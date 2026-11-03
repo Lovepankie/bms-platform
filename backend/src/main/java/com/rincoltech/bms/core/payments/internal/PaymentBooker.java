@@ -128,7 +128,7 @@ class PaymentBooker {
         Map<String, Object> cols = new HashMap<>();
         cols.put("booked_subject_txn_id", transactionId);
         cols.put("booked_at", now);
-        cols.put("next_check_at", CheckSchedule.nextReview(now, intent.paidAt()));
+        cols.put("next_check_at", CheckSchedule.nextReview(now, intent.paidAt(), intent.reportedMethod()));
         cols.put("technical_failures", 0);
         if (!store.update(intent.id(), "paid", "booked", now, cols)) {
             throw new IllegalStateException("the intent changed under its own row lock");
@@ -185,7 +185,7 @@ class PaymentBooker {
         UUID receiptId = unallocated.post(intent, paidOn, LocalDate.ofInstant(now, zone), refusal.code());
         Map<String, Object> cols = new HashMap<>();
         cols.put("refusal_code", refusal.code());
-        cols.put("next_check_at", CheckSchedule.nextReview(now, intent.paidAt()));
+        cols.put("next_check_at", CheckSchedule.nextReview(now, intent.paidAt(), intent.reportedMethod()));
         cols.put("technical_failures", 0);
         if (!store.update(intent.id(), "paid", "booked_unallocated", now, cols)) {
             throw new IllegalStateException("the intent changed under its own row lock");

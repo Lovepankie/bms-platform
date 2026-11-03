@@ -322,6 +322,8 @@ platform API and holds no tenant permissions.
 | `core.payments.read` | Y | Y | | Y | Y | Y | | | | | | |
 | `core.payments.collect` | Y | Y | | Y | | | | | | | | |
 | `core.payments.allocate` | Y | | | Y | Y | | | | | | | |
+| `core.payments.allocate_approve` | Y | Y | | | Y | | | | | | | |
+| `core.payments.manage` | Y | | | | Y | | | | | | | |
 | `core.reports.financial` | Y | Y | | | Y | Y | | | | | | |
 | `core.reports.audit` | Y | | | | | Y | | | | | | |
 | `core.data_export.run` | Y | | | | | | | | | | | |
@@ -426,6 +428,8 @@ platform API and holds no tenant permissions.
 | `retail.document.issue` | Y | | | | | | | | | | | |
 | `retail.controls.read` | Y | | | | | | | | | | | |
 | `retail.order.manage` | Y | | | | | | | Y | | | | |
+| `retail.advisor.use` | Y | | | | | | | | | | | |
+| `retail.advisor.configure` | Y | | | | | | | | | | | |
 
 The staff member and collateral screens (issue #280) offer an action only when the session holds its permission in the record's branch, from `permission_scopes`; the API remains the authority. An ID image is listed and opened only with `lending.members.verify_kyc`. No permission was added.
 
@@ -443,6 +447,17 @@ Notes:
   moves it later (`PUT /platform/tenants/{tenant_id}/go-live`), since a later date reopens the window for bringing loans in. An approved bring-in is reversed only
   through `loan_bring_in_reversal`, with the same maker and checker permissions, never decided by its maker, and only
   while the loan has no transaction in the app and no penalty charge (ADR-071 decision 9).
+- Retail AI brief (issue #422, migration `V125`, ADR-037 as amended): `retail.advisor.use` reads the shop brief on Home
+  and `retail.advisor.configure` reads and sets the assistant's switch and caps at `/staff/assistant` (switching on also needs
+  `core.settings.manage`). Both are seeded to the administrators only, so switching the assistant on shows the brief to nobody
+  else; another role holds `retail.advisor.use` only when a business grants it on purpose, once roles are editable by a business.
+  The stored brief covers every branch, every seller, cost, profit, the Controls counts and the open orders, so it is returned
+  only to a user who holds `retail.advisor.use`, `retail.sale.all_sellers`, `retail.profit.read`, `retail.stock.read`,
+  `retail.controls.read` and `retail.order.manage` over every branch. Anyone else holding `retail.advisor.use` gets the
+  automatic summary of what they may see (ADR-055): money only with `retail.sale.all_sellers` over every branch it covers, cost and profit only with
+  `retail.profit.read` there too, a seller who sees only their own sales their own sales alone, stock counts with
+  `retail.stock.read`, Controls counts with `retail.controls.read` and open orders with `retail.order.manage`. A Storekeeper
+  therefore never sees a money figure in it.
 - A loan officer running `lending.reports.collections` sees only loans where they are
   the responsible officer; branch managers and above see their branch scope.
 - Insights (#153, ADR-030): `lending.insights.read` opens the page in the user's branch scope.
@@ -457,7 +472,7 @@ Notes:
   an ID number. The daily digest settings need `core.settings.manage`.
 - Client extras (issue #210): the permissions `lending.advisor.use` and `lending.advisor.configure` are in the matrix above (migration `V55`, issue #226); `core.payments.manage` is not yet (its migration adds the row, with #224). The grants: `core.payments.manage`
   to the tenant admin and accountant, `lending.advisor.use` to the tenant admin, branch manager, accountant and auditor,
-  `lending.advisor.configure` to the tenant admin. `core.payments.collect` starts a gateway collection (the loan page offers "Collect by mobile money or card" to a holder of it together with `lending.loans.read`, on an active loan; slice #216, and the savings account page offers it with `lending.savings.read` on an active or dormant account; slice #219) and `core.payments.manage` uploads the
+  `lending.advisor.configure` to the tenant admin. `core.payments.collect` starts a gateway collection (the loan page offers "Collect by mobile money or card" to a holder of it together with `lending.loans.read`, on an active loan; slice #216, and the savings account page offers it with `lending.savings.read` on an active or dormant account; slice #219), and in the intent's branch also texts an open payment link to the payer once per intent, at most 3 a member an hour (`POST /payments/intents/{id}/sms`, slice #231; no new permission), and `core.payments.manage` uploads the
   merchant statement and reads the reconciliation (ADR-035); switching collections on needs `core.settings.manage`. The
   AI assistant (ADR-037) needs `lending.advisor.use` to read the brief and ask, `lending.advisor.configure` to read the
   call log and set caps, and `core.settings.manage` to switch it on after the acknowledgement. The stored daily brief covers every branch, so it is returned only to a user whose scope covers every branch of the tenant in `lending.advisor.use`, `lending.insights.read` and `lending.insights.all_officers` and who holds the last (a branch manager holds all officers for their own branches only, so is not one); everyone else gets the automatic summary computed for their own scope. The tenant's SMS settings (its own switch with the acknowledgement, the sender
@@ -493,6 +508,25 @@ Notes:
   The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth
   and villages, the arrears phone, customers' and suppliers' contacts); they are only in the full workbook downloaded after
   sign-in (ADR-074 decision 6).
+  Built (extras slice D5, issue #229): the monthly pack `lending.monthly_pack` runs under `lending.reports.portfolio` and the permission
+  of each of its eight reports (`lending.reports.collections`, `lending.reports.members`, `lending.reports.compliance`), with
+  `lending.insights.read`; a requester missing any is refused 403 and does not see the pack in the catalogue, and can still run the
+  reports they hold one at a time. Each report in the pack freezes its own scope as when it is run alone (names, phones and owner
+  details by branch, the requester's own loans without `lending.insights.all_officers`), and a download of either file of the pack is
+  refused when any report's check fails. The ready email names the pack and its date only; no file is attached. No permission and no
+  seeded row are added.
+  Built (extras slice D4, issue #225): `lending.collateral_register` runs under `lending.reports.members` in the branches the requester
+  holds it in, prints who owns an item (the member number and name, the reference, which can be an ID number, a plate or a title
+  number, and the description) only where they hold `lending.members.read` in the member's branch, and without
+  `lending.insights.all_officers` lists only the items securing the requester's own loans and names only those loans; all of it is
+  frozen with the run and checked again at download.
+  `lending.regulatory_summary` runs under `lending.reports.compliance` with `lending.insights.read` and its scope. No permission and no
+  seeded row are added.
+  Built (extras slice D3, issue #222): `lending.disbursements` runs under `lending.reports.portfolio`, and
+  `lending.expected_vs_collected`, `lending.arrears_list` and `lending.officer_performance` under `lending.reports.collections`; each also
+  needs `lending.insights.read`, and without `lending.insights.all_officers` covers only the caller's own loans. The arrears list prints a
+  borrower's name only in the branches where the requester holds `lending.members.read` and the phone in full only where they hold
+  `lending.members.contact`, both frozen with the run and checked again at download. No permission and no seeded row are added.
   Built (extras slice D2, issue #217): the PDF and Excel renderers and `lending.portfolio_outstanding` add no permission and no seeded
   row either (both lending reports run under `lending.reports.portfolio`); `PermissionMatrixIT` still passes and this matrix equals the
   seeds. A spreadsheet cell is never a formula: text is written as a string cell and text that begins with `=`, `+`, `-`, `@`, a tab or a
@@ -615,7 +649,7 @@ Notes:
   `retail.expense.record`. One rule covers every profit-derived figure: the day's profit, the
   savings suggestion, `suggested_minor` and **every response field that carries a savings amount**
   need `retail.profit.read` and are absent, not null, without it (a savings amount is half the
-  profit, so it leaks it), and so does `cash_purchases_minor` and every figure embedding it, because a restock total is a purchase total at cost (a caller without `retail.profit.read`, the sales role included, is shown `cash_expected_minor` only: takings less voids, expenses and advances paid out, plus repayments, before cash purchases and savings; ADR-022 decision 13, relaxable by the Owner, open question 8); a caller without `retail.profit.read` cannot send a savings amount at all (422 `amount_requires_profit_access`) and never sees `overwritten`; the audit payload of a savings record carries neither the amount nor
+  profit, so it leaks it), and so does `cash_purchases_minor` and every figure embedding it, because a restock total is a purchase total at cost (a caller without `retail.profit.read`, the sales role included, is shown `cash_expected_minor` only: takings less voids, expenses and advances paid out, plus repayments, before cash purchases and savings; ADR-022 decision 13, relaxable by the Owner, open question 8); a caller without `retail.profit.read` cannot send a savings amount at all (422 `amount_requires_profit_access`) and never sees `overwritten`, unless the Owner (only the Owner, 403 `owner_only` for anyone else) turns on `salespeople_see_savings_amount` (ADR-115): then that caller sees the suggestion and may change it within the cap before the day is saved, sees the saved amount only on records made while the setting is on and only when holding `retail.savings.record`, and is never sent the cap, the profit, the expenses or any other gated figure (an amount above the cap is refused in words that do not state it; by trying amounts the cap can still be found, which the owner accepted, owner decision D124); the profit can still be worked out from the suggestion, which the setting's help text says plainly; replacing a saved amount needs `retail.savings.overwrite` for every caller; the audit payload of a savings record carries neither the amount nor
   the suggestion (FR-RET-19, ADR-022 decision 12). Voiding needs `retail.cashbook.void`. No cash
   book approval action is registered (open question 3); if one is, its row joins section 8.4 with a
   threshold set first.
@@ -747,7 +781,7 @@ never by a tenant role:
 | `platform.tenants.read` | List plans and tenants, read one tenant |
 | `platform.tenants.read` (also) | The applications queue and one application with its possible repeats; the outbox counts and failed rows (ADR-024) |
 | `platform.tenants.manage` | Create tenants, switch modules, move subscriptions, suspend and resume, reset a tenant admin's second factor |
-| `platform.tenants.manage` (also) | Verify, Needs info, Reject and Activate an application; send a failed outbox row again (ADR-024) |
+| `platform.tenants.manage` (also) | Verify, Needs info, Reject and Activate an application; send a failed outbox row again (ADR-024); clear the suppression of an email address after a bounce or complaint (`POST /platform/outbox/unsuppress`, ADR-117 decision 9) |
 
 The two platform permissions cover onboarding because Activate creates a tenant: a separate
 `platform.applications.*` pair would split one operator duty across two keys with the same holders.
@@ -836,6 +870,11 @@ CHECK constraint as well as the service.
 | `period_close` | `core.periods.close` | `core.periods.approve_close` | No |
 | `savings_withdrawal` | `lending.savings.withdraw` | `lending.savings.withdraw_approve` | Yes |
 | `savings_reversal` | `lending.savings.withdraw` | `lending.savings.withdraw_approve` | No (always checked) |
+| `unallocated_allocation` | `core.payments.allocate` | `core.payments.allocate_approve` | No (always checked) |
+| `unallocated_refund` | `core.payments.allocate` | `core.payments.allocate_approve` | No (always checked) |
+| `gateway_payment_reversal` | the tenant's system user (raised by the platform; no person holds the maker permission); when a person asks for it to be put to a checker again (`POST /payments/intents/{id}/reversal-request`), that person is the maker, so they can never decide it, and neither can anyone who rejected an earlier request for the same payment | `core.payments.allocate_approve` and, besides it, the permission that reverses what the money became (`lending.repayments.reverse_approve` on a loan, `lending.savings.withdraw_approve` on a savings account) | No (always checked) |
+| `statement_fee` | `core.payments.manage` (the uploader of the statement; raised for a fee above the automatic rate of the line's amount, ADR-035 decision 65) | `core.journals.approve` in the order's branch | No (always checked) |
+| `statement_line_outside` | `core.payments.manage` in every branch (the person who marks a statement line as outside this system) | `core.payments.manage` in every branch, never the marker (ADR-035 decision 66) | No (always checked) |
 | `investment_funding` | `lending.investments.fund` | `lending.investments.fund_approve` | Yes |
 | `investment_early_withdrawal` | `lending.investments.payout` | `lending.investments.early_withdraw_approve` | No |
 | `investment_reversal` | `lending.investments.payout` | `lending.investments.reverse_approve` | No (always checked) |
@@ -851,7 +890,7 @@ CHECK constraint as well as the service.
 | `retail_stock_correction` | `retail.stocktake.commit` | `core.settings.manage` | Yes, on the value of the difference at the branch's average cost, only while the approval rules switch it on (off by default, ADR-091) |
 | `retail_expense` | `retail.expense.record` | `core.settings.manage` | Yes, on the amount, only while the approval rules switch it on (off by default, ADR-091) |
 
-Registered so far: `collateral_release` (#13); `retail_sale_write_off` (#340, `retail.sales`, ADR-043: writing off the unpaid part of a credit sale, with the same open default as returns); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
+Registered so far: `statement_fee` and `statement_line_outside` (#317, `core.payments`, ADR-035 decisions 65 and 66: a statement fee above the automatic rate, and a statement line marked outside this system, each decided by a second person); `unallocated_allocation`, `unallocated_refund` and `gateway_payment_reversal` (#224, `core.payments`, ADR-035 amendment of slice A5; migration `V123` adds the checker permission `core.payments.allocate_approve` for the tenant admin, branch manager and accountant, and the `system` user kind that makes the platform's own reversal requests); `collateral_release` (#13); `retail_sale_write_off` (#340, `retail.sales`, ADR-043: writing off the unpaid part of a credit sale, with the same open default as returns); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
 action pends only at or above a threshold the tenant sets); `loan_disbursement`, `repayment_reversal` and
 `loan_write_off` (#108, `lending.loans`, ADR-026); `investment_funding`, `investment_early_withdrawal`
 and `investment_reversal` (#152, `lending.investments`, ADR-031). Increment 10 adds two checker
@@ -950,6 +989,8 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
 | SMS aggregator and payment gateway credentials | Host env file | Per provider policy |
 | Web Push (ADR-050): `BMS_PUSH_VAPID_PRIVATE_KEY` (with `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_SUBJECT`, `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`) | Host env file; optional, push is off when unset | Made once per environment with `npx web-push generate-vapid-keys`; rotating strands every device until its next staff page load |
 | Outbox senders: `BMS_SMTP_PASSWORD` (with `BMS_SMTP_HOST`, `BMS_SMTP_PORT`, `BMS_SMTP_USER`, `BMS_MAIL_FROM`) and `BMS_TELEGRAM_BOT_TOKEN` (with `BMS_TELEGRAM_OPERATOR_CHAT_ID`) | Host env file; optional, a sender is off when unset | Per provider policy; the bot token through BotFather |
+| `BMS_RESEND_API_KEY` (with `BMS_MAIL_PROVIDER=resend`, issue #333, ADR-117): a send-only key restricted to `rincoltech.com`, one per environment | Host env file, put there by the operator; never in git, never logged | Make the new key in Resend, swap it in `.env`, restart the API, then delete the old one (`docs/runbooks/onboard-tenant.md`) |
+| `BMS_RESEND_WEBHOOK_SECRET` (issue #333, ADR-117 decision 8): the `whsec_` signing secret of the Resend webhook for bounces and complaints; unset turns `POST /api/v1/platform/webhooks/resend` off (404) | Host env file, put there by the operator; never in git, never logged | Roll the secret in Resend (Webhooks, the endpoint, Signing secret), swap it in `.env`, restart the API; events signed with the old one get 401 and Resend retries them |
 | The platform's own Pesapal pair (`BMS_PESAPAL_PLATFORM_*`) and its notification path token | Host env file (ADR-035) | Yearly, on staff change, on suspected exposure; the token whenever the IPN URL is re-registered |
 | A lender's own Pesapal consumer key and secret | Table `payment_gateway_accounts`, AES-256-GCM sealed with `BMS_DATA_KEY` (the id of the key is inside the box); entered by the lender's administrator, write-only: no endpoint returns it, no log line, audit row or error carries it; the notification token is stored only as its SHA-256 (ADR-035 amendment of 2026-10-18) | When the lender rotates it at Pesapal (a new secret for the same key is allowed with payments in flight); data key rotation re-seals the rows and the second-factor seeds (`BMS_DATA_KEY_PREVIOUS`, runbook `payments.md` section 4a) |
 | SMS provider key and callback token (`BMS_SMS_AT_API_KEY`, `BMS_SMS_AT_USERNAME`, `BMS_SMS_CALLBACK_TOKEN`, `BMS_SMS_ALLOWLIST`) | Host env file (ADR-036) | Yearly, on staff change |
@@ -986,7 +1027,7 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   stays legible); a canvas over 16 megapixels is refused before decoding (`image_too_large`), at most two images
   are re-encoded at once (a caller that waits 10 seconds gets 503 `uploads_busy`), the re-encoded
   bytes obey the same 5 MB limit, an object whose transaction is known to have rolled back is deleted again (an
-  unknown outcome keeps it, and a sweeper for the remaining orphans is issue #39), and a member keeps at
+  unknown outcome keeps it, and the daily orphan sweep of chapter 12 section 12.5 removes the rest once a day old, issue #39), and a member keeps at
   most 10 active documents per kind: a newer upload supersedes the oldest, which stays for the audit
   trail, so a wrong file can always be replaced, so a
   small compressed file cannot exhaust memory; files are stored in object storage, never on the

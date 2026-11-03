@@ -49,7 +49,8 @@ export const businessesPage: Tour = {
 
 export const businessPage: Tour = {
   id: 'page-operator-business',
-  version: 2,
+  // Version 3 adds the AI assistant add-on (issue #423).
+  version: 3,
   title: 'This page: one business',
   audience: forOperator,
   autoStart: false,
@@ -78,6 +79,12 @@ export const businessPage: Tour = {
       target: 'biz-plan',
       title: 'Change the plan',
       body: 'Choose another plan and say why. A plan the business does not fit is refused, with the reason.',
+    },
+    {
+      id: 'addon',
+      target: 'biz-addon',
+      title: 'AI assistant add-on',
+      body: 'Off for every business until you switch it on, with a reason. Charged, its price is added each month after the free month. With no charge, for a demo or a pilot, it adds nothing.',
     },
     {
       id: 'suspend',
@@ -114,7 +121,8 @@ export const businessPage: Tour = {
 
 export const plansPage: Tour = {
   id: 'page-operator-plans',
-  version: 1,
+  // Version 2 adds the AI assistant add-on price (issue #423).
+  version: 2,
   title: 'This page: plans and prices',
   audience: forOperator,
   autoStart: false,
@@ -139,6 +147,12 @@ export const plansPage: Tour = {
       target: 'plans-new',
       title: 'Add a plan',
       body: 'Its name, what it includes, its modules and its limits: shops and stores, staff, and lending members. Empty means unlimited.',
+    },
+    {
+      id: 'addon',
+      target: 'plans-addon',
+      title: 'The AI assistant add-on',
+      body: 'One monthly price on every plan, set here and changed from a date. It is added to what a business owes only when the add-on is on for it.',
     },
   ],
 };

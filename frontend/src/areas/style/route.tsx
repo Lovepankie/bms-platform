@@ -8,6 +8,10 @@ import { SideMenu } from '../../components/side-menu';
 import { illustrations, type IllustrationName } from '../../components/illustrations';
 import { BrandLoader, EmptyState, SkeletonList, StatusPanel } from '../../components/states';
 import { BusyButton } from '../../app/ui/BusyButton';
+import { Segmented } from '../../app/ui/Segmented';
+import { RINCOLTECH_LOGO } from '../../app/branding';
+import { LogoImg, THEME_LABELS } from '../../app/shell';
+import { THEME_CHOICES, useThemeChoice } from '../../app/theme-mode';
 import { Toast } from '../staff/retail/toast';
 
 // The living style page (#106, docs/ui/design-system.md): every shared component and illustration
@@ -58,8 +62,10 @@ function useStylePageAllowed(): boolean | null {
   return classifyHost(window.location.hostname, hosts.data).kind === 'platform';
 }
 
-function StylePage() {
+export function StylePage() {
   const allowed = useStylePageAllowed();
+  // The page in either theme (#115): the same choice as the theme button, so every section below can be checked in both.
+  const [theme, setTheme] = useThemeChoice();
   const dialog = useRef<HTMLDialogElement>(null);
   const sheet = useRef<HTMLDialogElement>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -89,6 +95,13 @@ function StylePage() {
           <p>Every shared component and illustration, drawn from the tokens in theme.css.</p>
         </div>
       </div>
+
+      <Section title="Theme">
+        <Segmented label="Theme" options={THEME_CHOICES.map((value) => ({ value, label: THEME_LABELS[value] }))} value={theme} onChange={setTheme} />
+        <p>
+          <LogoImg src={RINCOLTECH_LOGO} alt="Rincol Tech logo" width={168} height={48} />
+        </p>
+      </Section>
 
       <Section title="Colour roles">
         <ul className="swatch-grid">

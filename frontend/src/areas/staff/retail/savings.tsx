@@ -17,7 +17,9 @@ import { KeyFigure } from '../../../app/ui/KeyFigure';
 
 // Daily savings (FR-RET-18 to FR-RET-20): per shop per day. The server suggests half the day's profit; a
 // caller without retail.profit.read never sees the profit, the suggestion or any amount, and sends none:
-// the standard amount is recorded for them. Every save echoes the suggestion token the form was shown; if
+// the standard amount is recorded for them. When the owner turns on "Salespeople can see and change the savings amount"
+// (issue #768, ADR-115) that caller sees the suggestion, may change the amount, and sees what was saved; never the profit, the
+// expenses or the most the day allows (an amount above it is refused in words that do not state it). Every save echoes the suggestion token the form was shown; if
 // sales changed since, the server answers 409 suggestion_changed with the new token and writes nothing.
 // The day may save at most its profit less its expenses (ADR-080): the screen shows the three figures and
 // says so under the amount before anything is sent. The reason for a changed amount is optional (#538).
@@ -50,7 +52,6 @@ export function showInRecords(client: QueryClient, saved: Savings) {
 export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Savings) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const canOverwrite = holds(me, SAVINGS_OVERWRITE);
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), ...EMPTY });
   // A draft restored with an amount shows its problem at once; a fresh form waits for blur (rule 10).
   const [touched, setTouched] = useState(() => draft.amount.trim() !== '');
@@ -59,6 +60,9 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const suggestion = useQuery({ queryKey: suggestionKey, queryFn: () => retail.savingsSuggestion({ branchId, date: draft.date }) });
   const s = suggestion.data;
   const profitView = seesAmounts(s);
+  // ADR-115: the server says whether this caller may change the amount (the owner's setting before the day is saved, or the
+  // overwrite permission); an older server without the flag leaves it to the permission.
+  const canOverwrite = s?.may_change_amount ?? holds(me, SAVINGS_OVERWRITE);
   const reason = reasonText(draft.reason, draft.other ?? '');
   const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
@@ -104,14 +108,14 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
           {nowAboveWords(s) && <Note>{nowAboveWords(s)}</Note>}
           {profitView ? (
             <>
-              {s.available_minor !== undefined ? (
+              {s.daily_profit_minor === undefined ? null : s.available_minor !== undefined ? (
                 <dl className="rt-figures" aria-label="The day's figures">
                   <div><dt>Profit for the day</dt><dd>{money(s.daily_profit_minor ?? 0)}</dd></div>
                   <div><dt>Expenses for the day</dt><dd>{money(s.day_expenses_minor ?? 0)}</dd></div>
                   <div><dt>Available to save</dt><dd><strong>{money(s.available_minor)}</strong></dd></div>
                 </dl>
               ) : (
-                s.daily_profit_minor !== undefined && <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>
+                <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>
               )}
               <div aria-live="polite"><KeyFigure label="Suggested savings" value={money(s.suggested_minor ?? 0)} /></div>
               <label htmlFor="savings-amount">Amount to save (optional, leave blank to save the suggestion)</label>

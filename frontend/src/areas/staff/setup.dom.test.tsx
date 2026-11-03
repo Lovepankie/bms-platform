@@ -56,6 +56,7 @@ vi.mock('@tanstack/react-router', async (original) => ({
 
 const { Setup, brandDone, hasRetail, reportsWording } = await import('./setup');
 const { ICON_VERSION_KEY, NewLogoCard } = await import('../../install/NewIcon');
+const { hashId } = await import('../../app/ui/useHashSection');
 
 const REAL_AGENT = navigator.userAgent;
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1';
@@ -334,6 +335,103 @@ describe('the set-up menu icons', () => {
     for (const t of tiles) {
       expect(t.querySelector('.icon-chip svg')).not.toBeNull();
       expect(t.querySelector('.tile-hint')?.textContent).not.toBe('');
+    }
+  });
+});
+
+// JUSTIFICATION-A3: the Business set-up test issue #768 asks for.
+// Issue #768, ADR-115: off by default, only for the Owner, with one plain line saying what turning it on gives away.
+describe('the salespeople savings setting', () => {
+  it('is off until the owner turns it on, and says a salesperson can then work out the profit', async () => {
+    delete settings.salespeople_see_savings_amount;
+    client.PATCH.mockClear();
+    show({ modules: ['retail'], owner: true });
+    const box = (await screen.findByLabelText('Salespeople can see and change the savings amount')) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(document.getElementById(box.getAttribute('aria-describedby') ?? '')?.textContent).toContain(
+      "A salesperson who sees the savings amount can work out the day's profit from it.",
+    );
+    fireEvent.click(box);
+    await screen.findByText('Salespeople can now see and change the savings amount');
+    expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { salespeople_see_savings_amount: true } }));
+  });
+
+  it('is not shown to an administrator who is not the owner', async () => {
+    show({ modules: ['retail'] });
+    await screen.findByLabelText('The month your financial year ends in');
+    expect(screen.queryByLabelText('Salespeople can see and change the savings amount')).toBeNull();
+  });
+
+  it('is not shown to a business without retail', async () => {
+    show({ modules: ['lending'], owner: true });
+    await screen.findByLabelText(/The day the app became your register/);
+    expect(screen.queryByLabelText('Salespeople can see and change the savings amount')).toBeNull();
+  });
+});
+
+// JUSTIFICATION-A3: the DOM test the #783 follow-up asks for (a section link with a cold settings cache).
+describe('a link to a section of Set-up (issue #783)', () => {
+  it('scrolls to the Reports section and puts the cursor on its switch once the settings have loaded', async () => {
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id);
+    } as never;
+    window.location.hash = '#reports';
+    try {
+      // A cold cache: the page waits for the settings, and the section is not there yet.
+      show({ modules: ['retail'] });
+      expect(screen.getByText('Loading')).toBeTruthy();
+      expect(document.getElementById('reports')).toBeNull();
+      const box = await screen.findByLabelText(/Let staff run reports/);
+      await waitFor(() => expect(document.activeElement).toBe(box));
+      expect(scrolled).toEqual(['reports']);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+      window.location.hash = '';
+    }
+  });
+
+  // JUSTIFICATION-A3: the cases the review of #784 asks for (a malformed hash, a new hash after load).
+  it('shows the page for a malformed hash, and follows a new hash after the page has loaded (review of #784)', async () => {
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id);
+    } as never;
+    window.location.hash = '#50%';
+    try {
+      show({ modules: ['retail'] });
+      const box = await screen.findByLabelText(/Let staff run reports/);
+      expect(scrolled).toEqual([]);
+      window.location.hash = '#reports';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      await waitFor(() => expect(document.activeElement).toBe(box));
+      expect(scrolled).toEqual(['reports']);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+      window.location.hash = '';
+    }
+  });
+
+  it('reads a malformed hash as typed, and a well formed one decoded', () => {
+    expect(hashId('#%E0')).toBe('%E0');
+    expect(hashId('#50%')).toBe('50%');
+    expect(hashId('#reports')).toBe('reports');
+    expect(hashId('#rule%20one')).toBe('rule one');
+  });
+
+  it('stays at the top with no section in the address', async () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView as never;
+    try {
+      show({ modules: ['retail'] });
+      await screen.findByLabelText(/Let staff run reports/);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(document.body);
+    } finally {
+      Element.prototype.scrollIntoView = original;
     }
   });
 });

@@ -12,7 +12,7 @@ import { StaffContext } from '../context';
 // no link is made; a made link shows the QR code, the open link and a copy button; the screen follows the payment to a recorded
 // repayment and shows the receipt number, and says plainly where an unallocated payment is. All names, numbers and links are invented.
 
-const pay = { startLoanRepayment: vi.fn(), intent: vi.fn(), cancelIntent: vi.fn() };
+const pay = { startLoanRepayment: vi.fn(), intent: vi.fn(), cancelIntent: vi.fn(), textLink: vi.fn() };
 const lend = { listTransactions: vi.fn(), repay: vi.fn() };
 
 vi.mock('../../../api/payments', async (original) => {
@@ -109,6 +109,67 @@ describe('starting a collection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel this payment' }));
     expect(await screen.findByText('This payment was cancelled.')).toBeTruthy();
     expect(screen.queryByRole('img', { name: 'QR code of the payment link' })).toBeNull();
+  });
+});
+
+describe('sending the link by text message (issue #231)', () => {
+  async function linkShown() {
+    pay.startLoanRepayment.mockResolvedValue(pending);
+    pay.intent.mockResolvedValue(pending);
+    shell();
+    fireEvent.change(screen.getByLabelText("Payer's mobile number"), { target: { value: '0700000216' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Make the payment link' }));
+    return screen.findByRole('button', { name: 'Send the link by text message' });
+  }
+
+  it('queues the link once, says sent only when the provider took it, and queued earlier while it waits', async () => {
+    const answer = { intent_id: pending.id, expires_at: '2026-11-02T10:00:00Z' };
+    pay.textLink.mockResolvedValue({ ...answer, already_sent: false, text_status: 'queued' });
+    fireEvent.click(await linkShown());
+    expect(await screen.findByText('The link is queued to go by text message to ********0216.')).toBeTruthy();
+    expect(pay.textLink).toHaveBeenCalledWith(pending.id);
+    expect(screen.queryByRole('button', { name: 'Send the link by text message' })).toBeNull();
+    expect(screen.queryByText(/was sent by text message/)).toBeNull();
+    // Asking again reads where the text stands now; nothing new is sent.
+    pay.textLink.mockResolvedValue({ ...answer, already_sent: true, text_status: 'sent' });
+    fireEvent.click(screen.getByRole('button', { name: 'Check the text message' }));
+    expect(await screen.findByText('The link was sent by text message to ********0216.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Check the text message' })).toBeNull();
+    cleanup();
+    sessionStorage.clear();
+    pay.textLink.mockResolvedValue({ ...answer, already_sent: true, text_status: 'queued' });
+    fireEvent.click(await linkShown());
+    expect(await screen.findByText('The link was queued earlier to go by text message to ********0216. It has not gone yet.')).toBeTruthy();
+  });
+
+  it('says plainly when the text may or may not have arrived, and does not push a new link', async () => {
+    pay.textLink.mockResolvedValue({ intent_id: pending.id, already_sent: true, text_status: 'unconfirmed', expires_at: '2026-11-02T10:00:00Z' });
+    fireEvent.click(await linkShown());
+    expect(await screen.findByText(/could not confirm that the text message reached the payer/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Make a new payment link' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy the link' })).toBeTruthy();
+  });
+
+  it.each([
+    ['failed', 'The text message with the link did not reach the payer. Make a new payment link to send it again.'],
+    ['expired', 'The text message with the link ran out of time before it went. Make a new payment link to send it again.'],
+  ])('says so when the earlier text %s, and makes a new link after cancelling this one', async (textStatus, words) => {
+    pay.textLink.mockResolvedValue({ intent_id: pending.id, already_sent: true, text_status: textStatus, expires_at: '2026-11-02T10:00:00Z' });
+    pay.cancelIntent.mockResolvedValue({ ...pending, status: 'cancelled', redirect_url: undefined });
+    fireEvent.click(await linkShown());
+    expect(await screen.findByText(words)).toBeTruthy();
+    expect(screen.queryByText(/was sent by text message/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Make a new payment link' }));
+    await waitFor(() => expect(pay.cancelIntent).toHaveBeenCalledWith(pending.id));
+    expect(await screen.findByRole('button', { name: 'Make the payment link' })).toBeTruthy();
+  });
+
+  it('shows the refusal in plain words when the business has text messages switched off, and the link stays', async () => {
+    pay.textLink.mockRejectedValue(new PaymentsError('Text messages are not switched on for this business. Copy the link or show the QR code instead.', 422, 'sms_off'));
+    fireEvent.click(await linkShown());
+    expect(await screen.findByText(/Text messages are not switched on for this business/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy the link' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'QR code of the payment link' })).toBeTruthy();
   });
 });
 

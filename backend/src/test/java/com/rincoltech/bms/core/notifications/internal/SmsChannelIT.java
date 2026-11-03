@@ -70,6 +70,9 @@ class SmsChannelIT extends IntegrationTest {
     OutboxTemplates templates;
 
     @Autowired
+    com.rincoltech.bms.core.audit.PlatformAuditLog platformAudit;
+
+    @Autowired
     TenantSettings tenantSettings;
 
     @Autowired
@@ -144,8 +147,8 @@ class SmsChannelIT extends IntegrationTest {
                     tenantJobs,
                     hasher,
                     outbox);
-            this.dispatcher =
-                    new OutboxDispatcher(jdbc, transactionManager, templates, mapper, business, List.of(channel));
+            this.dispatcher = new OutboxDispatcher(
+                    jdbc, transactionManager, templates, mapper, business, List.of(channel), platformAudit);
             // As at application start: the mode is recorded before anything is sent.
             channel.enabled();
         }
@@ -352,7 +355,7 @@ class SmsChannelIT extends IntegrationTest {
             assertThat(noProvider.enabled()).as(mode).isFalse();
             String key = receipt(rig, t, "+256700000102");
             OutboxDispatcher dispatcher = new OutboxDispatcher(
-                    jdbc, transactionManager, templates, mapper, rig.business, List.of(noProvider));
+                    jdbc, transactionManager, templates, mapper, rig.business, List.of(noProvider), platformAudit);
             assertThat(dispatcher.enabledChannels()).isEmpty();
             assertThat(dispatcher.dispatch(List.of(noProvider), 10)).isZero();
             assertThat(outboxRow(key).get("status")).isEqualTo("pending");
@@ -1373,7 +1376,7 @@ class SmsChannelIT extends IntegrationTest {
         MovableClock clock = new MovableClock(start);
         Scripted channel = new Scripted();
         OutboxDispatcher dispatcher = new OutboxDispatcher(
-                jdbc, transactionManager, templates, mapper, new BusinessClock(clock), List.of(channel));
+                jdbc, transactionManager, templates, mapper, new BusinessClock(clock), List.of(channel), platformAudit);
 
         // Deferred: the attempt is given back and the row waits until the time given.
         String deferred = platformEmail(start);

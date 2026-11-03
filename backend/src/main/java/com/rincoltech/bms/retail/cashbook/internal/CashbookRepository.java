@@ -496,6 +496,17 @@ class CashbookRepository {
                 .optional();
     }
 
+    /** True when the branch and day had savings saved and voided: a new amount then replaces a saved one (ADR-115). */
+    boolean voidedSavingsExist(UUID branch, LocalDate date) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM retail_daily_savings
+                         WHERE branch_id = ? AND business_date = ? AND voided_at IS NOT NULL)
+                        """)
+                .params(branch, Date.valueOf(date))
+                .query(Boolean.class)
+                .single();
+    }
+
     /**
      * Serialises a savings create with an expense create for one branch and business date, until commit (ADR-080
      * decision 3): the savings cap reads the day's expenses after this lock, so an expense committing in between cannot

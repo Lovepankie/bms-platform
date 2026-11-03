@@ -15,6 +15,7 @@ import { StockHealthPage } from '../areas/staff/retail/stock-health';
 import { MoveStock } from '../areas/staff/retail/transfer';
 import { StockMoves } from '../areas/staff/retail/transfers';
 import { UsagePage } from '../areas/staff/retail/usage';
+import { UsageHistoryPage } from '../areas/staff/retail/usage-history';
 import { RETAIL_REPORT_TOURS } from './tours-retail-reports';
 import { describeTours } from './test-kit';
 
@@ -29,6 +30,7 @@ function screen(path: string): ReactElement {
     case '/staff/retail': return <RetailHome />;
     case '/staff/retail/restock': return <RestockPage />;
     case '/staff/retail/usage': return <UsagePage />;
+    case '/staff/retail/usage-history': return <UsageHistoryPage />;
     case '/staff/retail/transfer': return <MoveStock />;
     case '/staff/retail/transfers': return <StockMoves />;
     case '/staff/retail/valuation': return <ValuationPage />;
@@ -59,6 +61,7 @@ describeTours('retail reports', RETAIL_REPORT_TOURS, {
   'page-retail-home': [ADMIN, SELLER],
   'page-restock': [ADMIN],
   'page-usage': [ADMIN],
+  'page-usage-history': [ADMIN],
   'page-transfer': [ADMIN],
   'page-transfers': [ADMIN],
   'page-valuation': [ADMIN],

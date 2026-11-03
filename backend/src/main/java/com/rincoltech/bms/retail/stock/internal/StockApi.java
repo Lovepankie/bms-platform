@@ -162,11 +162,23 @@ final class StockApi {
             Instant at,
             UUID branchId,
             UUID productId,
+
+            @Schema(description = "The item's code, name and unit, so a list across items needs no lookup (#145)")
+            String code,
+
+            String description,
+            String unit,
             String kind,
             String qty,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
             Long unitCostMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description = "The quantity, without its sign, at the unit cost, rounded half up as the posting is"
+                            + " (#145); present only with retail.profit.read")
+            Long lineCostMinor,
 
             String sourceType,
             UUID sourceId,

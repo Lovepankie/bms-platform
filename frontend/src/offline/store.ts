@@ -1,11 +1,12 @@
 import type { Me } from '../api/client';
 import type { Customer, Product } from '../api/retail';
 import type { OutboxItem } from './outbox';
+import type { ReadCache } from './read-cache';
 
 // Where the device keeps what it needs to sell offline (issue #458, ADR-067 decisions 2, 3 and 9): IndexedDB database
 // `bms-offline`, two stores. `outbox` holds the queued sales, keyed by client sale id with an index on the scope (the business
-// host and the person). `kv` holds, per scope, the catalogue copy and the profile, and per host the last person signed in.
-// Nothing of lending is ever written here. Tests use the memory store, which behaves the same.
+// host and the person). `kv` holds, per scope, the catalogue copy, the profile and the figures last read (issue #763,
+// read-cache.ts), and per host the last person signed in. Nothing of lending is ever written here. Tests use the memory store, which behaves the same.
 
 /** What the sale screen needs with no network, for one person on one business. */
 export interface Catalogue {
@@ -33,6 +34,10 @@ export interface OfflineStore {
   /** The person last signed in on this host, for opening the app with no network; null after a sign-out. */
   lastPerson(host: string): Promise<string | null>;
   setLastPerson(host: string, userId: string | null): Promise<void>;
+  /** The figures last loaded on the screens a shop reads every day, for reading offline (issue #763, read-cache.ts). */
+  readCache(scope: string): Promise<ReadCache | null>;
+  putReadCache(scope: string, cache: ReadCache): Promise<void>;
+  deleteReadCache(scope: string): Promise<void>;
 }
 
 /** The scope of a person on a business: the host names the business (ADR-018), the user id the person. */
@@ -61,6 +66,9 @@ export function memoryStore(): OfflineStore {
     deleteProfile: async (scope) => void kv.delete(`profile:${scope}`),
     lastPerson: async (host) => (kv.get(`last:${host}`) as string | undefined) ?? null,
     setLastPerson: async (host, userId) => void (userId ? kv.set(`last:${host}`, userId) : kv.delete(`last:${host}`)),
+    readCache: async (scope) => copy((kv.get(`reads:${scope}`) as ReadCache | undefined) ?? null),
+    putReadCache: async (scope, c) => void kv.set(`reads:${scope}`, copy(c)),
+    deleteReadCache: async (scope) => void kv.delete(`reads:${scope}`),
   };
 }
 
@@ -125,6 +133,9 @@ export function indexedDbStore(factory: IDBFactory = indexedDB): OfflineStore {
     deleteProfile: (scope) => del(`profile:${scope}`),
     lastPerson: (host) => get<string>(`last:${host}`),
     setLastPerson: (host, userId) => (userId ? put(`last:${host}`, userId) : del(`last:${host}`)),
+    readCache: (scope) => get<ReadCache>(`reads:${scope}`),
+    putReadCache: (scope, c) => put(`reads:${scope}`, c),
+    deleteReadCache: (scope) => del(`reads:${scope}`),
   };
 }
 

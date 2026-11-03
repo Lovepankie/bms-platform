@@ -26,6 +26,7 @@ describe('Receive payments state', () => {
     expect(nextStep({ ...none, status: 'failed', credentials_saved: true, failure_reason: 'invalid_credentials' })).toMatch(/did not accept/);
     expect(nextStep({ ...none, host_ready: false })).toMatch(/not set up on this system/);
     expect(failureWords('something_new')).toMatch(/did not pass/);
+    expect(failureWords('account_unreadable')).toMatch(/could not read the saved key/);
   });
 
   it('accepts a credential as Pesapal shows it and refuses spaces, control characters and short values', () => {

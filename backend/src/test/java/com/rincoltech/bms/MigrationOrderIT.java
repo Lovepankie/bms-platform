@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.flywaydb.core.Flyway;
@@ -40,12 +41,18 @@ class MigrationOrderIT {
      * Merge order matters because {@code outOfOrder} is off: V41 (the retail price lists, #247, merged)
      * came before V42 (the loan pledge guard, #176, merged), then V43 (payment methods, #160, merged),
      * then V44 (the retail customer accounts, #196), then V45 (customer returns, #201, merged). Nothing here enforces the order, merge order does.
-     * Today V80 to V91 are merged (V91 is download my data, #478); V92 is billing, this pull request (#482). A number above
-     * them is allowed only as an ordered claim (AGENTS.md), merged in its turn or renumbered at merge.
+     * Every number up to V121 (the standard units, a Java migration) is merged; V99 and V114 stay unused. A number above
+     * them is allowed only as an ordered claim (AGENTS.md), merged in its turn or renumbered at merge. A migration pull
+     * request does not touch this list; it is extended now and then to what main holds (#172).
      */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46");
+            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47",
+            "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65",
+            "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "80", "81", "82", "83",
+            "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "100", "101",
+            "102", "103", "104", "105", "106", "107", "108", "109", "110", "111", "112", "113", "115", "116", "117",
+            "118", "119", "120", "121");
 
     /**
      * Columns a later migration adds to a table these cases watch, left out of the "keeps its shape" comparisons: each case
@@ -1419,6 +1426,375 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * The unallocated receipts queue (#224, V123) on a database a server already migrated to the version before it and that holds a staff user, a
+     * payment intent and an open receipt: the receipt keeps its row and stays {@code open} and bare, the new columns take their
+     * defaults, the swap of {@code users_kind_check} keeps the staff user and lets the new {@code system} kind in (and nothing
+     * else), the swap of the receipts' status check lets {@code reversed} in, a second system user is refused, the guard trigger
+     * refuses a status the queue does not know, and the new permission lands on the three roles that decide it.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a populated receipts or users table across V123.
+     */
+    @Test
+    void unallocatedReceiptsQueueMigrationKeepsPopulatedRowsAndSwapsTheChecks() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            verifyUnallocatedReceiptsMigration(postgres.getJdbcUrl());
+        }
+    }
+
+    /**
+     * The payment reconciliation (#317, V124) on a database a server already migrated to V123 and that holds a tenant, its user and a
+     * payment intent: the five new tables come empty and closed to anything but the grants they were given (a statement is never
+     * updated or removed by the application role, a run may be), the findings of a removed run go with it, no existing row
+     * changes, and the permission lands on the tenant admin and the accountant only.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates across V124.
+     */
+    @Test
+    void paymentReconciliationMigrationAddsFiveClosedTablesAndOnePermission() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            verifyReconciliationMigration(postgres.getJdbcUrl());
+        }
+    }
+
+    /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
+    static void verifyReconciliationMigration(String url) {
+        assertThat(flyway(url, "123").migrate().targetSchemaVersion).isEqualTo("123");
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        UUID staff = UUID.randomUUID();
+        UUID intent = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v124', 'Test Tenant V124', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                .params(branch, tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff V124', 'staff-v124@example.test', 'active')")
+                .params(staff, tenant)
+                .update();
+        owner.sql("""
+                        INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                                     amount_minor, currency, merchant_reference, status, initiated_by,
+                                                     idempotency_key, expires_at)
+                        VALUES (?, ?, ?, 'test.payment', 'test_subject', ?, '+256700000001', 1500, 'UGX', ?, 'created', ?,
+                                'v124-key-0001', now() + interval '30 minutes')
+                        """)
+                .params(
+                        intent,
+                        tenant,
+                        branch,
+                        UUID.randomUUID(),
+                        "BMS-DV-" + intent.toString().replace("-", ""),
+                        staff)
+                .update();
+        long permissions =
+                owner.sql("SELECT count(*) FROM permissions").query(Long.class).single();
+
+        assertThat(flyway(url, "124").migrate().targetSchemaVersion).isEqualTo("124");
+
+        for (String table : List.of(
+                "payment_statements",
+                "payment_statement_rows",
+                "payment_statement_reviews",
+                "payment_reconciliation_runs",
+                "payment_reconciliation_findings")) {
+            assertThat(owner.sql("SELECT count(*) FROM " + table)
+                            .query(Long.class)
+                            .single())
+                    .as("%s comes empty", table)
+                    .isZero();
+            assertThat(owner.sql("SELECT relforcerowsecurity FROM pg_class WHERE relname = ?")
+                            .param(table)
+                            .query(Boolean.class)
+                            .single())
+                    .as("%s forces row-level security", table)
+                    .isTrue();
+            assertThat(owner.sql("SELECT has_table_privilege('bms_app', ?, 'UPDATE')")
+                            .param(table)
+                            .query(Boolean.class)
+                            .single())
+                    .as("the application role never updates %s", table)
+                    .isFalse();
+        }
+        assertThat(owner.sql("SELECT has_table_privilege('bms_app', 'payment_statements', 'DELETE')")
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
+        assertThat(owner.sql("SELECT has_table_privilege('bms_app', 'payment_reconciliation_runs', 'DELETE')")
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM pg_indexes WHERE tablename = 'payment_intents' AND indexname IN
+                                ('payment_intents_lower_provider_reference', 'payment_intents_upper_confirmation_code')
+                                """).query(Long.class).single())
+                .as("the two lookup indexes exist")
+                .isEqualTo(2L);
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM pg_indexes WHERE indexname IN
+                                ('lending_loan_transactions_manual_reference', 'lending_savings_transactions_manual_reference')
+                                """).query(Long.class).single())
+                .as("the manual receipt reference indexes exist")
+                .isEqualTo(2L);
+        assertThat(owner.sql("SELECT status FROM payment_intents WHERE id = ?")
+                        .param(intent)
+                        .query(String.class)
+                        .single())
+                .as("no existing row changes")
+                .isEqualTo("created");
+        // The findings of a run go with it.
+        UUID run = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_reconciliation_runs (id, tenant_id, ran_on, trigger, window_from, intents_examined,
+                            statements_used, finding_count)
+                        VALUES (?, ?, current_date, 'job', current_date - 120, 1, 0, 1)
+                        """).params(run, tenant).update();
+        owner.sql(
+                        "INSERT INTO payment_reconciliation_findings (id, tenant_id, run_id, kind) VALUES (?, ?, ?, 'pending_over_24h')")
+                .params(UUID.randomUUID(), tenant, run)
+                .update();
+        // One nightly job run per business and day; a manual run the same day is allowed.
+        assertThatThrownBy(
+                        () -> owner.sql("""
+                                INSERT INTO payment_reconciliation_runs (id, tenant_id, ran_on, trigger, window_from,
+                                    intents_examined, statements_used, finding_count)
+                                VALUES (?, ?, current_date, 'job', current_date - 120, 0, 0, 0)
+                                """).params(UUID.randomUUID(), tenant).update())
+                .hasMessageContaining("payment_reconciliation_runs_one_job_a_day");
+        owner.sql("""
+                        INSERT INTO payment_reconciliation_runs (id, tenant_id, ran_on, trigger, window_from, intents_examined,
+                            statements_used, finding_count)
+                        VALUES (?, ?, current_date, 'manual', current_date - 120, 0, 0, 0)
+                        """).params(UUID.randomUUID(), tenant).update();
+        assertThatThrownBy(() -> owner.sql(
+                                "INSERT INTO payment_reconciliation_findings (id, tenant_id, run_id, kind) VALUES (?, ?, ?, 'lost_money')")
+                        .params(UUID.randomUUID(), tenant, run)
+                        .update())
+                .isNotNull();
+        owner.sql("DELETE FROM payment_reconciliation_runs WHERE tenant_id = ?")
+                .param(tenant)
+                .update();
+        assertThat(owner.sql("SELECT count(*) FROM payment_reconciliation_findings")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(owner.sql("SELECT count(*) FROM permissions")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(permissions + 1);
+        assertThat(owner.sql("""
+                                SELECT string_agg(role_key, ',' ORDER BY role_key) FROM role_permissions
+                                 WHERE permission_key = 'core.payments.manage'
+                                """).query(String.class).single()).isEqualTo("accountant,tenant_admin");
+    }
+
+    /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
+    static void verifyUnallocatedReceiptsMigration(String url) {
+        // The version just before V123 (V122, the onboarding link fix).
+        String before = VERSIONS.get(VERSIONS.indexOf("123") - 1);
+        assertThat(flyway(url, before).migrate().targetSchemaVersion).isEqualTo(before);
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        UUID staff = UUID.randomUUID();
+        UUID intent = UUID.randomUUID();
+        UUID receipt = UUID.randomUUID();
+        UUID period = UUID.randomUUID();
+        UUID entry = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v123', 'Test Tenant V123', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                .params(branch, tenant)
+                .update();
+        owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                .params(tenant, "{lending}")
+                .query((rs, n) -> 1)
+                .single();
+        owner.sql(
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff V123', 'staff-v123@example.test', 'active')")
+                .params(staff, tenant)
+                .update();
+        owner.sql("INSERT INTO gl_periods (id, tenant_id, year, month, status) VALUES (?, ?, 2026, 1, 'open')")
+                .params(period, tenant)
+                .update();
+        UUID account = owner.sql("SELECT id FROM gl_accounts WHERE tenant_id = ? AND is_postable ORDER BY code LIMIT 1")
+                .param(tenant)
+                .query(UUID.class)
+                .single();
+        owner.sql(
+                        "WITH e AS (INSERT INTO journal_entries (id, tenant_id, branch_id, entry_no, entry_date, period_id,"
+                                + " reference, source_module, source_type) VALUES (?, ?, ?, 'JE99999999', DATE '2026-01-15', ?,"
+                                + " 'V123-FIXTURE', 'test', 'fixture') RETURNING id)"
+                                + " INSERT INTO journal_lines (id, tenant_id, entry_id, line_no, account_id, debit, credit, currency)"
+                                + " SELECT ?, ?, e.id, 1, ?, 1000, 0, 'UGX' FROM e UNION ALL SELECT ?, ?, e.id, 2, ?, 0, 1000, 'UGX' FROM e")
+                .params(
+                        entry,
+                        tenant,
+                        branch,
+                        period,
+                        UUID.randomUUID(),
+                        tenant,
+                        account,
+                        UUID.randomUUID(),
+                        tenant,
+                        account)
+                .update();
+        owner.sql("""
+                        INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                                     amount_minor, currency, merchant_reference, status, initiated_by,
+                                                     idempotency_key, expires_at)
+                        VALUES (?, ?, ?, 'test.payment', 'test_subject', ?, '+256700000001', 1500, 'UGX', ?, 'created', ?,
+                                'v123-key-0001', now() + interval '30 minutes')
+                        """)
+                .params(
+                        intent,
+                        tenant,
+                        branch,
+                        UUID.randomUUID(),
+                        "BMS-DV-" + intent.toString().replace("-", ""),
+                        staff)
+                .update();
+        owner.sql("""
+                        INSERT INTO unallocated_receipts (id, tenant_id, branch_id, intent_id, purpose, subject_type, subject_id,
+                                                          amount_minor, currency, value_date, confirmation_code, refusal_code,
+                                                          journal_entry_id)
+                        VALUES (?, ?, ?, ?, 'test.payment', 'test_subject', ?, 1500, 'UGX', DATE '2026-01-15', 'V123-CONF-1',
+                                'loan_closed', ?)
+                        """)
+                .params(receipt, tenant, branch, intent, UUID.randomUUID(), entry)
+                .update();
+        long permissions =
+                owner.sql("SELECT count(*) FROM permissions").query(Long.class).single();
+
+        assertThat(flyway(url, "123").migrate().targetSchemaVersion).isEqualTo("123");
+
+        Map<String, Object> row = owner.sql("SELECT * FROM unallocated_receipts WHERE id = ?")
+                .param(receipt)
+                .query()
+                .singleRow();
+        assertThat(row.get("status")).as("the existing receipt stays open").isEqualTo("open");
+        assertThat(row.get("version")).isEqualTo(0);
+        assertThat(row.get("approval_id")).isNull();
+        assertThat(row.get("allocated_txn_id")).isNull();
+        assertThat(row.get("amount_minor")).isEqualTo(1500L);
+        assertThat(owner.sql("SELECT kind FROM users WHERE id = ?")
+                        .param(staff)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("staff");
+        // The users check now lets the system kind in, once per tenant, and still refuses a kind it does not know.
+        owner.sql(
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'system', 'Payments system', 'payments-system@system.invalid', 'active')")
+                .params(UUID.randomUUID(), tenant)
+                .update();
+        assertThatThrownBy(() -> owner.sql(
+                                "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'system', 'Another', 'PAYMENTS-SYSTEM@system.invalid', 'active')")
+                        .params(UUID.randomUUID(), tenant)
+                        .update())
+                .hasMessageContaining("users_system_email");
+        assertThatThrownBy(() -> owner.sql(
+                                "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'robot', 'Robot', 'robot@example.test', 'active')")
+                        .params(UUID.randomUUID(), tenant)
+                        .update())
+                .hasMessageContaining("users_kind_check");
+        // The receipt can end only as the queue allows, and only with the fields of its ending.
+        assertThatThrownBy(() -> owner.sql("UPDATE unallocated_receipts SET status = 'lost', version = 1 WHERE id = ?")
+                        .param(receipt)
+                        .update())
+                .hasMessageContaining("an open receipt ends as allocated, refunded or reversed");
+        assertThatThrownBy(
+                        () -> owner.sql("UPDATE unallocated_receipts SET status = 'reversed', version = 1 WHERE id = ?")
+                                .param(receipt)
+                                .update())
+                .hasMessageContaining("unallocated_receipts_reversed_complete");
+        // The replaced guard of payment_intents: the moves V123 added are allowed, the ones it narrows or never had are
+        // refused.
+        UUID other = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                                     amount_minor, currency, merchant_reference, status, initiated_by,
+                                                     idempotency_key, expires_at)
+                        VALUES (?, ?, ?, 'test.payment', 'test_subject', ?, '+256700000001', 1500, 'UGX', ?, 'created', ?,
+                                'v123-key-0002', now() + interval '30 minutes')
+                        """)
+                .params(
+                        other,
+                        tenant,
+                        branch,
+                        UUID.randomUUID(),
+                        "BMS-DV-" + other.toString().replace("-", ""),
+                        staff)
+                .update();
+        for (UUID id : List.of(intent, other)) {
+            owner.sql(
+                            "UPDATE payment_intents SET status = 'pending', provider_reference = ?, redirect_url = 'https://pay.example.test/x' WHERE id = ?")
+                    .params(UUID.randomUUID().toString(), id)
+                    .update();
+            owner.sql("""
+                            UPDATE payment_intents SET status = 'paid', paid_amount_minor = 1500, paid_currency = 'UGX',
+                                   confirmation_code = 'V123-CONF', paid_at = now(), verified_at = now() WHERE id = ?
+                            """).param(id).update();
+        }
+        owner.sql(
+                        "UPDATE payment_intents SET status = 'booked', booked_subject_txn_id = ?, booked_at = now() WHERE id = ?")
+                .params(UUID.randomUUID(), intent)
+                .update();
+        owner.sql("UPDATE payment_intents SET status = 'reversed_pending_review' WHERE id = ?")
+                .param(intent)
+                .update();
+        // V123: a payment reported reversed and then completed again goes back to booked.
+        owner.sql("UPDATE payment_intents SET status = 'booked' WHERE id = ?")
+                .param(intent)
+                .update();
+        owner.sql("UPDATE payment_intents SET status = 'reversed_pending_review' WHERE id = ?")
+                .param(intent)
+                .update();
+        owner.sql("UPDATE payment_intents SET status = 'reversed' WHERE id = ?")
+                .param(intent)
+                .update();
+        // A move it never had stays refused.
+        assertThatThrownBy(() -> owner.sql("UPDATE payment_intents SET status = 'needs_attention' WHERE id = ?")
+                        .param(intent)
+                        .update())
+                .hasMessageContaining("is not an allowed transition");
+        assertThatThrownBy(() -> owner.sql("UPDATE payment_intents SET status = 'booked' WHERE id = ?")
+                        .param(intent)
+                        .update())
+                .hasMessageContaining("is not an allowed transition");
+        // V123 narrows needs_attention to reversed: refused for an order that carries a booked transaction.
+        owner.sql(
+                        "UPDATE payment_intents SET status = 'needs_attention', booked_subject_txn_id = ?, booked_at = now() WHERE id = ?")
+                .params(UUID.randomUUID(), other)
+                .update();
+        assertThatThrownBy(() -> owner.sql("UPDATE payment_intents SET status = 'reversed' WHERE id = ?")
+                        .param(other)
+                        .update())
+                .hasMessageContaining("refused for an order with a booked transaction");
+        assertThat(owner.sql("SELECT count(*) FROM permissions")
+                        .query(Long.class)
+                        .single())
+                .as("exactly one permission is added")
+                .isEqualTo(permissions + 1);
+        assertThat(owner.sql("""
+                                SELECT string_agg(role_key, ',' ORDER BY role_key) FROM role_permissions
+                                 WHERE permission_key = 'core.payments.allocate_approve'
+                                """).query(String.class).single()).isEqualTo("accountant,branch_manager,tenant_admin");
+        assertThat(owner.sql("SELECT has_column_privilege('bms_app', 'unallocated_receipts', 'amount_minor', 'UPDATE')")
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
+    }
+
     /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
     static void verifyLandedCostMigration(String url) {
         assertThat(flyway(url, "47").migrate().targetSchemaVersion).isEqualTo("47");
@@ -1486,16 +1862,21 @@ class MigrationOrderIT {
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
         // account one, V83 (collections, #266) the two collection list ones, V86 (offline sales, #458)
         // retail.offline.resolve, V88 (referrals, #464) core.referrals.read, V89 (existing loans, #466)
-        // lending.loans.bring_in, V91 (download my data, #334) its own, V92 (billing, #480) core.billing.read and V107
-        // (fee and interest waivers, #265) lending.charges.waive_fee_interest, which are not V48's to answer for.
+        // lending.loans.bring_in, V91 (download my data, #334) its own, V92 (billing, #480) core.billing.read, V107
+        // (fee and interest waivers, #265) lending.charges.waive_fee_interest and V123 (the unallocated receipts queue,
+        // #224) core.payments.allocate_approve and V124 (the reconciliation, #317) core.payments.manage, which are not
+        // V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
+                                        // V125 (the shop brief, #422): the two retail advisor permissions.
+                                        + " 'retail.advisor.use', 'retail.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
                                         + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
                                         + " 'retail.offline.resolve', 'lending.members.contact',"
                                         + " 'lending.collections.all_officers', 'core.referrals.read',"
                                         + " 'lending.loans.bring_in', 'core.data_export.run', 'core.billing.read',"
-                                        + " 'lending.charges.waive_fee_interest')")
+                                        + " 'lending.charges.waive_fee_interest', 'core.payments.allocate_approve',"
+                                        + " 'core.payments.manage')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")
@@ -2499,6 +2880,102 @@ class MigrationOrderIT {
                                 .single())
                         .isZero();
             }
+        }
+    }
+
+    /**
+     * V125 (issue #422) is expand only: an empty retail_ai_briefs table under forced row-level security that the application role
+     * may read and insert into but never change, and the two retail advisor permissions with their grants. No tenant is switched
+     * on. JUSTIFICATION-A3: a new test case; no existing case covers the retail brief table.
+     */
+    @Test
+    void retailBriefMigrationAddsAnAppendOnlyTableAndTheTwoPermissionsAndSwitchesNobodyOn() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("125") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            long aiSettingsBefore = owner.sql(
+                            "SELECT count(*) FROM tenant_settings WHERE settings -> 'module_groups' -> 'ai' IS NOT NULL")
+                    .query(Long.class)
+                    .single();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class"
+                                    + " WHERE relname = 'retail_ai_briefs'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT privilege_type FROM information_schema.role_table_grants"
+                                    + " WHERE table_name = 'retail_ai_briefs' AND grantee = 'bms_app' ORDER BY 1")
+                            .query(String.class)
+                            .list())
+                    .containsExactly("INSERT", "SELECT");
+            assertThat(owner.sql("SELECT count(*) FROM retail_ai_briefs")
+                            .query(Long.class)
+                            .single())
+                    .isZero();
+            assertThat(owner.sql("SELECT role_key || ' ' || permission_key FROM role_permissions"
+                                    + " WHERE permission_key LIKE 'retail.advisor.%' ORDER BY 1")
+                            .query(String.class)
+                            .list())
+                    // Administrators only: switching the assistant on shows the brief to nobody else (review of #735).
+                    .containsExactly("tenant_admin retail.advisor.configure", "tenant_admin retail.advisor.use");
+            assertThat(owner.sql("SELECT count(*) FROM tenant_settings"
+                                    + " WHERE settings -> 'module_groups' -> 'ai' IS NOT NULL")
+                            .query(Long.class)
+                            .single())
+                    .as("no business is switched on")
+                    .isEqualTo(aiSettingsBefore);
+        }
+    }
+
+    /**
+     * V126 (issue #423, ADR-112) is expand only: an empty append-only addon_prices (nothing seeded: the price is the operator's)
+     * and two subscription marks that are false for every existing business, so no business is switched on.
+     * JUSTIFICATION-A3: a new test case; no existing case covers the add-on.
+     */
+    @Test
+    void aiAddonMigrationSeedsNoPriceAndSwitchesNobodyOn() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("126") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id, status) VALUES (?, 'test-v126', 'Test Tenant V126',"
+                                    + " '00000000-0000-4000-8000-000000000001', 'active')")
+                    .param(tenant)
+                    .update();
+            owner.sql("INSERT INTO subscriptions (id, tenant_id, plan_id, status)"
+                            + " VALUES (?, ?, '00000000-0000-4000-8000-000000000001', 'active')")
+                    .params(UUID.randomUUID(), tenant)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT count(*) FROM addon_prices")
+                            .query(Long.class)
+                            .single())
+                    .isZero();
+            assertThat(owner.sql("SELECT count(*) FROM subscriptions WHERE ai_addon OR ai_addon_no_charge")
+                            .query(Long.class)
+                            .single())
+                    .as("no business is switched on")
+                    .isZero();
+            assertThat(owner.sql("SELECT privilege_type FROM information_schema.role_table_grants"
+                                    + " WHERE table_name = 'addon_prices' AND grantee = 'bms_app'")
+                            .query(String.class)
+                            .list())
+                    .containsExactly("SELECT");
         }
     }
 

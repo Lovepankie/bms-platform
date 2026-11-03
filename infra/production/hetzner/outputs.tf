@@ -18,6 +18,11 @@ output "backup_bucket" {
   value       = module.cloudflare.backup_bucket
 }
 
+output "environment" {
+  description = "BMS_ENVIRONMENT of the host and the backup prefix the lock covers (runbook step 10)."
+  value       = module.cloudflare.environment
+}
+
 output "documents_bucket" {
   description = "R2_DOCUMENTS_BUCKET."
   value       = module.cloudflare.documents_bucket

@@ -55,15 +55,60 @@ final class CheckSchedule {
         return candidate.isAfter(last) ? last : candidate;
     }
 
-    /** A booked payment is asked about again once a day for 14 days, so a reversal whose notification was lost is still seen. */
+    /** A booked payment is asked about again once a day while it is young, so a reversal whose notification was lost is still seen. */
     static final Duration REVIEW_EVERY = Duration.ofDays(1);
 
-    static final Duration REVIEW_WINDOW = Duration.ofDays(14);
+    /** Mobile money is reversed within a week or not at all (spec 3.9). */
+    static final Duration MOBILE_MONEY_WINDOW = Duration.ofDays(7);
 
-    /** The next review of a booked payment, or null once the 14 days since it was paid are over. */
-    static Instant nextReview(Instant now, Instant paidAt) {
-        Instant next = now.plus(REVIEW_EVERY);
-        return next.isAfter(paidAt.plus(REVIEW_WINDOW)) ? null : next;
+    /** A card payment can be charged back for months (spec 3.9): daily for the first 14 days, weekly after, to 120 days. */
+    static final Duration CARD_WINDOW = Duration.ofDays(120);
+
+    static final Duration CARD_DAILY_FOR = Duration.ofDays(14);
+    static final Duration CARD_THEN_EVERY = Duration.ofDays(7);
+
+    /** A reversal that waits for a checker is looked at again every week: the request may have gone stale or expired. */
+    static final Duration REVIEW_OPEN_EVERY = Duration.ofDays(7);
+
+    /**
+     * The method strings the provider is known to report for a mobile money wallet: the family strings of its documentation
+     * (spec 3.12) and the two names of Airtel's and M-Pesa's. The exact Ugandan strings are not observed yet (spec 3.12.2), so
+     * a string that is not here is treated as a card (the longer window) and logged once, so the list can be corrected from what
+     * the provider really sends rather than guessed at.
+     */
+    static final java.util.Set<String> MOBILE_MONEY_METHODS =
+            java.util.Set.of("MTN", "AIRTEL", "MPESA", "M-PESA", "TIGO");
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CheckSchedule.class);
+    private static final java.util.Set<String> UNSEEN = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    static boolean mobileMoney(String reportedMethod) {
+        if (reportedMethod == null || reportedMethod.isBlank()) {
+            return false;
+        }
+        String m = reportedMethod.trim().toUpperCase(java.util.Locale.ROOT);
+        if (MOBILE_MONEY_METHODS.contains(m)) {
+            return true;
+        }
+        if (m.matches("^[A-Z0-9 _.-]{1,40}$") && UNSEEN.size() < 50 && UNSEEN.add(m)) {
+            log.warn(
+                    "payment method {} is not on the mobile money list, so its payments are reviewed as card payments",
+                    m);
+        }
+        return false;
+    }
+
+    /**
+     * The next review of a booked payment, or null once its window is over: for mobile money, daily for 7 days; for a card,
+     * daily for 14 days, then weekly until 120 days after it was paid (spec 3.9).
+     */
+    static Instant nextReview(Instant now, Instant paidAt, String reportedMethod) {
+        boolean wallet = mobileMoney(reportedMethod);
+        Duration window = wallet ? MOBILE_MONEY_WINDOW : CARD_WINDOW;
+        Duration step =
+                wallet || Duration.between(paidAt, now).compareTo(CARD_DAILY_FOR) < 0 ? REVIEW_EVERY : CARD_THEN_EVERY;
+        Instant next = now.plus(step);
+        return next.isAfter(paidAt.plus(window)) ? null : next;
     }
 
     /** Retry of a booking that failed technically: one minute, doubling to thirty. */

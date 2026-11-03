@@ -81,7 +81,9 @@ class BillingService {
 
     private final JdbcClient jdbc;
     private final PlatformService platform;
-    private final PriceBookService priceBook;
+    /** What a business owes is its plan's price and, when charged, the AI assistant add-on (ADR-112, issue #423). */
+    private final AddonService addons;
+
     private final PlatformAuditLog audit;
     private final BusinessClock clock;
     private final Outbox outbox;
@@ -99,7 +101,6 @@ class BillingService {
     BillingService(
             JdbcClient jdbc,
             PlatformService platform,
-            PriceBookService priceBook,
             PlatformAuditLog audit,
             BusinessClock clock,
             Outbox outbox,
@@ -111,10 +112,11 @@ class BillingService {
             @Value("${bms.platform.billing.issuer-name:Rincol Tech}") String issuerName,
             @Value("${bms.platform.billing.issuer-address:}") String issuerAddress,
             @Value("${bms.platform.billing.issuer-contact:}") String issuerContact,
-            @Value("${bms.platform.billing.issuer-tax-id:}") String issuerTaxId) {
+            @Value("${bms.platform.billing.issuer-tax-id:}") String issuerTaxId,
+            AddonService addons) {
         this.jdbc = jdbc;
         this.platform = platform;
-        this.priceBook = priceBook;
+        this.addons = addons;
         this.audit = audit;
         this.clock = clock;
         this.outbox = outbox;
@@ -377,9 +379,8 @@ class BillingService {
      * Owner gets the row with no channel, so the operator sees in its outbox that nothing went.
      */
     private boolean remind(TenantResponse tenant, String kind, LocalDate due, LocalDate today, Settings settings) {
-        PriceBookController.PlanPriceResponse price = priceBook
-                .priceOn(tenant.planCode(), tenant.currency(), priceDate(due, today))
-                .orElse(null);
+        PriceBookController.PlanPriceResponse price =
+                addons.chargeOn(tenant, priceDate(due, today)).orElse(null);
         Long amount = price == null ? null : price.monthlyMinor();
         String amountLine = price == null
                 ? "We will tell you the amount."
@@ -605,9 +606,8 @@ class BillingService {
         LocalDate due = dueOn(tenant.subscriptionStatus(), tenant.trialEndsOn(), tenant.paidUntil());
         String state = state(tenant.subscriptionStatus(), tenant.pilot(), due, today, settings.graceDays());
         boolean late = state.equals("in_grace") || state.equals("overdue");
-        PriceBookController.PlanPriceResponse price = priceBook
-                .priceOn(tenant.planCode(), tenant.currency(), priceDate(due, today))
-                .orElse(null);
+        PriceBookController.PlanPriceResponse price =
+                addons.chargeOn(tenant, priceDate(due, today)).orElse(null);
         List<BillingPayment> payments = jdbc.sql("""
                         SELECT sp.id, sp.amount_minor, sp.currency, sp.method, sp.reference, sp.paid_on, sp.months,
                                sp.period_start, sp.period_end, r.receipt_no
@@ -786,9 +786,8 @@ class BillingService {
             if (due == null || !today.isAfter(due.plusDays(settings.graceDays()))) {
                 continue;
             }
-            PriceBookController.PlanPriceResponse price = priceBook
-                    .priceOn(tenant.planCode(), tenant.currency(), priceDate(due, today))
-                    .orElse(null);
+            PriceBookController.PlanPriceResponse price =
+                    addons.chargeOn(tenant, priceDate(due, today)).orElse(null);
             items.add(new BillingAdminController.DueItem(
                     tenant.id(),
                     tenant.name(),

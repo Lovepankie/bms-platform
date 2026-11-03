@@ -82,6 +82,11 @@ start as an owner, and cannot read tables it has no grant on.
 
 ## 4. Verify and start
 
+**Before you start the API**, set `BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN=true` in `/opt/bms/.env`. A restore to an earlier
+point leaves objects in the documents bucket that were uploaded after the backup and have no row now; the nightly orphan
+sweep (issue #39, chapter 12 section 12.5) would delete them for good, and they may be needed to reconcile. Keep the dry
+run until those uploads are dealt with, then set it back to `false`.
+
 ```bash
 ./deploy.sh "$IMAGE_TAG"      # migrate is a no-op, or applies migrations newer than the backup
 curl -s https://<platform host>/readyz

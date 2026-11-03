@@ -6,9 +6,11 @@ import {
   activateApplication,
   type ActivationResult,
   type ApplicationDetail,
+  checkHostname,
   type Decision,
   decide,
   getApplication,
+  type HostnameCheck,
   OnboardingError,
   type PossibleDuplicate,
   statusLabel,
@@ -235,10 +237,85 @@ export function ActivateFormView({ form, problems, busy, onChange, onSubmit }: A
           </span>
         )}
       </div>
+      <HostnameCheckPanel slug={form.slug} />
       <BusyButton className="btn-brand" type="submit" busy={busy}>
         Activate and send the link
       </BusyButton>
     </form>
+  );
+}
+
+// JUSTIFICATION-A3: the hostname check of #155 is new behaviour with no existing home; its words and panel sit beside the form.
+export const RUNBOOK_STEP = 'See "Make the tenant host reachable" in docs/runbooks/onboard-tenant.md, then check again.';
+
+/** Plain words for each outcome of the hostname check (#155), and whether the address is ready. */
+export function hostnameWords(check: HostnameCheck): { ready: boolean; text: string } {
+  const host = check.host ?? 'The address';
+  switch (check.outcome) {
+    case 'answers':
+      return { ready: true, text: `${host} answers. The address is ready for this business.` };
+    case 'not_found':
+      return { ready: false, text: `${host} has no DNS record yet, so nobody can open it. ${RUNBOOK_STEP}` };
+    case 'no_answer':
+      return { ready: false, text: `${host} did not answer. The tunnel entry may be missing, or the record is still new. ${RUNBOOK_STEP}` };
+    case 'wrong_answer':
+      if (check.http_status === 403 || check.http_status === 503) {
+        return {
+          ready: false,
+          text: `${host} refused the check (HTTP ${check.http_status}). A Cloudflare security rule or challenge may be in front of it, not a missing tunnel entry. Open the address in a browser to see the page, and see "Make the tenant host reachable" in docs/runbooks/onboard-tenant.md.`,
+        };
+      }
+      return {
+        ready: false,
+        text: `Something answered at ${host}, but not this app${check.http_status ? ` (HTTP ${check.http_status})` : ''}. The tunnel entry may be missing. ${RUNBOOK_STEP}`,
+      };
+    default:
+      return { ready: false, text: `The check gave an answer this screen does not know: ${check.outcome ?? 'none'}. ${RUNBOOK_STEP}` };
+  }
+}
+
+/**
+ * The hostname check on the Activate form (#155): asks the business's own address for the app's version and says in plain
+ * words whether it answers. It changes nothing in DNS or the tunnel, and Activate works either way.
+ */
+export function HostnameCheckPanel({ slug }: { slug: string }) {
+  const [busy, setBusy] = useState(false);
+  const [checked, setChecked] = useState<{ slug: string; check?: HostnameCheck; error?: string } | null>(null);
+  // Any edit of the slug drops the answer, so changing it and back never brings an old answer back.
+  useEffect(() => setChecked(null), [slug]);
+  const current = checked && checked.slug === slug ? checked : null;
+  async function run() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      setChecked({ slug, check: await checkHostname(slug) });
+    } catch (err) {
+      setChecked({ slug, error: err instanceof OnboardingError ? err.message : 'Could not check the address. Try again.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+  const words = current?.check ? hostnameWords(current.check) : null;
+  return (
+    <section className="form-stack" aria-labelledby="hostname-heading">
+      <h3 id="hostname-heading">Does the address answer?</h3>
+      <p className="muted">Checks that the business's own address reaches this app. It changes nothing, and you can activate either way.</p>
+      <BusyButton type="button" busy={busy} disabled={slug.trim().length === 0} onClick={() => void run()}>
+        Check the address
+      </BusyButton>
+      <div aria-live="polite">
+        {words && (
+          <p role="status" className={`alert ${words.ready ? 'alert-success' : 'alert-warning'} wrap-anywhere`}>
+            {words.text}
+          </p>
+        )}
+        {current?.error && (
+          <p role="alert" className="alert alert-danger">
+            {current.error}
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 

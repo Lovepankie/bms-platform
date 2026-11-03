@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.reporting.internal;
 
 import com.rincoltech.bms.core.reporting.ReportDefinition;
+import com.rincoltech.bms.core.reporting.ReportPack;
 import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.kernel.Principal;
 import java.util.HashSet;
@@ -28,13 +29,51 @@ class ReportRegistry {
             if (!seen.add(d.key())) {
                 throw new IllegalStateException("Two reports are registered as " + d.key());
             }
-            if (!d.formats().stream()
-                    .allMatch(f -> f.equals("json") || f.equals("csv") || f.equals("pdf") || f.equals("xlsx"))) {
+            // JUSTIFICATION-A3: a pack (issue #229) is checked where every definition is, with its parts resolved.
+            boolean formatsOk = d instanceof ReportPack
+                    ? d.formats().equals(Set.of(ReportPack.FORMAT))
+                    : d.formats().stream()
+                            .allMatch(f -> f.equals("json") || f.equals("csv") || f.equals("pdf") || f.equals("xlsx"));
+            if (!formatsOk) {
                 throw new IllegalStateException("Report " + d.key() + " offers a format this build cannot render.");
             }
             byKey.put(d.key(), d);
         }
+        for (ReportDefinition d : definitions) {
+            if (d instanceof ReportPack pack) {
+                if (pack.parts().isEmpty()) {
+                    throw new IllegalStateException("Pack " + d.key() + " has no reports.");
+                }
+                for (String key : pack.parts()) {
+                    ReportDefinition part = byKey.get(key);
+                    if (part == null
+                            || part instanceof ReportPack
+                            || !part.formats().contains("pdf")
+                            || !part.formats().contains("xlsx")) {
+                        throw new IllegalStateException("Pack " + d.key() + " names " + key
+                                + ", which is not a report with a PDF and a workbook.");
+                    }
+                }
+            }
+        }
         this.modules = modules;
+    }
+
+    /** The reports of a pack, in print order (checked at start, so every key resolves). */
+    List<ReportDefinition> parts(ReportPack pack) {
+        return pack.parts().stream().map(byKey::get).toList();
+    }
+
+    /**
+     * Whether the principal may run the report: its permission, and for a pack the permission of every part as well
+     * (ADR-038 decision 4).
+     */
+    boolean permitted(Principal principal, ReportDefinition d) {
+        if (!principal.hasPermission(d.permission())) {
+            return false;
+        }
+        return !(d instanceof ReportPack pack)
+                || parts(pack).stream().allMatch(p -> principal.hasPermission(p.permission()));
     }
 
     Optional<ReportDefinition> find(String key) {
@@ -50,7 +89,7 @@ class ReportRegistry {
     List<ReportDefinition> available(Principal principal) {
         return byKey.values().stream()
                 .filter(d -> d.everyBusiness() || modules.isEnabled(d.module()))
-                .filter(d -> principal.hasPermission(d.permission()))
+                .filter(d -> permitted(principal, d))
                 .toList();
     }
 }

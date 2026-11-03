@@ -1543,9 +1543,11 @@ td.num.qty-packs {
   white-space: normal;
 }
 
-/* An amount is never broken in the middle of its figures. */
+/* An amount is never broken in the middle of its figures; in a wide font at a large size it may break after "UGX" (review of #735). */
 .pack-table .pack-price .num {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 
 .ladder-says,

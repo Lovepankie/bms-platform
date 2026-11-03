@@ -3,8 +3,11 @@
  * 14.10). The lending registration with the report framework of {@code core.reporting}: each report is a
  * {@link com.rincoltech.bms.core.reporting.ReportDefinition} bean that reads its figures through the public
  * {@link com.rincoltech.bms.lending.insights.InsightsFigures} port, so there is one implementation of PAR and
- * the report equals the insights page. Today: {@code lending.par}. The collections, disbursements, officer
- * performance, collateral register and regulator summary arrive with slices D3 and D4.
+ * the report equals the insights page. Today: {@code lending.par} and {@code lending.portfolio_outstanding} (D1, D2),
+ * {@code lending.expected_vs_collected}, {@code lending.arrears_list}, {@code lending.disbursements} and
+ * {@code lending.officer_performance} (D3, issue #222), and {@code lending.collateral_register} and
+ * {@code lending.regulatory_summary} (D4, issue #225), which read through the public
+ * {@link com.rincoltech.bms.lending.insights.RegisterFigures} port.
  */
 @ApplicationModule(
         id = "lending.reports",

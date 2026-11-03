@@ -1,6 +1,6 @@
 import { chromium, type Browser } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { openLayout } from './open';
+import { openLayout, settle } from './open';
 
 // The staff top bar laid out in Chromium on a phone (issue #603): with the Ask button beside Search, at 360, 390 and 412 wide, at
 // the default and a large font size, with Ask BMS on and off, no control overlaps another, each is a target of at least 48px,
@@ -85,6 +85,10 @@ describe.each([360, 390, 412])('the business and the branch at %ipx wide', (widt
         await openLayout(page, `layout/header.html?font=${font}&ask=${ask === 'on' ? 1 : 0}&sync=${sync}&waiting=${waiting}&${names}`, page.locator('.staff-bar-top .ask-open'));
         const button = page.locator('.staff-bar-top .sync-button');
         await button.waitFor();
+        // Read only once the fonts are in and what is asserted measures the same twice in a row (issue #775): the title,
+        // whose visible text is read, and the whole bar, whose 48px targets and edges are.
+        await settle(page.locator('.staff-bar-top .top-title'));
+        await settle(page.locator('.staff-bar-top'));
         // The business name comes from the branding of this page's host; without it the title would show the platform's name.
         expect(await page.locator('.top-title-business').textContent()).toBe('Tumaini Traders');
         // Ask is its icon and the sync indicator its dot and number, both 48px targets that keep their names.
@@ -116,6 +120,7 @@ describe.each([360, 390, 412])('the top bar at %ipx wide', (width) => {
       const page = await browser.newPage({ viewport: { width, height: 700 }, hasTouch: true, isMobile: true });
       const button = page.locator('.staff-bar-top .ask-open');
       await openLayout(page, `layout/header.html?font=${font}&ask=${ask}`, button);
+      await settle(page.locator('.staff-bar-top'));
       expect(await button.getAttribute('aria-label')).toBe(ask === '1' ? 'Ask BMS, New' : 'How do I?, New');
       // Refresh is in the bar beside Search (issue #631), its icon alone, named Refresh.
       const refresh = page.locator('.staff-bar-top .refresh-button');
@@ -154,5 +159,29 @@ describe.each([360, 390, 412])('the top bar at %ipx wide', (width) => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       await page.close();
     });
+  });
+});
+
+// JUSTIFICATION-A3: a new layout case for issue #763 (the offline banner at 360 and 412px) after the top bar cases it extends.
+// Issue #763: offline, the banner under the bar is the page's one offline notice, with the time of the figures, wrapped inside
+// the screen at the default and a large font size, and the bar's Refresh does not repeat it.
+describe.each([360, 412])('the offline banner at %ipx wide', (width) => {
+  it.each([1, 2])('fits at font scale %i as the only offline notice', async (font) => {
+    const page = await browser.newPage({ viewport: { width, height: 700 }, hasTouch: true, isMobile: true });
+    const banner = page.locator('.offline-banner');
+    await openLayout(page, `layout/header.html?font=${font}&sync=offline`, banner);
+    await settle(banner);
+    expect(await banner.count()).toBe(1);
+    expect(await banner.textContent()).toMatch(/^You are offline\. You can still sell; your sales will send when you are back online\. Figures are from \d{1,2} [A-Z][a-z]{2} at \d\d:\d\d\.$/);
+    const box = (await banner.boundingBox()) as Box;
+    expect(box.x).toBeGreaterThanOrEqual(-0.5);
+    expect(box.x + box.width).toBeLessThanOrEqual(width + 0.5);
+    expect(await banner.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    // The time of the figures is said once on the page: not again beside Refresh or anywhere else.
+    expect(await page.getByText(/Figures are from|Showing the figures/).count()).toBe(1);
+    // One notice: the dot's own word Offline (ADR-067) is a status, not a second notice.
+    expect(await page.getByText(/You are offline/).count()).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.close();
   });
 });

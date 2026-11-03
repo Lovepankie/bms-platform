@@ -67,6 +67,7 @@ export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
 export type SaleReceipt = S['RetailSaleReceipt'];
 export type ReceiptPreview = S['RetailReceiptPreview'];
+export type ReceiptLink = S['RetailReceiptLink'];
 export type CustomerPage = S['RetailCustomerList'];
 /** Customer accounts (ADR-033, issue #196): the credit limit and terms, the statement, payment on account. Money is integer minor units. */
 export type CustomerAccount = S['RetailCustomerAccount'];
@@ -474,6 +475,8 @@ export interface RetailApi {
   correctStock(body: StockCorrectionRequest, idempotencyKey: string): Promise<StockCorrection | ApprovalWaiting>;
   /** The stock history of an item at a branch, newest first (issue #351). */
   stockHistory(q: { productId: string; branchId: string; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
+  /** Stock used and damaged, newest first, in the days given and the caller's branch scope (#145); a blank branch or item means all. */
+  usageHistory(q: { from: string; to: string; branchId?: string; productId?: string; cursor?: string; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeInactive?: boolean; signal?: AbortSignal }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
@@ -531,6 +534,8 @@ export interface RetailApi {
   saleReceipt(saleId: string): Promise<SaleReceipt>;
   /** What the receipt PDF prints, for the screen's preview, asked for only when View receipt is tapped (issue #500); without `printed` when it could not be laid out. */
   saleReceiptPrinted(saleId: string): Promise<ReceiptPreview>;
+  /** A short link to the receipt PDF for a message to a typed WhatsApp number: read only, no sign-in, 90 days (issue #760). */
+  saleReceiptLink(saleId: string): Promise<ReceiptLink>;
   /** Optional documents (the documents capability, issue #197); 404 capability_not_enabled while it is off. */
   listSaleDocuments(saleId: string): Promise<RetailDocument[]>;
   /** The invoice or delivery note of a sale, issued once; takes the Idempotency-Key of its button. */
@@ -946,6 +951,16 @@ const realRetail: RetailApi = {
     return { items: page.items ?? [], ...(page.next_cursor ? { next_cursor: page.next_cursor } : {}) };
   },
 
+  async usageHistory({ from, to, branchId, productId, cursor, signal }) {
+    const page = unwrap(
+      await api.GET('/api/v1/retail/stock/movements', {
+        params: { query: { from, to, kind: ['usage', 'damage'], newest_first: true, ...(branchId ? { branch_id: [branchId] } : {}), ...(productId ? { product_id: productId } : {}), ...(cursor ? { cursor } : {}) } },
+        signal,
+      }),
+    );
+    return { items: page.items ?? [], ...(page.next_cursor ? { next_cursor: page.next_cursor } : {}) };
+  },
+
   async listStock({ branchId, query, categoryId, negativeOnly, level, includeInactive, signal }) {
     const rows: StockRow[] = [];
     let cursor: string | undefined;
@@ -1135,6 +1150,10 @@ const realRetail: RetailApi = {
 
   async saleReceiptPrinted(saleId) {
     return unwrap(await api.GET('/api/v1/retail/sales/{sale_id}/receipt/printed', { params: { path: { sale_id: saleId } } }));
+  },
+
+  async saleReceiptLink(saleId) {
+    return unwrap(await api.POST('/api/v1/retail/sales/{sale_id}/receipt/link', { params: { path: { sale_id: saleId } } }));
   },
 
   async saleReceiptPdf(saleId) {

@@ -35,7 +35,8 @@ public interface AiSettings {
     Status setCaps(Long dailyTokenCap, Long dailyCostCapMicro, int expectedVersion);
 
     /**
-     * @param allowed the tenant is named in {@code BMS_AI_ENABLED_TENANTS}
+     * @param allowed the operator switched the AI assistant add-on on for the business (ADR-112), or the platform's
+     *     {@code BMS_AI_ENABLED_TENANTS} lets it in
      * @param providerConfigured a provider (or the test stub) is wired; false means every call falls back
      * @param tokensUsedToday what today's calls hold against the cap, a call in flight included
      * @param costUsedTodayMicro the same for estimated cost, in micro-units of {@code costCurrency}

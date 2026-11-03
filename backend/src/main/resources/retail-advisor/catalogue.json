@@ -1,0 +1,138 @@
+{
+  "templates": {
+    "summary": "Advisory summary for {{asof}}. These are suggestions to check before acting; nothing has been changed.",
+    "finding": "{{priority}} priority. {{facts}}. Suggested action: {{action}}",
+    "watch": "To watch: {{facts}}.",
+    "fallback": "Key figures: {{facts}}.",
+    "nothing": "Nothing was flagged in the figures you can see."
+  },
+  "priorities": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "topics": [
+    {
+      "code": "sales_pace",
+      "label": "Sales against the usual pace",
+      "facts": [
+        "sales.yesterday", "sales.yesterday_count", "sales.last_7_days", "profit.last_7_days",
+        "own.sales_yesterday", "own.sales_last_7_days"
+      ]
+    },
+    {
+      "code": "best_sellers",
+      "label": "Best sellers",
+      "facts": ["item.sales_week", "sales.last_7_days", "stock.low", "stock.out"]
+    },
+    {
+      "code": "stock_levels",
+      "label": "Low and out of stock",
+      "facts": ["stock.low", "stock.out", "item.sales_week", "orders.open"]
+    },
+    {
+      "code": "slow_stock",
+      "label": "Slow sellers",
+      "facts": ["stock.slow_items", "sales.last_7_days"]
+    },
+    {
+      "code": "credit_follow_up",
+      "label": "Credit due and overdue",
+      "facts": ["credit.owed", "credit.overdue", "credit.buyers", "credit.over_limit"]
+    },
+    {
+      "code": "till_checks",
+      "label": "Cancelled sales, goods taken back and price changes",
+      "facts": ["controls.voided_sales", "controls.returns", "controls.price_overrides", "sales.yesterday_count"]
+    },
+    {
+      "code": "orders",
+      "label": "Customer orders and the stock kept for them",
+      "facts": ["orders.open", "stock.low", "stock.out"]
+    },
+    {
+      "code": "wholesale",
+      "label": "Price lists and credit to shops",
+      "facts": ["wholesale.list_sales", "credit.over_limit", "credit.owed", "credit.overdue"]
+    }
+  ],
+  "actions": [
+    {
+      "code": "SALES_CHECK_SLOW_DAY",
+      "topic": "sales_pace",
+      "text": "Look at what was different on the slow days: opening hours, staff on duty, stock on the shelf and prices."
+    },
+    {
+      "code": "SALES_REPEAT_WHAT_WORKED",
+      "topic": "sales_pace",
+      "text": "Note what went well and repeat it: the same stock on display, the same opening hours and the same offers."
+    },
+    {
+      "code": "SALES_STEADY",
+      "topic": "sales_pace",
+      "text": "No action is needed now; sales are at their usual pace.",
+      "calm": true
+    },
+    {
+      "code": "BEST_KEEP_IN_STOCK",
+      "topic": "best_sellers",
+      "text": "Keep enough stock{{where}} so the best sellers do not run out."
+    },
+    {
+      "code": "BEST_CHECK_PRICE",
+      "topic": "best_sellers",
+      "text": "Check that the price{{where}} still covers the buying price and is in line with the market."
+    },
+    {
+      "code": "STOCK_RESTOCK_LOW",
+      "topic": "stock_levels",
+      "text": "Restock the items that are low or out before they cost you sales."
+    },
+    {
+      "code": "STOCK_CHECK_MINIMUMS",
+      "topic": "stock_levels",
+      "text": "Check the minimum stock set for each item so the low stock warnings come in time."
+    },
+    {
+      "code": "SLOW_REVIEW_ITEMS",
+      "topic": "slow_stock",
+      "text": "Review the items that have not sold: move them to a shop where they sell, lower the price or stop buying them."
+    },
+    {
+      "code": "CREDIT_CALL_OVERDUE",
+      "topic": "credit_follow_up",
+      "text": "Call the buyers whose payments are past the due date and agree when they will pay."
+    },
+    {
+      "code": "CREDIT_HOLD_NEW_CREDIT",
+      "topic": "credit_follow_up",
+      "text": "Hold new credit for buyers who owe past the due date or are over their limit until they pay."
+    },
+    {
+      "code": "CONTROLS_REVIEW_TILL",
+      "topic": "till_checks",
+      "text": "Open the Controls page and check who cancelled sales, took goods back or changed prices, and why."
+    },
+    {
+      "code": "CONTROLS_STEADY",
+      "topic": "till_checks",
+      "text": "No action is needed now; the till checks are at their usual level.",
+      "calm": true
+    },
+    {
+      "code": "ORDERS_CLEAR_OPEN",
+      "topic": "orders",
+      "text": "Pack and deliver the open orders, oldest first, and make sure their stock is kept aside."
+    },
+    {
+      "code": "WHOLESALE_REVIEW_LISTS",
+      "topic": "wholesale",
+      "text": "Check that the price lists still give a fair margin for the buyers who use them."
+    },
+    {
+      "code": "WHOLESALE_FOLLOW_UP_SHOPS",
+      "topic": "wholesale",
+      "text": "Follow up the shops that buy on credit and owe past the due date or over their limit."
+    }
+  ]
+}

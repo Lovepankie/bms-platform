@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.core.notifications.Outbox;
+import com.rincoltech.bms.kernel.RequestContext;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Session;
 import java.sql.Connection;
@@ -17,10 +18,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -159,6 +165,348 @@ class OutboxIT extends IntegrationTest {
                         .query(Long.class)
                         .single())
                 .isZero();
+    }
+
+    /**
+     * Issue #333 (ADR-117): with the provider {@code resend} the SMTP sender is off and the dispatcher sends an email row
+     * through Resend, whichever of the two {@code email} senders is listed first.
+     */
+    @Test
+    void withResendChosenAnEmailRowReachesResendThroughTheDispatcher() throws Exception {
+        // JUSTIFICATION-A3: the routing test the #759 review asked for, through the real dispatcher.
+        List<String> keys = Collections.synchronizedList(new ArrayList<>());
+        com.sun.net.httpserver.HttpServer server =
+                com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/emails", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            keys.add(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+            byte[] out = "{\"id\":\"4ef9a417-02e9-4d39-ad75-9611e0fcc33c\"}".getBytes();
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NotificationProperties properties = new NotificationProperties(
+                    new NotificationProperties.Smtp(
+                            "smtp.example.test", null, "u", "fabricated-01", "no-reply@example.test"),
+                    null,
+                    "",
+                    new NotificationProperties.Mail(
+                            "resend",
+                            "re_fabricated_test_key_0002",
+                            "http://127.0.0.1:" + server.getAddress().getPort(),
+                            null));
+            SmtpEmailChannel smtp = new SmtpEmailChannel(
+                    properties, new OutboxTemplates(), EmailLayoutTest.HOSTS, null, null, null, null, "");
+            ResendEmailChannel resend = new ResendEmailChannel(
+                    smtp,
+                    properties,
+                    new tools.jackson.databind.ObjectMapper(),
+                    new com.rincoltech.bms.kernel.BusinessClock(java.time.Clock.systemUTC()),
+                    "");
+            assertThat(smtp.enabled()).isFalse();
+            assertThat(resend.enabled()).isTrue();
+            String key = key();
+            enqueue("email", "test-op@example.test", key);
+
+            dispatcher.dispatch(List.of(smtp, resend), 1000);
+
+            assertThat(keys).anyMatch(k -> k.startsWith("bms:local:") && k.endsWith(":" + key));
+            assertThat(row(key).get("status")).isEqualTo("sent");
+
+            // JUSTIFICATION-A3: the second provider of the routing test, as the #759 lead asked.
+            // With smtp chosen, Resend is off and the row goes to the SMTP sender, whichever is listed first. Port 1 on
+            // this machine refuses at once, so the try fails as SMTP's (a mail class), never as Resend's.
+            NotificationProperties smtpChosen = new NotificationProperties(
+                    new NotificationProperties.Smtp("127.0.0.1", 1, "u", "fabricated-01", "no-reply@example.test"),
+                    null,
+                    "",
+                    new NotificationProperties.Mail(
+                            "smtp",
+                            "re_fabricated_test_key_0002",
+                            "http://127.0.0.1:" + server.getAddress().getPort(),
+                            null));
+            SmtpEmailChannel smtpOn = new SmtpEmailChannel(
+                    smtpChosen, new OutboxTemplates(), EmailLayoutTest.HOSTS, null, null, null, null, "");
+            ResendEmailChannel resendOff = new ResendEmailChannel(
+                    smtpOn,
+                    smtpChosen,
+                    new tools.jackson.databind.ObjectMapper(),
+                    new com.rincoltech.bms.kernel.BusinessClock(java.time.Clock.systemUTC()),
+                    "");
+            assertThat(smtpOn.enabled()).isTrue();
+            assertThat(resendOff.enabled()).isFalse();
+            String viaSmtp = key();
+            enqueue("email", "test-op@example.test", viaSmtp);
+            int before = keys.size();
+
+            dispatcher.dispatch(List.of(resendOff, smtpOn), 1000);
+
+            assertThat(keys).hasSize(before);
+            Map<String, Object> tried = row(viaSmtp);
+            assertThat(tried.get("attempts")).isEqualTo(1);
+            assertThat(String.valueOf(tried.get("last_error"))).doesNotContain("resend");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /**
+     * Issue #333 (ADR-117): a 429 from Resend gives the attempt back. The row waits for Retry-After, and the next run sends
+     * it, so a burst of rate limits never uses up a reset email's three tries.
+     */
+    @Test
+    void aRateLimitFromResendGivesTheAttemptBackAndTheRowIsSentLater() throws Exception {
+        // JUSTIFICATION-A3: the dispatcher-level proof the second #759 review asked for.
+        String key = key();
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer server =
+                com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/emails", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            // Only this row is rate limited, once; other tests' rows that the run claims are accepted.
+            boolean ours = String.valueOf(exchange.getRequestHeaders().getFirst("Idempotency-Key"))
+                    .endsWith(":" + key);
+            boolean first = ours && calls.getAndIncrement() == 0;
+            byte[] out = (first
+                            ? "{\"name\":\"rate_limit_exceeded\"}"
+                            : "{\"id\":\"4ef9a417-02e9-4d39-ad75-9611e0fcc33c\"}")
+                    .getBytes();
+            if (first) {
+                exchange.getResponseHeaders().add("Retry-After", "60");
+            }
+            exchange.sendResponseHeaders(first ? 429 : 200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NotificationProperties properties = new NotificationProperties(
+                    new NotificationProperties.Smtp(null, null, null, null, "no-reply@example.test"),
+                    null,
+                    "",
+                    new NotificationProperties.Mail(
+                            "resend",
+                            "re_fabricated_test_key_0003",
+                            "http://127.0.0.1:" + server.getAddress().getPort(),
+                            null));
+            SmtpEmailChannel smtp = new SmtpEmailChannel(
+                    properties, new OutboxTemplates(), EmailLayoutTest.HOSTS, null, null, null, null, "");
+            ResendEmailChannel resend = new ResendEmailChannel(
+                    smtp,
+                    properties,
+                    new tools.jackson.databind.ObjectMapper(),
+                    new com.rincoltech.bms.kernel.BusinessClock(java.time.Clock.systemUTC()),
+                    "");
+            enqueue("email", "test-op@example.test", key);
+            // Other tests' email rows may be claimed first: run until this row has had its 429.
+            for (int i = 0; i < 20 && calls.get() == 0; i++) {
+                dispatcher.dispatch(List.of(resend), 1);
+            }
+            Map<String, Object> waiting = row(key);
+            assertThat(waiting.get("status")).isEqualTo("pending");
+            assertThat(waiting.get("attempts")).isEqualTo(0);
+            Boolean later = TestDatabase.owner()
+                    .sql(
+                            "SELECT next_attempt_at > now() + interval '30 seconds' FROM notification_outbox WHERE idempotency_key = ?")
+                    .param(key)
+                    .query(Boolean.class)
+                    .single();
+            assertThat(later).isTrue();
+
+            TestDatabase.owner()
+                    .sql(
+                            "UPDATE notification_outbox SET next_attempt_at = now() - interval '1 second' WHERE idempotency_key = ?")
+                    .param(key)
+                    .update();
+            dispatcher.dispatch(List.of(resend), 1000);
+
+            Map<String, Object> sent = row(key);
+            assertThat(sent.get("status")).isEqualTo("sent");
+            assertThat(sent.get("attempts")).isEqualTo(1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Autowired
+    EmailSuppressions suppressions;
+
+    /**
+     * Issue #333 (ADR-117 decision 9): an address suppressed after a complaint is refused by both senders with
+     * {@code recipient_suppressed}, so the row is failed on "Messages not sent" and nothing reaches Resend; once an operator
+     * clears it, a new row to it is sent.
+     */
+    @Test
+    void aSuppressedAddressIsRefusedAndShownAsNotSentUntilAnOperatorClearsIt() throws Exception {
+        // JUSTIFICATION-A3: the refusal and clear through the dispatcher, the third #759 review's must-fix 2.
+        String to = "test-suppressed-" + UUID.randomUUID().toString().substring(0, 6) + "@example.test";
+        TestDatabase.owner()
+                .sql("INSERT INTO platform_audit_log (id, action, data) VALUES (?, 'platform.email.complained', "
+                        + "jsonb_build_object('recipient_hash', ?::text))")
+                .params(UUID.randomUUID(), suppressions.hash(to))
+                .update();
+        List<String> keys = Collections.synchronizedList(new ArrayList<>());
+        com.sun.net.httpserver.HttpServer server =
+                com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/emails", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            keys.add(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+            byte[] out = "{\"id\":\"4ef9a417-02e9-4d39-ad75-9611e0fcc33c\"}".getBytes();
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NotificationProperties properties = new NotificationProperties(
+                    new NotificationProperties.Smtp(null, null, null, null, "no-reply@example.test"),
+                    null,
+                    "",
+                    new NotificationProperties.Mail(
+                            "resend",
+                            "re_fabricated_test_key_0004",
+                            "http://127.0.0.1:" + server.getAddress().getPort(),
+                            null));
+            SmtpEmailChannel smtp = new SmtpEmailChannel(
+                    properties, new OutboxTemplates(), EmailLayoutTest.HOSTS, null, null, null, null, suppressions, "");
+            ResendEmailChannel resend = new ResendEmailChannel(
+                    smtp,
+                    properties,
+                    new tools.jackson.databind.ObjectMapper(),
+                    new com.rincoltech.bms.kernel.BusinessClock(java.time.Clock.systemUTC()),
+                    "");
+            String refused = key();
+            enqueue("email", to, refused);
+
+            dispatcher.dispatch(List.of(resend), 1000);
+
+            Map<String, Object> row = row(refused);
+            assertThat(row.get("status")).isEqualTo("failed");
+            assertThat(row.get("last_error")).isEqualTo("recipient_suppressed");
+            assertThat(keys).noneMatch(k -> k.endsWith(":" + refused));
+            // The SMTP sender refuses the same address before it connects (no SMTP host is set here).
+            assertThat(smtp.send(new OutboxChannel.Delivery(to, "s", "t", "k")))
+                    .isEqualTo(OutboxChannel.Result.refused("recipient_suppressed"));
+
+            Api platform = Api.platform(http);
+            String opEmail = Api.email("operator");
+            UUID opId = Api.platformUser(opEmail);
+            Session op = platform.signIn(opId, opEmail, Api.PASSWORD, null);
+            boolean shown = false;
+            for (JsonNode f : platform.get("/api/v1/platform/outbox", op.accessToken())
+                    .getBody()
+                    .get("failures")) {
+                shown |= "recipient_suppressed".equals(f.path("last_error").asString(""));
+            }
+            assertThat(shown).as("the refusal is on Messages not sent").isTrue();
+
+            assertThat(platform.post("/api/v1/platform/outbox/unsuppress", Map.of("email", to), op.accessToken())
+                            .getStatusCode())
+                    .isEqualTo(HttpStatus.NO_CONTENT);
+            String again = key();
+            enqueue("email", to, again);
+            dispatcher.dispatch(List.of(resend), 1000);
+            assertThat(row(again).get("status")).isEqualTo("sent");
+            assertThat(keys).anyMatch(k -> k.endsWith(":" + again));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** Issue #777: the value sent to the clear is an address or a typo of one, so a refusal never repeats it. */
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void anUnsuppressOfANonAddressIsRefusedWithoutEchoingIt(CapturedOutput output) {
+        Api platform = Api.platform(http);
+        String opEmail = Api.email("operator");
+        UUID opId = Api.platformUser(opEmail);
+        Session op = platform.signIn(opId, opEmail, Api.PASSWORD, null);
+        String typed = "staff-777-at-fabricated.example.test";
+
+        var answer = platform.post("/api/v1/platform/outbox/unsuppress", Map.of("email", typed), op.accessToken());
+
+        // A validation refusal answers 422 in this API (ApiException.validation).
+        assertThat(answer.getStatusCode().value()).isEqualTo(422);
+        assertThat(String.valueOf(answer.getBody())).contains("email").doesNotContain(typed);
+        assertThat(output.getAll()).doesNotContain(typed);
+    }
+
+    /**
+     * Issue #333 (ADR-117 decision 1): with Resend chosen and SMTP still set, a row whose request could not reach Resend
+     * goes by SMTP, is marked sent, and the platform audit log records that SMTP carried it.
+     */
+    @Test
+    void aRowThatCannotReachResendGoesBySmtpAndTheSenderIsRecorded() throws Exception {
+        // JUSTIFICATION-A3: the dispatcher-level proof of the fallback and of which sender sent (third #759 review, 3).
+        int closed;
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
+            closed = probe.getLocalPort();
+        }
+        NotificationProperties properties = new NotificationProperties(
+                new NotificationProperties.Smtp(
+                        "smtp.example.test", null, "u", "fabricated-01", "no-reply@example.test"),
+                null,
+                "",
+                new NotificationProperties.Mail(
+                        "resend", "re_fabricated_test_key_0005", "http://127.0.0.1:" + closed, null));
+        List<String> carried = Collections.synchronizedList(new ArrayList<>());
+        SmtpEmailChannel smtp =
+                new SmtpEmailChannel(
+                        properties,
+                        new OutboxTemplates(),
+                        EmailLayoutTest.HOSTS,
+                        null,
+                        null,
+                        null,
+                        null,
+                        suppressions,
+                        "") {
+                    @Override
+                    Result transmit(Delivery delivery) {
+                        carried.add(delivery.idempotencyKey());
+                        return Result.SENT;
+                    }
+                };
+        ResendEmailChannel resend = new ResendEmailChannel(
+                smtp,
+                properties,
+                new tools.jackson.databind.ObjectMapper(),
+                new com.rincoltech.bms.kernel.BusinessClock(java.time.Clock.systemUTC()),
+                "");
+        String key = key();
+        enqueue("email", "test-fallback@example.test", key);
+
+        // Inside a request, so the row shows it went through the PlatformAuditLog port (issue #777): the port stores
+        // the request id and the client address, which the raw insert it replaced left empty.
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(RequestContext.HEADER, "fabricated-request-0777");
+        request.setRemoteAddr("192.0.2.77");
+        new RequestContext()
+                .doFilter(
+                        request,
+                        new MockHttpServletResponse(),
+                        (req, res) -> dispatcher.dispatch(List.of(resend), 1000));
+
+        assertThat(carried).contains(key);
+        assertThat(row(key).get("status")).isEqualTo("sent");
+        String id = TestDatabase.owner()
+                .sql("SELECT id::text FROM notification_outbox WHERE idempotency_key = ?")
+                .param(key)
+                .query(String.class)
+                .single();
+        Map<String, Object> sentVia = TestDatabase.owner()
+                .sql("SELECT data ->> 'via' AS via, data ->> 'channel' AS channel, request_id, host(ip) AS ip"
+                        + " FROM platform_audit_log"
+                        + " WHERE action = 'platform.outbox.sent_via' AND data ->> 'outbox_id' = ?")
+                .param(id)
+                .query()
+                .singleRow();
+        assertThat(sentVia.get("via")).isEqualTo("smtp");
+        assertThat(sentVia.get("channel")).isEqualTo("email");
+        assertThat(sentVia.get("request_id")).isEqualTo("fabricated-request-0777");
+        assertThat(sentVia.get("ip")).isEqualTo("192.0.2.77");
     }
 
     /** FR-NTF-09: a sent row is marked sent and its parameters (which may hold a link) cleared. */
@@ -554,6 +902,9 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("expires_on", "11 Nov 2026"),
                 Map.entry("module", "Shop"),
                 Map.entry("decision", "approved: Shop is switched on now"),
+                // A report pack is ready (issue #229).
+                Map.entry("name", "Test Staff 02"),
+                Map.entry("report_title", "monthly report pack"),
                 Map.entry("links", "Test Shop\nhttps://test-bms-staging.rincoltech.test/sign-in"));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {

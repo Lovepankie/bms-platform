@@ -677,6 +677,9 @@ class BusinessClosureIT extends IntegrationTest {
         assertThat(count("SELECT count(*) FROM help_setup_drafts WHERE tenant_id = ?", t.tenantId()))
                 .as("the setup helper's draft row seeded by RlsIsolationIT.seedOneRowInEveryTable")
                 .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .as("the receipt link seeded by RlsIsolationIT.seedOneRowInEveryTable (V128, #760)")
+                .isEqualTo(1);
         ResponseEntity<JsonNode> removed = remove(op, closureId, code(op));
         assertThat(removed.getStatusCode()).as("%s", removed.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(removed.getBody().get("erased").get("core").asInt()).isPositive();
@@ -718,6 +721,12 @@ class BusinessClosureIT extends IntegrationTest {
         assertThat(closures.purgeDue()).as("nothing is due before keep_until").isZero();
         assertThat(count("SELECT count(*) FROM retail_sales WHERE tenant_id = ?", t.tenantId()))
                 .isPositive();
+        // The import run and its batch (V127, #127), seeded by RlsIsolationIT.seedOneRowInEveryTable. The batch names
+        // its run with no ON DELETE CASCADE, so the purge's passes must delete the batch before the run (#736).
+        assertThat(count("SELECT count(*) FROM import_runs WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM import_batches WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
         TestDatabase.owner()
                 .sql("UPDATE tenant_closures SET keep_until = ? WHERE id = ?")
                 .params(today.minusDays(1), closureId)
@@ -733,12 +742,33 @@ class BusinessClosureIT extends IntegrationTest {
             }
         }
         assertThat(kept).as("tables still holding rows after the purge").isEmpty();
+        // The five tables of V124 (#317), seeded with a statement line that names a fee entry, a review of it,
+        // and a run with a finding: the purge's passes delete the line before the journal entry it names.
+        for (String table : List.of(
+                "payment_statements",
+                "payment_statement_rows",
+                "payment_statement_reviews",
+                "payment_reconciliation_runs",
+                "payment_reconciliation_findings")) {
+            assertThat(RlsIsolationIT.tenantOwnedTables()).contains(table);
+        }
         assertThat(count("SELECT count(*) FROM help_ask_questions WHERE tenant_id = ?", t.tenantId()))
                 .isZero();
         assertThat(count("SELECT count(*) FROM help_ask_spend WHERE tenant_id = ?", t.tenantId()))
                 .isZero();
         assertThat(count("SELECT count(*) FROM help_setup_drafts WHERE tenant_id = ?", t.tenantId()))
                 .as("and the purge leaves none")
+                .isZero();
+        assertThat(count("SELECT count(*) FROM import_batches WHERE tenant_id = ?", t.tenantId()))
+                .as("the import batch is purged")
+                .isZero();
+        assertThat(count("SELECT count(*) FROM import_runs WHERE tenant_id = ?", t.tenantId()))
+                .as("and the import run it named")
+                .isZero();
+        // V128 (#760): the receipt link points at a sale; the purge removes both, the link first.
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+        assertThat(count("SELECT count(*) FROM retail_sales WHERE tenant_id = ?", t.tenantId()))
                 .isZero();
         assertThat(count(
                         "SELECT count(*) FROM tenant_closures WHERE id = ? AND status = 'purged' AND purged_at IS NOT NULL",

@@ -340,6 +340,9 @@ class PlatformController {
             @Schema(description = "The price in force today for the business's plan, or null when none was entered")
             PriceBookController.PlanPriceResponse planPrice,
 
+            @Schema(description = "The AI assistant add-on on this business (ADR-112, issue #423)")
+            AddonController.TenantAddonResponse aiAddon,
+
             List<AdminResponse> admins,
 
             @Schema(description = "Newest first") List<PaymentResponse> payments,

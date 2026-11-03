@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../../../api/retail';
 import { dropDraft, loadDraft, newIdempotencyKey, saveDraft, type DraftStore } from './idempotency';
-import { buildSaleRequest, draftProblem, draftTotal, lineHint, newLine, type Draft } from './sale-state';
+import { buildSaleRequest, draftProblem, draftTotal, lineHint, newLine, oldestRead, type Draft } from './sale-state';
 
 const bulb: Product = { id: 'p1', code: 'P003', description: 'LED bulb 9W screw', unit: 'piece', sell_minor: 6000, active: true };
 const cable: Product = { id: 'p2', code: 'P001', description: '2.5mm twin cable 100m roll', unit: 'roll', sell_minor: 230000, active: true };
@@ -45,6 +45,28 @@ describe('sale form', () => {
     const req = buildSaleRequest(draft({ customerId: 'c1', dueDate: '2026-11-01' }));
     expect(req).not.toHaveProperty('customer_id');
     expect(req).not.toHaveProperty('due_date');
+  });
+
+  it('sends the name and phone typed for the receipt of a sale paid now, and nothing when they are blank (issue #760)', () => {
+    expect(buildSaleRequest(draft({ cashName: ' Test Customer 07 ', cashPhone: ' 0700 000 041 ' }))).toMatchObject({
+      payment_method: 'cash', buyer_name: 'Test Customer 07', buyer_contact: '0700 000 041',
+    });
+    expect(buildSaleRequest(draft({ method: 'mobile_money', cashName: 'Test Customer 08' }))).toMatchObject({ buyer_name: 'Test Customer 08' });
+    const blank = buildSaleRequest(draft({ cashName: '  ', cashPhone: '' }));
+    expect(blank).not.toHaveProperty('buyer_name');
+    expect(blank).not.toHaveProperty('buyer_contact');
+    expect(buildSaleRequest(draft())).not.toHaveProperty('buyer_name');
+    // Never on a credit sale, which names its buyer its own way, nor beside a customer chosen for the price list.
+    const credit = buildSaleRequest(draft({ method: 'credit', newBuyerName: 'Test Buyer 03', dueDate: '2026-11-01', cashName: 'Test Customer 09' }));
+    expect(credit.buyer_name).toBe('Test Buyer 03');
+    const listed = buildSaleRequest(draft({ customerId: 'c1', cashName: 'Test Customer 10' }), { checking: false, resolved: [] });
+    expect(listed).not.toHaveProperty('buyer_name');
+    // A customer left over from a credit choice is not sent on a cash sale with price lists off, so the name is the
+    // sale's only buyer: never both together (second review of #762).
+    const leftOver = buildSaleRequest(draft({ customerId: 'c1', cashName: 'Test Customer 11' }));
+    expect(leftOver).not.toHaveProperty('customer_id');
+    expect(leftOver.buyer_name).toBe('Test Customer 11');
+    expect(draftProblem(draft({ cashName: 'Test Customer 07' }))).toBeNull();
   });
 
   it('refuses a quantity above the branch stock as an early hint', () => {
@@ -122,5 +144,21 @@ describe('a credit sale with customer accounts on (ADR-033, issue #196)', () => 
     expect(buildSaleRequest(credit(), undefined, accounts)).not.toHaveProperty('credit_override_reason');
     expect(buildSaleRequest(credit({ creditReason: '  Standing arrangement ' }), undefined, accounts)).toMatchObject({ credit_override_reason: 'Standing arrangement' });
     expect(buildSaleRequest(draft({ creditReason: 'Standing arrangement' }), undefined, accounts)).not.toHaveProperty('credit_override_reason');
+  });
+});
+
+// JUSTIFICATION-A3: the test the #776 follow-up asks for (the oldest read time by the moment it names, not by text).
+describe('the oldest read time (issue #776)', () => {
+  it('takes the earliest moment, mixing a Z time, an offset time and a time without milliseconds', () => {
+    // 08:30 Z written in Kampala time sorts after both Z times as text, yet is the oldest.
+    expect(oldestRead(['2026-11-02T09:00:00.000Z', '2026-11-02T11:30:00+03:00', '2026-11-02T09:05:00Z'])).toBe('2026-11-02T08:30:00.000Z');
+    // Two lines read at 09:00 and 09:05: the sale is priced as of 09:00, whatever the order of the lines.
+    expect(oldestRead(['2026-11-02T09:05:00.000Z', '2026-11-02T09:00:00Z'])).toBe('2026-11-02T09:00:00.000Z');
+  });
+
+  it('is not known when there is no read, or one read has no time or is not a time', () => {
+    expect(oldestRead([])).toBeUndefined();
+    expect(oldestRead(['2026-11-02T09:00:00.000Z', undefined])).toBeUndefined();
+    expect(oldestRead(['2026-11-02T09:00:00.000Z', 'not a time'])).toBeUndefined();
   });
 });

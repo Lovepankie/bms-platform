@@ -35,6 +35,9 @@ class SignUpRateLimiter {
     /** Short name checks as the applicant types (ADR-108): 120 in 10 minutes from one address. */
     static final Limit SHORT_NAME_PER_IP = new Limit("short-name-ip", 120, Duration.ofMinutes(10));
 
+    /** Short links no shop has, such as receipt links (issue #760, ADR-116): 60 in 10 minutes from one address. */
+    static final Limit MODULE_LINK_PER_IP = new Limit("module-link-ip", 60, Duration.ofMinutes(10));
+
     static final int MAX_KEYS = 10_000;
 
     private final BusinessClock clock;

@@ -49,7 +49,96 @@ public interface PurposeHandler {
      */
     UUID book(Booking booking) throws PurposeRefusal;
 
+    /**
+     * The version of the subject that holds the money a transaction booked (a loan's, an account's), compared on approval so a
+     * reversal request is stale (FR-APR-08) when anything moved on the subject since it was raised. Empty: unknown.
+     */
+    default java.util.Optional<Integer> subjectVersionOfTransaction(UUID transactionId) {
+        return java.util.Optional.empty();
+    }
+
+    /** The permission, besides the payments one, that a checker of a reversal of this purpose's booking also needs. */
+    default java.util.Optional<String> reversalCheckerPermission() {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Reverses a transaction this purpose booked, because the provider reported the payment reversed and a checker approved
+     * (ADR-035 decision 16): the same reversal, posting, re-allocation and audit as a staff reversal, which refuses a gateway
+     * transaction. Runs in the approval's transaction. A business refusal (a deposit already withdrawn would leave the balance
+     * negative) is an {@code ApiException}: the approval fails and stays pending, nothing is changed.
+     */
+    default void reverseBooked(
+            UUID transactionId,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            java.util.Set<String> listedCautions) {
+        throw new UnsupportedOperationException("purpose " + purpose() + " cannot reverse a booking");
+    }
+
+    /**
+     * What a checker must accept knowingly if this transaction were reversed now (for a loan: the pledged items that would not
+     * come back when the loan reopens, as identifiers), or empty. Raised with the request and handed back to
+     * {@link #reverseBooked} as {@code listedCautions}, so a reversal the checker saw in full is not refused as stale because it
+     * listed nothing. A read.
+     */
+    default java.util.List<String> reversalCautions(UUID transactionId) {
+        return java.util.List.of();
+    }
+
+    /** The permission, besides the two above, a checker needs to accept the cautions of {@link #reversalCautions}. */
+    default java.util.Optional<String> cautionCheckerPermission() {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * The receipts staff keyed by hand (any method but {@code gateway}, not reversed) whose reference equals one of these
+     * payment codes, ignoring letter case and surrounding spaces, other than the transactions in {@code excluding} (the ones the
+     * gateway booked). The reconciliation uses it to find the same mobile money payment entered twice (spec 3.9); the payments
+     * module reads no vertical's tables. Read only.
+     */
+    default java.util.List<ManualReceipt> manualReceiptsWithReference(
+            java.util.Collection<String> references, java.util.Collection<UUID> excluding) {
+        return java.util.List.of();
+    }
+
+    /** A receipt entered by hand: its transaction, the reference staff typed, its amount, the method they chose, the loan or account it
+     * went to and its value date, which is what lets the reconciliation tell the same payment entered twice from another that
+     * happens to carry the same short code. */
+    record ManualReceipt(
+            UUID transactionId,
+            String reference,
+            long amountMinor,
+            String currency,
+            String methodKey,
+            UUID branchId,
+            UUID subjectId,
+            java.time.LocalDate valueDate) {}
+
     /** @param subjectType a word such as {@code loan} or {@code savings_account} */
+    /**
+     * What it takes to settle the subject in full today (a loan's payoff), when the purpose has such a ceiling; money above it
+     * becomes the subject's credit balance (spec 3.7). Empty for a purpose without one (a savings deposit).
+     */
+    default java.util.OptionalLong payoffMinor(UUID subjectId) {
+        return java.util.OptionalLong.empty();
+    }
+
+    /** How a person names the subject (a loan's number), for a sentence shown to a checker. */
+    default java.util.Optional<String> label(UUID subjectId) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * The member the subject belongs to (a loan's borrower, an account's holder), for the payment link text (issue #231):
+     * the SMS opt-out is matched on the member. Empty: the purpose has no member, and no link can be texted for it.
+     */
+    default java.util.Optional<UUID> memberOf(UUID subjectId) {
+        return java.util.Optional.empty();
+    }
+
     record Subject(String subjectType, UUID branchId) {}
 
     /**

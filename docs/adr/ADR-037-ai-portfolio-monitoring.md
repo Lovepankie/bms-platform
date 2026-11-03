@@ -291,3 +291,55 @@ of its text (no digit, no claim about a figure), and a new fact family must be b
 **Decisions 7 and 8 (the scope of the brief, the fallback and the switch).** The brief of the day is one row per tenant and Africa/Kampala business date in `lending_ai_briefs` (migration `V55`), over every branch, made by the job `lending.advisor-daily-brief` (every 15 minutes, nothing before 06:00 Kampala time, idempotent by the primary key) from the business date its run was DUE on, read once per run: a run queued before midnight and served after it reads the facts of the date it was queued for (the scope carries that date, so after midnight the facts come from that day's snapshot, never the next day's live tables). What is stored is the text our renderer wrote from the structured answer, or the facts-only brief with the reason (`validation`, or the gateway's reason) when the model was not used or its answer was refused; a refused answer still counts toward the token and cost counters and the daily caps, since the call was paid for. It is returned only to a user whose branch scope covers every branch and who holds `lending.insights.all_officers`; the check is per permission scope, so a branch manager, who holds all officers for their own branches, gets the automatic summary with reason `scope`. **The route answers 204 and reads nothing while the assistant is off** (its switch, or the tenant not being on `BMS_AI_ENABLED_TENANTS`), so a tenant that never opted in sees no card and pays no figure reads; where it is active the route answers 200 on every path, with the labelled automatic summary when there is no model brief for the caller (not the design's 404 `advisor_disabled`). A refusal that sent nothing and cost nothing (a state: the switch, the list, no provider, an open breaker) is not stored, so the day is not locked; only a paid call that gave no usable answer (validation, a timeout, a provider error, a cap) stores the final facts-only brief. With the switch off the job reads no facts and makes no call. The settings routes read and write the settings group `ai` through `AiSettings`; switching on needs `core.settings.manage`, the acknowledgement of the shown text version and the tenant in `BMS_AI_ENABLED_TENANTS`. 
 
 **Better:** the card always has something true to show, and the all-branches brief cannot reach a user who may not see every branch. **Worse:** a paid failure at the morning run stores the automatic summary for the day (the day is not retried), the acknowledgement is a recorded click (the client echoes the public text version and the server stores it with a digest of the wording shown; it is not proof of what was on a screen), and the stored text names branches and products as they were that morning. **Watch for:** the scope check is per permission, so a new role that holds all officers with a partial branch scope must stay out of the stored brief.
+
+## Amendment of 2026-11-02 (issue #423): decision 7, the add-on
+
+The platform allow-list of decision 7 is now the AI assistant add-on, switched on per business by the operator with a reason and
+charged on what the business owes (ADR-112). `BMS_AI_ENABLED_TENANTS` stays as the platform's kill switch (`off`) and a demo
+host's allow-all (`*`); ids named in it are still let in. The business's own switch, acknowledgement and caps are unchanged.
+
+## Amendment of 2026-11-02 (issue #422): the retail brief
+
+**Context.** Shops and wholesale businesses (the retail module, ADR-020) asked for the same morning brief. The question was whether
+to give retail its own way to a model or to reuse this one.
+
+**Decisions.**
+
+1. **One AI path.** The retail brief (module `retail.advisor`) reaches a model only through `core.ai`'s `AiGateway`, under the same
+   tenant switch (settings group `ai`), the same platform list `BMS_AI_ENABLED_TENANTS`, the same tenant and platform daily caps,
+   the same circuit breaker and the same call log (purpose `retail_brief`). A business with both modules has one switch and one
+   pair of caps; the settings routes `/retail/advisor/settings` and `/lending/advisor/settings` read and write the same record,
+   each with its own notice text (`retail-advisor-1`, `advisor-1`).
+2. **The same answer contract.** The model writes no text. It returns the shape of the #223 amendment (findings of fact keys, a
+   topic, an action code and a priority, and keys to watch), checked as a whole against the retail catalogue
+   (`retail-advisor/catalogue.json`: eight topics, fifteen actions, no digit in any text, calm actions marked); our code writes every
+   sentence, and as a second line every digit in a written point must come from a fact it cites.
+3. **The facts.** `retail.reports.RetailBriefFacts` is read with the queries the shop reports run (the dashboard's sales, credit
+   control, the sales analysis, the stock counts of Home and the Controls cards), so a figure agrees with the page its chip opens.
+   They stand at the end of the day before the brief: yesterday's sales against the usual day (the same weekday in the four weeks
+   before, counting only weeks with sales), the last seven days against the seven before, gross profit, the three best sellers,
+   low, out of stock and slow items, credit owed and overdue, the three Controls counts, open orders, and, when the business uses
+   them, sales at a price list price and credit customers over their limit. An item is sent as `Item A` and its name never leaves
+   the server; there is no buyer, staff member, phone or sale number in any fact.
+4. **Who sees what.** The stored brief covers every branch, every seller, cost, profit, the Controls counts and the open orders,
+   so it is served only to a user holding `retail.advisor.use`, `retail.sale.all_sellers`, `retail.profit.read`,
+   `retail.stock.read`, `retail.controls.read` and `retail.order.manage` over every branch: every permission a figure in it needs.
+   Anyone else holding the brief gets the automatic summary of what they may see under ADR-055: no money for a Storekeeper, a
+   seller's own sales for a seller who sees only their own, a Supervisor's shops. There is no small group suppression here,
+   since no figure is about a person.
+5. **Deferred.** Cash not banked is not in the first release: its figure belongs to `retail.cashbook`, which already depends on
+   `retail.reports`, so the port would need a second source. The question box is not offered for retail.
+6. **Administrators only by default (review of #735).** Issue #422 names no role for the brief, so `retail.advisor.use` and
+   `retail.advisor.configure` are seeded to `tenant_admin` alone: an owner who switches the assistant on for their own use shows
+   it to no seller or Storekeeper. Another role holds the brief only when a business grants it on purpose. Roles are not yet
+   editable by a business, so until they are, only administrators see the card; the views of decision 4 are ready for the day a
+   role is given it.
+7. **An empty answer is not an AI brief.** A model answer with no finding and nothing to watch is stored as the automatic
+   summary with the reason `empty`, so the label "AI assistant (advisory)" is never shown over text no model chose.
+8. **A paid day is never paid twice.** When a paid call's brief cannot be stored, even as the facts only row, the job keeps the
+   date in memory and makes no second call for it; the day shows the automatic summary.
+
+**Better:** one switch, one cap and one log for every brief, and the retail card is drawn by the same view as the lending one.
+**Worse:** a business with both modules accepts one notice for both briefs, and the retail catalogue is a second reviewed file.
+**Watch for:** a new retail fact family must be bound to a topic on purpose, and a figure that could name a person must never be
+added to the port.

@@ -134,7 +134,8 @@ describe('the home cards', () => {
     const html = renderToString(<DashboardView data={base} nameOf={nameOf} choice={{ period: 'today' }} />);
     expect(html).toContain('Sales, Today');
     expect(html).toContain('UGX 5,000');
-    expect(html).toContain('Up UGX 1,000, 25% on yesterday');
+    expect(html).toContain('Compared with yesterday');
+    expect(html).toContain('Up UGX 1,000 (25%)');
     expect(html).not.toContain('Money collected');
     expect(html).not.toContain('not paid yet');
     // The Today card keeps its figures exactly under the default way.

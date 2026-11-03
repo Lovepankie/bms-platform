@@ -81,8 +81,8 @@
   <div th:fragment="pagefoot" id="pagefoot">
     <table class="foot">
       <tr>
-        <td style="width: 65%;" th:text="${lh.footer}">Footer</td>
-        <td style="text-align: right;"><span th:text="${doc.number}">RC-HQ-000001</span>, <span class="pageinfo"></span></td>
+        <td style="width: 65%;" th:style="${doc['section'] != null} ? 'width: 45%;' : 'width: 65%;'" th:text="${lh.footer}">Footer</td>
+        <td style="text-align: right;"><span th:text="${doc.number}">RC-HQ-000001</span>, <span th:if="${doc['section'] != null}" th:text="${doc['section'] + ', '}">Part 2 of 8, </span><span class="pageinfo"></span></td>
       </tr>
     </table>
   </div>

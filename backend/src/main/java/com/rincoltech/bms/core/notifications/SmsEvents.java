@@ -89,7 +89,9 @@ public interface SmsEvents {
      *     event that is about today by nature (the maturity reminder)
      * @param expiresAt for a reminder or an arrears notice, when it stops being true (a "due today" text at the end of
      *     the due date); it then expires at the earlier of this and the end of the window day, so a text deferred by the
-     *     daily cap or a run resumed after the window is never sent late. Null: the end of the window day.
+     *     daily cap or a run resumed after the window is never sent late. Null: the end of the window day. For a
+     *     transactional text, an expiry sooner than its hour shortens it (a payment link expires with its intent, issue
+     *     #231); null or later keeps the hour.
      */
     record MemberSms(
             String templateKey,
@@ -191,6 +193,47 @@ public interface SmsEvents {
             Instant expiresAt,
             Supplier<String> phone,
             Supplier<Map<String, String>> params);
+
+    /**
+     * Where one member message stands (issue #772), read from its outbox row and the delivery log, never guessed.
+     * JUSTIFICATION-A3: the port had no way to read a message's status; the anchor is only the insertion point.
+     */
+    enum TextStatus {
+        /** Waiting in the outbox or held by the sender: it has not reached the provider yet. */
+        PENDING,
+        /** The provider took it (on staging, the sink did). */
+        SENT,
+        /** It reached the provider and failed, was refused or blocked: it did not arrive. */
+        FAILED,
+        /** It went to the provider but the outcome is unknown (no automatic retry): it may or may not have arrived. */
+        UNCONFIRMED,
+        /** It never reached the provider: it expired, was withdrawn or dropped, or no row was ever written. */
+        NOT_SENT
+    }
+
+    /** What {@link #queueTracked} did: the outcome and, when a row was written, its outbox id. */
+    record Queued(Result result, UUID rowId) {}
+
+    /**
+     * As {@link #queue}, also answering the outbox id of the row written, for a caller that will ask its
+     * {@link #status} later (the payment link, issue #772). Guarded like {@link #queue}.
+     */
+    Queued queueTracked(MemberSms message);
+
+    /**
+     * Where the member message with this outbox id ({@link #queueTracked}) stands, for the bound tenant; a null id (one
+     * queued before ids were kept) answers {@link TextStatus#NOT_SENT}. Guarded: a failure answers
+     * {@link TextStatus#PENDING}, which never claims that a text went.
+     */
+    TextStatus status(UUID rowId);
+
+    /**
+     * The bound business's name as a short plain text carries it (issue #772): every dash written as a space, a curly
+     * quote as a straight one, any other character outside the GSM-7 default alphabet dropped (one would make the whole
+     * text UCS-2 and more than double its segments), spaces collapsed, and at most {@code maxLength} characters, cut
+     * after a whole word when one ends in the second half. Not guarded.
+     */
+    String plainTenantName(int maxLength);
 
     /**
      * Withdraws the messages of the event {@code eventRef} of the bound tenant that nobody has claimed yet, as a reversal

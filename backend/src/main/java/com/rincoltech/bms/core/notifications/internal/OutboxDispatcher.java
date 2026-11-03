@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.notifications.internal;
 
+import com.rincoltech.bms.core.audit.PlatformAuditLog;
 import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.kernel.BusinessClock;
 import java.sql.Timestamp;
@@ -49,6 +50,8 @@ class OutboxDispatcher {
     static final Duration LEASE = Duration.ofMinutes(2);
     /** The delivery log is kept 13 months (ADR-036 decision 3). */
     static final int DELIVERY_RETENTION_MONTHS = 13;
+    /** The platform audit action that says which sender carried a row (ADR-117 decision 1). */
+    static final String SENT_VIA = "platform.outbox.sent_via";
 
     private static final Logger log = LoggerFactory.getLogger(OutboxDispatcher.class);
     private static final TypeReference<Map<String, String>> PARAMS = new TypeReference<>() {};
@@ -59,6 +62,7 @@ class OutboxDispatcher {
     private final ObjectMapper mapper;
     private final BusinessClock clock;
     private final List<OutboxChannel> channels;
+    private final PlatformAuditLog audit;
 
     OutboxDispatcher(
             JdbcClient jdbc,
@@ -66,8 +70,10 @@ class OutboxDispatcher {
             OutboxTemplates templates,
             ObjectMapper mapper,
             BusinessClock clock,
-            List<OutboxChannel> channels) {
+            List<OutboxChannel> channels,
+            PlatformAuditLog audit) {
         this.jdbc = jdbc;
+        this.audit = audit;
         this.transactions = new TransactionTemplate(transactionManager);
         this.templates = templates;
         this.mapper = mapper;
@@ -162,6 +168,7 @@ class OutboxDispatcher {
         String error = null;
         Instant retryAt = null;
         Instant newExpiry = null;
+        String via = null;
         try {
             Map<String, String> params = mapper.readValue(row.params(), PARAMS);
             String subject = null;
@@ -190,7 +197,10 @@ class OutboxDispatcher {
                     new OutboxChannel.Delivery(row.recipient(), subject, text, row.idempotencyKey(), context));
             Instant now = clock.now();
             switch (result) {
-                case OutboxChannel.Result.Sent sent -> outcome = "sent";
+                case OutboxChannel.Result.Sent sent -> {
+                    outcome = "sent";
+                    via = sent.via() == null ? null : safeReason(sent.via());
+                }
                 case OutboxChannel.Result.Deferred deferred -> {
                     outcome = "deferred";
                     // A deferral never lands in the past: that would claim the row again at once.
@@ -217,21 +227,40 @@ class OutboxDispatcher {
         String recordedError = error;
         Instant recordedRetry = retryAt;
         Instant recordedExpiry = newExpiry;
-        String status =
-                transactions.execute(tx -> jdbc.sql("SELECT notification_outbox_record_result(?, ?, ?, ?, ?, ?, ?)")
-                        .params(
-                                row.id(),
-                                recordedOutcome,
-                                recordedError,
-                                MAX_ATTEMPTS,
-                                Timestamp.from(recordedRetry),
-                                Timestamp.from(now),
-                                recordedExpiry == null ? null : Timestamp.from(recordedExpiry))
-                        .query(String.class)
-                        .optional()
-                        .orElse("none"));
+        String sentVia = via;
+        String status = transactions.execute(tx -> {
+            String recorded = jdbc.sql("SELECT notification_outbox_record_result(?, ?, ?, ?, ?, ?, ?)")
+                    .params(
+                            row.id(),
+                            recordedOutcome,
+                            recordedError,
+                            MAX_ATTEMPTS,
+                            Timestamp.from(recordedRetry),
+                            Timestamp.from(now),
+                            recordedExpiry == null ? null : Timestamp.from(recordedExpiry))
+                    .query(String.class)
+                    .optional()
+                    .orElse("none");
+            if (sentVia != null && recorded.equals("sent")) {
+                // A row sent by another sender than the channel's chosen one (ADR-117 decision 1): the row only says
+                // sent, so which sender carried it is kept in the platform audit log, with no address and no text.
+                // Through the port (issue #777), so its masking and request context apply and the table stays the audit
+                // module's.
+                audit.record(
+                        SENT_VIA,
+                        null,
+                        row.tenantId(),
+                        Map.of("outbox_id", row.id().toString(), "channel", row.channel(), "via", sentVia));
+            }
+            return recorded;
+        });
         if (outcome.equals("sent")) {
-            log.info("outbox row sent: id={} channel={} template={}", row.id(), row.channel(), row.templateKey());
+            log.info(
+                    "outbox row sent: id={} channel={} via={} template={}",
+                    row.id(),
+                    row.channel(),
+                    sentVia == null ? row.channel() : sentVia,
+                    row.templateKey());
         } else {
             log.warn(
                     "outbox row not sent: id={} channel={} template={} attempt={} outcome={} status={} error={}",

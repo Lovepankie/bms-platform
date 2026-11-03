@@ -9,6 +9,7 @@ import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
+import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
@@ -17,6 +18,7 @@ import jakarta.mail.util.ByteArrayDataSource;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Optional;
@@ -55,7 +57,12 @@ class SmtpEmailChannel implements OutboxChannel {
 
     static final int LOGO_MAX_HEIGHT = 64;
 
+    /** The longest business name used as the from-name; a longer one is cut. */
+    static final int FROM_NAME_MAX = 70;
+
     private final NotificationProperties.Smtp smtp;
+    private final NotificationProperties.Mail mail;
+    private final boolean staging;
     private final String supportContact;
     private final OutboxTemplates templates;
     private final PlatformHost hosts;
@@ -63,7 +70,10 @@ class SmtpEmailChannel implements OutboxChannel {
     private final CurrentTenant tenant;
     private final Letterheads letterheads;
     private final ObjectProvider<EmailAttachments> attachments;
+    /** The addresses not sent to (ADR-117 decision 9); null only in a unit test that builds the sender itself. */
+    private final EmailSuppressions suppressions;
 
+    /** Without the suppression check: for a unit test that builds the sender itself. */
     SmtpEmailChannel(
             NotificationProperties properties,
             OutboxTemplates templates,
@@ -72,9 +82,31 @@ class SmtpEmailChannel implements OutboxChannel {
             CurrentTenant tenant,
             Letterheads letterheads,
             ObjectProvider<EmailAttachments> attachments,
+            String environment) {
+        this(properties, templates, hosts, tenantJobs, tenant, letterheads, attachments, null, environment);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    SmtpEmailChannel(
+            NotificationProperties properties,
+            OutboxTemplates templates,
+            PlatformHost hosts,
+            TenantJobs tenantJobs,
+            CurrentTenant tenant,
+            Letterheads letterheads,
+            ObjectProvider<EmailAttachments> attachments,
+            EmailSuppressions suppressions,
             @Value("${bms.environment:}") String environment) {
-        properties.smtp().requireInProduction(environment);
+        properties.requireEmailInProduction(environment);
+        this.suppressions = suppressions;
         this.smtp = properties.smtp();
+        this.mail = properties.mail();
+        this.staging = NotificationProperties.isStaging(environment);
+        if (staging && !mail.hasAllowlist()) {
+            // Not a refusal to start: that would take all of staging down for an email setting. Every email is refused
+            // (not_on_staging_allowlist) until the list is set, and this line says so at every start.
+            log.warn("BMS_MAIL_ALLOWLIST is empty on staging: no email will be sent until it lists the testers");
+        }
         this.supportContact = properties.supportContact();
         this.templates = templates;
         this.hosts = hosts;
@@ -102,13 +134,36 @@ class SmtpEmailChannel implements OutboxChannel {
         return "email";
     }
 
+    /** On while SMTP is the chosen sender and configured; {@link ResendEmailChannel} carries email when Resend is chosen. */
     @Override
     public boolean enabled() {
-        return smtp.configured();
+        return !mail.resend() && smtp.configured();
     }
 
     @Override
     public Result send(Delivery delivery) throws Exception {
+        String refused = refusal(delivery.recipient());
+        if (refused != null) {
+            return Result.refused(refused);
+        }
+        return transmit(delivery);
+    }
+
+    /**
+     * Why this recipient is not sent to, by either sender, or null: off the staging allow-list
+     * ({@code not_on_staging_allowlist}), or suppressed after a hard bounce, a complaint or Resend's suppression
+     * ({@code recipient_suppressed}, ADR-117 decision 9). The row is refused and shows on "Messages not sent".
+     */
+    String refusal(String recipient) {
+        String staging = stagingRefusal(recipient);
+        if (staging != null) {
+            return staging;
+        }
+        return suppressions != null && suppressions.suppressed(recipient) ? "recipient_suppressed" : null;
+    }
+
+    /** Sends over SMTP with no refusal check: {@link #send} has made it, or Resend's fallback has (ADR-117 decision 1). */
+    Result transmit(Delivery delivery) throws Exception {
         Properties props = new Properties();
         props.put("mail.transport.protocol", "smtps");
         props.put("mail.smtps.host", smtp.host());
@@ -120,14 +175,75 @@ class SmtpEmailChannel implements OutboxChannel {
         props.put("mail.smtps.timeout", "20000");
         props.put("mail.smtps.writetimeout", "20000");
         Session session = Session.getInstance(props);
-        Body body = body(delivery, brand(delivery.context()));
-        MimeMessage message = compose(session, smtp.from(), delivery, body, attachment(delivery.context()));
+        MimeMessage message = message(session, delivery);
         try (Transport transport = session.getTransport("smtps")) {
             transport.connect(smtp.host(), smtp.port(), smtp.user(), smtp.password());
-            message.saveChanges();
             transport.sendMessage(message, message.getAllRecipients());
         }
         return Result.SENT;
+    }
+
+    /** The message {@link #transmit} sends, complete and saved, so a test reads exactly what goes out (issue #777). */
+    MimeMessage message(Session session, Delivery delivery) throws MessagingException, SendFailure {
+        Body body = body(delivery, brand(delivery.context()));
+        MimeMessage message =
+                compose(session, sender(delivery.context()), delivery, body, attachment(delivery.context()));
+        message.saveChanges();
+        return message;
+    }
+
+    // JUSTIFICATION-A3: the staging allow-list and business from-name are new (#333), shared by both senders.
+    /**
+     * On staging, or on any host where {@code BMS_MAIL_ALLOWLIST} is set, the reason a recipient is not sent to
+     * ({@code not_on_staging_allowlist}) unless the list names the address or its domain (issue #333, ADR-117); null when
+     * it may be sent. The row is refused, never sent elsewhere, and nothing about the address is logged.
+     */
+    String stagingRefusal(String recipient) {
+        // Also wherever a list is set: an unset or misspelled BMS_ENVIRONMENT never lifts it.
+        return (staging || mail.hasAllowlist()) && !mail.allows(recipient) ? "not_on_staging_allowlist" : null;
+    }
+
+    /**
+     * The From of a row (issue #333, ADR-117): the address of {@code BMS_MAIL_FROM} with the business's name as the
+     * from-name for a row of a tenant, so a reader sees who wrote; {@code BMS_MAIL_FROM} as set for a platform row. A name
+     * that cannot be read (a suspended tenant) falls back to the platform's From, like {@link #brand}.
+     */
+    String sender(RowContext context) {
+        if (context == null || context.tenantId() == null) {
+            return smtp.from();
+        }
+        try {
+            String name = tenantJobs.callForTenant(
+                    context.tenantId(), () -> tenant.profile().name());
+            return fromWithName(smtp.from(), name);
+        } catch (RuntimeException | UnsupportedEncodingException | AddressException e) {
+            log.warn(
+                    "email from-name of outbox row {} falls back to the platform's: {}",
+                    context.outboxId(),
+                    e.getClass().getSimpleName());
+            return smtp.from();
+        }
+    }
+
+    /**
+     * The address of {@code from} with {@code name} as a header value: on one line, without quotes, backslashes, control or
+     * format characters (so no provider has a reason to refuse it), cut to {@link #FROM_NAME_MAX} characters by code point
+     * (never inside an emoji). A name with nothing left keeps {@code from}.
+     */
+    static String fromWithName(String from, String name) throws AddressException, UnsupportedEncodingException {
+        String address = new InternetAddress(from, true).getAddress();
+        StringBuilder clean = new StringBuilder();
+        oneLine(name)
+                .codePoints()
+                .filter(c -> c != '"' && c != '\\')
+                .filter(c -> Character.getType(c) != Character.CONTROL && Character.getType(c) != Character.FORMAT)
+                .limit(FROM_NAME_MAX)
+                .forEach(clean::appendCodePoint);
+        String cut = clean.toString().strip();
+        if (cut.isEmpty()) {
+            return from;
+        }
+        return new InternetAddress(address, cut, StandardCharsets.UTF_8.name()).toUnicodeString();
     }
 
     /** The two parts of one email: the plain text and the HTML, from the same template and values. */
@@ -194,7 +310,17 @@ class SmtpEmailChannel implements OutboxChannel {
             Session session, String from, Delivery delivery, Body body, EmailAttachments.Attachment attachment)
             throws MessagingException {
         MimeMessage message = new IdMessage(session, messageId(delivery.idempotencyKey()));
-        message.setFrom(new InternetAddress(from, true));
+        // Built again from its parts so a business's name is RFC 2047 encoded in the header (ADR-117), not sent as raw
+        // UTF-8, which parsing the string alone would keep.
+        InternetAddress sender = new InternetAddress(from, true);
+        if (sender.getPersonal() != null) {
+            try {
+                sender = new InternetAddress(sender.getAddress(), sender.getPersonal(), StandardCharsets.UTF_8.name());
+            } catch (UnsupportedEncodingException e) {
+                throw new MessagingException("from-name could not be encoded");
+            }
+        }
+        message.setFrom(sender);
         message.setRecipient(Message.RecipientType.TO, new InternetAddress(delivery.recipient(), true));
         message.setSubject(oneLine(delivery.subject()), StandardCharsets.UTF_8.name());
         MimeBodyPart plain = new MimeBodyPart();

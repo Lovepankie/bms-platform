@@ -7,12 +7,13 @@ import type { MenuGroup, MenuLink, MenuSection } from '../../components/side-men
 import { useOptionalStaff } from './context';
 import { homeParts, homeSummaryQuery } from './home-cards';
 import { canConfigureAdvisor, showInsights } from './insights/permissions';
+import { canConfigureRetailAdvisor } from './retail/advisor-card';
 import { showInvestments } from './lending/investment-state';
 import { showCollateral, showMembers } from './lending/member-permissions';
 import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
-import { showReceivePayments } from './payments/state';
-import { showReports } from './reports/permissions';
+import { showReceivePayments, showReconciliation, showUnallocated } from './payments/state';
+import { holdsReports, showReports } from './reports/permissions';
 import { CATALOGUE_LINKS, SCREENS, UNITS, canUse, capabilityOn, showRetail, type RetailScreen } from './retail/permissions';
 import { showSms } from './sms/state';
 import { showUsers } from './users/state';
@@ -69,7 +70,10 @@ export function staffMenu(me: Me, { sells, counts = {}, ask = false }: { sells: 
   const retail = showRetail(me);
   // Reports is the shop's page of figures and every shop page; a lending business without the shop has its own Reports page, which
   // a business with both lists in its Lending group.
-  const lendingReports = showReports(me);
+  // A report holder keeps the entry while report runs are switched off, marked Off, and the page says how to switch them on
+  // (issue #764).
+  const lendingReports = holdsReports(me);
+  const reportsOff = showReports(me) ? undefined : 'Off';
   const groups: { id: string; label?: string; tour?: string; links: (MenuLink | false)[] }[] = [
     { id: 'home', links: [{ to: '/staff', label: 'Home', icon: icons.home, exact: true }, helpLink(ask)] },
     {
@@ -130,7 +134,7 @@ export function staffMenu(me: Me, { sells, counts = {}, ask = false }: { sells: 
         showSavings(me) && { to: '/staff/lending/savings', label: 'Savings', icon: icons.coins, section: 'lending' },
         showInvestments(me) && { to: '/staff/lending/investments', label: 'Investments', icon: icons.investments, section: 'lending' },
         showInsights(me) && { to: '/staff/insights', label: 'Insights', icon: icons.insights, tour: 'nav-insights', section: 'lending' },
-        retail && lendingReports && { to: '/staff/reports', label: 'Loan reports', icon: icons.documents, section: 'lending' },
+        retail && lendingReports && { to: '/staff/reports', label: 'Loan reports', icon: icons.documents, section: 'lending', count: reportsOff },
       ],
     },
     {
@@ -139,13 +143,15 @@ export function staffMenu(me: Me, { sells, counts = {}, ask = false }: { sells: 
       links: [
         retail
           ? { to: '/staff/retail', label: 'Reports', icon: icons.reports, exact: true, tour: 'nav-retail', section: 'shop' }
-          : lendingReports && { to: '/staff/reports', label: 'Reports', icon: icons.reports },
+          : lendingReports && { to: '/staff/reports', label: 'Reports', icon: icons.reports, count: reportsOff },
         // The Controls page (issue #357, ADR-047, ADR-087): what deserves a second look, for holders of retail.controls.read.
         shopRow(me, 'Controls', 'controls', ['controls']),
         showUsers(me) && { to: '/staff/users', label: 'Staff', icon: icons.user, tour: 'nav-users' },
-        showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.receivePayments },
+        showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.receivePayments, exact: true },
+        showUnallocated(me) && { to: '/staff/payments/unallocated', label: 'Unallocated payments', icon: icons.unallocatedPayments },
+        showReconciliation(me) && { to: '/staff/payments/reconciliation', label: 'Payment reconciliation', icon: icons.paymentReconciliation },
         showSms(me) && { to: '/staff/sms', label: 'SMS', icon: icons.phone },
-        canConfigureAdvisor(me) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.assistant },
+        (canConfigureAdvisor(me) || canConfigureRetailAdvisor(me)) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.assistant },
         permissions.includes('core.settings.manage') && { to: '/staff/setup', label: 'Business set-up', icon: icons.settings },
       ],
     },

@@ -235,3 +235,91 @@ more than a few hundred rows holds its whole layout in memory while it is made.
 **Watch for:** a report that lists a column the PDF cannot print in its width (a long heading is wrapped, a long figure is not: widen the
 column weights in `PdfReport`); a new column kind (add it to the spool, the PDF text, the workbook cell and the CSV together); the PDF cap raised
 on a small host without running `ReportMemoryIT` first.
+
+## Amendment (issue #222, slice D3: collections, disbursements and officer performance)
+
+Building `lending.expected_vs_collected`, `lending.arrears_list`, `lending.disbursements` and `lending.officer_performance` settled five
+things. None reverses a decision; no migration and no permission were needed.
+
+1. **Range figures are grouped twins of the insights queries.** The port gains `collections`, `disbursements`, `arrears` and `officers`.
+   The page computes its expected, collected on due, collected and disbursed by day, not by branch, product or officer, so
+   `lending.insights` gains `FlowFigures`: each query keeps the predicates of the insights query it must equal and adds a `GROUP BY`. A
+   test asserts every report total equals the page for the same range and caller, in every grouping, so a second definition cannot
+   drift unseen.
+2. **The collections equation is measured, not forced.** The total collected and each of its parts (paid in the range on items due in
+   it, arrears recovered, prepayments, penalties, overpayments, recoveries on written-off loans) are summed by separate queries; the
+   report prints the parts and the total and prints "Not explained by the parts" only if they differ, so a broken allocation shows up on
+   paper instead of being absorbed into a balancing line. Recoveries are a part of their own because a recovery settles no item.
+3. **What a borrower's line shows is frozen with the run, branch by branch.** The arrears list prints a name only in the branches of
+   `lending.members.read` and a full phone only in the branches of `lending.members.contact` (masked elsewhere, as the collection lists);
+   both branch lists are decided at request time, stored in the run's scope, and a download by someone whose access to either has
+   narrowed is refused.
+4. **An officer is the loan's responsible officer now.** Flows, actions and promises count for the officer the loan has today, the
+   positions of a past date for the snapshot's officer; the report says so. Counting actions by who logged them would split one loan's
+   follow up across officers and leave the collection rate and the actions in different rows.
+5. **The scope stays the insights page's.** As for `lending.par`, a run also needs `lending.insights.read`, and a caller without
+   `lending.insights.all_officers` sees only their own loans; a cashier who holds `lending.reports.collections` without insights access
+   is refused, as the D1 amendment decided for the portfolio reports.
+
+## Amendment (issue #225, slice D4: the collateral register and the regulator data summary)
+
+Building `lending.collateral_register` and `lending.regulatory_summary` settled six things. None reverses a decision; no migration and no
+permission were needed.
+
+1. **A second public port, `RegisterFigures`, beside `InsightsFigures`.** The page computes neither figure, so they have their own
+   queries (as decision 3 allows), kept in `lending.insights` with every other read of the lending tables (ADR-030 decision 1) so
+   `lending.reports` still depends on one lending module. The summary's book, PAR 30 and PAR 90 are `InsightsFigures.par`'s own, and its
+   breakdowns are aggregates over the very position statement PAR reads, so they cannot describe a different book. The savings and
+   investment figures are those of the panels' `SavingsMetrics` and `InvestmentMetrics`, looked up when a summary is made.
+2. **The register is the items as they stand, not as at a date.** Custody, location and value are not kept by date, so a past `as_at`
+   would be a guess; the register takes no date parameter, prints the business date it was made on, and says so.
+3. **Flags are counted in a first pass and printed first.** The register reads its items twice, both inside the run's one
+   `REPEATABLE READ` snapshot transaction (the query phase of decision 2; the port's `@Transactional` joins it), so an item registered
+   between the passes is in neither (a test commits an item from another connection during the first pass and proves the second does
+   not see it): once to count the flags, once to write the items. The short table of counts comes first, so the
+   PDF prints it whole even when the items are cut at the row cap, and the Excel file holds every item.
+4. **"Imported, not verified" reads the import's note.** Chapter 13 section 13.6.8 has the import register an item with the note
+   "imported; verify custody and value"; the flag is an item registered with exactly that note and not valued, moved or noted since. No
+   column was added (the migration queue is busy, and none is needed), and nothing writes the note until the import commit (issue #133).
+5. **Who owns an item is personal data, gated like a name.** The member number, the name, the item's reference (an ID number, a plate,
+   a title number) and its description (where staff often type the same) are printed only where the requester holds
+   `lending.members.read` in the member's branch; where an item is kept is ours and stays. A requester without
+   `lending.insights.all_officers` gets only the items securing their own loans, and the Loans column names only their own loans
+   (release overdue still reads every loan of the item). Both are frozen with the run and checked at download, as the arrears list of
+   #222 does for names and phones. In the summary such a requester gets no savings, investments, branches or staff, none of which
+   belongs to an officer.
+6. **A missing figure prints blank in these two reports.** The PDF prints a missing figure as a dash (decision on the renderer, slice
+   D2), and that stays the default. A register is mostly items never valued, and PAR on an empty book has nothing to measure, so a row of
+   dashes would read as a figure. `ReportDefinition.blankMissingFigures()` (false by default) lets a report print such a cell blank; both
+   reports set it, and tests assert their PDFs carry no dash, the summary on an empty book. The summary still has a table per kind of
+   figure (numbers and amounts, rates, counts), and each total is the sum of its own rows.
+
+## Amendment (issue #229, slice D5: the monthly pack and the report centre)
+
+Building `lending.monthly_pack` settled six things. None reverses a decision; no migration and no permission were needed.
+
+1. **A pack is a definition of parts, run by the framework.** `core.reporting` gains the public `ReportPack`, a `ReportDefinition`
+   offered only in the format `pack` that names its parts and the request each part is prepared with. The core prepares each part with
+   its own `prepare` in the request (so each freezes exactly the scope it freezes alone: branches, own loans, the branches of names and
+   phones), stores them in the run's scope, queries them in the one snapshot transaction of decision 2, and asks every part's
+   `stillAllowed` at download. The core still names no vertical; the lending module only lists its eight reports.
+2. **The union of the permissions is enforced in three places.** The catalogue lists a pack only to a holder of its permission and every
+   part's, a request without them is refused 403, and a download of either file needs them still. This completes decision 4.
+3. **Two files, one run, no column.** A pack's PDF and workbook are two `documents` rows of type `report` with the run as subject and the
+   same number; `report_runs.document_id` names the PDF and the run lists both as `files`. The expiry of decision 7 deletes every file of a
+   run. No column was added (the migration queue is busy, and the documents table already ties a file to its run).
+4. **The PDF is merged on disk, as decision 5 says.** Each part is rendered alone through the `report` template, its pages counted, then a
+   cover (parameters, contents with the page each part starts on, a sign off block) is laid out, and PDFBox joins the files with
+   temporary-file storage through two new methods of `core.documents` (`pdfPages`, `mergePdfs`), which owns PDFBox. Page numbers stay each
+   part's own ("part n of 8, page x of y" in the footer), because one layout per part is what bounds memory; the contents give the page of
+   the whole file.
+5. **Every missing figure in a pack prints blank.** The amendment for #225 left the dash as the default for a report alone; in a board
+   pack a dash reads as a figure, so the pack prints every part's missing figures blank, and the workbook leaves them empty as before.
+6. **The ready notice of decision 7.** When a pack is ready the requester gets a push notice (when push is on and they have a device) and
+   an email naming the pack and its date, written in the transaction that marks the run ready, so neither exists for a run that did not
+   finish. A single report still relies on the screen's own refresh, because it is quick and its requester is usually watching.
+
+**Better:** the board and the auditor get the eight reports from one instant in two files, with the sign off on the cover; a pack can
+show no more than its requester could see in each report alone. **Worse:** a pack holds the tenant's one run place for the length of its
+eight reports, and page numbers restart at each part. **Watch for:** a new report added to the pack must offer PDF and Excel (the registry
+refuses one that does not at start); a pack of many large reports reaching the byte cap on staging.

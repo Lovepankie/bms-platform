@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.sales.internal;
 
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.NoStore;
+import com.rincoltech.bms.kernel.PublicEndpoint;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.DocumentList;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.DocumentPage;
@@ -261,6 +262,79 @@ class DocumentsController {
                                 .build()
                                 .toString())
                 .body(pdf);
+    }
+
+    // JUSTIFICATION-A3: the receipt link of issue #760 (ADR-116): one route makes it, one public route opens it.
+    @Schema(name = "RetailReceiptLink")
+    record ReceiptLink(
+            @Schema(description = "The link with https://, for the WhatsApp message")
+            String url,
+
+            @Schema(description = "As a person reads it, for example rincoltech.com/<token>")
+            String link,
+
+            @Schema(description = "When the link stops working, 90 days on")
+            java.time.Instant expiresAt) {}
+
+    @PostMapping("/sales/{sale_id}/receipt/link")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary = "A short link to the sale's receipt PDF for a message to a typed WhatsApp number: read only, no"
+                    + " sign-in, valid for 90 days; the same check as the receipt PDF (issue #760)",
+            operationId = "createRetailSaleReceiptLink")
+    ReceiptLink receiptLink(@PathVariable("sale_id") UUID saleId, HttpServletResponse response) {
+        NoStore.apply(response);
+        ReceiptLinks.Minted m = service.receiptLink(saleId);
+        return new ReceiptLink(m.url(), m.link(), m.expiresAt());
+    }
+
+    @GetMapping(
+            path = "/receipt-links/{token}",
+            produces = {MediaType.APPLICATION_PDF_VALUE, MediaType.TEXT_HTML_VALUE})
+    @PublicEndpoint
+    @Operation(
+            summary = "The receipt PDF a receipt link opens, with no sign-in; a wrong or expired link is a plain page"
+                    + " (issue #760)",
+            operationId = "openRetailReceiptLink")
+    @ApiResponses({
+        @ApiResponse(
+                responseCode = "200",
+                description = "The PDF",
+                content =
+                        @Content(mediaType = "application/pdf", schema = @Schema(type = "string", format = "binary"))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "This receipt link has expired: a plain page",
+                content = @Content(mediaType = "text/html", schema = @Schema(type = "string"))),
+        @ApiResponse(
+                responseCode = "429",
+                description = "Too many opens of this link or from this address: a plain page",
+                content = @Content(mediaType = "text/html", schema = @Schema(type = "string")))
+    })
+    ResponseEntity<byte[]> openReceiptLink(@PathVariable("token") String token) {
+        if (!service.mayOpenLink(token)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .contentType(new MediaType(MediaType.TEXT_HTML, java.nio.charset.StandardCharsets.UTF_8))
+                    .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                    .header(HttpHeaders.RETRY_AFTER, "600")
+                    .body(ReceiptLinks.BUSY_PAGE.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return service.linkedReceiptPdf(token)
+                .map(pdf -> ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_PDF)
+                        .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                        .header("X-Robots-Tag", "noindex")
+                        .header(
+                                HttpHeaders.CONTENT_DISPOSITION,
+                                ContentDisposition.inline()
+                                        .filename("receipt.pdf")
+                                        .build()
+                                        .toString())
+                        .body(pdf))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .contentType(new MediaType(MediaType.TEXT_HTML, java.nio.charset.StandardCharsets.UTF_8))
+                        .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                        .body(ReceiptLinks.GONE_PAGE.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     private static ResponseEntity<IssuedDocument> created(Outcome<IssuedDocument> outcome) {

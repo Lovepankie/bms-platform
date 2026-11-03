@@ -52,14 +52,18 @@ class InsightsQueries {
         return p;
     }
 
-    /** Disbursements by value date in the range. */
+    /**
+     * Disbursements by value date in the range: the amount and the distinct loans of each day. V29 allows one
+     * disbursement row per loan, so a loan is disbursed on one day only and the days' counts add up to the distinct
+     * loans of the range, the definition {@code lending.disbursements} uses.
+     */
     List<DayTotal> disbursedByDay(Scope s) {
         if (s.empty()) {
             return List.of();
         }
         Map<String, Object> p = range(s);
         String sql = """
-                SELECT t.value_date, sum(t.amount_minor) AS amount, count(*) AS n
+                SELECT t.value_date, sum(t.amount_minor) AS amount, count(DISTINCT t.loan_id) AS n
                   FROM lending_loan_transactions t
                   JOIN lending_loans l ON l.id = t.loan_id
                  WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to
@@ -197,7 +201,7 @@ class InsightsQueries {
     }
 
     /** The loans whose schedule items count as expected in the range: active at some point in it. */
-    private static final String ACTIVE_IN_RANGE = " " + """
+    static final String ACTIVE_IN_RANGE = " " + """
              AND l.disbursed_on IS NOT NULL
              AND (l.written_off_on IS NULL OR l.written_off_on >= :from)
              AND (l.closed_on IS NULL OR l.closed_on >= :from)""";

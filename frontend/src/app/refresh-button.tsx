@@ -1,4 +1,4 @@
-import { type Query, useQueryClient } from '@tanstack/react-query';
+import { type Query, type QueryCache, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { icons } from '../components/icons';
 
@@ -46,6 +46,14 @@ export function useDeviceOnline(): boolean {
   return useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
 }
 
+const NO_CACHE = { subscribe: () => () => undefined, findAll: () => [] as Query[] };
+
+/** When the oldest figures of the page on screen were loaded (pollers aside); 0 while none is, or with no query cache. */
+export function useLoadedAt(cache: Pick<QueryCache, 'subscribe' | 'findAll'> = NO_CACHE): number {
+  const subscribeCache = useCallback((notify: () => void) => cache.subscribe(notify), [cache]);
+  return useSyncExternalStore(subscribeCache, () => oldestLoad(cache.findAll({ type: 'active' })), () => 0);
+}
+
 export function RefreshButton() {
   const client = useQueryClient();
   const cache = client.getQueryCache();
@@ -57,8 +65,7 @@ export function RefreshButton() {
   const [now, setNow] = useState(() => Date.now());
   const online = useDeviceOnline();
   // The oldest load among the queries of the page on screen (pollers aside), so the label never looks fresher than the figures; 0 while none.
-  const subscribeCache = useCallback((notify: () => void) => cache.subscribe(notify), [cache]);
-  const loadedAt = useSyncExternalStore(subscribeCache, () => oldestLoad(cache.findAll({ type: 'active' })), () => 0);
+  const loadedAt = useLoadedAt(cache);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), TICK_MS);
@@ -103,10 +110,10 @@ export function RefreshButton() {
 
   return (
     <div className={`refresh${online ? '' : ' refresh-offline'}`} data-tour="refresh">
+      {/* Offline, the banner under the bar says how old the figures are: one notice per page (issue #763). */}
       {visible && (
         <span id={describedBy} className="refresh-status">
           {visible}
-          {!online && <span className="refresh-more">{`. ${older}`}</span>}
         </span>
       )}
       <button

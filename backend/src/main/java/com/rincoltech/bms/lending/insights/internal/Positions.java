@@ -248,6 +248,39 @@ class Positions {
     /** Distinct borrowers in total and by group id (a null id is the loans with no such value). */
     record Borrowers(long total, Map<UUID, Long> byGroup) {}
 
+    // JUSTIFICATION-A3: borrowers() can only count; the regulator summary (issue #225) needs sums by gender,
+    // purpose and product rate over the same position statement, so they are the loans PAR reads.
+
+    /**
+     * An aggregate over the very positions {@link #forEachLive} or {@link #forEachSnapshot} reads (issue #225, the regulator
+     * summary): {@code select} and {@code groupBy} name the position {@code x} (columns {@code id}, {@code member_id},
+     * {@code product_id}, {@code po}), its loan {@code ln} and its member {@code mb}. One row per group, read whole.
+     */
+    <T> List<T> overLoans(
+            Scope s,
+            LocalDate date,
+            boolean live,
+            String select,
+            String groupBy,
+            org.springframework.jdbc.core.RowMapper<T> row) {
+        if (s.empty()) {
+            return List.of();
+        }
+        Map<String, Object> p = new LinkedHashMap<>();
+        String inner;
+        if (live) {
+            inner = liveSql(s, p);
+        } else {
+            p.put("d", Date.valueOf(date));
+            inner = snapshotSql(s, p);
+        }
+        return jdbc.sql("SELECT " + select + " FROM (" + inner + ") x JOIN lending_loans ln ON ln.id = x.id"
+                        + " JOIN lending_members mb ON mb.id = x.member_id GROUP BY " + groupBy)
+                .params(p)
+                .query(row)
+                .list();
+    }
+
     /** The snapshot rows of one business date in the scope, as positions. */
     List<Position> snapshot(Scope s, LocalDate date) {
         if (s.empty()) {

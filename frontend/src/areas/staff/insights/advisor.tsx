@@ -12,6 +12,7 @@ const WHY: Record<string, string | undefined> = {
   off: 'The AI assistant is switched off for your business.',
   scope: 'The AI brief covers every branch. This summary is for the branches you can see.',
   validation: 'The assistant gave no usable answer today.',
+  empty: 'The assistant found nothing to flag today.',
   provider_down: 'The assistant could not be reached today.',
   cap: 'The assistant reached its daily limit.',
   not_ready: 'Today\'s AI brief is not ready yet.',

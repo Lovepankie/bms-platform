@@ -117,6 +117,15 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
 }
 
+/* The AI assistant card's figure chips (issue #422): a chip label carries an item's name, so a long one wraps inside the card at a
+   phone's 412px instead of pushing the page sideways (review of #735). */
+.iv-advisor .cluster > * {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
 .iv-card {
   position: relative;
   display: flex;
@@ -383,6 +392,83 @@ line.iv-grid {
   color: var(--color-link);
   cursor: pointer;
   font-size: var(--text-sm);
+}
+
+/* The report centre (issue #229): the pack card, the catalogue in groups of cards that open to their form, and the runs. One
+   border width all round, no fill but the surface, no stripe. */
+.rp-pack {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.rp-pack > p,
+.rp-pack > h2 {
+  margin: 0;
+}
+
+.rp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  max-width: 20rem;
+}
+
+.rp-field input {
+  min-height: var(--tap);
+}
+
+.rp-pack .btn-primary {
+  justify-self: start;
+  min-height: var(--tap);
+}
+
+.rp-group h2 {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.rp-report {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  box-shadow: none;
+}
+
+.rp-report > summary {
+  min-height: var(--tap);
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.rp-report-title {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.rp-report-text {
+  font-size: var(--text-sm);
+}
+
+.rp-report > .iv-filters {
+  margin: 0;
+  border: 0;
+  padding-top: 0;
+  background: transparent;
+}
+
+.rp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rp-actions .btn-sm {
+  min-height: var(--tap);
 }
 
 /* Horizontal bar rows. */

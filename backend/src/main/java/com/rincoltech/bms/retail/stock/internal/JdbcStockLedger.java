@@ -34,6 +34,20 @@ class JdbcStockLedger implements StockLedger {
     /** Kinds refused when they would take a balance below zero; there is no setting (ADR-020 decision 4). */
     static final Set<String> GUARDED = Set.of("sale", "usage", "damage", "transfer_out", "return_to_supplier");
 
+    /** Every kind the table's check allows (V48); RetailPaymentsAndUsageIT fails if the check and this list drift (#145). */
+    static final Set<String> KINDS = Set.of(
+            "opening",
+            "purchase",
+            "sale",
+            "usage",
+            "damage",
+            "adjustment",
+            "return",
+            "legacy_balance",
+            "transfer_out",
+            "transfer_in",
+            "return_to_supplier");
+
     /** Kinds that carry the transfer they belong to, the movement's source id (FR-RET-16). */
     static final Set<String> TRANSFER = Set.of("transfer_out", "transfer_in");
 

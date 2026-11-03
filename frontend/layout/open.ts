@@ -5,6 +5,30 @@ import { inject } from 'vitest';
 // the test fails at once with what the page reported, and one that never draws fails at the wait with the same report, instead
 // of a bare timeout.
 
+// JUSTIFICATION-A3: nothing waits for fonts or a settled layout yet; one shared wait for the header, reports and pack-table cases.
+/**
+ * Waits until the fonts have loaded and `target` measures the same on two animation frames in a row (issue #775): its box,
+ * scroll and client widths, its text and the page's scroll width. Read earlier, a check once saw "Store " for "Store 1" and a
+ * page 418 wide. A layout still moving after `frames` frames fails with its last measurement.
+ */
+export async function settle(target: Locator, frames = 120): Promise<void> {
+  await target.first().evaluate(async (el, limit) => {
+    const measure = async () => {
+      await document.fonts.ready;
+      await new Promise<void>((done) => requestAnimationFrame(() => done()));
+      const r = el.getBoundingClientRect();
+      return [document.fonts.status, r.x, r.y, r.width, r.height, el.scrollWidth, el.clientWidth, document.documentElement.scrollWidth, el.textContent].join('|');
+    };
+    let last = await measure();
+    for (let i = 0; i < limit; i++) {
+      const now = await measure();
+      if (now === last && document.fonts.status === 'loaded') return;
+      last = now;
+    }
+    throw new Error(`the layout did not settle in ${limit} frames: last measured ${last}`);
+  }, frames);
+}
+
 /** Opens `path` (for example `layout/my-stock.html?font=2`) on the layout server and waits for `ready` to show. */
 export async function openLayout(page: Page, path: string, ready: Locator): Promise<Page> {
   const report: string[] = [];

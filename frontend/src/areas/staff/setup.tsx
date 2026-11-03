@@ -13,6 +13,7 @@ import { useStaff } from './context';
 import { PlanCard } from './plan';
 import { ShortLinkCard } from './short-link';
 import { Hint } from '../../app/ui/Hint';
+import { useHashSection } from '../../app/ui/useHashSection';
 import { sayDone } from './retail/toast';
 
 // Business set-up (FR-TEN-08): name, logo, theme colour and receipt footer, with a checklist a new
@@ -105,6 +106,8 @@ export function Setup() {
     setFooter(loaded.receipt_footer ?? '');
     setColour(loaded.theme_primary ?? '');
   }, [loaded]);
+  // A link to a section (the Reports page's switch them on goes to #reports, issue #783) lands on it once the settings load.
+  useHashSection(loaded !== undefined);
 
   if (settings.isError) return <p>Could not load the settings.</p>;
   if (!loaded) return <p>Loading</p>;
@@ -215,6 +218,20 @@ export function Setup() {
       await refresh();
       await queryClient.invalidateQueries({ queryKey: ['me'] });
       return on ? 'Reports turned on' : 'Reports turned off';
+    });
+  }
+
+  // Issue #768, ADR-115: off by default; when on, salespeople see and may change the daily savings amount. Only the Owner sees the
+  // switch (the server answers owner_only for anyone else).
+  function setSalespeopleSavings(on: boolean) {
+    void run(async () => {
+      const { error } = await api.PATCH('/api/v1/settings', {
+        params: { header: { 'If-Match': `"${current.version}"` } },
+        body: { salespeople_see_savings_amount: on },
+      });
+      if (error) throw new Error(problemOf(error).detail ?? 'Could not change the savings setting.');
+      await refresh();
+      return on ? 'Salespeople can now see and change the savings amount' : 'Salespeople no longer see the savings amount';
     });
   }
 
@@ -385,13 +402,27 @@ export function Setup() {
 
         <ShortLinkCard />
 
-        <fieldset>
+        <fieldset id="reports">
           <legend>Reports</legend>
           <label>
             <input type="checkbox" checked={current.reports_enabled === true} disabled={busy} onChange={(e) => setReports(e.target.checked)} />{' '}
             Let staff run reports ({reportsWording(me.modules)}), prepared in the background and kept for 30 days
           </label>
         </fieldset>
+
+        {hasRetail(me.modules) && me.is_owner === true && (
+          <fieldset>
+            <legend>Daily savings</legend>
+            <label>
+              <input type="checkbox" checked={current.salespeople_see_savings_amount === true} disabled={busy}
+                aria-describedby="salespeople-savings-hint" onChange={(e) => setSalespeopleSavings(e.target.checked)} />{' '}
+              Salespeople can see and change the savings amount
+            </label>
+            <p id="salespeople-savings-hint" className="hint">
+              A salesperson who sees the savings amount can work out the day&apos;s profit from it. Only you, the owner, can change this.
+            </p>
+          </fieldset>
+        )}
 
         {permissions.includes('core.data_export.run') && <DataExportCard modules={me.modules} zone={me.tenant_timezone} />}
 

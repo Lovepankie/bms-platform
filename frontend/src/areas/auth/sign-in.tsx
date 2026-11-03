@@ -6,6 +6,7 @@ import { normaliseSecondFactor, plainProblem } from '../../auth/codes';
 import { cancelPendingLogout, endPendingLogout, logoutPending, setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
 import { InstallPrompt } from '../../install/InstallPrompt';
+import { TOAST_MS, useToast } from '../staff/retail/toast';
 import { ErrorLine, RecoveryCodes, StepHeader, TwoStepSetup } from './steps';
 
 // Staff sign-in (FR-IAM-04 to FR-IAM-06, FR-IAM-11): password, then the second factor when the
@@ -26,6 +27,15 @@ export function SignIn() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  // Issue #122: an error is said in a toast as well as in the error line, which stays on the page. The line already reads it
+  // out as an alert, so the toast is silent, and it never carries a button. The toast shows only while the error line does:
+  // each attempt clears the line first, so a new try, and the next step after it, never keep an old error. A second failure
+  // replaces the toast (one toast at a time).
+  const { show, toast } = useToast(TOAST_MS, true);
+  const fail = (words: string) => {
+    setMessage(words);
+    show(words, 'error');
+  };
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(false);
   // ADR-067 decision 9: a sign-out whose server session could not be ended yet. The installed app has no address bar, so
@@ -72,7 +82,7 @@ export function SignIn() {
     try {
       await action();
     } catch (error) {
-      setMessage(plainProblem(problemOf(error), 'Something went wrong. Try again.'));
+      fail(plainProblem(problemOf(error), 'Something went wrong. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -94,7 +104,7 @@ export function SignIn() {
     e.preventDefault();
     const factor = normaliseSecondFactor(code);
     if (factor.kind === 'invalid') {
-      setMessage('Enter the 6 digit code from your app, or one recovery code.');
+      fail('Enter the 6 digit code from your app, or one recovery code.');
       return;
     }
     void run(async () => {
@@ -192,6 +202,7 @@ export function SignIn() {
           <RecoveryCodes codes={step.codes} onDone={() => void navigate({ to: '/staff' })} />
         </>
       )}
+      {message && toast}
     </main>
   );
 }

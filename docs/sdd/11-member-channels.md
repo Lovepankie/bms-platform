@@ -63,9 +63,9 @@ The brand bar, the theme colour and the footer belong to the shared shell, the r
 PWA, so every area inherits them (sign-in, accept-invitation, staff, member, platform console).
 A tenant host reads the public `GET /api/v1/branding` (display name, theme colour, logo URL and
 enabled module keys; no sign-in) and shows the logo with the display name as its alt text, or the name as text when there
-is no logo. The platform host and any unknown host show the Rincoltech brand. Every screen ends
-with the footer "Powered by" and the Rincoltech logo (`/brand/rincoltech-logo.png`), a link to the
-Rincoltech site with an accessible name; a tenant cannot remove it.
+is no logo. The platform host and any unknown host show the Rincol Tech brand. Every screen ends
+with the footer "Powered by" and the Rincol Tech logo (`/brand/rincoltech-logo.png`, and on the dark theme
+`/brand/rincoltech-logo-on-dark.png`), a link to the Rincol Tech site with an accessible name; a tenant cannot remove it.
 
 The theme colour reaches the screens as two CSS custom properties on `:root`, set once by the
 shell and absent when the tenant has no colour (the defaults in `frontend/src/app/theme.css`

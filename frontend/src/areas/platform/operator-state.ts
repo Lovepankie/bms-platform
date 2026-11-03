@@ -329,6 +329,28 @@ export function paymentFormFor(price: PlanPrice | null | undefined, today: strin
   return { amount: expectedAmount(price, 1), method: 'mtn_momo', reference: '', paidOn: today, months: '1', note: '' };
 }
 
+/**
+ * The plan's price with the AI assistant add-on in it when the add-on is charged (issue #423, ADR-112): what the business owes, and
+ * what the server checks a payment against. A year adds twelve months of the add-on; the plan's months free are the plan's alone.
+ * JUSTIFICATION-A3: the add-on is new; no existing helper adds anything to a plan's price.
+ */
+export function withAddon(
+  price: PlanPrice | null | undefined,
+  addon: { charged?: boolean; monthly_minor?: number | null } | null | undefined,
+): PlanPrice | null | undefined {
+  if (!price || price.monthly_minor == null || !addon?.charged || !addon.monthly_minor) return price;
+  const year = price.annual_minor ?? price.monthly_minor * (price.annual_months ?? 12);
+  return { ...price, monthly_minor: price.monthly_minor + addon.monthly_minor, annual_minor: year + addon.monthly_minor * 12 };
+}
+
+/** The add-on as one plain line on the Business page. */
+export function addonLine(addon: { on?: boolean; no_charge?: boolean; charged?: boolean; monthly_minor?: number | null } | null | undefined, currency: string): string {
+  if (!addon?.on) return 'Off. The business cannot use the AI assistant.';
+  if (addon.no_charge) return 'On, with no charge.';
+  const price = addon.monthly_minor == null ? 'no price entered yet' : `${formatMinor(addon.monthly_minor, currency)} a month`;
+  return addon.charged ? `On, charged: ${price}, added to what the business owes after its free month.` : `On, not charged while it is a pilot (${price}).`;
+}
+
 /** What the plan's price asks for that many months: a year (12) at the annual price, otherwise the monthly price times the months. */
 export function expectedAmount(price: PlanPrice | null | undefined, months: number): string {
   if (!price || price.monthly_minor == null) return '';

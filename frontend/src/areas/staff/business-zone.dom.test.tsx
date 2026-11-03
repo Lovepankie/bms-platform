@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, type Me } from '../../api/client';
 import { businessToday, businessZone, setBusinessZone } from '../../api/retail';
@@ -14,7 +14,8 @@ import { useBusinessZone } from './route';
 // Issue #667: the staff shell hands the business's own zone from /me (tenant_timezone) to businessToday, so a form's today is
 // the business's date. At 22:30 UTC on 28 Oct a business in Lagos (UTC+1) is still on the 28th while Kampala is on the 29th.
 // Issue #670: the zone belongs to the person signed in, so it goes back to Kampala when they sign out or the shell unmounts.
-// Issue #672: the zone is set and forgotten in one effect, so StrictMode's mount, unmount and mount ends on the business's zone.
+// Issue #672: the zone is set as the shell draws and again in an effect whose cleanup forgets it, so StrictMode's mount, unmount
+// and mount ends on the business's zone. Issue #674: a zone that only changes goes straight to the new one, never via Kampala.
 // The real shell and the real screens are drawn; only the network is faked. Every name is invented.
 
 function officer(zone?: string, permissions = ['lending.insights.read']): Me {
@@ -114,6 +115,24 @@ describe("forgetting the business's zone", () => {
     expect(businessZone()).toBe('Africa/Lagos');
     rerender({ zone: 'Africa/Nairobi' });
     expect(businessZone()).toBe('Africa/Nairobi');
+    unmount();
+    expect(businessZone()).toBe('Africa/Kampala');
+  });
+
+  it('changes from one zone to the next with no moment on Kampala between (#674)', () => {
+    // A screen's effect runs after the shell's old cleanup and before the shell's new effect: it saw Kampala there.
+    const seen: string[] = [];
+    function Screen({ zone }: { zone: string }) {
+      useEffect(() => void seen.push(businessZone()), [zone]);
+      return null;
+    }
+    function Shell({ zone }: { zone: string }) {
+      useBusinessZone(zone);
+      return <Screen zone={zone} />;
+    }
+    const { rerender, unmount } = render(<Shell zone="Africa/Lagos" />);
+    rerender(<Shell zone="Africa/Nairobi" />);
+    expect(seen).toEqual(['Africa/Lagos', 'Africa/Nairobi']);
     unmount();
     expect(businessZone()).toBe('Africa/Kampala');
   });

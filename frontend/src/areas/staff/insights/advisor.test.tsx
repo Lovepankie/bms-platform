@@ -129,7 +129,8 @@ describe('the AI assistant settings', () => {
     expect(other).toContain('Only a business administrator');
     const notAllowed = renderToString(<AssistantSwitch saved={{ ...settings, allowed: false }} canManage busy={false} error={null} onChange={() => {}} />);
     expect(notAllowed).not.toContain('Switch the assistant on');
-    expect(notAllowed).toContain('has not opened the assistant');
+    expect(notAllowed).toContain('has not opened it for your business');
+    expect(notAllowed).toContain('an add-on to your plan');
   });
 
   it('shows who accepted the notice and offers the way off once it is on', () => {

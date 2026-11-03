@@ -30,6 +30,10 @@ bms:
     # other profiles use the chapter 8 cost (64 MiB, 3 iterations).
     argon2-memory-kib: 4096
     argon2-iterations: 2
+  # A fabricated Resend webhook secret, so ResendWebhookIT can sign events (issue #333).
+  notifications:
+    mail:
+      resend-webhook-secret: whsec_dGVzdC1vbmx5LXJlc2VuZC13ZWJob29rLXNlY3JldA==
   # High global caps, so the whole suite's sign-ups fit in one hour; OnboardingIT fills them on
   # purpose to prove the cap.
   onboarding:

@@ -49,12 +49,47 @@ final class PdfReport {
             Spool spool,
             Path target,
             Guard guard) {
+        write(documents, limits, h, p, number, null, tables, spool, target, guard);
+    }
+
+    // JUSTIFICATION-A3: a pack (issue #229) renders each part and its cover through the same wait for a render place.
+    /** As above, for a part of a pack: {@code section} ("Part 2 of 8") is printed in the footer before the page number. */
+    static void write(
+            Documents documents,
+            ReportsProperties limits,
+            Header h,
+            Presentation p,
+            String number,
+            String section,
+            List<TableMeta> tables,
+            Spool spool,
+            Path target,
+            Guard guard) {
+        renderWhenFree(documents, TEMPLATE, target, guard, () -> {
+            Map<String, Object> model = model(limits.pdfRowCap, h, p, number, tables, spool, guard);
+            if (section != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> doc = (Map<String, Object>) model.get("doc");
+                doc.put("section", section);
+            }
+            return model;
+        });
+    }
+
+    /**
+     * Renders {@code template} to {@code target} once a render place is free, waiting until the run's own deadline or
+     * cancellation (the guard). The model is built only once the place is held.
+     */
+    static void renderWhenFree(
+            Documents documents,
+            String template,
+            Path target,
+            Guard guard,
+            java.util.function.Supplier<Map<String, Object>> model) {
         while (true) {
             guard.checkpoint();
             try {
-                // The model (the printed rows of every table) is built once a render place is held.
-                documents.renderPdf(
-                        TEMPLATE, () -> model(limits.pdfRowCap, h, p, number, tables, spool, guard), target, 5_000);
+                documents.renderPdf(template, model, target, 5_000);
                 return;
             } catch (ApiException e) {
                 if (!e.code().equals("documents_busy")) {
@@ -102,7 +137,7 @@ final class PdfReport {
 
         List<Map<String, Object>> out = new ArrayList<>();
         for (TableMeta t : tables) {
-            out.add(table(t, rowCap, h.currency(), exponent, spool, guard));
+            out.add(table(t, rowCap, h.currency(), exponent, p.blankMissing() ? "" : DASH, spool, guard));
         }
 
         Map<String, Object> model = new LinkedHashMap<>();
@@ -115,7 +150,7 @@ final class PdfReport {
     }
 
     private static Map<String, Object> table(
-            TableMeta t, int rowCap, String currency, int exponent, Spool spool, Guard guard) {
+            TableMeta t, int rowCap, String currency, int exponent, String missing, Spool spool, Guard guard) {
         List<Column> columns = t.columns();
         double weights = 0;
         for (Column c : columns) {
@@ -146,7 +181,7 @@ final class PdfReport {
             seen[0]++;
             List<String> cells = new ArrayList<>(columns.size());
             for (int i = 0; i < columns.size(); i++) {
-                cells.add(text(columns.get(i), row.get(i), exponent));
+                cells.add(text(columns.get(i), row.get(i), exponent, missing));
             }
             if (t.hasTotal() && seen[0] > head) {
                 total[0] = cells;
@@ -184,9 +219,10 @@ final class PdfReport {
         return Math.max(c.kind() == Kind.MONEY ? 1.9 : 1.4, longest * 0.24);
     }
 
-    private static String text(Column c, Object v, int exponent) {
+    /** A cell in words; a missing figure is {@code missing}, a dash unless the report asks for a blank. */
+    private static String text(Column c, Object v, int exponent, String missing) {
         if (v == null) {
-            return c.kind() == Kind.TEXT ? "" : DASH;
+            return c.kind() == Kind.TEXT ? "" : missing;
         }
         return switch (c.kind()) {
             case TEXT -> String.valueOf(v);

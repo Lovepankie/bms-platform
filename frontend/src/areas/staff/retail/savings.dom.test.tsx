@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Savings, SavingsSuggestion } from '../../../api/retail';
+import { RetailError, type Savings, type SavingsSuggestion } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { showDate } from './transfers';
@@ -59,10 +59,10 @@ const saved: Savings = {
   total_sold_minor: 50000, by_name: 'Test User 01', at: new Date().toISOString(), voided: false, historical: false,
 };
 
-function open() {
+function open(me = admin) {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me: admin, branch }}>
+      <StaffContext.Provider value={{ me, branch }}>
         <SavingsScreen />
       </StaffContext.Provider>
     </QueryClientProvider>,
@@ -152,5 +152,71 @@ describe('the savings screen', () => {
     await waitFor(() => expect(records.textContent).toContain('Saved UGX 4,000'));
     expect(records.textContent).not.toContain('No savings recorded in this period.');
     release([saved]);
+  });
+});
+
+// JUSTIFICATION-A3: the on and off DOM tests issue #768 asks for, one test per case.
+// Issue #768, ADR-115: the owner's setting "Salespeople can see and change the savings amount". The server leaves the profit and
+// the expenses out of the suggestion for a salesperson either way; with the setting on it sends the suggestion, never the cap.
+describe('the savings screen for a salesperson', () => {
+  const seller = mockMe('cashier');
+  const hidden: SavingsSuggestion = { branch_id: branch, business_date: today, total_sold_minor: 50000, suggestion_token: 'tok-1' };
+  const shown: SavingsSuggestion = { ...hidden, suggested_minor: 4000, may_change_amount: true };
+
+  it('with the setting on but a saved amount voided earlier that day, may not change it (overwrite needed)', async () => {
+    savingsSuggestion.mockResolvedValue({ ...shown, may_change_amount: false });
+    listSavings.mockResolvedValue([]);
+    open(seller);
+    await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
+    fireEvent.change(amount(), { target: { value: '3000' } });
+    expect(screen.getByText(/Only an administrator can change the amount/)).toBeTruthy();
+    fireEvent.click(saveButton());
+    expect(createSavings).not.toHaveBeenCalled();
+  });
+
+  it('with the setting off shows no amount and sends none, as before', async () => {
+    savingsSuggestion.mockResolvedValue(hidden);
+    listSavings.mockResolvedValue([]);
+    createSavings.mockResolvedValue({ ...saved, amount_minor: undefined, suggested_minor: undefined, overwritten: undefined });
+    open(seller);
+    await screen.findByText('Savings will be recorded using the standard amount.');
+    expect(screen.queryByLabelText(/Amount to save/)).toBeNull();
+    expect(document.body.textContent).not.toContain('UGX 4,000');
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(createSavings).toHaveBeenCalledTimes(1));
+    expect('amount_minor' in (createSavings.mock.calls[0]?.[0] as Record<string, unknown>)).toBe(false);
+    const panel = await screen.findByRole('region', { name: 'Savings recorded' });
+    expect(panel.textContent).toContain('The savings were recorded using the standard amount.');
+  });
+
+  it('with the setting on shows the suggestion but never the cap, the profit or expenses, and saves a changed amount', async () => {
+    savingsSuggestion.mockResolvedValue(shown);
+    const row: Savings = { ...saved, amount_minor: 3000, suggested_minor: undefined, overwritten: true };
+    listSavings.mockResolvedValueOnce([]).mockResolvedValue([row]);
+    const tooMuch = 'That amount is more than this shop can save today. Enter a smaller amount.';
+    createSavings.mockRejectedValueOnce(new RetailError(tooMuch, 422, 'savings_above_available', { code: 'savings_above_available' }));
+    createSavings.mockResolvedValue(row);
+    open(seller);
+    await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
+    expect(screen.queryByText(/The most you can save/)).toBeNull();
+    expect(screen.queryByLabelText("The day's figures")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day|UGX 8,000/);
+
+    // Too large: only the server knows the cap, and its words do not state it.
+    fireEvent.change(amount(), { target: { value: '9000' } });
+    fireEvent.blur(amount());
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(saveButton());
+    await screen.findByText(tooMuch);
+
+    fireEvent.change(amount(), { target: { value: '3000' } });
+    expect(screen.queryByText(/Only an administrator can change the amount/)).toBeNull();
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(createSavings).toHaveBeenCalledTimes(2));
+    expect(createSavings.mock.calls[1]?.[0]).toMatchObject({ amount_minor: 3000, suggestion_token: 'tok-1' });
+    const panel = await screen.findByRole('region', { name: 'Savings recorded' });
+    expect(panel.textContent).toContain('Amount saved: UGX 3,000');
+    const records = screen.getByRole('region', { name: 'Savings records' });
+    await waitFor(() => expect(records.textContent).toContain('Saved UGX 3,000'));
   });
 });

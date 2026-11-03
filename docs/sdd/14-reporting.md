@@ -152,6 +152,8 @@ Parameters: date range, branches, group by. Loans with a `disbursement` transact
 `value_date` is in the range and which is not reversed: count, total principal
 disbursed, fees deducted at disbursement, average and median loan size.
 
+**Built (extras slice D3, issue #222):** see section 14.10; it also lists each loan.
+
 ### `lending.loans_by_status`
 
 Parameters: `as_at`, branches. Count and requested or approved principal per status, and
@@ -216,6 +218,9 @@ allocations from transactions not reversed:
 Parameters: date range, branches. Per officer: active loans and `PO` at range end,
 disbursements in range, expected and collected on due (as above), collection rate, PAR30
 at range end, collection actions logged, promises kept and broken.
+
+**Built (extras slice D3, issue #222):** `lending.arrears_list`, `lending.expected_vs_collected` and `lending.officer_performance`, with
+the differences from the text above listed in section 14.10.
 
 ### `lending.promises_to_pay`
 
@@ -294,6 +299,31 @@ latest value, custody status and location, linked loans and their status. Flags:
 custody while every linked loan is closed ("release overdue"); imported items not yet
 verified (13.6.8); items without a valuation.
 
+**Built (extras slice D4, issue #225).** Offered as `pdf`, `xlsx`, `csv` and `json` under `lending.reports.members`; no migration and no
+permission. Parameters `branch_id`, `collateral_type` and `custody_status`; the branches are those the requester holds the permission in,
+resolved at request time and frozen with the run, and a download by someone whose access has narrowed since is refused. Not `as_at`: the
+register is the items as they stand when it is made, under the business date of the request, because custody and values are not kept by
+date (the report says so). A requester without `lending.insights.all_officers` gets only the items that secure a loan they are the
+responsible officer for (chapter 7: a loan officer sees only their own loans), and its Loans column names only those loans. Two tables,
+the short one first so the PDF always prints it whole; both are read in the run's one `REPEATABLE READ` snapshot transaction, so the
+counts are of the very items listed. A missing value or date prints blank in the PDF, not as a dash (ADR-038, #225 amendment point 6):
+
+- `flags`: the items with each flag and the items in the register (a total row).
+- `items`, by branch, member number and registration order: branch, member number, the name, type, description, reference, the
+  estimated value given at registration, the latest valuation's market value and date, custody status, where it is kept, the linked
+  loans with their status in words ("LN0001 (active)"), and its flags. Who owns an item (the member number, the name, the reference,
+  which can be an ID number, a plate or a title number, and the description) is printed only where the requester holds `lending.members.read`
+  in the member's branch, and blank elsewhere; the branches are frozen with the run and checked again at download, as is the officer
+  limit.
+
+The flags: **Release overdue**, an item still pledged or in custody that secures at least one loan and whose loans are all closed,
+cancelled or rejected (a written-off loan keeps its collateral for recovery, so it does not count as finished); **Imported, not
+verified**, an item whose registration event carries exactly the import's note "imported; verify custody and value" (chapter 13 section 13.6.8)
+and that has no valuation and no later event; **No valuation**, an item with no valuation recorded. Nothing writes the import's note
+yet (the import commit is issue #133), so the second flag is proven on fabricated rows only. A register longer than the PDF row cap is
+cut with the printed pointer to the Excel file, which holds every item. The figures come through the new public port `RegisterFigures` of
+`lending.insights`, read with plain SQL like the other insights reads (ADR-030 decision 1). Test: `LendingRegistersReportsIT`.
+
 ## 14.6 Operational and audit reports
 
 ### `lending.operational_trend` (`lending.reports.portfolio`)
@@ -329,6 +359,37 @@ PAR90; interest rate range and weighted average per product (in bp, weighted by 
 loans written off in the period; savings held from members (total, number of accounts);
 investments held from members (total principal, number); number of branches and staff.
 
+**Built (extras slice D4, issue #225).** Offered as `pdf`, `xlsx`, `csv` and `json` under `lending.reports.compliance`, and, like the
+portfolio reports, it also needs `lending.insights.read` because its scope is the insights page's (a caller without
+`lending.insights.all_officers` gets their own loans and no savings, investments, branches or staff, which belong to no officer). No migration and no
+permission. Parameters `from` (the first of the month of `to` by default), `to` (the period end, today by default) and `branch_id`. Its
+first note is the cover note "Data summary. Not a filed return.", printed on every format; a date in a note is printed `7 Oct 2026`.
+Six tables, a table per kind of figure; each total is the sum of its own rows, and a figure with nothing to measure (PAR on an empty
+book, the weighted rate of a product owing nothing) prints blank in the PDF, not as a dash (ADR-038, #225 amendment point 6):
+
+- `loans`, a number and an amount per row: active loans and their principal outstanding at the period end; loans disbursed and loans
+  written off in the period (the insights page's `portfolio.disbursed` and `portfolio.written_off` rules; V29 allows one disbursement
+  row per loan, so the disbursements are loans); savings held (the savings panel's balance at the period end, and the accounts open
+  then); investments held (the investment panel's balance at the period end, and the open investments now). The savings and investment
+  rows are left out for a caller limited to their own loans, and the report says why.
+- `risk`: PAR 30 and PAR 90.
+- `people`: active borrowers at the period end; the active branches of the scope; active staff with a role that is not revoked in
+  those branches or in every branch, now. Branches and staff are left out for a caller limited to their own loans.
+- `borrowers`: the distinct borrowers with an active loan by gender (women, men, other, not recorded; a value outside the list counts
+  as not recorded) and the total.
+- `products`: by product and rate unit, the active loans, principal outstanding, lowest and highest rate and the rate weighted by
+  principal outstanding (half up), in basis points per the unit; rates of different units are never averaged together, so the table has
+  no total row (the `purposes` total is the book's, summed from its rows).
+- `purposes`: the active loans and principal outstanding by loan purpose (the purpose is the loan's own and never changes, so a past
+  date can be grouped by it); a purpose outside the list is one row "Not recorded", so the rows always add up to the total.
+
+The loan book at the period end is the positions of `lending.par` (the loan tables for today, the nightly snapshot for an earlier
+date, with the same refusals), so PAR 30 and PAR 90 are those of section 14.3: tests assert they equal `lending.par` and the insights
+page today, and `lending.par` on a past date read from the snapshot, and that a past date without a snapshot is refused with
+`snapshot_unavailable`. On a past date the breakdowns join the snapshot's loans to their loan and member rows as they are now (rate,
+purpose, gender); the report says it reads the snapshot. The figures come through the public port `RegisterFigures` of
+`lending.insights`. Test: `LendingRegistersReportsIT`.
+
 ## 14.9 Live insights (`lending.insights.*`, #153, ADR-030)
 
 The staff Insights page is not a catalogue report: it is computed per request, live for today,
@@ -355,7 +416,8 @@ route.
 
 ## 14.10 The reports pack and report runs (ADR-038, issue #111)
 
-Design only. The seven formal reports are defined in sections 14.3, 14.4, 14.5 and 14.7 and are not redefined here:
+Built (slices D1 to D5, issues #214, #217, #222, #225 and #229; each slice's paragraph below). The seven formal reports are defined in
+sections 14.3, 14.4, 14.5 and 14.7 and are not redefined here:
 
 | Report | Key | Section |
 |---|---|---|
@@ -420,7 +482,8 @@ migration (the `format` check of `report_runs` already allowed `pdf` and `xlsx`)
   made the file and when, when the data was read, the notes), then each table with its heading repeated on every page, tinted rows and a
   total row set off between rules, and "page x of y" in the footer. A4, landscape when a table has more than seven columns, Open Sans
   embedded. Money is in whole currency units with the currency in the column heading, a rate is a percentage to one decimal made from
-  the integer basis points half up (so 755 basis points reads 7.6%, not 7.5%), a date is `8 Oct 2026`, a missing figure is a dash, and
+  the integer basis points half up (so 755 basis points reads 7.6%, not 7.5%), a date is `8 Oct 2026`, a missing figure is a dash (blank in a report that sets
+  `ReportDefinition.blankMissingFigures()`, ADR-038 #225 amendment point 6), and
   a long unbroken word wraps inside its cell. A table longer than `BMS_REPORTS_PDF_ROW_CAP` (3,000; 500 on staging) is cut to that many
   rows with the printed note "Showing the first 500 of 900 rows. The full detail is in the Excel file." and keeps its total row. A
   character the font lacks prints as "?" (ADR-034). The layout is read from the spool after the snapshot has committed and holds no
@@ -450,6 +513,97 @@ migration (the `format` check of `report_runs` already allowed `pdf` and `xlsx`)
 - **Render places.** A report PDF takes at most one of the document renderer's two places and builds its model only once it holds it, so
   a receipt or a statement asked for while two reports are made still finds a place (a test holds a report in its layout and renders a
   document beside it).
+
+**Built (extras slice D3, issue #222).** Four more reports, each offered as `pdf`, `xlsx`, `csv` and `json`. No migration and no
+permission. Each needs `lending.insights.read` as well as its own permission, because its branch and officer scope is the insights
+page's, resolved at request time and frozen with the run; a caller without `lending.insights.all_officers` gets only the loans they are
+the responsible officer for, in every report and every format.
+
+- **Figures.** The public port `InsightsFigures` gains `collections`, `disbursements`, `arrears` and `officers`. Their range figures are
+  read by `FlowFigures`, grouped twins of the insights queries that keep each query's predicates and add only the grouping, so a report's
+  total is the insights page's figure for the same range and caller (`portfolio.expected`, `portfolio.collected_on_due`,
+  `portfolio.collection_rate`, `portfolio.collected`, `portfolio.disbursed`, `portfolio.disbursed_count`,
+  `portfolio.average_loan_size`; a test asserts each). Their position figures (active loans, principal outstanding, days late, arrears,
+  PAR 30) are the positions `lending.par` reads, live for today and the nightly snapshot for a past date.
+- **`lending.expected_vs_collected`** (`lending.reports.collections`). Parameters `from` (the first of the month of `to` by default),
+  `to` (today by default), `branch_id` and `group_by` (`none`, `branch`, `product`, `officer`). Table `collections`, per group and a
+  total row: expected, collected on due, collection rate, then the parts of the total collected and the total. Table `equation` prints
+  the collections equation of section 14.4 for the selection, a line per part and "Equals total collected". The parts are the
+  allocations of the range's repayments, not reversed, by where they went: to items due in the range (paid in the range), before it
+  (arrears recovered), after it (prepayments), penalties and overpayments; a recovery on a written-off loan settles no item and is its own
+  part. Collected on due differs from the first part by what was paid before the range toward items due in it, which is why both are
+  shown. A line "Not explained by the parts" is printed only if the parts and the total ever differ; the golden test asserts they do not.
+- **`lending.arrears_list`** (`lending.reports.collections`). Parameters `as_at`, `branch_id` and `bucket` (`1_30`, `31_60`, `61_90`,
+  `over_90`). One table, `arrears`: every active loan more than 0 days late on the date, the buckets in age order and the most overdue
+  first, with the member number, the name (only in the branches where the requester holds `lending.members.read`), the phone (in full
+  only in the branches where the requester holds `lending.members.contact`, masked `+256*****0001` elsewhere, as the collection lists),
+  the officer, days late, arrears, penalties outstanding, principal outstanding, the last repayment on or before the date (one reversed
+  by then excluded; a reversal after the date does not change what stood on it), the last collection action logged by then, and the
+  earliest promise to pay made by then and not settled by then; a total row. The branch a line is judged by is the position's (the
+  snapshot's on a past date). Both branch lists are frozen with the run, and a download by someone who has since lost either permission
+  in any of those branches is refused. Penalties are blank on a line read from the snapshot, and then the total is blank too. A
+  position whose loan row cannot be read is still printed, without its member and extras. Not here: an officer parameter (the
+requester's scope decides whose loans are listed, and `group_by` is not offered either), the arrears split into principal,
+  interest and fees, which the positions do not hold, and penalties outstanding for a past date (the snapshot does not hold them; the
+  report says so). Only the late loans are kept in memory, to sort them; the rest of the book passes through.
+- **`lending.disbursements`** (`lending.reports.portfolio`). Parameters `from`, `to`, `branch_id`, `group_by`. Table `loans`: each loan
+  disbursed in the range, not reversed, by date then loan number (loan, date, member number, branch, product, officer, principal, the
+  upfront fee taken at disbursement) and a total row, written as the loans are read. Both tables count a loan once: its principal is
+  every disbursement of it in the range that is not reversed, summed, dated by the first, and its upfront fee is the `fee_upfront`
+  entries dated on that first disbursement (a reversed one excluded), so a fee belongs to exactly one disbursement. Today V29's index
+  `lending_loan_transactions_one_disbursement` allows one disbursement row per loan, reversed or not (a test proves a second tranche and
+  a payout entered again are refused), and the insights page's `portfolio.disbursed_count` counts distinct loans too. Table `summary`,
+  per group and a total row: loans, principal disbursed, upfront fees, the average loan (half up) and the
+  median loan (the middle loan, or the mean of the two middle ones rounded half up). A responsible officer with no user row is labelled
+  "Staff" and the last four characters of the id, in this and the officer reports.
+- **`lending.officer_performance`** (`lending.reports.collections`, FR-CLN-06). Parameters `from`, `to`, `branch_id`. Table `officers`,
+  a row per responsible officer and a total row: active loans, principal outstanding and PAR 30 at the end of the range; loans disbursed
+  and their principal, expected, collected on due and the collection rate over the range; the collection actions logged on the officer's
+  loans in the range (by the business date in Kampala) and the promises to pay settled kept and broken in it. A loan counts for the
+  officer responsible for it now (the snapshot's officer for a past date's positions); the report says so.
+- **Tests.** `LendingCollectionsReportsIT`: a fabricated book with every figure computed by hand (a repayment split over arrears, the
+  range, a later item and a penalty; an overpayment; a repayment reversed; a recovery; a reversed disbursement; promises kept and
+  broken), the equation, the cross check against the insights page in every grouping, the officer and branch scope (including a
+  branch-limited caller asking for another branch), names and phones by the branches of their own permissions, a download refused after
+  either is lost, golden snapshot cases for the arrears list and officer performance (a repayment reversed after the date still shows on
+  it), the catalogue, and the PDF and workbook figures.
+
+**Built (extras slice D5, issue #229).** The monthly pack and the report centre. No migration (`report_runs.format` already allowed `pack`)
+and no permission.
+
+- **`lending.monthly_pack`** (format `pack` only). Parameters `period_end` (today by default; a future date is refused as the reports
+  refuse it) and `branch_id`. The month runs from the first day of the month of the period end to the period end. The eight reports of
+  the table above, in that order: `lending.portfolio_outstanding` and `lending.par` at the period end grouped by branch,
+  `lending.expected_vs_collected` and `lending.disbursements` over the month grouped by branch, `lending.arrears_list` at the period end,
+  `lending.officer_performance` and `lending.regulatory_summary` over the month, and `lending.collateral_register` as the items stand when
+  the pack is made (it takes no date). A past period end reads that date's nightly snapshot for the figures at a date, and fails
+  `snapshot_unavailable` without it.
+- **One snapshot, each report's own rules.** The requester needs the pack's permission (`lending.reports.portfolio`) and every report's;
+  otherwise the pack is refused with 403 and is not in the catalogue, and the reports they hold can still be run singly. Each report is
+  prepared with its own rules in the request, so in the pack it freezes the same scope as alone: the branches, the requester's own loans
+  without `lending.insights.all_officers`, names and owner details only in the branches of `lending.members.read`, full phones only in the
+  branches of `lending.members.contact`. Every report is then queried in the run's one `REPEATABLE READ` transaction, so their figures agree.
+  A download of either file is refused when any report's check at download fails.
+- **The PDF.** A cover on the shared letterhead (the title, a parameters box with the period end, the scope, the currency, who made it
+  and when, and when the data was read; the contents with each report's date, its pages and the page of the file it starts on; a sign off
+  block with Prepared by, Approved by and the date), then each report as it prints alone, its footer reading "part n of 8, page x of y"
+  beside the pack's number. In a pack every missing figure prints blank, never a dash. Each report is rendered to its own file and the
+  files are merged on disk.
+- **The workbook.** A Parameters sheet for the pack (the period end as a real date, when the data was read and the file made, by whom,
+  the currency and the scope), then for each report its title, its sheets, its date, its parameters and its notes; then every report's
+  sheets, each named with its part number ("3 Expected and collected"; a name is cut at the 31 characters a sheet name holds).
+- **Files and notice.** The PDF and the workbook are both documents of the run; the run lists them under `files` and the expiry deletes
+  both after 30 days. When the pack is ready the requester gets a push notice and an email that names the pack and its date and attaches
+  nothing.
+- **The report centre.** The Reports screen offers the pack first (a period end and Run the pack), then every report in groups (loan book,
+  collections and officers, members and collateral, for the regulator), each a card that opens to its form; then the user's runs with a
+  filter (all, in progress, ready, failed), the date each stands at in the report format, a download for each file (a pack's PDF and
+  Excel), Cancel and Run again.
+- **Tests.** `LendingPackIT` on the fabricated golden book: the principal outstanding and PAR 30 (computed by hand) are equal in the
+  portfolio, PAR, officer and regulator reports and on the insights page, and the month's expected, collection rate and disbursed agree
+  across reports and with the page; the cover, contents and sign off and each part's footer; refusals for a missing permission and the
+  wrong format; names and phones by branch and both files refused after the name permission is lost; an officer's pack of their own loans;
+  a past period end from the snapshot and refused without it; both files deleted after 30 days; the ready email.
 
 ## 14.8 Test datasets
 

@@ -173,8 +173,17 @@ class SalesService {
     Outcome<Sale> create(String idempotencyKey, SaleRequest r) {
         // ADR-067: a sale already recorded with this client sale id is the same sale, whatever key it comes with, so a
         // send after the key expired, or with a new key after a lost answer, answers it again and does nothing.
+        // Issue #769: it is looked up before the key, and the key's hash leaves out how the sale was delivered, so an
+        // online request that got no answer in time and is sent again from the outbox under the same key with
+        // occurred_at, recorded_offline and prices_as_of added is the same request, also while the first holds the key.
+        if (r.clientSaleId() != null && idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Sale> found = recordedAs(r);
+            if (found.isPresent()) {
+                return new Outcome<>(found.get(), true);
+            }
+        }
         boolean[] earlier = {false};
-        Outcome<Sale> outcome = idempotency.once(idempotencyKey, "POST", PATH, r, Sale.class, () -> {
+        Outcome<Sale> outcome = idempotency.once(idempotencyKey, "POST", PATH, keyed(r), Sale.class, () -> {
             if (r.clientSaleId() != null) {
                 Optional<Sale> found = recordedAs(r);
                 if (found.isPresent()) {
@@ -185,6 +194,28 @@ class SalesService {
             return record(r);
         });
         return earlier[0] ? new Outcome<>(outcome.body(), true) : outcome;
+    }
+
+    /** What the Idempotency-Key covers: a request with a client sale id without its delivery fields (issue #769). */
+    static SaleRequest keyed(SaleRequest r) {
+        if (r.clientSaleId() == null) {
+            return r;
+        }
+        return new SaleRequest(
+                r.branchId(),
+                r.saleDate(),
+                r.paymentMethod(),
+                r.customerId(),
+                r.buyerName(),
+                r.buyerContact(),
+                r.dueDate(),
+                r.priceListId(),
+                r.creditOverrideReason(),
+                r.lines(),
+                r.clientSaleId(),
+                null,
+                null,
+                null);
     }
 
     /**
@@ -1633,12 +1664,21 @@ class SalesService {
 
     /** As above, with the rule's start read once by a caller that shows a list. */
     Sale visible(Sale s, CreditPeriods periods) {
-        Principal principal = CurrentPrincipal.require();
-        boolean hideCost = !principal.may("retail.profit.read", s.branchId());
+        return visible(s, periods, CurrentPrincipal.require());
+    }
+
+    /** A sale read for its receipt link (issue #760, ADR-116), where nobody is signed in: as a reader without cost sees it. */
+    Optional<Sale> forReceiptLink(UUID id) {
+        return repo.find(id, false).map(Header::sale).map(s -> visible(s, capabilities.onPaymentPeriods(), null));
+    }
+
+    /** As above for this caller, or for nobody ({@code null}): then cost, profit and who made the sale are left out. */
+    private Sale visible(Sale s, CreditPeriods periods, Principal principal) {
+        boolean hideCost = principal == null || !principal.may("retail.profit.read", s.branchId());
+        UUID me = principal == null ? null : principal.userId();
         // Who made or voided a sale is shown to those who may read profit there, and to the person themselves.
-        UUID createdBy =
-                hideCost && !java.util.Objects.equals(principal.userId(), s.createdBy()) ? null : s.createdBy();
-        UUID voidedBy = hideCost && !java.util.Objects.equals(principal.userId(), s.voidedBy()) ? null : s.voidedBy();
+        UUID createdBy = hideCost && !java.util.Objects.equals(me, s.createdBy()) ? null : s.createdBy();
+        UUID voidedBy = hideCost && !java.util.Objects.equals(me, s.voidedBy()) ? null : s.voidedBy();
         boolean hidePricing = !pricing.on();
         // A credit sale whose counting day (the later of its date and its entry day) is on or after the first day of
         // the rule "when the buyer pays" is paid on the day the payment

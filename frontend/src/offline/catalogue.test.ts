@@ -3,7 +3,7 @@ import type { Me } from '../api/client';
 import type { Product } from '../api/retail';
 import type { Draft } from '../areas/staff/retail/sale-state';
 import { mayKeepOnPhone, offlineProblem, offlineSale, refreshCatalogue, searchCatalogue, sellingBranchesOf, serverIso } from './catalogue';
-import { createConnectivity } from './connectivity';
+import { PING_TIMEOUT_MS, browserConnectivity, createConnectivity } from './connectivity';
 import { memoryStore, scopeOf } from './store';
 
 // The catalogue copy, the offline sale request and the connection watch (issue #458, ADR-067 decisions 2, 3 and 4;
@@ -156,6 +156,73 @@ describe('the connection', () => {
     handlers.online?.();
     await vi.waitFor(() => expect(c.online()).toBe(true));
     expect(seen).toEqual([false, true, false, true]);
+  });
+
+  // JUSTIFICATION-A3: a new test the review asks for (#769), not a mechanism.
+  it("treats the browser's ping cut off by its own 3 s limit as slow, so it is pinged again (issue #769)", async () => {
+    const timedOut = (): Promise<Response> => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError'));
+    const fetch = vi.fn(timedOut).mockImplementationOnce(timedOut).mockImplementationOnce(async () => ({ ok: true }) as Response);
+    vi.stubGlobal('fetch', fetch);
+    try {
+      // One cut off, the second answers: still online.
+      expect(await browserConnectivity().check()).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      // Both cut off: offline.
+      expect(await browserConnectivity().check()).toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(4);
+      // Older engines name the timeout AbortError: slow too, pinged again.
+      fetch.mockImplementationOnce(() => Promise.reject(new DOMException('The operation was aborted.', 'AbortError')));
+      fetch.mockImplementationOnce(async () => ({ ok: true }) as Response);
+      expect(await browserConnectivity().check()).toBe(true);
+      fetch.mockClear();
+      // A failure that is not slowness (no network) is offline at once, with no second ping.
+      fetch.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
+      expect(await browserConnectivity().check()).toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+  it('counts two pings in a row with no answer within 3 seconds as offline, and one as a cold link (issue #769)', async () => {
+    vi.useFakeTimers();
+    try {
+      let answer: (ok: boolean) => void = () => {};
+      const pings = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)));
+      const c = createConnectivity({
+        ping: pings,
+        navigatorOnline: () => true,
+        addListener: () => () => {},
+        every: () => () => {},
+      });
+      expect(c.online()).toBe(true);
+      // One slow ping is pinged again at once, and an answer in time keeps the app online.
+      const cold = c.check();
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+      expect(pings).toHaveBeenCalledTimes(2);
+      answer(true);
+      expect(await cold).toBe(true);
+      expect(c.online()).toBe(true);
+      // Two slow in a row: offline.
+      const checked = c.check();
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+      expect(c.online()).toBe(true);
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS - 1);
+      expect(c.online()).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await checked).toBe(false);
+      expect(c.online()).toBe(false);
+      // The slow answer that comes later changes nothing; the next ping that answers in time does.
+      answer(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(c.online()).toBe(false);
+      const again = c.check();
+      answer(true);
+      expect(await again).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

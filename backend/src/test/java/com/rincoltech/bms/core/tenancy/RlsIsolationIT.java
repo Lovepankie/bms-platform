@@ -629,6 +629,20 @@ public class RlsIsolationIT {
                         INSERT INTO retail_credit_note_issues (tenant_id, return_id, issued_by, issued_on, buyer_name)
                         VALUES (?, ?, ?, DATE '2026-01-16', 'Test Buyer 01')
                         """).params(t.tenantId(), saleReturn, user).update();
+        // A short link to the fixture sale's receipt (migration V128, #760): only the token's hash is stored.
+        owner.sql("""
+                        INSERT INTO retail_receipt_links (id, tenant_id, sale_id, token_hash, token_sealed, created_by, created_at,
+                                                          expires_at)
+                        VALUES (?, ?, ?, ?, decode('00', 'hex'), ?, TIMESTAMPTZ '2026-01-16 09:00:00+03',
+                                TIMESTAMPTZ '2026-04-16 09:00:00+03')
+                        """)
+                .params(
+                        UUID.randomUUID(),
+                        t.tenantId(),
+                        sale,
+                        "%064x".formatted(new java.math.BigInteger(128, new java.util.Random())),
+                        user)
+                .update();
         // The retail import's source references (migration V20, #55).
         owner.sql("""
                         INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, source_user)
@@ -959,6 +973,13 @@ public class RlsIsolationIT {
                         VALUES (?, current_date, 'fallback', 'validation', 'Summary for a fabricated day.', '[]'::jsonb,
                                 '[]'::jsonb, current_date, now())
                         """).params(t.tenantId()).update();
+        // The stored shop brief (migration V125, #422), the same shape.
+        owner.sql("""
+                        INSERT INTO retail_ai_briefs (tenant_id, brief_date, source, reason, summary, points, chips,
+                                                      facts_as_of, generated_at)
+                        VALUES (?, current_date, 'fallback', 'validation', 'Summary for a fabricated day.', '[]'::jsonb,
+                                '[]'::jsonb, current_date, now())
+                        """).params(t.tenantId()).update();
         // A payment intent and the notification that named it (migration V54, #213). JUSTIFICATION-A3: one factory row
         // per tenant table.
         UUID intent = UUID.randomUUID();
@@ -1032,6 +1053,47 @@ public class RlsIsolationIT {
         owner.sql(
                         "INSERT INTO retail_notice_runs (tenant_id, kind, run_on) VALUES (?, 'daily_summary', DATE '2026-01-15')")
                 .param(t.tenantId())
+                .update();
+        // The merchant statement, its line, a reconciliation run and one of its findings (migration V124, #317).
+        // JUSTIFICATION-A3: one factory row per tenant table; they point at the fixture user, intent and journal entry
+        // above.
+        UUID statement = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_statements (id, tenant_id, uploaded_by, file_name, content_sha256, row_count,
+                            period_from, period_to, currency, matched_count, different_count, unmatched_count, fees_posted_minor)
+                        VALUES (?, ?, ?, 'statement.csv', ?, 1, DATE '2026-01-15', DATE '2026-01-15', 'UGX', 1, 0, 0, 0)
+                        """).params(statement, t.tenantId(), user, hex64(statement)).update();
+        UUID statementRow = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_statement_rows (id, tenant_id, statement_id, row_no, order_tracking_id, amount_minor,
+                            fee_minor, currency, paid_on, match_status, intent_id, fee_entry_id)
+                        VALUES (?, ?, ?, 1, ?, 1500, 15, 'UGX', DATE '2026-01-15', 'matched', ?, ?)
+                        """)
+                // The line names a fee entry, so the closed business purge (V102) meets the line's key on the journal
+                // and must delete the line before the entry (BusinessClosureIT).
+                .params(statementRow, t.tenantId(), statement, UUID.randomUUID().toString(), intent, entry)
+                .update();
+        // The confirmer of a review is a second person (ADR-035 decision 66).
+        UUID confirmer = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff 02', ?, 'active')")
+                .params(confirmer, t.tenantId(), "confirmer-" + confirmer + "@example.test")
+                .update();
+        owner.sql("""
+                        INSERT INTO payment_statement_reviews (id, tenant_id, row_id, reviewed_by, confirmed_by, note)
+                        VALUES (?, ?, ?, ?, ?, 'Sale at the shop')
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), statementRow, user, confirmer)
+                .update();
+        UUID run = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_reconciliation_runs (id, tenant_id, ran_on, trigger, window_from, intents_examined,
+                            statements_used, finding_count)
+                        VALUES (?, ?, DATE '2026-01-15', 'job', DATE '2025-09-17', 1, 1, 1)
+                        """).params(run, t.tenantId()).update();
+        owner.sql(
+                        "INSERT INTO payment_reconciliation_findings (id, tenant_id, run_id, kind, intent_id) VALUES (?, ?, ?, 'pending_over_24h', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), run, intent)
                 .update();
         // A feedback item a member of staff sent from inside the app (migration V80, #447).
         owner.sql("""
@@ -1116,6 +1178,14 @@ public class RlsIsolationIT {
                                                        model, rows_drafted, cost_currency)
                         VALUES (?, ?, ?, now(), 'retail', 'text', 'drafted', 'gemini', 'test-model', 3, 'USD')
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // Customer data onboarding (migration V127, #127): a run and its first batch.
+        UUID importRun = UUID.randomUUID();
+        owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
+                .params(importRun, t.tenantId(), user)
+                .update();
+        owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq) VALUES (?, ?, ?, 1)")
+                .params(UUID.randomUUID(), t.tenantId(), importRun)
+                .update();
     }
 
     /**

@@ -52,7 +52,20 @@ interface OutboxChannel {
 
         Result SENT = new Sent();
 
-        record Sent() implements Result {}
+        /**
+         * @param via the sender that carried it when not the channel's chosen one (Resend's SMTP fallback,
+         *     ADR-117 decision 1), or null; the dispatcher logs it and records a platform audit row
+         */
+        record Sent(String via) implements Result {
+
+            public Sent() {
+                this(null);
+            }
+        }
+
+        static Result sentVia(String via) {
+            return new Sent(via);
+        }
 
         /** @param extendExpiryTo a later expiry the row should get (bounded by the database), or null */
         record Deferred(Instant until, Instant extendExpiryTo) implements Result {

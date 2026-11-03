@@ -15,6 +15,7 @@
             "core.tenancy",
             "core.approvals",
             "core.audit",
+            "core.identity",
             "core.ledger",
             "core.documents",
             "core.jobs",

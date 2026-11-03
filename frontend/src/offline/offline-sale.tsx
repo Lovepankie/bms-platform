@@ -11,15 +11,22 @@ import type { OutboxItem } from './outbox';
 // The sale screen with no network (issue #458, ADR-067 decision 3): items found in the copy on the phone, a note that the
 // sale stays on the phone, and the provisional receipt that the server's number replaces once the sale is sent.
 
-/** The banner at the top of the sale form while offline. */
-export function OfflineNote() {
+/** The banner at the top of the sale form while offline; says plainly when the branch's items are not on the phone yet (issue #769). */
+export function OfflineNote({ branchId }: { branchId: string }) {
   const offline = useOffline();
+  const noItems = offline !== null && !offline.catalogueLoading && (offline.catalogue?.products[branchId] ?? []).length === 0;
   return (
     <div role="status" className="alert alert-warning" data-testid="offline-note">
       <p>
         <strong>You are offline.</strong> This sale is kept on this phone and sent when the phone is back online.
       </p>
-      <p className="muted">{pricesAsOfWords(offline?.catalogue?.pricesAsOf)}</p>
+      {noItems ? (
+        <p data-testid="no-items-on-phone">
+          <strong>The items are not on this phone yet, so you cannot sell offline here.</strong> Open Sell once with the internet on, and the items are saved on this phone for next time.
+        </p>
+      ) : (
+        <p className="muted">{pricesAsOfWords(offline?.catalogue?.pricesAsOf)}</p>
+      )}
     </div>
   );
 }
@@ -107,7 +114,7 @@ export function ProvisionalReceipt({ item, onNew }: { item: OutboxItem; onNew: (
           The server did not record this sale: {now.error?.message} A manager can have it sent again or discard it.
         </p>
       ) : (
-        !sent && <p className="muted">Not yet sent. It goes to the server when the phone is back online.</p>
+        !sent && <p className="muted">Saved on this phone, it will send when the connection is better.</p>
       )}
       <button type="button" className="rt-primary" onClick={onNew}>
         New sale

@@ -18,6 +18,7 @@ import com.rincoltech.bms.retail.stock.internal.StockSummaryApi.Summary;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageReport;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -136,10 +137,13 @@ class StockController {
             @RequestParam(name = "product_id", required = false) UUID productId,
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
+            @Parameter(description = "Only these movement kinds, for example usage and damage (#145)")
+                    @RequestParam(name = "kind", required = false)
+                    List<String> kinds,
             @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.movements(branchIds, productId, from, to, newestFirst, limit, cursor);
+        return service.movements(branchIds, productId, from, to, kinds, newestFirst, limit, cursor);
     }
 
     @PostMapping("/stock/corrections")

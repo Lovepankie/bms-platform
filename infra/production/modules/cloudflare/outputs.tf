@@ -19,6 +19,11 @@ output "backup_bucket" {
   value       = cloudflare_r2_bucket.backups.name
 }
 
+output "environment" {
+  description = "BMS_ENVIRONMENT: the prefix the lock and lifecycle rules cover (<environment>/daily/, <environment>/monthly/)."
+  value       = var.environment
+}
+
 output "documents_bucket" {
   description = "R2_DOCUMENTS_BUCKET."
   value       = cloudflare_r2_bucket.documents.name

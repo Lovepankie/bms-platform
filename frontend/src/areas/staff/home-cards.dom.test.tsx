@@ -170,6 +170,17 @@ describe('the Home cards (issue #471)', () => {
     expect(calls.approvals).not.toHaveBeenCalled();
   });
 
+  it('tells whoever may sell that Sell works offline, and nobody else (issue #763)', async () => {
+    show(admin as unknown as Me);
+    const shop = await screen.findByRole('article', { name: 'Shop' });
+    expect(within(shop).getByText('Sell works offline too: your sales send when you are back online.')).toBeTruthy();
+    cleanup();
+    const watcher = { ...admin, permissions: (admin.permissions ?? []).filter((p) => p !== 'retail.sale.create') } as unknown as Me;
+    show(watcher);
+    const theirs = await screen.findByRole('article', { name: 'Shop' });
+    expect(within(theirs).queryByText(/Sell works offline/)).toBeNull();
+  });
+
   it('leaves out each figure the session may not see', async () => {
     // A seller sees only their own sales (ADR-055), so no shop-wide total, no stock count and no orders board without the orders permission.
     const seller = { ...both, permissions: ['retail.sale.create', 'retail.sale.read', 'lending.loans.read'] } as unknown as Me;

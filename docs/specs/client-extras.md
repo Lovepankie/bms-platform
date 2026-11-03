@@ -469,7 +469,7 @@ recordings. Mobile money cannot be tested without an answer to question 9.
 - **Handler refusals** end as the table of 3.4 says, now built: `before_last_repayment` retried once dated today (`booked`, note "dated today"); any other business refusal posts the
   amount debit the account the `gateway` method is mapped to at the branch (`gateway_clearing` when unmapped) credit `unallocated_receipts`, inserts the `unallocated_receipts` row, ends the intent `booked_unallocated` and counts `booking_refused`. The
   allocation screen and the refund are later slices; the table is append-only until then (migration V59).
-- **Not built here.** The non-login system user (spec 3.4, decision 16) is created by the slice that first acts as it, the reversal approval request (#224). A payment in another
+- **Not built here.** The non-login system user (spec 3.4, decision 16) is created by the slice that first acts as it, the reversal approval request (#224, built since: section 3.16). A payment in another
   currency than the intent's still ends `needs_attention` (the status checker never hands it to booking).
 
 ### 3.15 As built in slice #219 (savings deposit by mobile money; differences from, and sharpenings of, the design above)
@@ -492,8 +492,68 @@ The twin of 3.14; only what differs is listed.
   receipts exactly as in 3.14. A payment dated on or before the last end of day written (or before the account opened) is booked dated today (note "dated today"); a closed period is retried
   dated today. Only the allow-listed business refusals become receipts; any other error is retried.
 - **Reversal.** Staff cannot reverse a gateway deposit (`gateway_reversal_pending`) until #224, and the screen hides Reverse.
-- **Not built here.** The same as 3.14 (the system user and the reversal request of #224, a payment in another currency, allocation and refund of a receipt, FR-PAY-04). The savings
+- **Not built here.** The same as 3.14 (a payment in another currency; the system user, the reversal request and the allocation and refund of a receipt, FR-PAY-04, are built since in #224 part 1, section 3.16). The savings
   transaction list does not yet show the provider's payment code (it is on the collect screen and the intent).
+
+### 3.16 As built in slice #224, part 1 (the unallocated receipts queue, governed reversal, review windows)
+
+Slice #224 is delivered as a stack: this part (the queue, the reversal of a gateway payment, the review windows) and a second part (the nightly reconciliation job and report, the statement upload and the
+fee posting, migration `V124`). Everything here is off with the collections switch: a business that never collected has no receipts and no payments to reverse.
+
+- **The queue.** `GET /payments/unallocated` (open by default) lists the money a loan or account would not take, with the order's facts staff match against the provider's statement (order reference, tracking id,
+  confirmation code, method, paid time), the refusal code, and the requests waiting on it; never the payer's phone. A receipt is read with `core.payments.read` in its branch (else 404).
+- **Allocate** (`POST .../allocate`) and **refund** (`POST .../refund`) are requests, never actions: a holder of `core.payments.allocate` in the receipt's branch (and, to allocate, in the loan's or account's branch, checked before
+  the subject is described) asks with a reason and an `Idempotency-Key`; the answer is 202 with an approval request (`unallocated_allocation` or `unallocated_refund`, always checked, decided with the new
+  `core.payments.allocate_approve`, held by tenant admin, branch manager and accountant; never the maker). The purposes offered are the lender's own (`lending.loan_repayment`, `lending.savings_deposit`); the platform's own
+  purposes are never offered. The subject must be able to take the money when asked (`subject_not_payable`), and is checked again when the checker approves.
+- **Exactly once.** A receipt has one change in its life (`open` to `allocated`, `refunded` or `reversed`) and a `version` that rises with it. On approval the receipt row and the payment's intent row are locked, the receipt must
+  still be open and the intent still `booked_unallocated` (else the request ends stale, 409 `receipt_not_open` or `payment_not_held`), the snapshot of amount and currency must match, and the settlement is a
+  conditional update; the database refuses a second settlement (guard trigger), a second allocation transaction for one receipt (unique index) and a second reversal of the receipt's journal entry (the ledger). Two requests on one receipt
+  can both wait; whichever is approved first wins and the other is stale.
+- **Allocation books through the purpose handler** (`PurposeHandler.book`, the same call the booker makes), with the order tracking id as the external reference, the payment's own day as the value date (today when the loan's last repayment or a closed period
+  forbids it), recorded by the maker; a refusal (a closed loan, a frozen account) fails the approval with the code and leaves it pending for the checker to reject. The receipt's entry (debit the account `gateway` is mapped to, credit `unallocated_receipts`) is then
+  reversed (debit the liability, credit that same account) and the repayment's or deposit's own posting debits the account again: the clearing balance is the same as for a payment that booked at once and the liability is released. The intent
+  keeps the status `booked_unallocated` and gains `booked_subject_txn_id`, the transaction that holds its money, which is the join the reconciliation uses (ADR-035 amendment).
+- **Refund** records that the money went back and by what method: `gateway` (through the provider, the receipt's entry is reversed), or `cash`, `bank`, `mtn_momo`, `airtel_money` (debit `unallocated_receipts`, credit that method's account, which must be mapped and active
+  or the request is refused `payment_method_unmapped`), with the lender's own reference. The refund is always the receipt's whole amount: it carries no amount to exceed, and a request whose snapshot amount differs is closed `receipt_changed`.
+- **A payment the provider reports reversed** (decision 16, spec 3.8): the intent goes to `reversed_pending_review` and the platform raises one `gateway_payment_reversal` request per order, made by the tenant's system user (a user of kind `system`, one per tenant, no credentials, no role, no session,
+  created on first use). The request names what stands: a repayment or deposit (booked at once or allocated from the queue) or a receipt still held. Approval needs `core.payments.allocate_approve` and the permission that reverses
+  the thing (`lending.repayments.reverse_approve`, `lending.savings.withdraw_approve`); it reverses a booked transaction through `PurposeHandler.reverseBooked` (the staff reversal code with the gateway guard lifted for this path only: `gateway_reversal_pending` is
+  still what a staff request gets), or clears a held receipt (`reversed`), and ends the intent `reversed`. A deposit already withdrawn is refused by the balance rule and the approval stays pending. The request is
+  stale when the loan, account or receipt moved (its version is compared on approval), and the next notification or the weekly look raises a fresh one; a rejected one is not raised again; a refunded or
+  already-reversed receipt raises none (nothing of ours can be reversed; the loss is the accountant's).
+- **After the attack review of PR #315.** The request is raised in the branch of the loan or account that is reversed (a receipt of one branch can be allocated to a loan of another), where the checker's lending permission is asked, and
+  the checker must also hold `core.payments.allocate_approve` in the branch the money was received in. A rejection needs the same permissions as an approval. An allocation clears the receipt's entry on the day the repayment or deposit is dated (not
+  today), so a month closing between the two never shows the money twice. A repayment that would reopen a loan without some of its pledges lists those items on the request, and the checker needs `lending.collateral.release_approve` as well (decision 47).
+  A reversal asked for three times that still stands (`reversal_unresolved`) or that a checker rejected (`reversal_rejected`) is handed to a person: the order stays `reversed_pending_review`, carries that word, and is no longer polled; a holder of
+  `core.payments.allocate_approve` puts it to a checker again with `POST /payments/intents/{id}/reversal-request` (the provider is asked first; the asker is the maker and so cannot decide the new request, and neither can whoever rejected an earlier one or asked for one in the same episode; only an order waiting for a reversal is asked about, at most once in ten seconds, and the answers are 202 with the request, 409 `try_again` (the provider could not be asked, or a checker is deciding the earlier request), 409 `completed_again` (it reports the payment completed), 409 `provider_disagrees` (it does not report a reversal), 409 `not_in_review` and 422 `nothing_to_reverse`; each report of the reversal after a completed-again is a new episode with its own requests and count). A look that could not read what it needs keeps its schedule. A payment the provider reports completed again while a reversal waits goes back
+  to `booked` (or `booked_unallocated`), the waiting request ends `stale` with a note, `completed_after_reversal` is counted once; after an approved reversal it is counted and logged for a person. Approving, rejecting and the queue's "you may decide" use one
+  hook (`ApprovalAction.mayDecide`), which for this action also asks `allocate_approve` in the branch the money was received in. The queue also filters `status=reversed`.
+- **Review windows (spec 3.9).** A booked or unallocated payment is asked about again daily for 7 days when the reported method is a mobile money wallet (the exact strings `MTN`, `AIRTEL`, `MPESA`, `M-PESA`, `TIGO`; any other string is reviewed as a card and logged once), and otherwise (a card, or a method string we do not know) daily for 14 days and weekly until 120 days after payment. A payment waiting for a checker
+  is looked at weekly. A payment that failed and is then paid on the same hosted order books when the next notification arrives (a failed order is not polled).
+- **Not built here (part 2).** The nightly reconciliation job and report, the statement CSV upload with fee posting (FR-PAY-06), the manual-receipt-versus-confirmation-code flag (joins `payment_intents.confirmation_code` through `booked_subject_txn_id`, never the loan transaction's
+  external reference), and the shortfall list. A payment in another currency than the intent's still ends `needs_attention`.
+
+### 3.17 As built in slice #224, part 2 (daily reconciliation and the statement upload)
+
+Migration `V124`; permission `core.payments.manage` (tenant admin, accountant). Off with the collections switch: a business with no orders and no statement gets no nightly run.
+
+- **Statement upload** (`POST /payments/statements`, multipart CSV). The provider offers no settlement interface (3.1) and its export columns are undocumented to us (3.12.2), so the reader asks for few: a column for the order tracking id and/or the confirmation code, `amount` and `date`; it reads
+  `fee`, `settled`, `currency` and `payment_method` when present and ignores every other column (a payer's number or masked account is never stored). Usual names are accepted (`Tracking ID`, `Gross Amount`, `Net`, `Fees`, `Payment Code`...). Amounts are the decimal the provider shows; a fraction a
+  currency cannot hold is refused, never rounded; only UGX is read. A file with any unreadable line, the same tracking id twice, more than 5,000 lines, more than 1 MB, or text that is not UTF-8 is refused whole (422, the first twenty problems, each with its `line n`), and nothing is stored or posted.
+- **Matching.** By the order tracking id, which is unique per order; the confirmation code only for a line that has no tracking id and names exactly one of the business's orders, because a provider's short code is not unique (#312). A line with a tracking id no order of ours has is `unmatched` and is not rescued by its code. Outcomes:
+  `matched` (ours, paid here, same amount and currency), `amount_mismatch`, `currency_mismatch`, `not_paid_here` (ours, but this system does not hold it as paid), `ambiguous`, `unmatched`. Only the business's own orders (scope tenant, row-level security) can be named.
+- **Fees (FR-PAY-06).** The fee of a `matched` line of an order that is `booked` or `booked_unallocated` (read under a share lock on the order, so an approved reversal and a fee go one after the other) is posted when it is at most the automatic rate of the line's amount (5% by default, `BMS_PAYMENTS_STATEMENT_FEE_AUTO_MAX_BPS`); a higher fee raises a `statement_fee` request a second person approves (`awaiting_approval`, then `posted` or `not_approved`; ADR-035 decision 65), and approval checks again that the order is booked (`payment_not_booked` otherwise). An approved reversal of the payment reverses its posted fee in the same transaction (unless it was already reversed by hand), so the clearing account never goes below nothing; the line then reads `reversed`. A posted fee: debit `gateway_charges`, credit the account `gateway` is mapped to at the order's branch (`gateway_clearing` when unmapped), dated the line's day (today when that period is closed), idempotency key `payments.statement.fee:<order>`.
+  Once per order, ever: the statement row records the entry, a unique index allows one fee entry per order, and uploads of one business take an advisory lock, so overlapping files and two uploads at once post it once (the later line reads `already_posted`, or `reversed_elsewhere` when that fee was reversed by hand since: a wrong fee is corrected by a manual journal entry, not by a corrected export). A line that does not match cleanly, or whose order is not booked, posts nothing (`held`); a corrected or later export posts it. The same file (SHA-256) twice is one statement, answered 200 `Idempotent-Replayed`.
+- **Statement lines that match no order are reported, not booked** (departs from 3.9, ADR-035 decision 52): the lender's own merchant account can receive money for things that never went through this system, and booking them as unallocated receipts would invent a liability with no intent to point at.
+- **Reconciliation** (`core.payments.reconcile`, nightly 03:10 Kampala for every active business with orders or statements; `POST /payments/reconciliation/run` on request; `GET /payments/reconciliation` reads the latest). It reads the last 120 days of orders and the statements uploaded in that time, in pages up to a ceiling (it records `truncated` and lists nothing that needs the whole when partial), posts nothing to a ledger and changes no order's status (it only schedules an immediate look at one that is stuck), and lists:
+  `completed_not_booked` (verified paid, unbooked an hour on; the poller is asked to look now), `pending_over_24h` (same), `paid_differs`, `reversed_awaiting_review`, `reversal_handed_over` (nobody is waiting on it), `reversal_blocked` (the request is waiting with the books' refusal: a deposit already withdrawn, a closed account: the shortfall), `reversed_after_refund` (money the lender already sent back, then
+  reported reversed: a loss for the accountant to record by manual journal), `manual_receipt_duplicate`, and from the statements `in_provider_not_in_bms`, `in_bms_not_in_provider` (booked on a day an export is complete for and on none: the days the uploader states, else those strictly between the first and last line), `amount_mismatch`, `currency_mismatch`, `ambiguous_statement_row`. Statement lines are matched again on every run, so a difference closes when its cause is put right.
+- **Scope and acknowledgement.** Upload, read, run and "mark as outside this system" (`POST /payments/statements/{id}/rows/{n}/outside-system`, a maker-checker request that a second person confirms before the line stops being listed, ADR-035 decision 66) need `core.payments.manage` in every branch. A reader of some branches sees only the differences of those branches, with totals counted from them. The alert counts only differences the previous run did not list.
+- **The manual receipt check** asks each registered purpose (`PurposeHandler.manualReceiptsWithReference`) for receipts staff keyed by hand (any method but `gateway`, not reversed) whose reference equals, ignoring case and spaces, the confirmation code of an order that was paid, other than the transactions the gateway booked (`payment_intents.booked_subject_txn_id`), and that is for the same loan or account or for the same amount within three days (a short code is not unique, so a bare match is not a duplicate).
+  The loan transaction's own external reference is the order tracking id for a gateway payment and is never compared with a code (#312). The payments module reads no vertical's tables.
+- **Alerts and retention.** A run that lists a difference the previous run did not list counts `reconciliation_differences` once (spec 9.2) and logs the kinds; the same differences night after night are not news. A nightly run that met a person's run counts `reconciliation_lock_missed` and is tried again at the next slot of the night. Runs and findings are kept 90 days. Unmatched provider notifications (platform-wide, no tenant) stay with the operator's counters and are not in a business's report.
+- **Not built.** Moving the net settlement from `gateway_clearing` to the bank stays the tenant's bank credit entry (chapter 12 section 12.4.2); `fetch_settlement` replaces the upload only if the provider documents a settlement endpoint.
 
 ## 4. SMS (ADR-036)
 
@@ -650,6 +710,49 @@ overdue" with no count.
 Template `payment.link`: the hosted order URL for an open intent, sent from the collection screen to
 the payer's number, category `transactional`, once per intent, only while the intent is open.
 
+Built in slice #231 (no migration). Where the build sharpens the text above:
+
+- **The route is the payments module's.** `POST /payments/intents/{intent_id}/sms`, `core.payments.collect` in the intent's
+  branch. It queues through `SmsEvents` like the money events; the member for the opt-out comes from the purpose handler's new
+  `memberOf` (a loan's borrower, an account's holder), so the payments core still names no vertical.
+- **Once per intent.** The outbox key is per intent and member; a repeat answers `already_sent: true` and writes nothing.
+- **The real status (issue #772).** Every answer carries `text_status`: `queued` (still waiting in the outbox or at the
+  sender), `sent` (the provider or, on staging, the sink took it), `failed` (the provider failed, refused or blocked
+  it), `unconfirmed` (the send's outcome is `unknown`: it may have arrived) or `expired` (its row is no longer waiting and never
+  reached the provider: its time ran out, it was dropped or withdrawn, so it will never go). `already_sent` alone only proves the audit row. The status
+  is read through `SmsEvents.status` by the outbox row's id, which `SmsEvents.queueTracked` answers when the text is queued
+  and the link text keeps in its audit row (`outbox_id`, never the number). Every outbox row keeps a random id, so only the
+  idempotency key decides a repeat (`ON CONFLICT` on its index): two transactions queueing the same event at once write one
+  row and the second no-ops without an error (`SmsEventsIT`). The outbox is read only through its functions, and none reads
+  by key, so the id is kept rather than adding a function (no migration). `notification_outbox_is_pending` says whether it
+  waits, and the tenant's one `sms_deliveries` row (`UNIQUE (tenant_id, outbox_id)`, row-level security) says what the
+  provider did. A text queued before this release has no `outbox_id`: it reads `queued` until its time is up. The screen says "queued earlier" while it waits, "sent" only when sent, after `failed` or `expired` offers "Make a
+  new payment link" (it cancels this payment first, only while it can be cancelled), and after `unconfirmed` asks staff to
+  check with the payer or copy the link, without pushing a new one.
+- **Withdrawn when the payment closes (issue #772).** When an intent leaves `pending` (paid, cancelled, failed or expired
+  through `IntentStore.update`, or handed to a person when the payment account changes), its link text still waiting in the
+  outbox and held by no sender is withdrawn (`cancelled_settled`), as a reversal withdraws a receipt, so a dead or already
+  paid link never goes.
+- **Open only, and it expires with the intent.** `pending` with a link and before `expires_at`; a transactional message now
+  takes the earlier of its own expiry and its usual hour. No other transactional caller passes an expiry:
+  `SmsExpiryCallersTest` pins the callers of the forms that take one (the loan reminders and arrears notices, and this link).
+- **Polite refusals, nothing written.** `collections_disabled`, `sms_off` (either switch off, or a cap of 0),
+  `member_opted_out` (an opt-out of all SMS; a reminders-only opt-out does not block a link), and 429 `too_many_link_texts`
+  above 3 link texts per member in an hour and 429 `link_text_daily_limit` above 200 per business in 24 hours (a user who
+  types one number on many payments cannot spend the business's credit on it), both counted from the audit rows through
+  the index `audit_log_by_time`, under one lock per business. The intent is read again under its row lock before the
+  open check. A text the channel
+  would not queue (a switch turned off in between, a cap reached) is refused `link_text_not_queued`: `already_sent` is
+  answered only when this intent's audit row exists, which is written in the same transaction as the outbox row.
+- **Audited** `core.payments.intent.link_texted` with the member id, never the number.
+- **The wording.** `{tenant_name}: Pay {currency} {amount} for {reference} at {link}`, where `reference` is `loan <loan_no>` or
+  `savings account <account_no>` with any dash written as a space (`loan LN HQ 000123`), so the words of the text carry
+  no dash; only the provider's address may. No name, no balance. The hosted address is about 113 characters, so the text is two GSM-7
+  segments; it is not one of the wordings a tenant can override (section 4.16). The business name is made plain for it
+  (issue #772, `SmsEvents.plainTenantName`): every dash is written as a space, a curly quote as a straight one, any other
+  character outside the GSM-7 default alphabet is dropped (one would make the text UCS-2, and the address alone would then
+  take two segments), and it is cut to 40 characters after a whole word, so the text stays within two segments.
+
 ### 4.14 Threat model (SMS)
 
 | Threat | Control |
@@ -660,6 +763,7 @@ the payer's number, category `transactional`, once per intent, only while the in
 | Spam or abuse of the SMS-triggering endpoints (payment links, receipts) | Permission checks, one link per intent, per tenant daily cap on SMS (setting) and an alert at 80 percent |
 | Message content leaks personal data | Templates reviewed: no name, no balance in reminders; recipient masked everywhere; parameters cleared after sending |
 | Number reused by another person | Opt-out matches on member plus hash, not on the number alone |
+| A payment link texted to a number that asked for no texts | Accepted by design (issue #772): the link text (4.13) checks the opt-out of the member of the loan or savings account, not the number typed on the payment, which may be a relative's or a neighbour's phone. A member who opted out is never texted; a payer who is not a member has no opt-out to check. Staff type the number with the payer present, the text is once per intent and the per member and per business limits of 4.13 apply |
 | API key theft | Environment only, rotation runbook, alert on provider 401 |
 | Sender id spoofing or unapproved id | The approved flag; the provider rejects unregistered ids |
 | Cross-tenant leakage through the platform outbox | The tenant id is set from the bound tenant, the delivery log has row-level security, isolation tests on both |
@@ -1260,6 +1364,12 @@ reports in the order above) and one workbook (a sheet per report plus Parameters
 every report's permission; otherwise the pack is refused and the reports can still be run singly. Loan
 officers see their own loans in the collections and officer reports.
 
+**As built in slice D5 (issue #229).** `lending.monthly_pack`, offered as the format `pack`: the eight reports (collections is two),
+each prepared with its own rules and queried in the run's one snapshot, as one merged PDF (cover, contents with start pages, sign off,
+then each report with "part n of 8" in its footer and blanks for missing figures) and one workbook (Parameters, then every report's sheets
+numbered by part). No migration and no permission: the second file is a second `documents` row of the run, listed under `files`. The
+requester is told by a push notice and an email. The Reports screen became the report centre. Chapter 14 section 14.10 has the details.
+
 ### 6.5 Catalogue and permissions
 
 `GET /reports` lists what the user may run (FR-RPT-01). No new permission is needed: the existing report
@@ -1309,10 +1419,23 @@ finishes on that heap but fills the old generation, so it stays a setting for ho
 Chapter 14 sections 14.3 and 14.4. The collections equation (total collected equals collected on due plus
 arrears recovered plus prepayments plus penalties plus overpayments) is printed and asserted.
 
+**As built in slice D3 (issue #222).** `lending.expected_vs_collected`, `lending.arrears_list`, `lending.disbursements` and
+`lending.officer_performance` as PDF, Excel, CSV and JSON, through four new methods of `InsightsFigures` over `FlowFigures` (grouped twins
+of the insights queries) and the positions of `lending.par`; no migration and no permission. The equation prints recoveries on written-off
+loans as a part of its own, and its first part is what was paid in the range on items due in it (collected on due also counts earlier
+payments toward those items). Chapter 14 section 14.10 lists the columns and the differences; the ADR-038 amendment for #222 what building
+settled.
+
 ### 6.10 Collateral register and regulator summary
 
 Chapter 14 sections 14.5 and 14.7. The regulator summary carries the cover note "Data summary. Not a
 filed return." until the client's return formats are known (scope question 5).
+
+**As built in slice D4 (issue #225).** `lending.collateral_register` and `lending.regulatory_summary` as PDF, Excel, CSV and JSON,
+through the new public port `RegisterFigures` of `lending.insights`; no migration and no permission. The register is the items as they
+stand when it is made (no `as_at`), with a table of flag counts first and the items after, cut at the PDF row cap with the pointer to the
+Excel file. The summary's book, PAR 30 and PAR 90 are `InsightsFigures.par`'s own. Chapter 14 sections 14.5 and 14.7 list the columns and
+the rules.
 
 ### 6.11 Operations and threats
 

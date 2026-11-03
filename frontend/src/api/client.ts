@@ -74,6 +74,19 @@ const updating = (status: number, detail: string) =>
     headers: { 'content-type': 'application/problem+json' },
   });
 
+// A request that ended with no answer at all (offline, or a read the server never answered) is marked, so the offline reading
+// of issue #763 (ADR-116) tells it from a TypeError of the app's own code. It stays the same TypeError with the same message.
+const DROPPED = Symbol.for('bms.droppedConnection');
+/** Marks an error as a connection that dropped with no answer; returns it. */
+export function markDropped<E extends Error>(error: E): E {
+  (error as E & { [DROPPED]?: boolean })[DROPPED] = true;
+  return error;
+}
+/** Whether a request failed because the connection dropped, as the API client marks it, not because of the app's own code. */
+export function droppedConnection(error: unknown): boolean {
+  return error instanceof TypeError && (error as TypeError & { [DROPPED]?: boolean })[DROPPED] === true;
+}
+
 const replays = new WeakMap<Request, Request>();
 // Requests one of whose attempts may have reached the API, so whether it was saved is not known.
 const maybeSaved = new WeakSet<Request>();
@@ -122,8 +135,12 @@ const deployGap: Middleware = {
     return updating(response.status, wordsFor(request));
   },
   async onError({ request, error, options }) {
-    if (!online() || (error as { name?: string } | null)?.name === 'AbortError') return;
-    if (savesNothing(request)) return new TypeError(APP_UPDATING);
+    if ((error as { name?: string } | null)?.name === 'AbortError') return;
+    if (!online()) {
+      if (error instanceof TypeError) markDropped(error);
+      return;
+    }
+    if (savesNothing(request)) return markDropped(new TypeError(APP_UPDATING));
     if (!replays.has(request)) return;
     maybeSaved.add(request);
     const retried = await retryOnce(request, options.fetch);

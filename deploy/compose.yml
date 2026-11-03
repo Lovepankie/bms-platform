@@ -109,6 +109,10 @@ services:
       R2_DOCUMENTS_ACCESS_KEY_ID: ${R2_DOCUMENTS_ACCESS_KEY_ID:?}
       R2_DOCUMENTS_SECRET_ACCESS_KEY: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:?}
       R2_DOCUMENTS_BUCKET: ${R2_DOCUMENTS_BUCKET:?}
+      # The daily orphan sweep (issue #39): true (the default) only logs the counts it would remove;
+      # MAX_SHARE is the most of a business's objects that may be orphans before it is skipped.
+      BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN: ${BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN:-true}
+      BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_SHARE: ${BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_SHARE:-0.5}
       # Outbox senders (spec section 11, chapter 9 section 9.8). A sender whose values are empty
       # stays off and its messages wait in the outbox, except SMTP in production: with
       # BMS_ENVIRONMENT=production the API refuses to start unless BMS_SMTP_HOST, BMS_SMTP_USER,
@@ -119,6 +123,12 @@ services:
       BMS_SMTP_USER: ${BMS_SMTP_USER:-}
       BMS_SMTP_PASSWORD: ${BMS_SMTP_PASSWORD:-}
       BMS_MAIL_FROM: ${BMS_MAIL_FROM:-}
+      # Email by the Resend HTTP API instead of SMTP (issue #333, ADR-117): BMS_MAIL_PROVIDER=resend and a send-only
+      # key; production then needs the key and BMS_MAIL_FROM instead of the SMTP values.
+      BMS_MAIL_PROVIDER: ${BMS_MAIL_PROVIDER:-smtp}
+      BMS_RESEND_API_KEY: ${BMS_RESEND_API_KEY:-}
+      # The signing secret of the Resend webhook for bounces and complaints; unset turns the route off.
+      BMS_RESEND_WEBHOOK_SECRET: ${BMS_RESEND_WEBHOOK_SECRET:-}
       # The support line in the footer of every email (issue #396, ADR-054); empty leaves it out.
       BMS_SUPPORT_CONTACT: ${BMS_SUPPORT_CONTACT:-}
       BMS_TELEGRAM_BOT_TOKEN: ${BMS_TELEGRAM_BOT_TOKEN:-}

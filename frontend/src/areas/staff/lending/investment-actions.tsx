@@ -54,7 +54,7 @@ export function FundForm({ inv }: { inv: Investment }) {
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const today = businessToday();
-  const { key, draft, setDraft, finish, sending, mended, unmend, sent, sentBefore } = usePersistedDraft<FundDraft>(`invest-fund:${me.user_id ?? ''}:${id}`, {
+  const { key, draft, setDraft, finish, sending, mended, unmend, sentBefore, sentDraft } = usePersistedDraft<FundDraft>(`invest-fund:${me.user_id ?? ''}:${id}`, {
     date: today,
     method: 'cash',
     reference: '',
@@ -81,7 +81,7 @@ export function FundForm({ inv }: { inv: Investment }) {
         approves it first.
       </p>
       <label htmlFor="fund-date">Date received</label>
-      <input id="fund-date" type="date" max={sentMax(sent, today)} value={draft.date} onChange={(e) => { update({ date: e.target.value }); unmend(); }} />
+      <input id="fund-date" type="date" max={sentMax(today, sentDraft?.date)} value={draft.date} onChange={(e) => { update({ date: e.target.value }); unmend(); }} />
       {mended && <DateReset />}
       <MethodChoice name="fund-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <label htmlFor="fund-ref">Reference (optional)</label>

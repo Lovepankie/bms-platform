@@ -9,7 +9,7 @@ import type { HelpTipKey } from '../../../app/help-tips';
 import { useStaff } from '../context';
 import { showQty } from './maths';
 import { canUse } from './permissions';
-import { ChangeLine, ChartLegend, RangeChart, RangePicker } from './range-ui';
+import { ChangeLine, ChartLegend, CompareLine, RangeChart, RangePicker } from './range-ui';
 import { DEFAULT_RANGE, daysBetween, previousWords, rangeQuery, rangeTitle, readRange, shortDate, writeRange, type RangeChoice } from './range-state';
 import { ScreenLink } from './screen-link';
 import { Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
@@ -147,6 +147,7 @@ export function DashboardView({ data, nameOf, choice = DEFAULT_RANGE, onChoice, 
       <h2 id="dash-title">{onPayment ? 'Sold' : 'Sales'}, {title}</h2>
       {picker}
       {updating && <p className="loading">Loading the days you picked</p>}
+      {withBefore && <CompareLine words={before} />}
       <div className="rc-headline">
         <strong className="rc-total num">{money(cur.sales_minor ?? 0)}</strong>
         <ChangeLine now={cur.sales_minor ?? 0} before={prev?.sales_minor} words={before} />

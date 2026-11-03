@@ -67,6 +67,7 @@ export function testOffline(
     othersWaiting: options.othersWaiting ?? 0,
     refresh: async () => {},
     forget: async () => {
+      await store.deleteReadCache(scope);
       await store.deleteCatalogue(scope);
       await store.deleteProfile(scope);
     },

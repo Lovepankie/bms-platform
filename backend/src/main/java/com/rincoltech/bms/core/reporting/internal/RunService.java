@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.reporting.ReportDefinition;
 import com.rincoltech.bms.core.reporting.ReportDefinition.Param;
 import com.rincoltech.bms.core.reporting.ReportDefinition.Prepared;
+import com.rincoltech.bms.core.reporting.ReportPack;
 import com.rincoltech.bms.core.reporting.internal.RunStore.Run;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
@@ -57,6 +58,8 @@ class RunService {
     private final AuditLog audit;
     private final Idempotency idempotency;
     private final ReportsProperties limits;
+    private final Packs packs;
+    private final com.rincoltech.bms.core.documents.Documents documents;
 
     RunService(
             RunStore store,
@@ -65,7 +68,11 @@ class RunService {
             BusinessClock clock,
             AuditLog audit,
             Idempotency idempotency,
-            ReportsProperties limits) {
+            ReportsProperties limits,
+            Packs packs,
+            com.rincoltech.bms.core.documents.Documents documents) {
+        this.packs = packs;
+        this.documents = documents;
         this.store = store;
         this.registry = registry;
         this.settings = settings;
@@ -134,12 +141,15 @@ class RunService {
         ReportDefinition def = registry.findInTenant(key)
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.NOT_FOUND, "report_not_found", "Report not found", "No such report is available."));
-        if (!principal.hasPermission(def.permission())) {
+        if (!registry.permitted(principal, def)) {
             throw new ApiException(
                     HttpStatus.FORBIDDEN,
                     "permission_denied",
                     "Permission denied",
-                    "You do not have permission to run this report.");
+                    def instanceof ReportPack
+                            ? "You need permission for every report in the pack. You can still run the reports you have"
+                                    + " permission for one at a time."
+                            : "You do not have permission to run this report.");
         }
         String format = request.format() == null ? "" : request.format();
         if (!def.formats().contains(format)) {
@@ -162,6 +172,9 @@ class RunService {
                 throw ApiException.validation(List.of(
                         new FieldProblem("params." + required.name(), "required", "This parameter is required.")));
             }
+        }
+        if (def instanceof ReportPack pack) {
+            prepared = packs.prepare(pack, prepared);
         }
         return insert(def, format, prepared, principal.userId(), true);
     }
@@ -302,7 +315,23 @@ class RunService {
                 r.expiresAt(),
                 expired,
                 r.cancelRequestedAt() != null && r.status().equals("running"),
-                r.error());
+                r.error(),
+                files(r, expired));
+    }
+
+    /** The files a ready run holds: its one file, or for a pack its PDF first and then its workbook. */
+    private List<ReportsApi.RunFile> files(Run r, boolean expired) {
+        if (!r.status().equals("ready") || expired || r.documentId() == null) {
+            return List.of();
+        }
+        if (!r.format().equals(ReportPack.FORMAT)) {
+            return List.of(new ReportsApi.RunFile(r.documentId(), r.format()));
+        }
+        return documents.listGenerated(RunExecutor.SUBJECT, r.id()).stream()
+                .map(g -> new ReportsApi.RunFile(
+                        g.document().id(), RunExecutor.formatOf(g.document().contentType())))
+                .sorted(java.util.Comparator.comparing(f -> f.format().equals("pdf") ? 0 : 1))
+                .toList();
     }
 
     // ---- the dedupe key -----------------------------------------------------------------------

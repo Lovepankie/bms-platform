@@ -1145,6 +1145,30 @@ class PaymentGatewayIT extends IntegrationTest {
         assertThat(handler.bookings).hasSize(1);
     }
 
+    // JUSTIFICATION-A3: a test the attack review of #315 asked for (#224): a reversal whose subject cannot be read
+    // keeps its look.
+    @Test
+    void aReversalWhoseSubjectCannotBeReadRaisesNothingAndKeepsItsWeeklyLookInsteadOfLettingGo() {
+        JsonNode intent = booked();
+        String id = intent.get("id").asString();
+        // The test purpose cannot say what version its subject is at, so no request can be raised yet: the look is
+        // kept.
+        fake.reverse(tracking(intent));
+        notifyAndCheck(intent);
+        assertThat(statusOf(id)).isEqualTo("reversed_pending_review");
+        assertThat(row(id).get("next_check_at"))
+                .as("the weekly look is kept, not dropped")
+                .isNotNull();
+        assertThat(row(id).get("refusal_code")).isNull();
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT count(*) FROM approval_requests WHERE action_type = 'gateway_payment_reversal' AND subject_id = ?")
+                        .param(UUID.fromString(id))
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     // JUSTIFICATION-A3: new tests the attack review asked for (contradicting answers, ceiling, return page); they add
     // cases, no mechanism.
     // ---- answers that contradict the intent -------------------------------------------------------------
@@ -1272,7 +1296,7 @@ class PaymentGatewayIT extends IntegrationTest {
     }
 
     @Test
-    void theDailyReviewOfABookedPaymentStopsAfterFourteenDays() {
+    void theDailyReviewOfABookedMobileMoneyPaymentStopsAfterSevenDays() {
         JsonNode intent = booked();
         String id = intent.get("id").asString();
         int before = fake.queryCount();
@@ -1282,7 +1306,9 @@ class PaymentGatewayIT extends IntegrationTest {
         }
         assertThat(row(id).get("next_check_at")).isNull();
         int asked = fake.queryCount() - before;
-        assertThat(asked).as("about one a day for 14 days, then none").isBetween(12, 15);
+        assertThat(asked)
+                .as("about one a day for 7 days (mobile money, spec 3.9), then none")
+                .isBetween(5, 8);
         clock.set(clock.instant().plus(Duration.ofDays(3)));
         tick();
         assertThat(fake.queryCount() - before).isEqualTo(asked);
@@ -2737,6 +2763,14 @@ class PaymentGatewayIT extends IntegrationTest {
                 .isEmpty();
         assertThat(tenantJobs.callForTenant(t.tenantId(), () -> verifiedAccounts.verified()))
                 .isFalse();
+        // Issue #311: a test names why (the box cannot be opened), apart from a refused key, and calls no one.
+        long before = fake.calls().size();
+        ResponseEntity<JsonNode> tested =
+                as(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, admin, PERMS, null);
+        assertThat(tested.getStatusCode().value()).isEqualTo(200);
+        assertThat(tested.getBody().get("status").asString()).isEqualTo("failed");
+        assertThat(tested.getBody().get("failure_reason").asString()).isEqualTo("account_unreadable");
+        assertThat(fake.calls()).hasSize((int) before);
     }
 
     @Test

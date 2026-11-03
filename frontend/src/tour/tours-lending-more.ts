@@ -23,6 +23,8 @@ const APPROVALS_READ = 'core.approvals.read';
 const SETTINGS_READ = 'core.settings.read';
 const SETTINGS_MANAGE = 'core.settings.manage';
 const PAYMENT_ACCOUNT = 'core.payment_account.manage';
+const PAYMENTS_READ = 'core.payments.read';
+const PAYMENTS_MANAGE = 'core.payments.manage';
 const USERS_MANAGE = 'core.users.manage';
 const NOTIFICATIONS_READ = 'core.notifications.read';
 const TEMPLATES_MANAGE = 'core.notification_templates.manage';
@@ -515,7 +517,8 @@ export const staffHomePage: Tour = {
   id: 'page-staff-home',
   // Version 3 words the menu step for the phone's bottom tabs (issue #539).
   // Version 4 words it for the grouped menu, which a phone opens from the button at the top left (issue #564).
-  version: 4,
+  // Version 5 adds the shop's AI assistant card (issue #422).
+  version: 5,
   title: 'This page: staff home',
   audience: () => true,
   autoStart: false,
@@ -542,6 +545,16 @@ export const staffHomePage: Tour = {
       optional: true,
       title: 'Your shop today',
       body: 'See the money taken today by cash and by mobile money. Below it: what customers owe, the best selling items and each shop. Tap the link under a card to open the full page.',
+    },
+    {
+      // Issue #422: the shop's AI assistant card, drawn only while the assistant is on for the business.
+      id: 'shop-brief',
+      target: 'home-retail-brief',
+      module: 'retail',
+      needs: ['retail.advisor.use'],
+      optional: true,
+      title: 'Your morning brief',
+      body: 'A short summary of yesterday and the last seven days: sales, best sellers, stock that is low, what buyers owe. It only advises. Tap a figure to open its page.',
     },
     {
       id: 'members',
@@ -665,6 +678,76 @@ export const paymentsPage: Tour = {
   ],
 };
 
+// JUSTIFICATION-A3: ADR-049 asks one page tour per staff route; this is the tour of the new Payment reconciliation route (#317).
+export const reconciliationPage: Tour = {
+  id: 'page-reconciliation',
+  version: 1,
+  title: 'This page: payment reconciliation',
+  audience: (me) => held(me, PAYMENTS_READ),
+  autoStart: false,
+  page: '/staff/payments/reconciliation',
+  steps: [
+    {
+      id: 'intro',
+      target: 'reconciliation-intro',
+      title: 'What differs',
+      body: 'Every night the system compares what your payment provider says with what is recorded here. It changes nothing by itself.',
+    },
+    {
+      id: 'upload',
+      target: 'reconciliation-upload',
+      needs: [PAYMENTS_MANAGE],
+      optional: true,
+      title: 'Upload the statement',
+      body: 'Download the statement from your payment provider as a CSV file and upload it here. Each line is matched to your own payments.',
+    },
+    {
+      id: 'report',
+      target: 'reconciliation-report',
+      title: 'The differences',
+      body: 'Each difference says what to check. It goes away on the next run once its cause is put right.',
+    },
+    {
+      id: 'run',
+      target: 'reconciliation-run',
+      needs: [PAYMENTS_MANAGE],
+      optional: true,
+      title: 'Run it now',
+      body: 'Tap Run it now to compare again without waiting for the night.',
+    },
+  ],
+};
+
+// JUSTIFICATION-A3: ADR-049 asks one page tour per staff route; this is the tour of the new Unallocated payments route (#224).
+export const unallocatedPage: Tour = {
+  id: 'page-unallocated',
+  version: 1,
+  title: 'This page: unallocated payments',
+  audience: (me) => held(me, PAYMENTS_READ),
+  autoStart: false,
+  page: '/staff/payments/unallocated',
+  steps: [
+    {
+      id: 'intro',
+      target: 'unallocated-intro',
+      title: 'Money that did not land',
+      body: 'A member paid by mobile money or card, but the loan or account would not take it. The money is safe in your own payment account.',
+    },
+    {
+      id: 'filter',
+      target: 'unallocated-filter',
+      title: 'What to show',
+      body: 'Choose to see what is still waiting, or what was put on a loan or account, sent back or reversed.',
+    },
+    {
+      id: 'ask',
+      target: 'unallocated-list',
+      title: 'Put it where it belongs',
+      body: 'Ask to put a payment on a loan or savings account, or record that it was sent back. A second person approves it before anything changes.',
+    },
+  ],
+};
+
 export const inviteUserPage: Tour = {
   id: 'page-invite-user',
   version: 3,
@@ -702,25 +785,34 @@ export const inviteUserPage: Tour = {
 
 export const reportsPage: Tour = {
   id: 'page-reports',
-  version: 1,
+  version: 2,
   title: 'This page: reports',
   audience: (me) => me.reports_enabled === true && heldAny(me, REPORT_PERMISSIONS),
   autoStart: false,
   page: '/staff/reports',
   steps: [
     {
+      id: 'pack',
+      target: 'reports-pack',
+      module: 'lending',
+      needs: REPORT_PERMISSIONS,
+      optional: true,
+      title: 'The monthly pack',
+      body: 'All the lending reports for one month in one go: one PDF to print and sign, and one Excel workbook. Choose the last day of the month and tap Run the pack.',
+    },
+    {
       id: 'catalogue',
       target: 'reports-catalogue',
       module: 'lending',
       title: 'Choose a report',
-      body: 'Each report has its own form. Fill in the date, pick the file type and tap Run report.',
+      body: 'The reports are grouped by what they are about. Open one, fill in the date, pick the file type and tap Run report.',
     },
     {
       id: 'runs',
       target: 'reports-runs',
       module: 'lending',
       title: 'Your reports',
-      body: 'A report takes a moment. When it says Ready, tap Download. Files are kept for 30 days.',
+      body: 'A report takes a moment. When it says Ready, tap Download. A pack has a PDF and an Excel file. Files are kept for 30 days.',
     },
   ],
 };
@@ -941,6 +1033,6 @@ export const existingLoansImportPage: Tour = {
 export const LENDING_MORE_TOURS: readonly Tour[] = [
   savingsPage, savingsProductsPage, savingsAccountPage, savingsStatementPage, memberSavingsPage, memberEditPage, collateralEditPage,
   investmentsPage, investmentNewPage, investmentNewForMemberPage, maturitiesPage, investmentProductsPage, memberInvestmentsPage,
-  investmentPage, certificatePage, staffHomePage, approvalsPage, insightsPage, paymentsPage, inviteUserPage, reportsPage,
+  investmentPage, certificatePage, staffHomePage, approvalsPage, insightsPage, paymentsPage, unallocatedPage, reconciliationPage, inviteUserPage, reportsPage,
   smsSettingsPage, smsWordingPage, smsOptOutsPage, ownTwoStepPage, existingLoansPage, existingLoansImportPage,
 ];

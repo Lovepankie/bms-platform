@@ -35,9 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 class IntentsController {
 
     private final PaymentCollections collections;
+    private final PaymentLinkTexts linkTexts;
 
-    IntentsController(PaymentCollections collections) {
+    IntentsController(PaymentCollections collections, PaymentLinkTexts linkTexts) {
         this.collections = collections;
+        this.linkTexts = linkTexts;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -74,5 +76,20 @@ class IntentsController {
     IntentView cancel(@PathVariable("intent_id") UUID intentId, HttpServletResponse response) {
         NoStore.apply(response);
         return collections.cancel(intentId);
+    }
+
+    /**
+     * Texts the link of an open intent to the payer's number (issue #231). Idempotent by nature: one text per intent, a
+     * repeat answers {@code already_sent: true} and sends nothing, so no {@code Idempotency-Key} is asked for.
+     */
+    @PostMapping("/{intent_id}/sms")
+    @RequiresPermission("core.payments.collect")
+    @Operation(
+            summary =
+                    "Send the payment link to the payer's number by SMS, once per intent, while it is open; refused when SMS or collections are off",
+            operationId = "textPaymentLink")
+    PaymentLinkTexts.LinkText text(@PathVariable("intent_id") UUID intentId, HttpServletResponse response) {
+        NoStore.apply(response);
+        return linkTexts.send(intentId);
     }
 }

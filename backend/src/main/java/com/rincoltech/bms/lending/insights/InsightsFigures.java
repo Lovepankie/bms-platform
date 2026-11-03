@@ -21,8 +21,8 @@ import java.util.UUID;
  *       scope alone. It never reads the principal, so a job cannot widen what the requester could see.
  * </ol>
  *
- * Built by extras slice D1 (issue #214) with the figures the first report needs; slice D2 (issue #217) adds
- * the rest of the portfolio, collections, disbursements and officer figures to this port.
+ * Built by extras slice D1 (issue #214) with the figures the first report needs; slice D2 (issue #217) added
+ * the portfolio figures and slice D3 (issue #222) the collections, disbursements, arrears and officer figures.
  */
 public interface InsightsFigures {
 
@@ -149,4 +149,152 @@ public interface InsightsFigures {
 
     /** One age bucket of a group: its loans, principal outstanding, share of the group's principal and arrears. */
     record ParBucket(String bucket, long loans, long principalOutstandingMinor, Long shareBp, long arrearsMinor) {}
+
+    // JUSTIFICATION-A3: slice D3 (issue #222) adds the collections, disbursements, arrears and officer figures the
+    // design names for this port (ADR-038 decision 3), so the reports never compute a figure of the page twice.
+
+    /**
+     * Expected against collected over {@code scope.from()} to {@code scope.to()} (chapter 14 section 14.4,
+     * {@code lending.expected_vs_collected}), per group and in total. Expected, collected on due and the collection rate
+     * are the insights page's own ({@code portfolio.expected}, {@code portfolio.collected_on_due},
+     * {@code portfolio.collection_rate}), and the total collected is its {@code portfolio.collected}: repayments and
+     * recoveries dated in the range, a reversed one excluded. Runs in the caller's transaction, which should be read only.
+     */
+    CollectionFigures collections(PortfolioScope scope, ParGroupBy groupBy, Runnable checkpoint);
+
+    /**
+     * The loans disbursed in the range (chapter 14 section 14.3, {@code lending.disbursements}), per group and in total;
+     * the amount and count are the insights page's {@code portfolio.disbursed} and {@code portfolio.disbursed_count}.
+     * Each loan is handed to {@code lines} in date order, one at a time, for the detail table.
+     */
+    DisbursementFigures disbursements(
+            PortfolioScope scope,
+            ParGroupBy groupBy,
+            Runnable checkpoint,
+            java.util.function.Consumer<DisbursementLine> lines);
+
+    /**
+     * The active loans more than zero days past due as at {@code scope.to()} (chapter 14 section 14.4,
+     * {@code lending.arrears_list}), from the same positions as {@link #par}, most overdue first within each bucket and
+     * the buckets in age order; {@code bucket} keeps one bucket ({@code 1_30}, {@code 31_60}, {@code 61_90},
+     * {@code over_90}) or all when null. A member's name is given only in the branches of {@code nameBranchIds}, and a
+     * phone in full only in the branches of {@code contactBranchIds} (each null for every branch, empty for none); the
+     * branch is the position's (the snapshot's for a past date). Elsewhere the name is null and the phone masked.
+     */
+    void arrears(
+            PortfolioScope scope,
+            String bucket,
+            List<UUID> nameBranchIds,
+            List<UUID> contactBranchIds,
+            Runnable checkpoint,
+            java.util.function.Consumer<ArrearsLine> lines);
+
+    /**
+     * Per responsible officer (chapter 14 section 14.4, {@code lending.officer_performance}): the active loans,
+     * principal outstanding and PAR 30 as at {@code scope.to()} (the positions of {@link #par}), and over the range the
+     * disbursements, expected, collected on due and collection rate (as {@link #collections}), the collection actions
+     * logged on their loans and the promises to pay settled kept or broken.
+     */
+    OfficerFigures officers(PortfolioScope scope, Runnable checkpoint);
+
+    /**
+     * One group of {@link #collections}. The parts of the total collected: {@code paidOnDueInRange} (allocations of the
+     * range's payments to items due in the range), {@code arrearsRecovered} (to items due before it),
+     * {@code prepayments} (to items due after it), {@code penalties}, {@code overpayments}, and {@code recoveries}
+     * (payments on written-off loans, which settle no item). {@code unexplained} is the total less those parts, zero when
+     * the equation of chapter 14 section 14.4 holds.
+     */
+    record CollectionGroup(
+            String key,
+            String label,
+            long expectedMinor,
+            long collectedOnDueMinor,
+            Long collectionRateBp,
+            long paidOnDueInRangeMinor,
+            long arrearsRecoveredMinor,
+            long prepaymentsMinor,
+            long penaltiesMinor,
+            long overpaymentsMinor,
+            long recoveriesMinor,
+            long totalCollectedMinor,
+            long unexplainedMinor) {}
+
+    record CollectionFigures(
+            LocalDate from, LocalDate to, String currency, CollectionGroup total, List<CollectionGroup> groups) {}
+
+    /**
+     * One group of {@link #disbursements}: the loans, principal disbursed, upfront fees taken at disbursement, and the
+     * average and median loan (half up; null without loans).
+     */
+    record DisbursementGroup(
+            String key,
+            String label,
+            long loans,
+            long principalMinor,
+            long feesMinor,
+            Long averageMinor,
+            Long medianMinor) {}
+
+    record DisbursementFigures(
+            LocalDate from, LocalDate to, String currency, DisbursementGroup total, List<DisbursementGroup> groups) {}
+
+    /** One disbursed loan: its date, number, member number, branch, product and officer names, principal and upfront fee. */
+    record DisbursementLine(
+            LocalDate disbursedOn,
+            String loanNo,
+            String memberNo,
+            String branch,
+            String product,
+            String officer,
+            long principalMinor,
+            long feesMinor) {}
+
+    /**
+     * One loan in arrears. {@code memberName} is null outside the name branches, {@code phone} masked outside the contact
+     * branches. {@code penaltiesOutstandingMinor} is null for a past date (the snapshot does not hold it); the last
+     * repayment, the last collection action and the open promise are those on or before the date.
+     */
+    record ArrearsLine(
+            String bucket,
+            String loanNo,
+            String memberNo,
+            String memberName,
+            String phone,
+            String officer,
+            int daysPastDue,
+            long arrearsMinor,
+            Long penaltiesOutstandingMinor,
+            long principalOutstandingMinor,
+            LocalDate lastRepaymentOn,
+            String lastAction,
+            LocalDate lastActionOn,
+            LocalDate promisedDate,
+            Long promisedAmountMinor) {}
+
+    /** One officer of {@link #officers}; the label is the officer's name. */
+    record OfficerGroup(
+            String key,
+            String label,
+            long activeLoans,
+            long principalOutstandingMinor,
+            Long par30Bp,
+            long disbursedLoans,
+            long disbursedMinor,
+            long expectedMinor,
+            long collectedOnDueMinor,
+            Long collectionRateBp,
+            long actions,
+            long promisesKept,
+            long promisesBroken) {}
+
+    /**
+     * @param source {@code live} or {@code snapshot}, where the positions at the range end were read from
+     */
+    record OfficerFigures(
+            LocalDate from,
+            LocalDate to,
+            String source,
+            String currency,
+            OfficerGroup total,
+            List<OfficerGroup> groups) {}
 }

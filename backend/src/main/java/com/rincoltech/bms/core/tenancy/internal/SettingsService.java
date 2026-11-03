@@ -58,6 +58,9 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
             Map.of("repayment_history", 40, "affordability", 30, "collateral_cover", 20, "exposure", 10);
     private static final String MODULE_GROUPS = "module_groups";
     private static final String APPROVAL_SWITCHES = "approval_switches";
+    /** When the Owner last turned on {@code salespeople_see_savings_amount}; read by the retail cash book (ADR-115). */
+    private static final String SALESPEOPLE_SINCE = "salespeople_see_savings_amount_since";
+
     private static final Pattern ACTION_TYPE = Pattern.compile("^[a-z][a-z0-9_]{2,62}$");
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
 
@@ -122,6 +125,11 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
             // ADR-090: the retention of a closed business's money records counts from the end of its financial year.
             guard.requireOwner("set the end of the financial year");
         }
+        if (request.salespeopleSeeSavingsAmount() != null) {
+            // ADR-115: a salesperson who sees the savings amount can work out the day's profit, so only the Owner
+            // decides.
+            guard.requireOwner("let salespeople see the savings amount");
+        }
         Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());
@@ -131,6 +139,21 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
             requireEarlier(stored, request.goLiveDate());
         }
         Map<String, Object> changes = plan(stored, request);
+        if (Boolean.FALSE.equals(request.salespeopleSeeSavingsAmount())) {
+            changes.put(SALESPEOPLE_SINCE, null);
+        } else if (Boolean.TRUE.equals(request.salespeopleSeeSavingsAmount())
+                && !Boolean.TRUE.equals(stored.values().get("salespeople_see_savings_amount"))) {
+            // ADR-115: a savings record shows its amount to a salesperson only when it was made after this moment, so
+            // turning the
+            // setting on never opens the amounts of earlier days. The database clock, the one that stamps the records.
+            changes.put(
+                    SALESPEOPLE_SINCE,
+                    jdbc.sql("SELECT now()")
+                            .query(java.sql.Timestamp.class)
+                            .single()
+                            .toInstant()
+                            .toString());
+        }
         boolean relaxes = relaxes(stored.values(), changes);
         boolean amounts = changesThresholds(resolve(stored.values(), stored.version()), request);
         if ((relaxes || amounts) && !proved) {
@@ -754,6 +777,8 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
                 s.get("financial_year_end_month") == null
                         ? null
                         : ((Number) s.get("financial_year_end_month")).intValue(),
+                // Issue #768: read by the retail cash book from the same key; off unless the owner turned it on.
+                Boolean.TRUE.equals(s.get("salespeople_see_savings_amount")),
                 version);
     }
 }

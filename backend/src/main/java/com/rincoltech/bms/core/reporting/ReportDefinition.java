@@ -95,6 +95,14 @@ public interface ReportDefinition {
     }
 
     /**
+     * True when the PDF prints a missing figure as a blank cell rather than a dash (ADR-038 amendment for #225), for a
+     * printed register where an empty cell is ordinary (an item never valued). False (the default) keeps the dash.
+     */
+    default boolean blankMissingFigures() {
+        return false;
+    }
+
+    /**
      * Job time, in the snapshot transaction. Reads the data and writes it to the output. Throws a
      * {@link ReportFailure} or an {@code ApiException} with a stable code for a failure the user should
      * understand; any other exception is reported as {@code run_failed} and logged without its message.

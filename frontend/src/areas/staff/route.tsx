@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled, setBusinessZone } from '../../api/retail';
 import { endPendingLogout, getAccessToken, logoutPending, markLogoutPending, refreshFailedOffline, refreshSession, setAccessToken, subscribe } from '../../auth/session';
-import { OfflineProvider, lastProfile, useOfflineSupport, waitingNow } from '../../offline/offline-context';
+import { OfflineProvider, forgetReads, lastProfile, useOfflineSupport, waitingNow } from '../../offline/offline-context';
 import { SignOutWarning } from '../../offline/sign-out-warning';
 import { OthersWaitingNote, SyncStatus } from '../../offline/sync-status';
 import { InstallPrompt } from '../../install/InstallPrompt';
@@ -49,14 +49,15 @@ const push = createPush();
 
 /**
  * The signed-in business's zone for every default date (#667). Set as the shell draws, so the screens drawn in the same pass
- * already take it, and again in an effect whose cleanup forgets it (#670), so StrictMode's mount, unmount and mount ends on the
- * business's zone and leaving the shell goes back to Kampala (#672).
+ * already take it, and again in an effect (#670). Only leaving the shell forgets it, so StrictMode's mount, unmount and mount ends
+ * on the business's zone and leaving goes back to Kampala (#672) whatever a discarded draw set. A zone that only changes is never
+ * forgotten in between, so there is no moment on Kampala (#674).
  */
 export function useBusinessZone(zone: string | undefined | null): void {
   setBusinessZone(zone);
+  useEffect(() => () => setBusinessZone(undefined), []);
   useEffect(() => {
     setBusinessZone(zone);
-    return () => setBusinessZone(undefined);
   }, [zone]);
 }
 
@@ -101,7 +102,7 @@ function StaffLayout() {
   const { branch, ready } = active;
   const { choose, toast: switchToast } = useBranchSwitch(profileNow, branch, active.choose);
   const signedIn = me.data !== undefined;
-  const offline = useOfflineSupport(mock ? undefined : profileNow, signedIn);
+  const offline = useOfflineSupport(mock ? undefined : profileNow, signedIn, undefined, queryClient);
   useEffect(() => {
     // Back online after opening offline: restore the session, or ask for a sign-in.
     if (!offline || !offlineMe || token !== null) return;
@@ -167,7 +168,9 @@ function StaffLayout() {
         return;
       }
       // Keeps the outbox: sales still waiting are sent when this person signs in here again (offline-context.dom.test.tsx).
-      await offline?.forget();
+      // The figures kept for reading offline go too, also for a person who no longer sells (issue #763).
+      if (offline) await offline.forget();
+      else if (!mock) await forgetReads(profile.user_id, queryClient);
       offline?.engine.stop();
       setAskEverywhere(false);
       setOfflineMe(null);
@@ -379,7 +382,7 @@ export function StaffBar({
           <TopMenu me={me} busy={busy} onSignOut={onSignOut} onSignOutEverywhere={onSignOutEverywhere} signOut={!phone || signOutInBar} />
         </div>
       </header>
-      <OfflineBanner />
+      <OfflineBanner me={me} />
     </>
   );
 }

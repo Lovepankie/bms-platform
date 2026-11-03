@@ -90,6 +90,37 @@
           }
         }
       },
+      "AddAddonPriceRequest" : {
+        "properties" : {
+          "confirm_large_change" : {
+            "description" : "True when the operator checked a monthly price more than 25% away from the one in force (422 price_change_unusual otherwise)",
+            "type" : "boolean"
+          },
+          "currency" : {
+            "description" : "Default UGX",
+            "pattern" : "^[A-Z]{3}$",
+            "type" : "string"
+          },
+          "effective_from" : {
+            "description" : "Default today; never before today, so a price never changes the past",
+            "format" : "date",
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "format" : "int64",
+            "maximum" : 50000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "description" : "Why, kept with the price and in the audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "monthly_minor", "reason" ]
+      },
       "AddPlanPriceRequest" : {
         "properties" : {
           "annual_months" : {
@@ -194,6 +225,63 @@
           }
         },
         "required" : [ "phone", "scope" ]
+      },
+      "AddonDetail" : {
+        "description" : "The add-on, its price in force today and every price it has had",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "price_today" : {
+            "$ref" : "#/components/schemas/AddonPrice"
+          },
+          "prices" : {
+            "description" : "Every price, newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/AddonPrice"
+            },
+            "type" : "array"
+          },
+          "tenants_on" : {
+            "description" : "Businesses that have the add-on on",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "AddonPrice" : {
+        "description" : "Every price, newest first",
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "effective_from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "description" : "The monthly price in minor units (whole shillings for UGX)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
       },
       "AdvisorAcknowledgement" : {
         "description" : "The text to show before switching on, and its version",
@@ -303,7 +391,7 @@
             "$ref" : "#/components/schemas/AdvisorAcknowledgement"
           },
           "allowed" : {
-            "description" : "The tenant is named in BMS_AI_ENABLED_TENANTS; switching on is refused otherwise",
+            "description" : "The operator switched the AI assistant add-on on for the business (ADR-112); switching on is refused otherwise",
             "type" : "boolean"
           },
           "cost_currency" : {
@@ -337,6 +425,29 @@
             "type" : "integer"
           }
         }
+      },
+      "AllocateReceiptRequest" : {
+        "properties" : {
+          "purpose" : {
+            "description" : "What the money is put on: lending.loan_repayment or lending.savings_deposit",
+            "example" : "lending.loan_repayment",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why this loan or account, for the checker",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "subject_id" : {
+            "description" : "The loan or the savings account",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "purpose", "reason", "subject_id" ]
       },
       "AppManifest" : {
         "description" : "A W3C web app manifest",
@@ -658,6 +769,10 @@
           },
           "can_decide" : {
             "type" : "boolean"
+          },
+          "checker_notice" : {
+            "description" : "A sentence the checker must read before deciding, when the request carries one (for example the credit balance an allocation creates); in the list and the detail",
+            "type" : "string"
           },
           "currency" : {
             "type" : "string"
@@ -1476,6 +1591,9 @@
               "$ref" : "#/components/schemas/TenantAdmin"
             },
             "type" : "array"
+          },
+          "ai_addon" : {
+            "$ref" : "#/components/schemas/TenantAddon"
           },
           "history" : {
             "description" : "Newest first, at most 50",
@@ -3299,6 +3417,23 @@
           }
         },
         "required" : [ "code", "name" ]
+      },
+      "HostnameCheck" : {
+        "properties" : {
+          "host" : {
+            "description" : "The business's own host, from the slug and the tenant host pattern",
+            "type" : "string"
+          },
+          "http_status" : {
+            "description" : "The HTTP status of a wrong answer; null otherwise",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outcome" : {
+            "description" : "answers: this app answered /version there; not_found: the name has no DNS record; no_answer: the name exists but nothing answered in time or the connection failed; wrong_answer: something answered, but not this app (http_status says what)",
+            "type" : "string"
+          }
+        }
       },
       "ImportSmsOptOutsRequest" : {
         "properties" : {
@@ -7205,6 +7340,40 @@
         },
         "required" : [ "member_id", "product_id" ]
       },
+      "OutboxBounce" : {
+        "description" : "The latest 100 bounces and complaints Resend reported (issue #333, ADR-117)",
+        "properties" : {
+          "bounce_type" : {
+            "description" : "Resend's bounce type, for example Permanent or Transient; null for a complaint",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "bounced, complained or suppressed (Resend did not send it: the address is blocked)",
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "outbox_id" : {
+            "description" : "The outbox row the email was, when Resend gave it back",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "recipient_domain" : {
+            "description" : "The recipient's domain only, never the address",
+            "type" : "string"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "description" : "The business whose email it was, or null for a platform email",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "OutboxFailure" : {
         "properties" : {
           "attempts" : {
@@ -7250,6 +7419,13 @@
       },
       "OutboxStatus" : {
         "properties" : {
+          "bounces" : {
+            "description" : "The latest 100 bounces and complaints Resend reported (issue #333, ADR-117)",
+            "items" : {
+              "$ref" : "#/components/schemas/OutboxBounce"
+            },
+            "type" : "array"
+          },
           "counts" : {
             "additionalProperties" : {
               "description" : "Rows per status: pending, sent, failed",
@@ -7274,6 +7450,17 @@
             "type" : "array"
           }
         }
+      },
+      "OutboxUnsuppressRequest" : {
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "email" ]
       },
       "OwnerCandidate" : {
         "description" : "An active administrator of a business with no Owner",
@@ -7400,6 +7587,25 @@
           }
         }
       },
+      "PaymentLinkText" : {
+        "properties" : {
+          "already_sent" : {
+            "type" : "boolean"
+          },
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "intent_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "text_status" : {
+            "enum" : [ "queued", "sent", "failed", "unconfirmed", "expired" ],
+            "type" : "string"
+          }
+        }
+      },
       "PaymentMethodMapping" : {
         "properties" : {
           "account_code" : {
@@ -7433,6 +7639,263 @@
               "$ref" : "#/components/schemas/PaymentMethodMapping"
             },
             "type" : "array"
+          }
+        }
+      },
+      "PaymentReconciliation" : {
+        "properties" : {
+          "counts_by_kind" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "findings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentReconciliationFinding"
+            },
+            "type" : "array"
+          },
+          "findings_truncated" : {
+            "type" : "boolean"
+          },
+          "run" : {
+            "$ref" : "#/components/schemas/PaymentReconciliationRun"
+          }
+        }
+      },
+      "PaymentReconciliationFinding" : {
+        "properties" : {
+          "bms_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "confirmation_code" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "intent_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "What differs. completed_not_booked, pending_over_24h, paid_differs, reversed_awaiting_review, reversal_handed_over, reversal_blocked, reversed_after_refund, manual_receipt_duplicate, in_provider_not_in_bms, in_bms_not_in_provider, amount_mismatch, currency_mismatch, ambiguous_statement_row",
+            "type" : "string"
+          },
+          "order_tracking_id" : {
+            "type" : "string"
+          },
+          "other_transaction_id" : {
+            "description" : "A receipt keyed by hand (manual_receipt_duplicate): its transaction",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "provider_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "statement_row_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "PaymentReconciliationRun" : {
+        "description" : "The latest run, or absent before the first",
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "finding_count" : {
+            "description" : "Differences; for a reader of some branches, those in their branches",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "intents_examined" : {
+            "description" : "Orders looked at; absent for a reader of some branches only",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "ran_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "statements_used" : {
+            "description" : "Statements looked at; absent for a reader of some branches only",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "trigger" : {
+            "enum" : [ "job", "manual" ],
+            "type" : "string"
+          },
+          "truncated" : {
+            "description" : "The run could not read everything: what it lists is partial, and it lists nothing that needs the whole",
+            "type" : "boolean"
+          },
+          "window_from" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "PaymentStatement" : {
+        "properties" : {
+          "covered_from" : {
+            "description" : "The days the export is complete for, where a booked payment missing from it is reported; absent when it covers none",
+            "format" : "date",
+            "type" : "string"
+          },
+          "covered_to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "different_count" : {
+            "description" : "Lines whose order is ours but whose amount, currency or paid state differs, or whose code names several orders",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fees_posted_minor" : {
+            "description" : "The fees posted to the gateway charges account by this upload",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "file_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "matched_count" : {
+            "description" : "Lines whose order is ours, paid, with the same amount and currency",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "period_from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "period_to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "row_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "unmatched_count" : {
+            "description" : "Lines no order of ours has",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "uploaded_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "PaymentStatementDetail" : {
+        "properties" : {
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentStatementRow"
+            },
+            "type" : "array"
+          },
+          "rows_truncated" : {
+            "description" : "True when more lines exist than are listed here (the first 1,000 are)",
+            "type" : "boolean"
+          },
+          "statement" : {
+            "$ref" : "#/components/schemas/PaymentStatement"
+          }
+        }
+      },
+      "PaymentStatementList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentStatement"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "PaymentStatementRow" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "confirmation_code" : {
+            "type" : "string"
+          },
+          "fee_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fee_status" : {
+            "description" : "posted: the fee was posted from this line; reversed: it was, and has been reversed since (with the payment, or by hand); already_posted: an earlier statement did; reversed_elsewhere: an earlier statement did and that fee was reversed by hand, so this line posts nothing (one fee per order: a wrong fee is corrected by a manual journal entry); none: no fee on the line; held: the line did not match cleanly, or its order was not booked, so no fee was posted; awaiting_approval: the fee is above the automatic rate and waits for a second person; not_approved: that request was rejected, cancelled or expired, so nothing was posted",
+            "enum" : [ "posted", "reversed", "already_posted", "reversed_elsewhere", "none", "held", "awaiting_approval", "not_approved" ],
+            "type" : "string"
+          },
+          "intent_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "match_status" : {
+            "enum" : [ "matched", "amount_mismatch", "currency_mismatch", "not_paid_here", "ambiguous", "unmatched" ],
+            "type" : "string"
+          },
+          "order_tracking_id" : {
+            "type" : "string"
+          },
+          "outside_awaiting_confirmation" : {
+            "description" : "Marked as outside this system and waiting for a second person to confirm; still a finding",
+            "type" : "boolean"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "payment_method" : {
+            "type" : "string"
+          },
+          "reviewed_outside" : {
+            "description" : "Two people agreed the line is money for something outside this system (marked, then confirmed)",
+            "type" : "boolean"
+          },
+          "row_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "settled_minor" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -8487,6 +8950,74 @@
         },
         "required" : [ "endpoint" ]
       },
+      "ReceiptActionOutcome" : {
+        "description" : "The request waits for a checker as approval_request_id",
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptAllocation" : {
+        "properties" : {
+          "purpose" : {
+            "type" : "string"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject_type" : {
+            "type" : "string"
+          },
+          "transaction_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptIntendedSubject" : {
+        "description" : "What the payer meant to pay, as the order recorded it",
+        "properties" : {
+          "purpose" : {
+            "type" : "string"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject_type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptPendingRequest" : {
+        "description" : "Requests waiting for a checker (an open receipt)",
+        "properties" : {
+          "action_type" : {
+            "type" : "string"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptRefund" : {
+        "properties" : {
+          "method_key" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          }
+        }
+      },
       "RecordExistingLoanRequest" : {
         "properties" : {
           "agreed_total_minor" : {
@@ -8857,6 +9388,30 @@
           }
         }
       },
+      "RefundReceiptRequest" : {
+        "properties" : {
+          "method_key" : {
+            "description" : "How the money went or goes back: gateway (through the provider), cash, bank, mtn_momo or airtel_money",
+            "example" : "bank",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why it is returned, for the checker",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reference" : {
+            "description" : "The lender's own reference for the refund (a bank or wallet reference), printable characters",
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "method_key", "reason", "reference" ]
+      },
       "RelatedMember" : {
         "properties" : {
           "full_name" : {
@@ -9023,6 +9578,13 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "files" : {
+            "description" : "The files of a ready run that has not expired: one, or for a pack the PDF and the workbook",
+            "items" : {
+              "$ref" : "#/components/schemas/ReportRunFile"
+            },
+            "type" : "array"
+          },
           "finished_at" : {
             "format" : "date-time",
             "type" : "string"
@@ -9071,6 +9633,19 @@
             "type" : "string"
           },
           "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReportRunFile" : {
+        "description" : "The files of a ready run that has not expired: one, or for a pack the PDF and the workbook",
+        "properties" : {
+          "document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "format" : {
+            "description" : "json, csv, pdf or xlsx",
             "type" : "string"
           }
         }
@@ -9454,6 +10029,149 @@
           }
         },
         "required" : [ "party_id", "principal_minor" ]
+      },
+      "RetailAdvisorAcknowledgement" : {
+        "description" : "The text to show before switching on, and its version",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "text_version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAdvisorBrief" : {
+        "properties" : {
+          "advisory" : {
+            "description" : "Always true: every text here is advisory",
+            "type" : "boolean"
+          },
+          "as_of" : {
+            "description" : "When the brief was made (a stored brief) or computed (the caller's own summary)",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "facts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailAdvisorFact"
+            },
+            "type" : "array"
+          },
+          "facts_as_of" : {
+            "description" : "The business date the figures stand at: the end of the day before the brief",
+            "format" : "date",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "The label the card carries: AI assistant (advisory) or Automatic summary",
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "The line shown under the text",
+            "type" : "string"
+          },
+          "points" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailAdvisorPoint"
+            },
+            "type" : "array"
+          },
+          "reason" : {
+            "description" : "Why the automatic summary is shown: off, scope, validation, empty (the model flagged nothing), provider_down, cap, not_ready or unavailable; null for a model brief",
+            "type" : "string"
+          },
+          "source" : {
+            "description" : "model: written from an accepted structured model answer. fallback: the automatic summary",
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAdvisorFact" : {
+        "description" : "A figure the brief rests on; metric is the figure's family, which the screen opens the page of",
+        "properties" : {
+          "display" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "metric" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAdvisorPoint" : {
+        "description" : "One point of the brief, written by our code from the reviewed catalogue",
+        "properties" : {
+          "facts" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAdvisorSettings" : {
+        "properties" : {
+          "acknowledged_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "acknowledged_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "acknowledged_text_version" : {
+            "type" : "string"
+          },
+          "acknowledgement" : {
+            "$ref" : "#/components/schemas/RetailAdvisorAcknowledgement"
+          },
+          "allowed" : {
+            "description" : "The platform has opened the assistant for the business; switching on is refused otherwise",
+            "type" : "boolean"
+          },
+          "cost_currency" : {
+            "type" : "string"
+          },
+          "cost_used_today_micro" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "daily_cost_cap_micro" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "daily_token_cap" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "provider_configured" : {
+            "description" : "A provider is configured on the platform; false means every brief is the automatic summary",
+            "type" : "boolean"
+          },
+          "tokens_used_today" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
       },
       "RetailAgeing" : {
         "description" : "What is owed on completed credit sales, by days past the due date as of today; a sale with no due date counts as not yet due",
@@ -17493,6 +18211,23 @@
         },
         "required" : [ "lines", "valid_until" ]
       },
+      "RetailReceiptLink" : {
+        "properties" : {
+          "expires_at" : {
+            "description" : "When the link stops working, 90 days on",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "link" : {
+            "description" : "As a person reads it, for example rincoltech.com/<token>",
+            "type" : "string"
+          },
+          "url" : {
+            "description" : "The link with https://, for the WhatsApp message",
+            "type" : "string"
+          }
+        }
+      },
       "RetailReceiptPreview" : {
         "properties" : {
           "printed" : {
@@ -19071,13 +19806,17 @@
             "type" : "integer"
           },
           "existing_amount_minor" : {
-            "description" : "Present only with retail.profit.read in the record's branch; the amount of the active record for the day, if any",
+            "description" : "Present only with retail.profit.read in the record's branch, or for a record made while salespeople_see_savings_amount is on (ADR-115); the amount of the active record for the day, if any",
             "format" : "int64",
             "type" : "integer"
           },
           "existing_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "may_change_amount" : {
+            "description" : "True when this caller may save an amount different from the suggestion: with retail.savings.overwrite, or with salespeople_see_savings_amount on when no saved record of the day was voided (replacing a saved amount needs retail.savings.overwrite; ADR-115)",
+            "type" : "boolean"
           },
           "suggested_minor" : {
             "description" : "Present only with retail.profit.read in the record's branch",
@@ -19669,8 +20408,15 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "code" : {
+            "description" : "The item's code, name and unit, so a list across items needs no lookup (#145)",
+            "type" : "string"
+          },
           "correction" : {
             "$ref" : "#/components/schemas/RetailStockMovementCorrection"
+          },
+          "description" : {
+            "type" : "string"
           },
           "historical" : {
             "type" : "boolean"
@@ -19681,6 +20427,11 @@
           },
           "kind" : {
             "type" : "string"
+          },
+          "line_cost_minor" : {
+            "description" : "The quantity, without its sign, at the unit cost, rounded half up as the posting is (#145); present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
           },
           "note" : {
             "type" : "string"
@@ -19701,6 +20452,9 @@
             "type" : "string"
           },
           "source_type" : {
+            "type" : "string"
+          },
+          "unit" : {
             "type" : "string"
           },
           "unit_cost_minor" : {
@@ -22186,6 +22940,18 @@
         },
         "required" : [ "reason" ]
       },
+      "ReversalRequestOutcome" : {
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "intent_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "Role" : {
         "properties" : {
           "key" : {
@@ -23909,6 +24675,15 @@
           }
         }
       },
+      "StatementLineOutsideRequest" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
       "StoredDocument" : {
         "properties" : {
           "branch_id" : {
@@ -24100,6 +24875,49 @@
           }
         },
         "required" : [ "reason", "status" ]
+      },
+      "TenantAddon" : {
+        "description" : "The AI assistant add-on on one business",
+        "properties" : {
+          "charged" : {
+            "description" : "It adds to what the business owes: on, not no charge, not a pilot (nothing is charged in the free month)",
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "description" : "The add-on's monthly price today, or null when none was entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "no_charge" : {
+            "description" : "On without charge: a demo or a pilot",
+            "type" : "boolean"
+          },
+          "on" : {
+            "description" : "The operator switched it on: the business may use the assistant",
+            "type" : "boolean"
+          }
+        }
+      },
+      "TenantAddonRequest" : {
+        "properties" : {
+          "no_charge" : {
+            "description" : "On without charge (a demo or a pilot); ignored when switching off",
+            "type" : "boolean"
+          },
+          "on" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "description" : "Why; kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "on", "reason" ]
       },
       "TenantAdmin" : {
         "properties" : {
@@ -24400,6 +25218,10 @@
             },
             "type" : "array"
           },
+          "salespeople_see_savings_amount" : {
+            "description" : "Salespeople without profit read see the suggested daily savings amount, may change it within the day's cap and see the saved amount (default false; issue #768, ADR-115)",
+            "type" : "boolean"
+          },
           "setup_dismissed" : {
             "description" : "True once the business set-up checklist has been dismissed",
             "type" : "boolean"
@@ -24548,6 +25370,113 @@
             "description" : "The current 6 digit code from the Owner's own authenticator app",
             "maxLength" : 20,
             "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "UnallocatedReceipt" : {
+        "properties" : {
+          "allocation" : {
+            "$ref" : "#/components/schemas/ReceiptAllocation"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "confirmation_code" : {
+            "description" : "The provider's payment code, as shown on the provider's statement",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "decided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "intended_subject" : {
+            "$ref" : "#/components/schemas/ReceiptIntendedSubject"
+          },
+          "note" : {
+            "description" : "Why it was allocated or refunded, as the maker wrote it",
+            "type" : "string"
+          },
+          "order_reference" : {
+            "description" : "Our reference for the order (BMS-...)",
+            "type" : "string"
+          },
+          "order_tracking_id" : {
+            "description" : "The provider's order tracking id",
+            "type" : "string"
+          },
+          "paid_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pending_requests" : {
+            "description" : "Requests waiting for a checker (an open receipt)",
+            "items" : {
+              "$ref" : "#/components/schemas/ReceiptPendingRequest"
+            },
+            "type" : "array"
+          },
+          "refund" : {
+            "$ref" : "#/components/schemas/ReceiptRefund"
+          },
+          "refusal_code" : {
+            "description" : "Why the loan or account did not take it, a closed word such as invalid_status_transition",
+            "type" : "string"
+          },
+          "reported_method" : {
+            "type" : "string"
+          },
+          "requested_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "open", "allocated", "refunded", "reversed" ],
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "UnallocatedReceiptPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/UnallocatedReceipt"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
             "type" : "string"
           }
         }
@@ -24882,6 +25811,33 @@
           }
         }
       },
+      "UpdateRetailAdvisorSettingsRequest" : {
+        "description" : "Omitted fields are unchanged",
+        "properties" : {
+          "acknowledged_text_version" : {
+            "description" : "The version of the acknowledgement text that was shown; required when switching on",
+            "maxLength" : 40,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "daily_cost_cap_micro" : {
+            "description" : "Estimated cost a day in millionths of the cost currency, at most the platform ceiling",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "daily_token_cap" : {
+            "description" : "Tokens a day for this business, at most the platform ceiling; 0 stops every call",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "enabled" : {
+            "description" : "Switch the assistant on or off; needs core.settings.manage as well",
+            "type" : "boolean"
+          }
+        }
+      },
       "UpdateRetailCapabilitiesRequest" : {
         "properties" : {
           "branch_roles" : {
@@ -25143,6 +26099,10 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "salespeople_see_savings_amount" : {
+            "description" : "Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115)",
+            "type" : "boolean"
           },
           "setup_dismissed" : {
             "type" : "boolean"
@@ -32592,6 +33552,82 @@
         "tags" : [ "payments" ]
       }
     },
+    "/api/v1/payments/intents/{intent_id}/reversal-request" : {
+      "post" : {
+        "operationId" : "requestPaymentReversalAgain",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "intent_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReversalRequestOutcome"
+                }
+              }
+            },
+            "description" : "The request, new or already waiting"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReversalRequestOutcome"
+                }
+              }
+            },
+            "description" : "try_again, completed_again, provider_disagrees or not_in_review: nothing was raised"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReversalRequestOutcome"
+                }
+              }
+            },
+            "description" : "nothing_to_reverse"
+          }
+        },
+        "summary" : "Put the reversal of a payment the provider reversed to a checker again (a person asking; 202 with the request)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/intents/{intent_id}/sms" : {
+      "post" : {
+        "operationId" : "textPaymentLink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "intent_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentLinkText"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send the payment link to the payer's number by SMS, once per intent, while it is open; refused when SMS or collections are off",
+        "tags" : [ "payments" ]
+      }
+    },
     "/api/v1/payments/merchant-account" : {
       "delete" : {
         "operationId" : "removeMerchantAccount",
@@ -32684,6 +33720,44 @@
         "tags" : [ "payments" ]
       }
     },
+    "/api/v1/payments/reconciliation" : {
+      "get" : {
+        "operationId" : "getPaymentReconciliation",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentReconciliation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The latest reconciliation run and its differences",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/reconciliation/run" : {
+      "post" : {
+        "operationId" : "runPaymentReconciliation",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentReconciliation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Run the reconciliation now and return its report",
+        "tags" : [ "payments" ]
+      }
+    },
     "/api/v1/payments/settings" : {
       "get" : {
         "operationId" : "getPaymentsSettings",
@@ -32735,6 +33809,320 @@
           }
         },
         "summary" : "Change the tenant's payments settings, audited with before and after (ADR-035)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/statements" : {
+      "get" : {
+        "operationId" : "listPaymentStatements",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentStatementList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The statements uploaded, newest first",
+        "tags" : [ "payments" ]
+      },
+      "post" : {
+        "operationId" : "uploadPaymentStatement",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "covered_from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "covered_to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentStatementDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Upload the merchant statement (CSV, up to 1 MB and 5,000 lines): match its lines to our orders and post each clean line's fee once (FR-PAY-11)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/statements/{statement_id}" : {
+      "get" : {
+        "operationId" : "getPaymentStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "statement_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentStatementDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One statement with how each line matched",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/statements/{statement_id}/rows/{row_no}/outside-system" : {
+      "post" : {
+        "operationId" : "markStatementLineOutsideSystem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "statement_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "row_no",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StatementLineOutsideRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentStatementRow"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark a statement line no order of ours has as money for something outside this system, so it is no longer reported (audited)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated" : {
+      "get" : {
+        "operationId" : "listUnallocatedReceipts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnallocatedReceiptPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The queue of unallocated receipts, oldest first (open by default; status open, allocated, refunded, reversed or all)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated/{receipt_id}" : {
+      "get" : {
+        "operationId" : "getUnallocatedReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnallocatedReceipt"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One unallocated receipt with its requests",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated/{receipt_id}/allocate" : {
+      "post" : {
+        "operationId" : "allocateUnallocatedReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AllocateReceiptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReceiptActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask to put a receipt's money on a loan or a savings account (maker-checker, 202)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated/{receipt_id}/refund" : {
+      "post" : {
+        "operationId" : "refundUnallocatedReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefundReceiptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReceiptActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask to record that a receipt's money was sent back to the payer (maker-checker, 202)",
         "tags" : [ "payments" ]
       }
     },
@@ -32899,6 +34287,54 @@
         "tags" : [ "plan" ]
       }
     },
+    "/api/v1/platform/addons/ai_assistant" : {
+      "get" : {
+        "operationId" : "platformGetAiAddon",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddonDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The AI assistant add-on with its price history (issue #423)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/addons/ai_assistant/prices" : {
+      "post" : {
+        "operationId" : "platformAddAiAddonPrice",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddAddonPriceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddonDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the AI assistant add-on's monthly price from a date; the price already in force on that date again changes nothing",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/applications" : {
       "get" : {
         "operationId" : "platformListApplications",
@@ -32927,6 +34363,33 @@
           }
         },
         "summary" : "The applications queue with counts (FR-ONB-05)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/applications/hostname-check" : {
+      "get" : {
+        "operationId" : "platformHostnameCheck",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HostnameCheck"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Does the business's own address already answer? Asks that host for /version (issue #155)",
         "tags" : [ "platform" ]
       }
     },
@@ -33729,6 +35192,28 @@
         "tags" : [ "platform" ]
       }
     },
+    "/api/v1/platform/outbox/unsuppress" : {
+      "post" : {
+        "operationId" : "platformUnsuppressEmail",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OutboxUnsuppressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send email to an address again after a bounce, complaint or suppression (ADR-117)",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/outbox/{outbox_id}/retry" : {
       "post" : {
         "operationId" : "platformRetryOutbox",
@@ -34298,7 +35783,27 @@
         } ],
         "responses" : {
           "302" : {
-            "description" : "Location is the shop's address or the not found page"
+            "description" : "Location is the shop's address, a module's page or the not found page"
+          },
+          "404" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "A module's link that is wrong or has expired, such as a receipt link (issue #760)"
+          },
+          "429" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Too many names no shop has from this address in ten minutes: a plain page"
           }
         },
         "summary" : "Follow a short link: 302 to the shop, to its new address while an old name forwards, or to the page 'No shop uses this link' (ADR-108)",
@@ -34318,7 +35823,27 @@
         } ],
         "responses" : {
           "302" : {
-            "description" : "Location is the shop's address or the not found page"
+            "description" : "Location is the shop's address, a module's page or the not found page"
+          },
+          "404" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "A module's link that is wrong or has expired, such as a receipt link (issue #760)"
+          },
+          "429" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Too many names no shop has from this address in ten minutes: a plain page"
           }
         },
         "summary" : "Follow a short link: 302 to the shop, to its new address while an old name forwards, or to the page 'No shop uses this link' (ADR-108)",
@@ -34606,6 +36131,44 @@
           }
         },
         "summary" : "One tenant",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/ai-addon" : {
+      "put" : {
+        "operationId" : "platformSetTenantAiAddon",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantAddonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantAddon"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Switch the AI assistant add-on on or off for a business, charged or not, with a reason; the same state again changes nothing",
         "tags" : [ "platform" ]
       }
     },
@@ -35904,6 +37467,79 @@
         },
         "summary" : "Void an advance that has no repayments (FR-RET-28); M",
         "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/advisor/brief" : {
+      "get" : {
+        "operationId" : "getRetailAdvisorBrief",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvisorBrief"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Today's retail brief: the stored AI brief for the owner, else the automatic summary of what the caller may see",
+        "tags" : [ "retail-advisor" ]
+      }
+    },
+    "/api/v1/retail/advisor/settings" : {
+      "get" : {
+        "operationId" : "getRetailAdvisorSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvisorSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The AI assistant's settings, limits and use today",
+        "tags" : [ "retail-advisor" ]
+      },
+      "put" : {
+        "operationId" : "updateRetailAdvisorSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateRetailAdvisorSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvisorSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Switch the assistant on (with the acknowledgement) or off, or set its daily caps; audited",
+        "tags" : [ "retail-advisor" ]
       }
     },
     "/api/v1/retail/bankings" : {
@@ -41549,6 +43185,54 @@
         "tags" : [ "retail-documents" ]
       }
     },
+    "/api/v1/retail/receipt-links/{token}" : {
+      "get" : {
+        "operationId" : "openRetailReceiptLink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/pdf" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The PDF"
+          },
+          "404" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "This receipt link has expired: a plain page"
+          },
+          "429" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Too many opens of this link or from this address: a plain page"
+          }
+        },
+        "summary" : "The receipt PDF a receipt link opens, with no sign-in; a wrong or expired link is a plain page (issue #760)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
     "/api/v1/retail/reports/business-evaluation" : {
       "get" : {
         "operationId" : "getRetailBusinessEvaluation",
@@ -43209,6 +44893,34 @@
         "tags" : [ "retail-documents" ]
       }
     },
+    "/api/v1/retail/sales/{sale_id}/receipt/link" : {
+      "post" : {
+        "operationId" : "createRetailSaleReceiptLink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptLink"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A short link to the sale's receipt PDF for a message to a typed WhatsApp number: read only, no sign-in, valid for 90 days; the same check as the receipt PDF (issue #760)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
     "/api/v1/retail/sales/{sale_id}/receipt/pdf" : {
       "get" : {
         "operationId" : "renderRetailSaleReceipt",
@@ -43953,6 +45665,17 @@
           "schema" : {
             "format" : "date",
             "type" : "string"
+          }
+        }, {
+          "description" : "Only these movement kinds, for example usage and damage (#145)",
+          "in" : "query",
+          "name" : "kind",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         }, {
           "in" : "query",

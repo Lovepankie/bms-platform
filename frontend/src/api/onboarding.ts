@@ -148,6 +148,15 @@ export async function activateApplication(id: string, body: ActivateRequest): Pr
   return data;
 }
 
+export type HostnameCheck = S['HostnameCheck'];
+
+/** Does the business's own address already answer (#155)? Asks that host for /version; changes nothing. */
+export async function checkHostname(slug: string): Promise<HostnameCheck> {
+  const { data, error } = await api.GET('/api/v1/platform/applications/hostname-check', { params: { query: { slug } } });
+  if (error || !data) fail(error, 'Could not check the address');
+  return data;
+}
+
 export async function outboxStatus(): Promise<OutboxStatus> {
   const { data, error } = await api.GET('/api/v1/platform/outbox');
   if (error || !data) fail(error, 'Could not load the outbox');

@@ -9,6 +9,10 @@ import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -23,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,13 +45,24 @@ class OutboxController {
     private final OutboxDispatcher dispatcher;
     private final BusinessClock clock;
     private final PlatformAuditLog audit;
+    private final EmailSuppressions suppressions;
 
-    OutboxController(JdbcClient jdbc, OutboxDispatcher dispatcher, BusinessClock clock, PlatformAuditLog audit) {
+    OutboxController(
+            JdbcClient jdbc,
+            OutboxDispatcher dispatcher,
+            BusinessClock clock,
+            PlatformAuditLog audit,
+            EmailSuppressions suppressions) {
         this.jdbc = jdbc;
         this.dispatcher = dispatcher;
         this.clock = clock;
         this.audit = audit;
+        this.suppressions = suppressions;
     }
+
+    @Schema(name = "OutboxUnsuppressRequest")
+    record UnsuppressRequest(
+            @NotBlank @Email @Size(max = 254) String email) {}
 
     @Schema(name = "OutboxFailure")
     record Failure(
@@ -73,6 +89,27 @@ class OutboxController {
             @Schema(description = "transactional, reminder or arrears")
             String category) {}
 
+    @Schema(name = "OutboxBounce")
+    record Bounce(
+            Instant occurredAt,
+
+            @Schema(description = "bounced, complained or suppressed (Resend did not send it: the address is blocked)")
+            String kind,
+
+            @Schema(description = "The outbox row the email was, when Resend gave it back")
+            UUID outboxId,
+
+            @Schema(description = "The business whose email it was, or null for a platform email")
+            UUID tenantId,
+
+            String templateKey,
+
+            @Schema(description = "The recipient's domain only, never the address")
+            String recipientDomain,
+
+            @Schema(description = "Resend's bounce type, for example Permanent or Transient; null for a complaint")
+            String bounceType) {}
+
     @Schema(name = "OutboxStatus")
     record Status(
             @Schema(description = "Channels whose sender is configured; rows of the others stay pending")
@@ -81,7 +118,10 @@ class OutboxController {
             @Schema(description = "Rows per status: pending, sent, failed")
             Map<String, Long> counts,
 
-            List<Failure> failures) {}
+            List<Failure> failures,
+
+            @Schema(description = "The latest 100 bounces and complaints Resend reported (issue #333, ADR-117)")
+            List<Bounce> bounces) {}
 
     @GetMapping
     @RequiresPermission("platform.tenants.read")
@@ -105,7 +145,23 @@ class OutboxController {
                         rs.getObject("tenant_id", UUID.class),
                         rs.getString("category")))
                 .list();
-        return new Status(dispatcher.enabledChannels(), counts, failures);
+        List<Bounce> bounces = audit.recent(ResendWebhookController.ACTIONS, 100).stream()
+                .map(e -> new Bounce(
+                        e.occurredAt(),
+                        switch (e.action()) {
+                            case ResendWebhookController.BOUNCED -> "bounced";
+                            case ResendWebhookController.SUPPRESSED -> "suppressed";
+                            default -> "complained";
+                        },
+                        e.data().get("outbox_id") == null
+                                ? null
+                                : UUID.fromString(e.data().get("outbox_id")),
+                        e.tenantId(),
+                        e.data().get("template"),
+                        e.data().get("recipient_domain"),
+                        e.data().get("bounce_type")))
+                .toList();
+        return new Status(dispatcher.enabledChannels(), counts, failures, bounces);
     }
 
     @PostMapping("/{outbox_id}/retry")
@@ -135,6 +191,29 @@ class OutboxController {
                     "This message is older than its link's lifetime. Issue a new link instead, for example with Needs info.");
         }
         audit.record("platform.outbox.retried", CurrentPrincipal.require().userId(), null, Map.of("outbox_id", id));
+        return ResponseEntity.noContent().build();
+    }
+
+    // JUSTIFICATION-A3: the operator's clear of a suppression the #759 lead asked for (third review, must-fix 2).
+    /**
+     * Clears the suppression of one address (ADR-117 decision 9): records {@code platform.email.unsuppressed} with the
+     * address's keyed hash and the operator, so the senders send to it again. The address is in the body, never the path,
+     * and is not stored or logged. 409 {@code email_not_suppressed} when it was not suppressed (a typo writes nothing).
+     */
+    @PostMapping("/unsuppress")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary = "Send email to an address again after a bounce, complaint or suppression (ADR-117)",
+            operationId = "platformUnsuppressEmail")
+    @Transactional
+    public ResponseEntity<Void> unsuppress(@Valid @RequestBody UnsuppressRequest request) {
+        if (!suppressions.clear(request.email(), CurrentPrincipal.require().userId())) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "email_not_suppressed",
+                    "Not suppressed",
+                    "BMS is not holding back email to this address.");
+        }
         return ResponseEntity.noContent().build();
     }
 }

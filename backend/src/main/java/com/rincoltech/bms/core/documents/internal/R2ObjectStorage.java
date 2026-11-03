@@ -87,6 +87,35 @@ class R2ObjectStorage implements ObjectStorage {
     }
 
     @Override
+    public java.util.stream.Stream<Listed> list(String prefix) {
+        // The paginator fetches the next page of 1000 only when the stream reaches it.
+        return s3.listObjectsV2Paginator(b -> b.bucket(bucket).prefix(prefix)).contents().stream()
+                .map(o -> new Listed(o.key(), o.lastModified()));
+    }
+
+    // JUSTIFICATION-A3: the #39 review asks for batched DeleteObjects; this is the port method's R2 adapter.
+    @Override
+    public java.util.List<String> deleteAll(java.util.List<String> keys) {
+        if (keys.isEmpty()) {
+            return java.util.List.of();
+        }
+        if (keys.size() > 1000) {
+            throw new IllegalArgumentException("DeleteObjects takes at most 1000 keys.");
+        }
+        var ids = keys.stream()
+                .map(k -> software.amazon.awssdk.services.s3.model.ObjectIdentifier.builder()
+                        .key(k)
+                        .build())
+                .toList();
+        // Quiet mode: the answer lists only the keys that failed.
+        var reply = s3.deleteObjects(
+                b -> b.bucket(bucket).delete(d -> d.objects(ids).quiet(true)));
+        return reply.errors().stream()
+                .map(software.amazon.awssdk.services.s3.model.S3Error::key)
+                .toList();
+    }
+
+    @Override
     public String signedGetUrl(String key, Duration ttl, String downloadName, String contentType) {
         return presigner
                 .presignGetObject(p -> p.signatureDuration(ttl)

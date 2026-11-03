@@ -363,6 +363,31 @@ class DocumentService implements Documents {
         pdf.renderTo(template, model, target, waitMillis);
     }
 
+    // JUSTIFICATION-A3: the report pack (issue #229) is merged on disk with PDFBox, which only this module uses.
+    @Override
+    public int pdfPages(java.nio.file.Path file) {
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = org.apache.pdfbox.Loader.loadPDF(
+                file.toFile(), org.apache.pdfbox.io.IOUtils.createTempFileOnlyStreamCache())) {
+            return doc.getNumberOfPages();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    @Override
+    public void mergePdfs(List<java.nio.file.Path> sources, java.nio.file.Path target) {
+        org.apache.pdfbox.multipdf.PDFMergerUtility merger = new org.apache.pdfbox.multipdf.PDFMergerUtility();
+        merger.setDestinationFileName(target.toString());
+        try {
+            for (java.nio.file.Path source : sources) {
+                merger.addSource(source.toFile());
+            }
+            merger.mergeDocuments(org.apache.pdfbox.io.IOUtils.createTempFileOnlyStreamCache());
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
     @Override
     public GeneratedObject putGenerated(byte[] bytes, String docType) {
         return putFile(bytes, docType, "application/pdf", "pdf");
@@ -370,6 +395,7 @@ class DocumentService implements Documents {
 
     @Override
     public GeneratedObject putFile(byte[] bytes, String docType, String contentType, String extension) {
+        generatedType(docType);
         UUID id = UUID.randomUUID();
         ZonedDateTime at = clock.now().atZone(ZoneOffset.UTC);
         String key = "tenants/%s/%s/%04d/%02d/%s.%s"
@@ -401,12 +427,24 @@ class DocumentService implements Documents {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+        generatedType(docType);
         UUID id = UUID.randomUUID();
         ZonedDateTime at = clock.now().atZone(ZoneOffset.UTC);
         String key = "tenants/%s/%s/%04d/%02d/%s.%s"
                 .formatted(TenantContext.require(), docType, at.getYear(), at.getMonthValue(), id, extension);
         storage.putFile(key, file, contentType);
         return new GeneratedObject(id, key, docType, contentType, digest, (int) size);
+    }
+
+    /**
+     * A generated file never goes under {@code upload/}: only {@link #store} writes there, with its row in the same
+     * transaction, which is what lets the orphan sweep (issue #39) treat an unnamed upload as an orphan.
+     */
+    static String generatedType(String docType) {
+        if ("upload".equals(docType)) {
+            throw new IllegalArgumentException("A generated file cannot be stored as an upload.");
+        }
+        return docType;
     }
 
     @Override

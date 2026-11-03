@@ -212,6 +212,34 @@ export async function savePlan(code: string, body: SavePlanRequest): Promise<Pla
   return data;
 }
 
+// The AI assistant add-on (issue #423, ADR-112): its own monthly price, entered here and never seeded, and the switch per business.
+// JUSTIFICATION-A3: three new routes of the add-on; no existing call reaches them.
+export type AddonDetail = S['AddonDetail'];
+export type AddonPrice = S['AddonPrice'];
+export type TenantAddon = S['TenantAddon'];
+export type AddAddonPriceRequest = S['AddAddonPriceRequest'];
+
+export async function aiAddon(): Promise<AddonDetail> {
+  const { data, error } = await api.GET('/api/v1/platform/addons/ai_assistant');
+  if (error || !data) fail(error, 'Could not load the AI assistant add-on');
+  return data;
+}
+
+export async function addAiAddonPrice(body: AddAddonPriceRequest): Promise<AddonDetail> {
+  const { data, error } = await api.POST('/api/v1/platform/addons/ai_assistant/prices', { body });
+  if (error || !data) fail(error, 'Could not save the price');
+  return data;
+}
+
+export async function setBusinessAiAddon(tenantId: string, on: boolean, noCharge: boolean, reason: string): Promise<TenantAddon> {
+  const { data, error } = await api.PUT('/api/v1/platform/tenants/{tenant_id}/ai-addon', {
+    params: { path: { tenant_id: tenantId } },
+    body: { on, no_charge: noCharge, reason },
+  });
+  if (error || !data) fail(error, 'Could not change the AI assistant add-on');
+  return data;
+}
+
 export async function addPlanPrice(code: string, body: AddPlanPriceRequest): Promise<PlanDetail> {
   const { data, error } = await api.POST('/api/v1/platform/plans/{plan_code}/prices', {
     params: { path: { plan_code: code } },

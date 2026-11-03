@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { RouterContextProvider } from '@tanstack/react-router';
 import { createRoot } from 'react-dom/client';
 import type { Me } from '../src/api/client';
@@ -59,6 +59,12 @@ const offline = {
   engine: { subscribe: () => () => undefined, snapshot: () => snapshot },
 } as unknown as Offline;
 const router = layoutRouter('/staff/retail/sale');
+// A page figure loaded two days ago, so the offline banner (?sync=offline) says its longest time, "Figures are from 31 Oct at 09:30" (issue #763).
+client.setQueryData(['retail', 'home', 'layout'], { sales: 1 }, { updatedAt: Date.now() - 2 * 86_400_000 });
+function PageFigures() {
+  useQuery({ queryKey: ['retail', 'home', 'layout'], queryFn: () => new Promise(() => undefined), staleTime: Infinity });
+  return null;
+}
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <RouterContextProvider router={router}>
@@ -68,6 +74,7 @@ createRoot(document.getElementById('root') as HTMLElement).render(
           <TourProvider me={me} saveProgress={false}>
             <div className="app-shell">
               <StaffBar me={me} branch={branch} onBranch={() => undefined} onSignOut={() => undefined} />
+              <PageFigures />
             </div>
           </TourProvider>
         </OfflineProvider>

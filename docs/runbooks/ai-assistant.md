@@ -13,7 +13,7 @@ A call reaches a provider only when all four are true. Any one of them stops it,
 | Switch | Where | Off means |
 |---|---|---|
 | The provider is configured | `BMS_AI_PROVIDER=openai_compatible` with `BMS_AI_BASE_URL`, `BMS_AI_API_KEY` and `BMS_AI_MODEL` in the host environment | Every call is answered with a fallback `provider_off`; nothing fails and nothing is sent. A half-set provider, a key with a stray space or line break, or a base URL that is not `https` logs one warning at start and is treated as off |
-| The tenant is on the platform allow-list | `BMS_AI_ENABLED_TENANTS`: tenant **ids** (UUIDs, never slugs: a slug is a name an administrator can choose), comma separated; an entry that is not a UUID names nobody | The tenant cannot switch the assistant on (403 `advisor_not_available`), and a tenant removed from the list stops at once (fallback `not_allowed`) |
+| The business has the AI assistant add-on (ADR-112, issue #423) | The operator switches the add-on on for the business on its Business page, with a reason. `BMS_AI_ENABLED_TENANTS` stays as the platform's control: `off` is the kill switch (nobody, whatever the add-on), `*` lets every business in (the API refuses to start with it unless the `dev`, `test` or `demo` profile is active, so a demo host adds `demo` to `SPRING_PROFILES_ACTIVE`), and tenant **ids** (UUIDs, never slugs) are still let in beside the add-on | The business cannot switch the assistant on (403 `advisor_not_available`), and a business whose add-on is switched off stops at once (fallback `not_allowed`) |
 | The tenant has switched it on | Tenant settings group `ai`, `enabled`, after the administrator acknowledges what is sent and where | Fallback `not_enabled`; no row is logged |
 | The caps are not spent | Tenant and platform daily token and cost caps | Fallback `tenant_token_cap`, `tenant_cost_cap`, `platform_token_cap` or `platform_cost_cap`, refused before any network call |
 
@@ -61,7 +61,10 @@ stub: the application refuses to start with it outside the dev and test profiles
 
 ## 4. Switching a tenant on
 
-1. Name the tenant in `BMS_AI_ENABLED_TENANTS` by its id (the `id` of its row in `tenants`), restart the API, and tell the tenant's administrator.
+1. On the operator portal, open the business and, under **AI assistant add-on**, choose **Switch on** (charged: its monthly price is
+   added to what the business owes after its free month) or **Switch on with no charge** (a demo business such as `retaildemo`,
+   `lendingdemo`, `tradedemo` or `demo`, or a pilot), with a reason. No restart is needed. Enter the add-on's monthly price first, once,
+   on **Plans and prices** (the owner's figure, typed as data; nothing is seeded). Then tell the business's administrator.
 2. The administrator switches the assistant on at `/staff/assistant` (menu entry "AI assistant"; the API is `GET` and `PUT
    /lending/advisor/settings`), reading the notice and ticking the box. The switch records who, when and which text version they
    acknowledged, and is audited as `core.ai.settings.changed`. A tenant that is not in the list gets 403 `advisor_not_available`.
@@ -111,8 +114,9 @@ data, rerun the evaluation suite of spec 5.8 (the harness is built, section 9; t
 
 From the finest to the coarsest, each taking effect at once or at the restart:
 
-1. A tenant: its administrator switches the assistant off (effective on the next call), or the operator removes it from
-   `BMS_AI_ENABLED_TENANTS` and restarts.
+1. A tenant: its administrator switches the assistant off (effective on the next call), or the operator switches its AI assistant
+   add-on off on its Business page (effective on the next call, nothing more is charged for it).
+1a. Every tenant at once, whatever its add-on: set `BMS_AI_ENABLED_TENANTS=off` and restart (the platform's kill switch).
 2. The caps: lower `BMS_AI_PLATFORM_DAILY_TOKENS` to 1 and restart; every call is refused before the network.
 3. Everything: set `BMS_AI_PROVIDER=off` (or empty the key) and restart. The page never depends on the model; every card shows the
    deterministic "Automatic summary".
@@ -183,4 +187,24 @@ SELECT tenant_id, brief_date, source, reason, facts_as_of, generated_at, call_id
 | No row for a date, the tenant being on | A run of that date came after midnight, before the night's snapshot was written (nothing is stored then) | Nothing: the card says "not ready" and shows the automatic summary; the next day's run makes its brief |
 | A user says they see the automatic summary | Their scope does not cover every branch, or they lack `lending.insights.all_officers`: reason `scope` | Expected. A branch manager never receives the all-branches brief |
 
-To remove one day's brief (for example after a wrong switch-on), delete the row as the owner role; the next run of that date makes it again.
+## 11. The shop brief (issue #422)
+
+A business with the retail module gets the same morning brief on Home. The job `retail.advisor-daily-brief` runs like the lending
+one (every 15 minutes from 06:00 Kampala time, once per tenant and business date) and stores the brief in `retail_ai_briefs`; the
+call log shows its calls with purpose `retail_brief`. It uses the same switch, platform list and caps as the lending brief: a
+business with both modules has one setting, switched at `/staff/assistant` by whoever holds `lending.advisor.configure` or
+`retail.advisor.configure` (and `core.settings.manage`). Switching a shop on is section 4 unchanged.
+
+```sql
+SELECT tenant_id, brief_date, source, reason, facts_as_of, generated_at, call_id
+  FROM retail_ai_briefs WHERE brief_date >= current_date - 7 ORDER BY brief_date DESC, tenant_id;
+```
+
+The signs and steps of section 10 hold. The card is for the administrators: `retail.advisor.use` is seeded to them alone, so
+switching the assistant on shows it to no seller or Storekeeper. A user who sees the automatic summary instead of the AI brief lacks
+one of `retail.sale.all_sellers`, `retail.profit.read`, `retail.stock.read`, `retail.controls.read` or `retail.order.manage` over
+every branch, which the stored brief needs; that is expected. A day whose model answer flagged nothing shows the automatic summary
+with the reason `empty`. Item names never leave the server (they are sent as Item A).
+
+To remove one day's brief, lending or shop (for example after a wrong switch-on), delete the row of `lending_ai_briefs` or
+`retail_ai_briefs` as the owner role; the next run of that date makes it again.

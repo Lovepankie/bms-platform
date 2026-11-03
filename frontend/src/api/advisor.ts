@@ -77,7 +77,7 @@ export class AdvisorError extends Error {
 }
 
 const MESSAGES: Record<string, string | undefined> = {
-  advisor_not_available: 'The AI assistant is not available for your business yet. Ask the platform operator.',
+  advisor_not_available: 'The AI assistant add-on is not on for your business yet. Ask the platform operator to switch it on.',
   acknowledgement_required: 'Read the notice and tick the box to switch the assistant on.',
   version_conflict: 'Someone else changed this. The latest has been loaded; check it and try again.',
   precondition_required: 'This page is out of date. Reload it and try again.',
@@ -101,6 +101,9 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }, fa
   }
   return result.data;
 }
+
+/** The same unwrapping for the retail brief's client (api/retail-advisor.ts, issue #422), so both speak the same messages. */
+export const advisorUnwrap = unwrap;
 
 const ifMatch = (version: number) => `"${version}"`;
 

@@ -59,6 +59,13 @@ class LogRedactionTest {
         assertThat(LogRedaction.redact("client_secret=fabricated-secret-01&grant=x"))
                 .isEqualTo("client_secret=[redacted]&grant=x");
         assertThat(LogRedaction.redact("BMS_SMTP_PASSWORD=fabricated-01")).isEqualTo("BMS_SMTP_PASSWORD=[redacted]");
+        // ADR-117: the Resend key, by its variable name.
+        assertThat(LogRedaction.redact("BMS_RESEND_API_KEY=re_fabricated_01"))
+                .isEqualTo("BMS_RESEND_API_KEY=[redacted]");
+        // ...and as the HTTP client would print the header, if its header logging were ever turned on.
+        assertThat(LogRedaction.redact("Authorization: Bearer re_fabricated_01"))
+                .doesNotContain("re_fabricated_01");
+        assertThat(LogRedaction.redact("bearer re_fabricated_01")).doesNotContain("re_fabricated_01");
         assertThat(LogRedaction.redact("resetToken=AbCdEf012345")).isEqualTo("resetToken=[redacted]");
         assertThat(LogRedaction.redact("invitation_token=AbCdEf012345 sent"))
                 .isEqualTo("invitation_token=[redacted] sent");

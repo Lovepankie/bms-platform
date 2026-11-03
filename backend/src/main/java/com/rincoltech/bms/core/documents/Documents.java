@@ -121,6 +121,19 @@ public interface Documents {
             long waitMillis);
 
     /**
+     * The number of pages of a PDF on disk (a report pack's contents, ADR-038 decision 5). Read with a temporary-file
+     * cache, so a long file costs disk, not heap.
+     */
+    int pdfPages(java.nio.file.Path file);
+
+    /**
+     * Joins PDFs on disk into {@code target}, in order (a report pack: its cover and then each report, ADR-038 decision 5).
+     * Merged with PDFBox through temporary files, so no more than one source's page tree is in memory. No transaction and
+     * no storage.
+     */
+    void mergePdfs(List<java.nio.file.Path> sources, java.nio.file.Path target);
+
+    /**
      * First half of storing a generated PDF: writes the bytes to object storage under a fresh key.
      * No transaction and no database, so a caller can keep its row lock for {@link #recordGenerated}
      * alone and never hold it across a render or an upload. The object is unreferenced until recorded;

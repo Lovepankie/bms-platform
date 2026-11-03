@@ -177,6 +177,39 @@ class AiConfigurationTest {
         assertThat(props(null, null, null, null).allowedTenants()).isEmpty();
     }
 
+    /** Issue #423: off is the platform's kill switch, * lets every business in (a demo host); an empty value leaves the add-on. */
+    @Test
+    void theEnvironmentListIsAKillSwitchOrAllowAllBesideTheAddon() {
+        AiProperties off = new AiProperties(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, " OFF ");
+        assertThat(off.killSwitch()).isTrue();
+        assertThat(off.allowAll()).isFalse();
+        assertThat(off.allowedTenants()).isEmpty();
+        AiProperties all = new AiProperties(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, "*");
+        assertThat(all.allowAll()).isTrue();
+        assertThat(all.killSwitch()).isFalse();
+        AiProperties none = props(null, null, null, null);
+        assertThat(none.killSwitch()).isFalse();
+        assertThat(none.allowAll()).isFalse();
+    }
+
+    /** Review of #743: * is refused at start outside the dev, test and demo profiles, so a production host never lets all in. */
+    @Test
+    void allowAllIsRefusedOnAServerHost() {
+        AiProperties all = new AiProperties(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, "*");
+        MockEnvironment server = new MockEnvironment();
+        server.setActiveProfiles("server");
+        assertThatThrownBy(() -> new AiAllowList(all, null, server))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("dev, test and demo");
+        MockEnvironment demo = new MockEnvironment();
+        demo.setActiveProfiles("server", "demo");
+        new AiAllowList(all, null, demo);
+        new AiAllowList(props(null, null, null, null), null, server);
+    }
+
     @Test
     void aCapOfZeroMeansStopAndANegativeOneFailsStartup() {
         AiProperties stop =

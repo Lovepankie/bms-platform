@@ -115,7 +115,13 @@ class SmsEventsService implements SmsEvents {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Result queue(MemberSms message) {
-        return guarded("queue " + message.templateKey(), Result.FAILED, () -> write(message));
+        return queueTracked(message).result();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Queued queueTracked(MemberSms message) {
+        return guarded("queue " + message.templateKey(), new Queued(Result.FAILED, null), () -> write(message));
     }
 
     @Override
@@ -137,7 +143,8 @@ class SmsEventsService implements SmsEvents {
                 return Result.TOO_OLD;
             }
             return write(new MemberSms(
-                    templateKey, memberId, phone.get(), params.get(), eventRef, category, valueDate, expiresAt));
+                            templateKey, memberId, phone.get(), params.get(), eventRef, category, valueDate, expiresAt))
+                    .result();
         });
     }
 
@@ -151,6 +158,74 @@ class SmsEventsService implements SmsEvents {
     @Transactional(propagation = Propagation.MANDATORY)
     public int cancelSettled(String eventRef) {
         return guarded("cancel", 0, () -> outbox.cancelUnclaimed(eventRef, "cancelled_settled"));
+    }
+
+    /**
+     * The row is found by the id {@link #queueTracked} answered: still pending, it has not reached the provider;
+     * otherwise the delivery log (row-level security keeps it to the bound tenant) says what the provider did, and no
+     * delivery row means it never got there. JUSTIFICATION-A3: a new read on the port.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public TextStatus status(UUID row) {
+        if (row == null) {
+            return TextStatus.NOT_SENT;
+        }
+        return guarded("status", TextStatus.PENDING, () -> {
+            if (Boolean.TRUE.equals(jdbc.sql("SELECT notification_outbox_is_pending(?)")
+                    .param(row)
+                    .query(Boolean.class)
+                    .single())) {
+                return TextStatus.PENDING;
+            }
+            // At most one row: UNIQUE (tenant_id, outbox_id) and the tenant binding (SmsEventsIT pins it).
+            return jdbc.sql("SELECT status FROM sms_deliveries WHERE outbox_id = ?")
+                    .param(row)
+                    .query(String.class)
+                    .optional()
+                    .map(SmsEventsService::textStatus)
+                    .orElse(TextStatus.NOT_SENT);
+        });
+    }
+
+    /**
+     * A delivery log status as the port says it: {@code queued} is a send in flight, {@code unknown} may or may not have
+     * gone. One row per outbox row: {@code UNIQUE (tenant_id, outbox_id)} (V50), a retry updates it.
+     */
+    static TextStatus textStatus(String delivery) {
+        return switch (delivery) {
+            case "queued" -> TextStatus.PENDING;
+            case "sent", "delivered", "sunk" -> TextStatus.SENT;
+            case "unknown" -> TextStatus.UNCONFIRMED;
+            default -> TextStatus.FAILED;
+        };
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String plainTenantName(int maxLength) {
+        return plainName(tenant.profile().name(), maxLength);
+    }
+
+    /** See {@link SmsEvents#plainTenantName}. Pure, so a test pins it; an empty result reads {@code BMS}. */
+    static String plainName(String name, int maxLength) {
+        StringBuilder out = new StringBuilder();
+        for (char c : (name == null ? "" : name).toCharArray()) {
+            // The dashes and quotes by code point (hyphens, figure, en and em dashes, the bar, minus; curly quotes), so
+            // this file carries none of them.
+            char k = c == '-' || (c >= 0x2010 && c <= 0x2015) || c == 0x2212 || Character.isWhitespace(c)
+                    ? ' '
+                    : c == 0x2018 || c == 0x2019 || c == 0x02bc ? '\'' : c == 0x201c || c == 0x201d ? '"' : c;
+            if (SmsSegments.basic(k)) {
+                out.append(k);
+            }
+        }
+        String plain = out.toString().replaceAll(" {2,}", " ").strip();
+        if (plain.length() > maxLength) {
+            int cut = plain.lastIndexOf(' ', maxLength);
+            plain = (cut > maxLength / 2 ? plain.substring(0, cut) : plain.substring(0, maxLength)).strip();
+        }
+        return plain.isEmpty() ? "BMS" : plain;
     }
 
     /** Runs {@code body} in a savepoint; on any failure rolls back to it, logs the label and the error class, answers {@code onFailure}. */
@@ -191,10 +266,10 @@ class SmsEventsService implements SmsEvents {
                 && valueDate.isBefore(clock.today(tenant.profile().timezone()).minusDays(maxAgeDays));
     }
 
-    private Result write(MemberSms message) {
+    private Queued write(MemberSms message) {
         Optional<String> to = PhoneNumbers.forSms(message.phone());
         if (to.isEmpty()) {
-            return Result.NO_PHONE;
+            return new Queued(Result.NO_PHONE, null);
         }
         CurrentTenant.Profile profile = tenant.profile();
         Map<String, String> params = new LinkedHashMap<>(message.params());
@@ -204,18 +279,24 @@ class SmsEventsService implements SmsEvents {
         }
         String key = key(message.templateKey(), profile.id(), message.eventRef(), message.memberId());
         boolean receipt = Outbox.TRANSACTIONAL.equals(message.category());
-        boolean queued = outbox.enqueue(new Outbox.Message(
+        // A transactional text lives an hour, or less when its subject ends sooner (a payment link dies with its
+        // intent).
+        Instant receiptExpiry = clock.now().plus(RECEIPT_LIFETIME);
+        if (message.expiresAt() != null && message.expiresAt().isBefore(receiptExpiry)) {
+            receiptExpiry = message.expiresAt();
+        }
+        Outbox.Enqueued queued = outbox.enqueueTracked(new Outbox.Message(
                 Outbox.SMS,
                 to.get(),
                 message.templateKey(),
                 params,
                 key,
                 null,
-                receipt ? clock.now().plus(RECEIPT_LIFETIME) : message.expiresAt(),
+                receipt ? receiptExpiry : message.expiresAt(),
                 message.category(),
                 Outbox.Subject.member(message.memberId()),
                 null));
-        return queued ? Result.QUEUED : Result.NOT_QUEUED;
+        return queued.written() ? new Queued(Result.QUEUED, queued.id()) : new Queued(Result.NOT_QUEUED, null);
     }
 
     /** The idempotency key: the same event for the same member in the same tenant is one row, ever. */

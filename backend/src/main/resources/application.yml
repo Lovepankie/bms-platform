@@ -156,6 +156,18 @@ bms:
       access-key-id: ${R2_DOCUMENTS_ACCESS_KEY_ID:}
       secret-access-key: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:}
       bucket: ${R2_DOCUMENTS_BUCKET:}
+  # The daily sweep of orphaned uploads (issue #39): objects under tenants/<id>/upload/ older than 24 hours that no
+  # documents row names. Dry run logs the counts and removes nothing; it is the default until the operator has read a
+  # dry run's summary (docs/runbooks/restore-from-backup.md section 4 sets it again after a restore). Bounds: most
+  # deletes per business and per run, the most of a business's objects that may be orphans (above it the business is
+  # skipped), and the pause between two delete requests of 500.
+  documents:
+    orphan-sweep-enabled: ${BMS_DOCUMENTS_ORPHAN_SWEEP_ENABLED:true}
+    orphan-sweep-dry-run: ${BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN:true}
+    orphan-sweep-max-per-tenant: ${BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_PER_TENANT:1000}
+    orphan-sweep-max-per-run: ${BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_PER_RUN:10000}
+    orphan-sweep-max-share: ${BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_SHARE:0.5}
+    orphan-sweep-pause: ${BMS_DOCUMENTS_ORPHAN_SWEEP_PAUSE:1s}
   # Report runs (ADR-038, docs/specs/client-extras.md sections 6 and 9.1). Not secrets. These are the production
   # defaults; the staging host (a 448 MB container with about 224 MB of heap) sets 1 run, 20000 rows and 8 MiB.
   reports:
@@ -186,6 +198,15 @@ bms:
       user: ${BMS_SMTP_USER:}
       password: ${BMS_SMTP_PASSWORD:}
       from: ${BMS_MAIL_FROM:}
+    # Which sender carries email (issue #333, ADR-117): smtp (the default) or resend, the Resend HTTP API with a send-only
+    # key the operator puts on the host. On staging only the recipients in the allow-list get mail; empty sends nothing.
+    mail:
+      provider: ${BMS_MAIL_PROVIDER:smtp}
+      resend-api-key: ${BMS_RESEND_API_KEY:}
+      resend-url: ${BMS_RESEND_API_URL:}
+      allowlist: ${BMS_MAIL_ALLOWLIST:}
+      # The signing secret (whsec_...) of the Resend webhook for bounces and complaints; unset turns the route off.
+      resend-webhook-secret: ${BMS_RESEND_WEBHOOK_SECRET:}
     telegram:
       bot-token: ${BMS_TELEGRAM_BOT_TOKEN:}
       operator-chat-id: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:}

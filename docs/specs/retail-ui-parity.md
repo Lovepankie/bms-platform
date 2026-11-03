@@ -19,7 +19,7 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 | Credit sales (sales where the type is Credit) | Credit sales (`credit-sales`): buyer, date, amount, due date, state (Unpaid, Part paid, Overdue, Paid); filter by buyer and by what is owed; open a sale for its lines | done | Nothing for the list. Payment history on a sale is not shown yet |
 | Sales list and history | All sales (`sales`): filters by date range, branch (the Branch box), buyer, payment method and item; open a sale for its lines | done | Nothing for the list |
 | Sales by cash and by profit margin, grouped by shop, year and month | Sales analysis (`sales-analysis`): by day, week or month, by shop, category, item and seller; Margins (`margins`): profit and margin percent by item and category; Daily profit (`profit`) per branch and day | done | Nothing for the grouping and the margin. The year is a range of up to 366 days. The cash against credit split of a day is on the retail home dashboard; there is no "by cash" cut of the profit report |
-| Void or return a sale | None | missing | The API voids a sale (`POST /retail/sales/{id}/void`); no screen. Customer returns were recorded as restocks in the AppSheet app and are `return` movements here |
+| Void or return a sale | "Void this sale" on an opened sale (`sale-actions.tsx`); Customer returns (`returns`), Take goods back from an opened sale (`returns/new/$saleId`) and the credit note (`returns/$returnId`) while the returns capability is on (issue #201, ADR-033) | done | Nothing. Customer returns were recorded as restocks in the AppSheet app; here they are credit notes with `return` movements |
 
 ## Stock
 
@@ -27,20 +27,20 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 |---|---|---|---|
 | Product catalogue (quantity and selling price, no cost for sales staff) | Stock (`stock`): item, category, quantity, price, cost only with `retail.profit.read`; search by name, code or category; category filter | done | Nothing |
 | Product categories (with related products) | Stock category filter and the by-category table on Stock value | done | Managing categories is on the Categories screen (see Catalogue management) |
-| Low stock items | Stock tab "Low stock" (at or below 5, out of stock included; a constant in `StockService`, documented in SDD 7.11.20) | partly | The AppSheet app has no per-product reorder level in the data, so one threshold serves all (ADR-029). A per-product or per-tenant level needs a retail settings group |
+| Low stock items | Stock tab "Low stock" (out of stock included): at or below the item's own minimum at that branch, or for every branch, where one is set; else the fixed level of 5 (issue #412, ADR-057; `LowStockRule`, issue #490) | done | Nothing. The AppSheet app had no per-product reorder level; a minimum is set per item and branch |
 | Out of stock items | Stock tab "Out of stock" (zero or less) | done | Nothing |
 | Stock per shop and across shops | Stock with the Branch box on one branch, or All branches (a column per branch, a total, the negative flag per cell; on a phone the total with a per-branch breakdown) | done | Nothing |
 | Stock-take | Stock-take (`stocktake`) | done | Nothing |
 | Shop-to-shop moves (recorded as negative and positive restocks) | Move stock (`transfer`) and Stock moves (`transfers`) | done | Better than the app: real transfers (ADR-020 amendment, #84) |
 | Usage and damage form | Usage and damage (`usage`) | done | Nothing |
-| Damaged and used records | None | missing | The movements API lists them (`GET /retail/stock/movements`); no screen. The loss as a share of stock for admins is not shown |
+| Damaged and used records | Past usage and damage (`usage-history`), linked from Usage and damage: newest first, filtered by date range, the Branch box (one branch or All branches) and item; each line with the item, quantity and unit, day, Used or Damaged, the reason, and the cost only with `retail.profit.read` (#145). It reads `GET /retail/stock/movements?kind=usage&kind=damage`, so it needs `retail.stock.read` | done | Nothing for the list. Shrinkage and damage cost by shop is on Stock health; the loss as a share of stock is not shown |
 
 ## Purchasing and valuation
 
 | AppSheet view | Equivalent screen | Status | What remains |
 |---|---|---|---|
 | Restock form (admin): per-shop quantities, unit cost and sell price, supplier | Restock (`restock`) | done | Nothing. The category shows beside each item in the picker |
-| Purchase records (admin) | None | missing | `GET /retail/purchases` exists; no list screen |
+| Purchase records (admin) | Past purchases (`restocks`), linked from Buy stock: filtered by date range and voided or not, a list or grouped by shop, month, supplier, category and item; Correct this purchase voids one and enters it again (issue #351, ADR-044) | done | Nothing |
 | Stock valuation per shop and combined (admin) | Stock value (`valuation`): at cost and at selling price, per branch with All branches, per item | done | Nothing |
 | Expected sales and expected profit, and percent profit | Stock value: Expected profit and Profit % (over cost) per item, branch, category and total, only with `retail.profit.read` | done | Nothing |
 | Valuation by category | Stock value, "By category" table | done | Nothing |
@@ -91,15 +91,17 @@ The pilot owner was promised better analytics than the AppSheet app. These scree
 
 ## Summary
 
-Done: record a sale, credit sales, all sales, stock (single branch and All branches, category filter, low and out
-of stock), stock-take, usage, restock, move stock, stock value with expected profit, daily profit (with the stock-take
+Done: record a sale, credit sales with payments, all sales, void a sale and customer returns, stock (single branch and All
+branches, category filter, low stock with a per-item minimum, out of stock), stock-take, usage and its history (Past usage and
+damage), restock and its history (Past purchases), move stock, stock value with expected profit, daily profit (with the stock-take
 difference), the catalogue screens for items, prices, categories, units, suppliers and credit buyers, with the
-item import, the analytics screens (sales analysis, margins, stock health, credit control, business evaluation and the owner dashboard), and the cash book screens (savings, banking and its report, withdrawals, expenses and its report and
-lists, advances, cash summary).
+item import, the analytics screens (sales analysis, margins, stock health, credit control and the owner dashboard), and the cash
+book screens (savings, banking and its report, withdrawals, expenses and its report and lists, advances, cash summary).
 
-Partly: paying a credit sale from the screens, low stock with a per-product level.
+Partly: the business evaluation, until the owner gives the exact AppSheet formula (issue #149 item 7).
 
-Missing: void and returns, damaged and used records, purchase records.
+Missing: no AppSheet view is without a screen. Two extras beyond the AppSheet app are not built: the loss as a share of stock,
+and a cash view per shop per day (out of scope, the cash book).
 
 Out of scope: location capture, user and shop
 administration.

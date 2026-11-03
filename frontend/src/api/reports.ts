@@ -45,7 +45,18 @@ export interface ReportRun {
   expired: boolean;
   cancel_requested: boolean;
   error: string | null;
+  /** The files of a ready run that has not expired: one, or for a pack the PDF then the workbook (issue #229). */
+  files?: ReportRunFile[];
 }
+
+export interface ReportRunFile {
+  document_id: string;
+  /** json, csv, pdf or xlsx */
+  format: string;
+}
+
+/** The format of a pack run: one PDF and one workbook (ADR-038 decision 4). */
+export const PACK_FORMAT = 'pack';
 
 // Keeps the generated types honest: a change to the contract that drops a field breaks this line, not the screen.
 export type GeneratedReportRun = components['schemas']['ReportRun'];

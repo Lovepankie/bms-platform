@@ -18,7 +18,7 @@ import {
 } from './forms';
 
 // The public sign-up page on the platform host (FR-ONB-01, spec section 10): phone first, plain
-// wording, the Rincoltech brand and the footer from the shared shell. No sign-in. The answer is the
+// wording, the Rincol Tech brand and the footer from the shared shell. No sign-in. The answer is the
 // same whether or not the email is known: "check your email". A referral link fills in Referred by.
 
 export interface SignUpViewProps {

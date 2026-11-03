@@ -838,4 +838,383 @@ class LoanRepaymentByGatewayIT extends LoanFixtures {
                         .single())
                 .isEqualTo("dated_today");
     }
+
+    // ---- the payment link by SMS (issue #231) ---------------------------------------------------
+    // JUSTIFICATION-A3: the issue's tests reuse this suite's loan, merchant account and fake gateway setup.
+
+    ResponseEntity<JsonNode> textLink(JsonNode intent) {
+        return call(
+                HttpMethod.POST, "/api/v1/payments/intents/" + intent.get("id").asString() + "/sms", null, null);
+    }
+
+    List<Map<String, Object>> linkTexts(JsonNode intent) {
+        return TestDatabase.owner()
+                .sql(
+                        "SELECT recipient, params, params ->> 'reference' AS reference, expires_at, category FROM notification_outbox"
+                                + " WHERE template_key = 'payment.link' AND idempotency_key LIKE ?")
+                .param("sms:payment.link:%:" + intent.get("id").asString() + ":%")
+                .query()
+                .listOfRows();
+    }
+
+    List<String> linkAudits(JsonNode intent) {
+        return TestDatabase.owner()
+                .sql(
+                        "SELECT data::text FROM audit_log WHERE entity_id = ? AND action = 'core.payments.intent.link_texted'")
+                .param(UUID.fromString(intent.get("id").asString()))
+                .query(String.class)
+                .list();
+    }
+
+    @Test
+    void frNtf02_aPaymentLinkIsTextedOncePerIntentToThePayerExpiringWithTheIntentAndAudited() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode intent = intentFor(loan, 520_000);
+
+        ResponseEntity<JsonNode> sent = textLink(intent);
+        assertThat(sent.getStatusCode().value()).as("%s", sent.getBody()).isEqualTo(200);
+        assertThat(sent.getBody().get("already_sent").asBoolean()).isFalse();
+        List<Map<String, Object>> rows = linkTexts(intent);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().get("recipient")).isEqualTo("+256700000216");
+        assertThat(rows.getFirst().get("category")).isEqualTo("transactional");
+        assertThat(rows.getFirst().get("params").toString())
+                .contains(intent.get("redirect_url").asString())
+                .contains("520,000");
+        // The loan number is spelled without dashes: no dash in the words of the text.
+        assertThat(rows.getFirst().get("reference").toString())
+                .startsWith("loan ")
+                .doesNotContain("-");
+        // The text dies with the intent (or after its hour, whichever is first).
+        Instant expires = Instant.parse(intent.get("expires_at").asString());
+        assertThat(((java.sql.Timestamp) rows.getFirst().get("expires_at")).toInstant())
+                .isBeforeOrEqualTo(expires);
+
+        // Again: nothing new is written, and the screen is told it went before.
+        ResponseEntity<JsonNode> again = textLink(intent);
+        assertThat(again.getStatusCode().value()).isEqualTo(200);
+        assertThat(again.getBody().get("already_sent").asBoolean()).isTrue();
+        assertThat(linkTexts(intent)).hasSize(1);
+        // One audit row, with the member and never the number.
+        assertThat(linkAudits(intent))
+                .hasSize(1)
+                .first()
+                .asString()
+                .contains("member_id")
+                .doesNotContain("700000216");
+        // Issue #772: the answer says where the text stands, read from the outbox; a new one is only queued.
+        assertThat(sent.getBody().get("text_status").asString()).isEqualTo("queued");
+        assertThat(again.getBody().get("text_status").asString()).isEqualTo("queued");
+    }
+
+    // ---- issue #772: the link text's real status, and its withdrawal when the payment closes -----
+    // JUSTIFICATION-A3: new cases for issue #772 on this suite's loan, merchant account and fake gateway.
+
+    /** The outbox row of the intent's link text, moved by hand as the sender would move it. */
+    void linkTextOutcome(JsonNode intent, String outboxStatus, String lastError, String delivery) {
+        UUID row = TestDatabase.owner()
+                .sql(
+                        "SELECT id FROM notification_outbox WHERE template_key = 'payment.link' AND idempotency_key LIKE ?")
+                .param("sms:payment.link:%:" + intent.get("id").asString() + ":%")
+                .query(UUID.class)
+                .single();
+        TestDatabase.owner()
+                // With the time the sender records, as the operator's outbox page reads it for every failed row.
+                .sql("UPDATE notification_outbox SET status = ?, last_error = ?,"
+                        + " failed_at = CASE WHEN ? = 'failed' THEN now() END,"
+                        + " sent_at = CASE WHEN ? = 'sent' THEN now() END WHERE id = ?")
+                .params(outboxStatus, lastError, outboxStatus, outboxStatus, row)
+                .update();
+        if (delivery != null) {
+            TestDatabase.owner()
+                    .sql(
+                            "INSERT INTO sms_deliveries (id, tenant_id, outbox_id, template_key, category, recipient_masked,"
+                                    + " recipient_hash, provider, status) VALUES (?, ?, ?, 'payment.link', 'transactional',"
+                                    + " '+256*****0216', repeat('a', 64), 'fake', ?)")
+                    .params(UUID.randomUUID(), t.tenantId(), row, delivery)
+                    .update();
+        }
+    }
+
+    @Test
+    void theLinkTextSaysSentOnlyWhenTheProviderTookItAndFailedOrExpiredWhenItDidNot() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode sent = intentFor(loan, 100_000);
+        JsonNode failed = intentFor(loan, 100_000);
+        JsonNode expired = intentFor(loan, 100_000);
+        for (JsonNode i : List.of(sent, failed, expired)) {
+            assertThat(textLink(i).getBody().get("text_status").asString()).isEqualTo("queued");
+        }
+        linkTextOutcome(sent, "sent", null, "delivered");
+        linkTextOutcome(failed, "failed", "rejected", "rejected");
+        // Dropped before the provider: the row is known and no longer waiting, so it will never go. Expired at once.
+        linkTextOutcome(expired, "failed", "expired", null);
+        assertThat(textLink(sent).getBody().get("text_status").asString()).isEqualTo("sent");
+        assertThat(textLink(failed).getBody().get("text_status").asString()).isEqualTo("failed");
+        assertThat(textLink(expired).getBody().get("text_status").asString()).isEqualTo("expired");
+        // A send whose outcome the provider left unknown is said as such, on another member's loan.
+        JsonNode unknown = intentFor(activeLoan(), 100_000);
+        assertThat(textLink(unknown).getStatusCode().value()).isEqualTo(200);
+        linkTextOutcome(unknown, "failed", "unknown", "unknown");
+        assertThat(textLink(unknown).getBody().get("text_status").asString()).isEqualTo("unconfirmed");
+        clock.set(Instant.parse(expired.get("expires_at").asString()).plusSeconds(60));
+        ResponseEntity<JsonNode> late = textLink(expired);
+        assertThat(late.getStatusCode().value()).isEqualTo(200);
+        assertThat(late.getBody().get("already_sent").asBoolean()).isTrue();
+        assertThat(late.getBody().get("text_status").asString()).isEqualTo("expired");
+        // Asking again never writes a second text.
+        assertThat(linkTexts(sent)).hasSize(1);
+        assertThat(linkTexts(failed)).hasSize(1);
+    }
+
+    @Test
+    void aQueuedLinkTextIsWithdrawnWhenThePaymentIsPaidOrCancelledBeforeItGoes() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode paid = intentFor(loan, 100_000);
+        JsonNode cancelled = intentFor(loan, 100_000);
+        JsonNode open = intentFor(loan, 100_000);
+        for (JsonNode i : List.of(paid, cancelled, open)) {
+            assertThat(textLink(i).getStatusCode().value()).isEqualTo(200);
+        }
+        pay(paid, 100_000, "CONF-772-PAID");
+        tick(Duration.ofMinutes(3));
+        assertThat(row(paid).get("status")).isIn("paid", "booked");
+        ResponseEntity<JsonNode> c = call(
+                HttpMethod.POST,
+                "/api/v1/payments/intents/" + cancelled.get("id").asString() + "/cancel",
+                null,
+                null);
+        assertThat(c.getStatusCode().value()).as("%s", c.getBody()).isEqualTo(200);
+
+        for (JsonNode closed : List.of(paid, cancelled)) {
+            Map<String, Object> text = TestDatabase.owner()
+                    .sql("SELECT status, last_error, params::text AS params FROM notification_outbox"
+                            + " WHERE template_key = 'payment.link' AND idempotency_key LIKE ?")
+                    .param("sms:payment.link:%:" + closed.get("id").asString() + ":%")
+                    .query()
+                    .singleRow();
+            assertThat(text.get("status")).isEqualTo("failed");
+            assertThat(text.get("last_error")).isEqualTo("cancelled_settled");
+            assertThat(text.get("params")).isEqualTo("{}");
+        }
+        // The payment still open keeps its text.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status FROM notification_outbox WHERE template_key = 'payment.link'"
+                                + " AND idempotency_key LIKE ?")
+                        .param("sms:payment.link:%:" + open.get("id").asString() + ":%")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("pending");
+        // Until the poller expires it, in its own tenant bound job: then its text is withdrawn too.
+        clock.set(Instant.parse(open.get("expires_at").asString()).plusSeconds(60));
+        poller.tick();
+        assertThat(row(open).get("status")).isEqualTo("expired");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT last_error FROM notification_outbox WHERE template_key = 'payment.link'"
+                                + " AND idempotency_key LIKE ?")
+                        .param("sms:payment.link:%:" + open.get("id").asString() + ":%")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("cancelled_settled");
+    }
+
+    @Test
+    void anExpiredIntentsLinkIsNeverTextedAndNeitherIsAPaidOne() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode expired = intentFor(loan, 100_000);
+        JsonNode paid = intentFor(loan, 100_000);
+        pay(paid, 100_000, "CONF-231-PAID");
+        poller.tick();
+
+        clock.set(Instant.parse(expired.get("expires_at").asString()).plusSeconds(60));
+        ResponseEntity<JsonNode> late = textLink(expired);
+        assertThat(late.getStatusCode().value()).as("%s", late.getBody()).isEqualTo(409);
+        assertThat(late.getBody().get("code").asString()).isEqualTo("intent_not_open");
+        assertThat(linkTexts(expired)).isEmpty();
+
+        ResponseEntity<JsonNode> done = textLink(paid);
+        assertThat(done.getStatusCode().value()).isEqualTo(409);
+        assertThat(linkTexts(paid)).isEmpty();
+        assertThat(linkAudits(expired)).isEmpty();
+    }
+
+    @Test
+    void theLinkIsRefusedPolitelyWhenSmsOrCollectionsAreOffAndNothingIsWritten() {
+        String loan = activeLoan();
+        JsonNode intent = intentFor(loan, 520_000);
+        // SMS was never switched on for this business.
+        ResponseEntity<JsonNode> smsOff = textLink(intent);
+        assertThat(smsOff.getStatusCode().value()).as("%s", smsOff.getBody()).isEqualTo(422);
+        assertThat(smsOff.getBody().get("code").asString()).isEqualTo("sms_off");
+        // The operator's switch alone is not enough: the tenant's own is off.
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        assertThat(textLink(intent).getBody().get("code").asString()).isEqualTo("sms_off");
+        // SMS on, but collecting by mobile money switched off.
+        SmsTenants.enable(t.tenantId());
+        setSettings(Map.of("collections_enabled", false, "daily_ceiling_minor", 100_000_000L));
+        ResponseEntity<JsonNode> moneyOff = textLink(intent);
+        assertThat(moneyOff.getStatusCode().value()).isEqualTo(422);
+        assertThat(moneyOff.getBody().get("code").asString()).isEqualTo("collections_disabled");
+        assertThat(linkTexts(intent)).isEmpty();
+        assertThat(linkAudits(intent)).isEmpty();
+    }
+
+    @Test
+    void aMemberGetsAtMostThreeLinkTextsAnHour() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        for (int i = 0; i < PaymentLinkTexts.PER_MEMBER_PER_HOUR; i++) {
+            ResponseEntity<JsonNode> ok = textLink(intentFor(loan, 100_000));
+            assertThat(ok.getStatusCode().value()).as("%s", ok.getBody()).isEqualTo(200);
+        }
+        JsonNode fourth = intentFor(loan, 100_000);
+        ResponseEntity<JsonNode> limited = textLink(fourth);
+        assertThat(limited.getStatusCode().value()).isEqualTo(429);
+        assertThat(limited.getBody().get("code").asString()).isEqualTo("too_many_link_texts");
+        assertThat(linkTexts(fourth)).isEmpty();
+    }
+
+    // JUSTIFICATION-A3: the review of #231 asked for these tests; they reuse this suite's loan and gateway setup.
+    ResponseEntity<JsonNode> textLinkAs(JsonNode intent, String permissions, String branches) {
+        return http.exchange(
+                "/api/v1/payments/intents/" + intent.get("id").asString() + "/sms",
+                HttpMethod.POST,
+                new HttpEntity<>(null, as(staff, permissions, branches, null)),
+                JsonNode.class);
+    }
+
+    UUID borrowerOf(String loan) {
+        return TestDatabase.owner()
+                .sql("SELECT member_id FROM lending_loans WHERE id = ?")
+                .param(UUID.fromString(loan))
+                .query(UUID.class)
+                .single();
+    }
+
+    void optOut(UUID member, String scope) {
+        TestDatabase.owner()
+                .sql("UPDATE sms_opt_outs SET removed_at = now() WHERE member_id = ? AND removed_at IS NULL")
+                .param(member)
+                .update();
+        TestDatabase.owner()
+                .sql("INSERT INTO sms_opt_outs (id, tenant_id, member_id, scope, source) VALUES (?, ?, ?, ?, 'staff')")
+                .params(UUID.randomUUID(), t.tenantId(), member, scope)
+                .update();
+    }
+
+    @Test
+    void theLinkIsTextedOnlyByAHolderOfCollectInTheIntentsBranchAndNothingIsWrittenOtherwise() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode intent = intentFor(loan, 520_000);
+        // No collect permission at all: refused at the route.
+        assertThat(textLinkAs(intent, "lending.loans.read", "*").getStatusCode().value())
+                .isEqualTo(403);
+        // Collect, but only in another branch: told the payment does not exist.
+        ResponseEntity<JsonNode> elsewhere = textLinkAs(
+                intent,
+                "core.payments.collect,lending.loans.read",
+                t.secondBranch().toString());
+        assertThat(elsewhere.getStatusCode().value())
+                .as("%s", elsewhere.getBody())
+                .isEqualTo(404);
+        assertThat(linkTexts(intent)).isEmpty();
+        assertThat(linkAudits(intent)).isEmpty();
+        // Collect in the loan's branch: sent.
+        ResponseEntity<JsonNode> here = textLinkAs(
+                intent,
+                "core.payments.collect,lending.loans.read",
+                t.headOffice().toString());
+        assertThat(here.getStatusCode().value()).as("%s", here.getBody()).isEqualTo(200);
+        assertThat(linkTexts(intent)).hasSize(1);
+    }
+
+    @Test
+    void aMemberOptedOutOfAllTextsIsNotTextedButARemindersOnlyOptOutDoesNotBlockTheLink() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        UUID borrower = borrowerOf(loan);
+
+        optOut(borrower, "all");
+        JsonNode blocked = intentFor(loan, 100_000);
+        ResponseEntity<JsonNode> refused = textLink(blocked);
+        assertThat(refused.getStatusCode().value()).as("%s", refused.getBody()).isEqualTo(422);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("member_opted_out");
+        assertThat(linkTexts(blocked)).isEmpty();
+        assertThat(linkAudits(blocked)).isEmpty();
+
+        optOut(borrower, "reminders");
+        JsonNode allowed = intentFor(loan, 100_000);
+        ResponseEntity<JsonNode> sent = textLink(allowed);
+        assertThat(sent.getStatusCode().value()).as("%s", sent.getBody()).isEqualTo(200);
+        assertThat(linkTexts(allowed)).hasSize(1);
+    }
+
+    // JUSTIFICATION-A3: the lead's round asks for a per-business daily cap; this proves it with this suite's setup.
+    @Test
+    void aBusinessSendsAtMostItsDailyNumberOfLinkTextsWhateverMembersOrNumbersTheyAreFor() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        // The day's link texts so far, each for a different member (as many payments typed with one number would be).
+        TestDatabase.owner()
+                .sql("INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type, entity_id, data)"
+                        + " SELECT gen_random_uuid(), ?, 'staff', 'core.payments.intent.link_texted', 'payment_intent',"
+                        + " gen_random_uuid(), jsonb_build_object('after', jsonb_build_object('member_id',"
+                        + " gen_random_uuid()::text)) FROM generate_series(1, ?)")
+                .params(t.tenantId(), PaymentLinkTexts.PER_BUSINESS_PER_DAY)
+                .update();
+        JsonNode intent = intentFor(loan, 100_000);
+        ResponseEntity<JsonNode> r = textLink(intent);
+        assertThat(r.getStatusCode().value()).as("%s", r.getBody()).isEqualTo(429);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("link_text_daily_limit");
+        assertThat(linkTexts(intent)).isEmpty();
+    }
+
+    @Test
+    void aTextTheChannelWouldNotQueueIsRefusedAndNeverReportedAsAlreadySent() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode intent = intentFor(loan, 520_000);
+        // A row already holds this intent's key but no link text was ever recorded for it, as when the outbox refuses
+        // the message: the answer must not be "already sent". The row is a complete failed row, removed again at the
+        // end, so the operator's failed list that other tests read never sees it.
+        UUID row = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO notification_outbox (id, channel, recipient, template_key, idempotency_key, tenant_id,"
+                                + " category, subject_type, subject_id, status, attempts, last_error, failed_at)"
+                                + " VALUES (?, 'sms', '+256700000216', 'payment.link', ?, ?, 'transactional', 'member', ?,"
+                                + " 'failed', 1, 'test_refused', now())")
+                .params(
+                        row,
+                        "sms:payment.link:" + t.tenantId() + ":"
+                                + intent.get("id").asString() + ":" + borrowerOf(loan),
+                        t.tenantId(),
+                        borrowerOf(loan))
+                .update();
+        try {
+            ResponseEntity<JsonNode> r = textLink(intent);
+            assertThat(r.getStatusCode().value()).as("%s", r.getBody()).isEqualTo(422);
+            assertThat(r.getBody().get("code").asString()).isEqualTo("link_text_not_queued");
+            assertThat(linkAudits(intent)).isEmpty();
+        } finally {
+            TestDatabase.owner()
+                    .sql("DELETE FROM notification_outbox WHERE id = ?")
+                    .param(row)
+                    .update();
+        }
+    }
 }

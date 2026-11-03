@@ -399,17 +399,18 @@ class LendingParReportIT extends LendingBookSupport {
     // JUSTIFICATION-A3: new case; every other book in this suite is under the 1,000 loans of the port's checkpoint
     // block.
     /**
-     * 2,600 loans in three statements (members, loans, schedule items), one per loan, 1,000,000 each, due 0 to 99 days ago.
-     * The port reads them in blocks and calls its checkpoint every 1,000 loans: twice mid-stream, besides the start and the
-     * end. A checkpoint that throws on the first mid-stream call stops the read there (the end is never reached), which is
-     * how a cancelled or timed out run stops.
+     * 2,001 loans in three statements (members, loans, schedule items), one per loan, 1,000,000 each, due 0 to 99 days ago:
+     * the fewest that still give the 2,000th loan its own checkpoint, apart from the end (#696). The port reads them in
+     * blocks and calls its checkpoint every 1,000 loans: twice mid-stream, besides the start and the end. A checkpoint that
+     * throws on the first mid-stream call stops the read there (the end is never reached), which is how a cancelled or
+     * timed out run stops.
      */
     @Test
     void theCheckpointFiresMidStreamOnABookOfThousandsAndAThrowStopsTheRead() {
         TestDatabase.Fixture t = tenant(true);
         UUID user = UUID.randomUUID();
         UUID product = product(t, user);
-        int n = 2_600;
+        int n = 2_001; // 2 * InsightsFiguresService.CHECKPOINT_EVERY (1,000) + 1; change both together
         var owner = TestDatabase.owner();
         owner.sql("""
                         INSERT INTO lending_members (id, tenant_id, branch_id, member_no, full_name, phone_e164, id_type,
@@ -436,8 +437,11 @@ class LendingParReportIT extends LendingBookSupport {
                                'due'
                           FROM generate_series(1, ?) g
                         """).params(t.tenantId(), n).update();
-        // Fresh statistics for the 2,600 rows just written, so the planner does not pick a plan that passes the
-        // statement timeout on a slow runner (issue #719).
+        // Fresh statistics for the rows just written (added by #720 for #719). The cause of the 180 s CI statement
+        // timeout in #696 is not confirmed: a stale-statistics plan did not reproduce it locally, and a lock wait on
+        // the shared test database fits the failures as well. It has not recurred since #720. Every join of the read
+        // is on an index already (loan id, and tenant and loan id on the schedule items), so it needs no new one. The
+        // open root-cause question, and the plan for a recurrence, are tracked in #748.
         owner.sql("ANALYZE lending_members, lending_loans, lending_schedule_items")
                 .update();
 

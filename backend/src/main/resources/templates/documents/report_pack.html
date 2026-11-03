@@ -1,0 +1,60 @@
+<!-- The cover of a report pack (ADR-038 decisions 4 and 5, issue #229): the shared letterhead and footer, the title, the parameters box of the whole pack (FR-RPT-02), the contents with the page each report starts on, and a sign off block for the person who prepared the pack and the person who approved it. Every value reaches the page as text already formatted by the renderer; this template only lays it out. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">MONTHLY REPORT PACK</h1>
+
+  <div class="box">
+    <table class="facts">
+      <tr><td class="k" style="width: 22%;">Period end</td><td class="strong" th:text="${report.asAt}">31 Oct 2026</td></tr>
+      <tr th:each="p : ${report.parameters}"><td class="k" th:text="${p.label}">Scope</td><td th:text="${p.value}">All branches in your access</td></tr>
+      <tr><td class="k">Currency</td><td th:text="${report.currency}">UGX</td></tr>
+      <tr><td class="k">Made</td><td th:text="${report.madeLine}">1 Nov 2026 08:05 (Africa/Kampala) by Test User</td></tr>
+      <tr><td class="k">Data read</td><td th:text="${report.readLine}">1 Nov 2026 08:05 (Africa/Kampala)</td></tr>
+    </table>
+    <div class="muted" th:each="n : ${report.notes}" th:text="${n}">Every report in this pack was read from the books at the same moment.</div>
+  </div>
+
+  <h2>Contents</h2>
+  <table class="grid" style="table-layout: fixed;">
+    <thead>
+      <tr>
+        <th class="num" style="width: 9%;">Part</th>
+        <th style="width: 47%;">Report</th>
+        <th class="num" style="width: 16%;">As at</th>
+        <th class="num" style="width: 12%;">Pages</th>
+        <th class="num" style="width: 16%;">Starts on page</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="c : ${contents}">
+        <td class="num" th:text="${c.part}">1</td>
+        <td th:text="${c.title}">Loan portfolio outstanding</td>
+        <td class="num" th:text="${c.asAt}">31 Oct 2026</td>
+        <td class="num" th:text="${c.pages}">2</td>
+        <td class="num" th:text="${c.start}">2</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Sign off</h2>
+  <table class="signs">
+    <tr>
+      <td>
+        <div class="remarks"></div>
+        <div class="signline">Prepared by: <span th:text="${by}">Test User</span></div>
+      </td>
+      <td>
+        <div class="remarks"></div>
+        <div class="signline">Approved by (name and role)</div>
+      </td>
+      <td class="last">
+        <div class="remarks"></div>
+        <div class="signline">Date approved</div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

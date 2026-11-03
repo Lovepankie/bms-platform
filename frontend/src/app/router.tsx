@@ -145,6 +145,7 @@ const retailOrdersReportRoute = retailScreen('/orders-report', 'Delivery fees an
 const retailRestockRoute = retailScreen('/restock', WORDS.buyStock).lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
 const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(() => import('../areas/staff/retail/restocks').then((m) => m.Route));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
+const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage').lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock', 'Stock', textParams('item', 'branch')).lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
 // Quick add (issue #632): `name` is what Sell's search typed before it found nothing, so the form starts with it.
 const retailQuickAddRoute = retailScreen('/quick-add', 'Quick add', textParams('name')).lazy(() => import('../areas/staff/retail/quick-add').then((m) => m.Route));
@@ -246,6 +247,15 @@ const staffAssistantRoute = createRoute({ getParentRoute: () => staffRoute, path
 const staffPaymentsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments', staticData: { crumb: 'Receive payments' } }).lazy(() =>
   import('../areas/staff/payments/page').then((m) => m.Route),
 );
+// Unallocated payments: money the provider confirmed that a loan or account would not take (extras slice A5, issue #224).
+const staffUnallocatedRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments/unallocated', staticData: { crumb: 'Unallocated payments' } }).lazy(() =>
+  import('../areas/staff/payments/unallocated').then((m) => m.Route),
+);
+// Payment reconciliation and the statement upload (extras slice A5 part 2, issue #224, task #317).
+const staffReconciliationRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments/reconciliation', staticData: { crumb: 'Payment reconciliation' } }).lazy(() =>
+  import('../areas/staff/payments/reconciliation').then((m) => m.Route),
+);
+
 // Notifications and app: install BMS and turn notifications on for this device (ADR-050).
 const staffNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/notifications', staticData: { crumb: 'Notifications and app' } }).lazy(() =>
   import('../areas/staff/notifications/page').then((m) => m.Route),
@@ -426,6 +436,7 @@ export const router = createRouter({
         retailRestockRoute,
         retailRestocksRoute,
         retailUsageRoute,
+        retailUsageHistoryRoute,
         retailStockRoute,
         retailStocktakeRoute,
         retailQuickAddRoute,
@@ -527,7 +538,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffFeedbackRoute, staffHelpRoute, staffHelpArticleRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUnallocatedRoute, staffReconciliationRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffFeedbackRoute, staffHelpRoute, staffHelpArticleRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

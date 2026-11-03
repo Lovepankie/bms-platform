@@ -111,6 +111,11 @@ class SettingsController {
                             "The month the business's financial year ends in (1 to 12), or null for June, the end of the Uganda tax year; the retention of a closed business's money records counts from it (ADR-090)")
             Integer financialYearEndMonth,
 
+            @Schema(
+                    description =
+                            "Salespeople without profit read see the suggested daily savings amount, may change it within the day's cap and see the saved amount (default false; issue #768, ADR-115)")
+            boolean salespeopleSeeSavingsAmount,
+
             int version) {}
 
     /** Omitted (or null) fields are unchanged (chapter 7 section 7.5). */
@@ -168,6 +173,11 @@ class SettingsController {
                     description =
                             "The month the financial year ends in, 1 to 12; only the Owner sets it, 403 owner_only otherwise (ADR-090)")
             Integer financialYearEndMonth,
+
+            @Schema(
+                    description =
+                            "Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115)")
+            Boolean salespeopleSeeSavingsAmount,
 
             @Size(max = 20)
             @Schema(

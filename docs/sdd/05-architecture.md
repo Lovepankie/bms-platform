@@ -113,8 +113,9 @@ core.feedback         -> core.tenancy, core.audit, core.documents, core.notifica
 core.onboarding       -> core.tenancy, core.platform, core.audit, core.notifications
                          (Activate creates the tenant through core.platform's TenantProvisioning, ADR-024)
 core.notifications    -> core.audit (the operator's "send again" is audited)
+core.documents        -> core.audit, core.jobs (the daily orphan sweep lists active businesses through TenantJobs, issue #39)
 core.imports          -> core.ledger, core.documents   (templates register into it)
-core.payments         -> core.tenancy, core.audit, core.jobs, core.ledger, core.operations (built in #213; booking is delegated through the PurposeHandler registry of beans the owning modules supply; it depends on no vertical)
+core.payments         -> core.tenancy, core.audit, core.jobs, core.ledger, core.operations, core.approvals (the unallocated receipts queue and the reversal of a gateway payment are approval actions it registers, #224; built in #213; booking is delegated through the PurposeHandler registry of beans the owning modules supply; it depends on no vertical)
 core.reporting        -> core.tenancy, core.audit, core.documents, core.jobs, core.operations, core.notifications (the weekly data export email and its attachment port, ADR-074)
                          (queued runs, the snapshot transaction, the spool, the JSON, CSV, PDF and Excel renderers, the file
                          expiry; the PDF is laid out by core.documents' shared report template under the letterhead of
@@ -218,7 +219,7 @@ to other modules.
 | `core.platform` | `...core.platform` | The platform console API: tenants, modules, subscriptions, admin MFA reset (ADR-016); the price book, payments entered by the operator and the Business page overview (ADR-056) |
 | `core.feedback` | `...core.feedback` | In-app feedback (issue #447, ADR-065): the staff send with an optional screenshot, the sender's own list, the ten-an-hour limit, the operator email through the outbox, and the public port `FeedbackInbox` the platform console serves the operator's list, status change and screenshot through |
 | `core.ledger` | `...core.ledger` | `LedgerPosting.post` (`post_entry`) |
-| `core.documents` | `...core.documents` | `Documents` (upload, find), the `DocumentAccess` registry, the object storage port with the R2 adapter and the dev and test fake, signed download URLs (#12) |
+| `core.documents` | `...core.documents` | `Documents` (upload, find), the `DocumentAccess` registry, the object storage port with the R2 adapter and the dev and test fake, signed download URLs (#12), the daily sweep of orphaned uploads (`core.documents.orphan-sweep`, #39) |
 | `core.jobs` | `...core.jobs` | `TenantJobs`, db-scheduler tasks (ADR-008) |
 | `core.operations` | `...core.operations` | `/version` and the `Bms-Build` header with the 426 `app_too_old` refusal (ADR-088), the migrations readiness check, the database role guard |
 | `lending.manifest` | `...lending.manifest` | The lending module's registration (`ModuleManifest`) |

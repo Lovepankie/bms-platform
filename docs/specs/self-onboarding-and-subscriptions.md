@@ -153,6 +153,12 @@ and paid; price book; agents; the global new-trials switch. Every action is writ
 `platform_audit_log`. A new application or a payment claim also writes an operator alert to the outbox (section 11), so
 the operator's phone hears about it on Telegram and WhatsApp without watching the portal.
 
+The Activate form has **Check the address** (issue #155): it asks the business's own host for the public `/version` and
+says whether it answers, has no DNS record, does not answer, or answers with something else, and points at "Make the
+tenant host reachable" in `docs/runbooks/onboard-tenant.md` when it does not. Creating the DNS record and the tunnel entry
+stays a manual operator step there; the portal only reads. The public landing of the platform host offers Apply to start and
+Find your sign-in page; operator sign-in is a quiet link at the foot of the page.
+
 ## 9. The tenant billing screen
 
 Inside every tenant, for the tenant admin: plan, modules, period and next due date, the payment

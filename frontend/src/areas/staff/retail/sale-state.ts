@@ -21,6 +21,8 @@ export interface DraftLine {
   typed?: boolean;
   /** Why the typed price differs from the resolved one; required then. */
   reason?: string;
+  /** Issue #769: when the item and its price were read from the server, so a sale kept on the phone says how old its prices are. */
+  readAt?: string;
 }
 
 /** The price the server defaults to for the line's unit: the sell price, or a pack's own price, else times the factor (#624). */
@@ -46,6 +48,12 @@ export interface Draft {
   priceListId?: string;
   /** Why a credit sale goes above the buyer's credit limit (customer accounts; retail.credit.override); sent when filled in. */
   creditReason?: string;
+  /**
+   * The customer's name and phone on a sale paid now (issue #760), typed behind Add customer name: printed on the receipt
+   * (blank keeps Cash customer) and kept on the sale, never a customer record.
+   */
+  cashName?: string;
+  cashPhone?: string;
   lines: DraftLine[];
 }
 
@@ -69,8 +77,17 @@ export interface Pricing {
   checking: boolean;
 }
 
-export function newLine(product: Product): DraftLine {
-  return { product, qty: '1', price: String(product.sell_minor ?? 0) };
+export function newLine(product: Product, readAt?: string): DraftLine {
+  return { product, qty: '1', price: String(product.sell_minor ?? 0), ...(readAt ? { readAt } : {}) };
+}
+
+/**
+ * The oldest of the read times, as an ISO time, or undefined when there is none or one is not known or not a time (issue
+ * #776). Each is parsed, so a time with an offset or without milliseconds compares by the moment it names, not as text.
+ */
+export function oldestRead(reads: (string | undefined)[]): string | undefined {
+  const times = reads.map((r) => (r ? Date.parse(r) : NaN));
+  return times.length > 0 && times.every(Number.isFinite) ? new Date(Math.min(...times)).toISOString() : undefined;
 }
 
 /** Quantity and unit price as numbers when both are valid, and the line total they give. */
@@ -153,6 +170,9 @@ export function buildSaleRequest(draft: Draft, pricing?: Pricing, accounts?: Acc
     ...(pricing && draft.priceListId ? { price_list_id: draft.priceListId } : {}),
     ...(credit && !draft.customerId ? { buyer_name: draft.newBuyerName.trim() } : {}),
     ...(credit && !draft.customerId && draft.newBuyerContact.trim() ? { buyer_contact: draft.newBuyerContact.trim() } : {}),
+    // A sale paid now that names no customer may carry a name for its receipt (issue #760).
+    ...(!credit && !(pricing && draft.customerId) && draft.cashName?.trim() ? { buyer_name: draft.cashName.trim() } : {}),
+    ...(!credit && !(pricing && draft.customerId) && draft.cashPhone?.trim() ? { buyer_contact: draft.cashPhone.trim() } : {}),
     // With customer accounts on and no date typed, the server dates the sale from the buyer's terms.
     ...(credit && (draft.dueDate !== '' || !accounts) ? { due_date: draft.dueDate } : {}),
     ...(credit && accounts && draft.creditReason?.trim() ? { credit_override_reason: draft.creditReason.trim() } : {}),

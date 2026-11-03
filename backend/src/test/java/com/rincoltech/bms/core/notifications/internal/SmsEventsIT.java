@@ -60,6 +60,9 @@ class SmsEventsIT extends IntegrationTest {
     OutboxTemplates templates;
 
     @Autowired
+    com.rincoltech.bms.core.audit.PlatformAuditLog platformAudit;
+
+    @Autowired
     TenantSettings tenantSettings;
 
     @Autowired
@@ -115,8 +118,8 @@ class SmsEventsIT extends IntegrationTest {
                     tenantJobs,
                     hasher,
                     outbox);
-            this.dispatcher =
-                    new OutboxDispatcher(jdbc, transactionManager, templates, mapper, business, List.of(channel));
+            this.dispatcher = new OutboxDispatcher(
+                    jdbc, transactionManager, templates, mapper, business, List.of(channel), platformAudit);
             channel.enabled();
         }
 
@@ -190,6 +193,99 @@ class SmsEventsIT extends IntegrationTest {
     }
 
     // ---- What is queued, once ----------------------------------------------------------------------
+
+    /**
+     * Issue #772: two transactions that queue the same event at once. Every row has its own random id, so only the
+     * idempotency key decides: the second waits for the first and then writes nothing, without an error. One row, and a
+     * later write in the second transaction commits. JUSTIFICATION-A3: the concurrency test the review of #781 asked
+     * for; the anchor is the insertion point.
+     */
+    @Test
+    void twoTransactionsQueueingTheSameEventAtOnceWriteOneRowAndNeitherIsHarmed() throws Exception {
+        Rig rig = new Rig(BASE);
+        TestDatabase.Fixture t = tenant(1000);
+        UUID member = UUID.randomUUID();
+        String ref = UUID.randomUUID().toString();
+        String other = UUID.randomUUID().toString();
+        java.util.concurrent.CountDownLatch firstQueued = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<Result> first = pool.submit(() -> inTenant(t, () -> {
+                Result r = rig.events.queue(
+                        new MemberSms("loan.repayment_received", member, "+256700000772", RECEIPT, ref, null));
+                firstQueued.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return r;
+            }));
+            assertThat(firstQueued.await(30, java.util.concurrent.TimeUnit.SECONDS))
+                    .isTrue();
+            // The second's own backend, so the wait is looked for on its connection and no other test's.
+            java.util.concurrent.atomic.AtomicInteger secondPid = new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.Future<List<Result>> second = pool.submit(() -> inTenant(t, () -> {
+                secondPid.set(
+                        jdbc.sql("SELECT pg_backend_pid()").query(Integer.class).single());
+                return List.of(
+                        rig.events.queue(
+                                new MemberSms("loan.repayment_received", member, "+256700000772", RECEIPT, ref, null)),
+                        rig.events.queue(new MemberSms(
+                                "loan.repayment_received", member, "+256700000772", RECEIPT, other, null)));
+            }));
+            // The second is held by the first's uncommitted row before the first commits.
+            boolean waiting = false;
+            for (int i = 0; i < 200 && !waiting; i++) {
+                waiting = secondPid.get() != 0
+                        && TestDatabase.owner()
+                                        .sql("SELECT count(*) FROM pg_locks WHERE NOT granted AND pid = ?")
+                                        .param(secondPid.get())
+                                        .query(Long.class)
+                                        .single()
+                                > 0;
+                if (!waiting) {
+                    Thread.sleep(50);
+                }
+            }
+            assertThat(waiting).as("the second enqueue waits on the first").isTrue();
+            release.countDown();
+            assertThat(first.get(30, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(Result.QUEUED);
+            List<Result> seconds = second.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(seconds.get(0)).isEqualTo(Result.NOT_QUEUED);
+            assertThat(seconds.get(1)).isEqualTo(Result.QUEUED);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+        assertThat(rows(t).stream().map(r -> (String) r.get("idempotency_key")))
+                .containsExactlyInAnyOrder(
+                        SmsEventsService.key("loan.repayment_received", t.tenantId(), ref, member),
+                        SmsEventsService.key("loan.repayment_received", t.tenantId(), other, member));
+    }
+
+    /**
+     * Issue #772: the status read takes the one delivery row of an outbox row. The delivery log holds at most one per
+     * outbox row in a tenant: a second is refused. JUSTIFICATION-A3: the pin the lead's note on #781 asked for.
+     */
+    @Test
+    void anOutboxRowHasAtMostOneDeliveryRow() {
+        TestDatabase.Fixture t = tenant(1000);
+        UUID outboxId = UUID.randomUUID();
+        String insert = "INSERT INTO sms_deliveries (id, tenant_id, outbox_id, template_key, category,"
+                + " recipient_masked, recipient_hash, provider, status) VALUES (?, ?, ?, 'payment.link',"
+                + " 'transactional', '+256*****0772', repeat('a', 64), 'fake', 'sent')";
+        TestDatabase.owner()
+                .sql(insert)
+                .params(UUID.randomUUID(), t.tenantId(), outboxId)
+                .update();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql(insert)
+                        .params(UUID.randomUUID(), t.tenantId(), outboxId)
+                        .update())
+                .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
+    }
 
     @Test
     void frNtf02_aQueuedEventIsOneRowForTheMembersNumberAndTheSameEventNeverQueuesTwice() {
