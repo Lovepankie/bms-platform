@@ -678,8 +678,13 @@ halted or failed). A second commit or resume of the business, on any instance, f
 is still alive, so a halt pressed between batches stops the loop at the next batch. The lock is the loop's heartbeat:
 PostgreSQL drops it when the loop's connection or process dies, so a crashed loop never blocks a resume, and no column or
 migration is needed. The loop checks its own claim before each batch (issue #789): on the claim connection it asks
-`pg_locks` whether its session still holds the loop key, with a 10 second timeout. If the probe fails
-(`claim_connection_lost`: an idle timeout, or a NAT or firewall that dropped the idle connection) or answers no
+`pg_locks` whether its session still holds the loop key, waiting about 10 seconds for an answer. The bound is the
+claim connection's network timeout (`setNetworkTimeout`, issue #792), which bounds each socket read (not the whole probe,
+nor its writes), set for the probe and put back after it on every path; a timeout that cannot be put back counts as a lost
+connection, whatever the probe read. It is not a query timeout: pgjdbc cancels a query on a new socket and never unblocks a read on a black-holed connection, which would wait
+for TCP to give up (about 15 minutes); a read that times out ends the connection instead. If the probe fails
+(`claim_connection_lost`: an idle timeout, a NAT or firewall that dropped the idle connection, or no answer within the
+10 seconds) or answers no
 (`claim_not_held`), a resume may already own the business, so the loop writes nothing more, audits
 `core.import_run.claim_lost` with the batch and the reason, and ends `HALTED` with the run `committing`; a resume then goes
 on from the first pending batch. The audit of a failed batch never replaces the batch's error: when it fails too (a lost connection
