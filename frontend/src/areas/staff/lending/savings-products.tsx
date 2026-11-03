@@ -243,7 +243,7 @@ export function Products() {
       )}
       {products.isPending && <p className="loading">Loading products</p>}
       <Problem error={products.error} />
-      {products.data && products.data.length === 0 && <p className="empty-state">No savings products yet.</p>}
+      {products.data && products.data.length === 0 && <p className="empty-state">No savings products yet. Add the first one with New product.</p>}
       <ul className="ln-list" data-tour="savings-products-list">
         {(products.data ?? []).map((p) => (
           <li key={p.id} className="rt-card">

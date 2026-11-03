@@ -66,7 +66,7 @@ export function SupplierPaymentsPage() {
           <option value="reversed">Reversed</option>
         </select>
       </div>
-      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="payments" /> : <p className="empty-state">No payments to suppliers yet.</p>)}
+      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="payments" /> : <p className="empty-state">No payments to suppliers yet. Record one with Pay a supplier.</p>)}
       <div data-tour="payments-list">
         <SearchResults fetching={list.finding}>
           <ul style={{ listStyle: 'none', padding: 0 }}>

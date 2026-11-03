@@ -247,7 +247,7 @@ export function PriceLists() {
       <Problem error={failure && new Error(failure)} />
       {lists.isPending && <p className="loading">Loading</p>}
       <Problem error={lists.error} />
-      {lists.data && lists.data.length === 0 && <p className="empty-state">No price lists yet.</p>}
+      {lists.data && lists.data.length === 0 && <p className="empty-state">No price lists yet. Make one with Add price list.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }} data-tour="price-list-lists">
         {(lists.data ?? []).map((l) => (
           <ListCard key={l.id} list={l} selected={open === l.id} busy={change.isPending} onOpen={() => setOpen(open === l.id ? null : (l.id ?? null))} onChange={(body) => change.mutate({ list: l, body })} />

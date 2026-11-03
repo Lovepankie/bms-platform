@@ -156,7 +156,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
           <SearchBox id={`search-${queryKey}`} label="Search by name or phone" search={search} fetching={finding} count={rows.data ? people.length : undefined} more={rows.hasNextPage} />
         </div>
       )}
-      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun={plural} /> : <p className="empty-state">{`No ${plural} yet.`}</p>)}
+      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun={plural} /> : <p className="empty-state">{`No ${plural} yet. Add the first one above.`}</p>)}
       <div data-tour="person-list">
       <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0 }}>

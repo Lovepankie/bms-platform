@@ -60,7 +60,7 @@ export function BillingScreen() {
           </p>
         )}
         {payments.length === 0 ? (
-          <p>No payment recorded yet.</p>
+          <p>No payment recorded yet. A payment for your plan shows here once it is made.</p>
         ) : (
           <ul className="ln-list" aria-label="Payments">
             {payments.map((p) => (

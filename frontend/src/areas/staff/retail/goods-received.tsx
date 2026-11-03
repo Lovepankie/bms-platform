@@ -67,7 +67,7 @@ export function GoodsReceivedPage() {
           <option value="voided">Voided</option>
         </select>
       </div>
-      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="deliveries" /> : <p className="empty-state">No goods have been received yet.</p>)}
+      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="deliveries" /> : <p className="empty-state">No goods have been received yet. Receive them against a purchase order, or with Receive goods without an order.</p>)}
       <div data-tour="receipts-list">
       <SearchResults fetching={list.finding}>
         <ul style={{ listStyle: 'none', padding: 0 }}>

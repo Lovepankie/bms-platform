@@ -70,7 +70,7 @@ export function ShortageWarning({ from }: { from: string }) {
 export function TransferList({ items, onOpen }: { items: Transfer[]; onOpen: (id: string) => void }) {
   const label = useBranchLabel();
   const { me } = useStaff();
-  if (items.length === 0) return <p className="empty-state">No stock has been moved yet.</p>;
+  if (items.length === 0) return <p className="empty-state">No stock has been moved yet. Use Move stock to another branch.</p>;
   return (
     <ul style={{ listStyle: 'none', padding: 0 }}>
       {items.map((t) => (

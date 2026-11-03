@@ -241,7 +241,7 @@ export function Products() {
       )}
       {list.isPending && <p className="loading">Loading products</p>}
       <Problem error={list.error ?? archive.error} />
-      {list.data && list.data.length === 0 && <p className="empty-state">No investment product yet.</p>}
+      {list.data && list.data.length === 0 && <p className="empty-state">No investment products yet. Add the first one with New product.</p>}
       <div data-tour="investment-products-list">
         {list.data && (
           <ul className="ln-list">

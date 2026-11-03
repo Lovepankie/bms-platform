@@ -1201,6 +1201,81 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/sms/wording` | Wording | `page-sms-wording` v1 (added) | none added |
 | `/staff/users` | Staff users | `page-users` v2 (existing) | none added |
 | `/staff/users/new` | Invite someone | `page-invite-user` v1 (added) | none added |
+
+**Stable addresses for one record (issue #336, task #794).** The three gaps named above are closed without a new route: a
+route that opens one record reads it from the address. `/staff/retail/sales?sale=<id>` (and `/staff/retail/credit-sales?sale=<id>`)
+opens that sale whatever branch is in use, Back to the list clears it, and a change of branch closes it as before;
+`/staff/retail/stock?item=<id>` shows that one item (found by its code, inactive included, the category chip ignored) with
+Show every item; `/staff/retail/stock?branch=<id>` switches to that branch once when the person works there, then drops it from
+the address, and says so otherwise. `SaleLink` (`retail/screen-link.tsx`) now makes the sale number on a credit note, a return,
+an overdue row of Credit control, a delivered order and a converted quotation open the sale; `ToStock` takes `item` or
+`branch`, so the item and branch names on Sales analysis, Margins, Daily profit, Stock value, Stock health, slow movers,
+Business evaluation and a saved stock move open that item or branch. Tested in `retail/record-links.dom.test.tsx` and
+`retail/links-retail-reports.dom.test.tsx`. Still plain: category and unit rows, Insights drill-down rows, the used, damaged
+and found-missing counts on Stock health, and the allocations on an account's payments (listed in the follow-up issue).
+
+## The three rules, screen by screen (issue #336, task #794)
+
+Audit of 2026-11-03 over the staff routes in `frontend/src/app/router.tsx` (136 routes: the 105 above and those added since;
+the same exclusions as above, and the component kit). Rule 2, cross links, is the table above. The rules are in
+`docs/ui/ux-rules.md`. Rule 1 is "show little, let people open more": a list that can grow is grouped with a summary on each
+group header, or paged, and a record keeps its long sections closed. Rule 3 is "no training needed": plain words (a word a
+shop owner would not use has a help tip), one primary action per view, and an empty list that names the next step.
+
+**Result.** Rule 1: 130 of 136 pass, 6 break. Rule 3: 99 of 136 passed before this change and 37 broke; this change fixes
+27 of them (the empty states, and three screens with a second brand button), so 126 pass and 10 are left. Every route not
+named below passes both rules: the sales, stock, restock, controls and cash record lists are grouped; members, loans,
+collateral, documents, opt-outs, the purchasing lists, buyers and suppliers are paged; the reports are bounded by a date
+range or a top count.
+
+**Rule 1: screens that break it** (all larger, left for the follow-up issue):
+
+| Route | What breaks it |
+|---|---|
+| `/staff/retail/transfers` | The last 50 moves as one flat list, with no group by day and no Show more |
+| `/staff/retail/in-transit` | Every move opens with its whole receive form and its take-back form, so each card carries a brand button |
+| `/staff/retail/valuation` | By item lists every stock row of every branch, flat, under the category summary |
+| `/staff/retail/cash-summary` | Every day and shop card shows about twenty money lines open; closing and expected cash first, the rest behind a button |
+| `/staff/retail/expense-lists` | Every category card is fully open: rename, switch, every item and an add form |
+| `/staff/retail/accounts/$customerId` | Payments taken lists up to 50 receipts open and stops at 50 with nothing said |
+
+**Rule 3: screens that broke it.** Fixed here (the empty text now names the next step, or the second brand button is gone):
+
+| Route | Fixed |
+|---|---|
+| `/staff` | No members yet now points to New member (the KYC heading is left, below) |
+| `/staff/retail/catalogue/products` | Empty: add one with Add an item, or choose another category |
+| `/staff/setup/referrals` | Empty: share the link above |
+| `/staff/setup/billing` | No payment yet: says a payment for the plan shows here |
+| `/staff/retail` | By shop, when empty, says to buy stock or record a sale |
+| `/staff/retail/sales`, `/staff/retail/credit-sales` | The empty list says how a sale or a credit sale gets there |
+| `/staff/retail/orders` | The step tiles are chips, not brand buttons, so New order is the one primary; the empty list points to it |
+| `/staff/retail/purchase-orders` | The status filter is chips, not brand buttons; the empty list points to New purchase order |
+| `/staff/retail/quotations` | Empty: make one with New quotation |
+| `/staff/retail/goods-received` | Empty: receive against an order, or without one |
+| `/staff/retail/supplier-bills`, `/supplier-payments`, `/supplier-credits`, `/landed-costs` | Empty: names the button that adds one |
+| `/staff/retail/returns` | Empty: open the sale and choose Return goods |
+| `/staff/retail/accounts` | Empty: a buyer shows after a sale on credit |
+| `/staff/retail/catalogue/suppliers`, `/catalogue/buyers` | Empty: add the first one above |
+| `/staff/retail/price-lists`, `/staff/retail/customer-groups` | Empty: names the add button |
+| `/staff/retail/transfers` | Empty: use Move stock to another branch |
+| `/staff/retail/catalogue/import` | After a clean check, Check these items is a plain button and Add N items the one primary |
+| `/staff/lending`, `/staff/lending/investments`, `/staff/lending/savings` | No match: change the search, or start one (savings: from the member's page) |
+| `/staff/lending/savings/products`, `/staff/lending/investments/products` | Empty: add the first one with New product |
+
+Left for the follow-up issue (each needs a look at the flow, not only a sentence):
+
+| Route | What breaks it |
+|---|---|
+| `/staff/lending/existing-loans`, `/existing-loans/import` | After a check, Check and Record are both brand buttons |
+| `/staff/lending/members/$memberId` | For a checker, Change details and Details are correct are both brand buttons |
+| `/staff/assistant` | With the assistant off, Switch on and Save the limit are both brand buttons; "Tokens a day" has no help tip |
+| `/staff/payments` | With a key saved but not checked, Test connection and Save are both brand buttons |
+| `/staff/sms`, `/staff/sms/opt-outs` | Two brand buttons in one state (Switch SMS on and Save changes; Add to the list twice) |
+| `/staff` | The column heading KYC has no help tip |
+| `/staff/lending/investments/$investmentId` | "Return accrued" is an accounting word; "Return earned so far" would do |
+| `/staff/insights` | "Portfolio at risk" and "From posted journal lines only" have no help tip |
+
 ## Controls (issue #358, part of #357, ADR-047)
 
 A read-only page for the tenant administrator and anyone given `retail.controls.read`: what deserves a second look, metrics first,

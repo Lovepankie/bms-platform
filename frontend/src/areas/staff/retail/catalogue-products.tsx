@@ -581,7 +581,7 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
           onSearchAll={() => { setCategoryId(''); setActiveFilter('all'); }}
           filtered={activeFilter === 'off'}
         />
-      ) : <p className="empty-state">No items found.</p>)}
+      ) : <p className="empty-state">No items found. Add one with Add an item, or choose another category.</p>)}
       <div data-tour="product-list">
         <SearchResults fetching={finding}>
           {phone ? (

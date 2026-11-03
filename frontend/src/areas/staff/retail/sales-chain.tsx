@@ -120,7 +120,7 @@ function LevelList({ index, sel, parent, root, empty, ...shared }: Shared & { in
     );
   }
   if (query.data && items.length === 0) {
-    return empty ?? <p className="empty-state">{root ? (credit ? 'No credit sales found.' : 'No sales found.') : emptyChainWords(credit)}</p>;
+    return empty ?? <p className="empty-state">{root ? (credit ? 'No credit sales found. A sale paid by Credit shows here.' : 'No sales found. A sale shows here once it is recorded with Record a sale.') : emptyChainWords(credit)}</p>;
   }
   return (
     <>

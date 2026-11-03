@@ -68,7 +68,7 @@ export function LandedCostsPage() {
         <option value="posted">Standing</option>
         <option value="voided">Voided</option>
       </select>
-      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="landed costs" /> : <p className="empty-state">No landed costs yet.</p>)}
+      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="landed costs" /> : <p className="empty-state">No landed costs yet. Add transport or other costs of a delivery with New landed cost.</p>)}
       <div data-tour="landed-list">
         <SearchResults fetching={list.finding}>
           <ul style={{ listStyle: 'none', padding: 0 }}>

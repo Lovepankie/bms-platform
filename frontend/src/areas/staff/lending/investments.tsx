@@ -45,7 +45,7 @@ export function InvestmentsGate({ title, children }: { title: string; children: 
 }
 
 export function InvestmentRows({ items, term = '' }: { items: Investment[]; term?: string }) {
-  if (items.length === 0) return <p className="empty-state">No investments match.</p>;
+  if (items.length === 0) return <p className="empty-state">No investments match. Change the search or filters, or add one with New investment.</p>;
   return (
     <ul className="ln-list">
       {items.map((i) => (
