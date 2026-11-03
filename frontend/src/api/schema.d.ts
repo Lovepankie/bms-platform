@@ -8039,6 +8039,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/usage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Past usage and damage grouped by shop, month, category and item with totals (issue #816) */
+        get: operations["summariseRetailUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/withdrawals": {
         parameters: {
             query?: never;
@@ -19628,6 +19645,71 @@ export interface components {
              */
             occurred_on?: string;
             reason: string;
+        };
+        RetailUsageSummary: {
+            /** @description Every level group_by accepts: branch, month, category and item */
+            available_levels?: string[];
+            /** @description The tenant's currency; a retail tenant keeps its books in one currency */
+            currency?: string;
+            /** @description The level these groups are: one of available_levels */
+            group_by?: string;
+            /** @description True when more groups remain: next_to (month) or next_offset (the rest) */
+            has_more?: boolean;
+            items?: components["schemas"]["RetailUsageSummaryGroup"][];
+            /** @description The chain the request asked for, in order */
+            levels?: string[];
+            /** @description The level under this one in the chain; absent at the end of the chain */
+            next_level?: string;
+            /**
+             * Format: int32
+             * @description Branch, category and item: ask again with offset = next_offset
+             */
+            next_offset?: number;
+            /**
+             * Format: date
+             * @description Month level: the day before the oldest month shown; ask again with to = next_to
+             */
+            next_to?: string;
+        };
+        RetailUsageSummaryGroup: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the figures cover: what was taken out, at the cost each record carries
+             */
+            cost_minor?: number;
+            /**
+             * Format: int64
+             * @description Records of stock damaged
+             */
+            damaged_count?: number;
+            /**
+             * Format: date
+             * @description First calendar day of the month; month level only
+             */
+            from?: string;
+            /** @description A branch id, a category id, a product id, or the month (2026-10); pass it back as branch_id, category_id or item_id, or use from and to for a month */
+            key?: string;
+            /** @description The branch, category or item name, or the month key */
+            label?: string;
+            /** @description Units taken out, without a sign; item level only */
+            quantity?: string;
+            /**
+             * Format: int64
+             * @description Records in the group: one per item taken out, as the list shows them
+             */
+            records_count?: number;
+            /**
+             * Format: date
+             * @description Last calendar day of the month; month level only
+             */
+            to?: string;
+            /** @description The item's unit; item level only */
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Records of stock used in the shop
+             */
+            used_count?: number;
         };
         /** @description The usual size of a pack in a smaller unit, and what it is for */
         RetailUsualPack: {
@@ -35279,6 +35361,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailUsageReport"];
+                };
+            };
+        };
+    };
+    summariseRetailUsage: {
+        parameters: {
+            query: {
+                group_by: string;
+                level?: string;
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                category_id?: string;
+                item_id?: string;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUsageSummary"];
                 };
             };
         };
