@@ -75,6 +75,8 @@ final class JsonLinesRows {
                 }
                 sink.header(0, List.copyOf(node.propertyNames()));
                 first = false;
+                // Blank lines before the first object are not rows, as rows above a header are not.
+                lastRowNo = lineNo - 1;
             }
             int gap = lineNo - lastRowNo - 1;
             if ((long) rows + gap + 1 > limits.maxRows()) {

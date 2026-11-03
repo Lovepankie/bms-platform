@@ -4,6 +4,7 @@ import com.rincoltech.bms.core.imports.internal.Parsing.Cell;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
@@ -27,8 +28,11 @@ import javax.xml.stream.XMLStreamReader;
  * Reads one sheet of an XLSX workbook with a streaming reader (StAX over the zip, read forward), never the workbook as a
  * whole. Two passes over the file, each a fresh stream: the first reads the workbook (sheet names, the 1904 date system),
  * its relationships, the styles (which cells are dates) and the shared strings; the second streams the chosen sheet row by
- * row. The shared strings are the only part held, up to {@link #MAX_SHARED_CHARS} characters; the inflated size of the zip
- * is capped at {@link #MAX_INFLATED} bytes (a zip bomb is {@code FILE_TOO_LARGE}).
+ * row. What the first pass keeps (the shared strings above all, then the styles, sheets and relationships) is charged
+ * against a memory budget, {@link Caps#heldBytes}, at an estimate of what each entry costs on the heap, so many empty or
+ * one-character strings are stopped as surely as long ones; every text is read in pieces and stopped at
+ * {@value Parsing#MAX_CELL_CHARS} characters; a part named twice is refused; and the inflated size of one pass is capped
+ * at {@link Caps#inflatedBytes} (a zip bomb). Over a cap is {@code FILE_TOO_LARGE}.
  *
  * <p>Values are what the sheet shows (the lesson of the retail data dictionary, section 3): a formula's cached value; a
  * number as Excel shows it in General, to 15 significant digits; a number in a date style as the date it shows,
@@ -37,9 +41,24 @@ import javax.xml.stream.XMLStreamReader;
  */
 final class XlsxRows {
 
-    static final long MAX_INFLATED = 1L << 30;
+    /**
+     * The reader's own memory and size caps.
+     *
+     * @param inflatedBytes the most a pass may unpack
+     * @param heldBytes the most the first pass may keep, at the estimate of {@link Workbook#charge}
+     */
+    record Caps(long inflatedBytes, long heldBytes) {
 
-    static final int MAX_SHARED_CHARS = 32 * 1024 * 1024;
+        /**
+         * 1 GiB unpacked, and 96 MiB kept, under half the staging heap of 224 MB: room for a workbook at the row limit
+         * whose every text is its own (100,000 rows of nine texts each, {@code UploadMemoryTest}), and no more.
+         */
+        static final Caps DEFAULT = new Caps(1L << 30, 96L << 20);
+    }
+
+    /** The parts of the first pass; each may appear once. */
+    private static final java.util.Set<String> PARTS =
+            java.util.Set.of("xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/sharedStrings.xml");
 
     /** The built-in number formats that are dates, times or both (ECMA-376 part 1, 18.8.30). */
     private static final BitSet BUILTIN_DATE = new BitSet();
@@ -73,16 +92,24 @@ final class XlsxRows {
 
     /** @return the name of the sheet read */
     static String read(Source source, String sheetName, Parsing.Sheet sheet) throws IOException {
-        Workbook book = new Workbook();
+        return read(source, sheetName, sheet, Caps.DEFAULT);
+    }
+
+    static String read(Source source, String sheetName, Parsing.Sheet sheet, Caps caps) throws IOException {
+        Workbook book = new Workbook(caps);
+        java.util.Set<String> seen = new java.util.HashSet<>();
         try (ZipInputStream zip = new ZipInputStream(source.open())) {
-            Inflated in = new Inflated(zip);
+            Inflated in = new Inflated(zip, caps.inflatedBytes());
             for (ZipEntry e; (e = zip.getNextEntry()) != null; ) {
+                if (PARTS.contains(e.getName()) && !seen.add(e.getName())) {
+                    throw Parsing.unreadable("The workbook holds one of its parts twice.");
+                }
                 switch (e.getName()) {
                     case "xl/workbook.xml" -> book.readWorkbook(in);
                     case "xl/_rels/workbook.xml.rels" -> book.readRelationships(in);
                     case "xl/styles.xml" -> book.readStyles(in);
                     case "xl/sharedStrings.xml" -> book.readSharedStrings(in);
-                    default -> {}
+                    default -> in.skipEntry();
                 }
             }
         } catch (IOException | XMLStreamException e) {
@@ -92,13 +119,14 @@ final class XlsxRows {
         Workbook.SheetRef chosen = book.choose(sheetName);
         boolean found = false;
         try (ZipInputStream zip = new ZipInputStream(source.open())) {
-            Inflated in = new Inflated(zip);
+            Inflated in = new Inflated(zip, caps.inflatedBytes());
             for (ZipEntry e; (e = zip.getNextEntry()) != null; ) {
                 if (e.getName().equals(chosen.path())) {
                     book.readSheet(in, sheet);
                     found = true;
                     break;
                 }
+                in.skipEntry();
             }
         } catch (IOException | XMLStreamException e) {
             throw damaged(e, "The sheet is damaged and cannot be read.");
@@ -127,8 +155,36 @@ final class XlsxRows {
         XMLInputFactory f = XMLInputFactory.newFactory();
         f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
         f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
-        f.setProperty(XMLInputFactory.IS_COALESCING, true);
+        // Not coalescing: a long text comes in pieces, so readText can stop it before it is whole.
+        f.setProperty(XMLInputFactory.IS_COALESCING, false);
         return f.createXMLStreamReader(in);
+    }
+
+    // JUSTIFICATION-A3: review of #790 item 1; getElementText has no bound, so texts are read in pieces with one.
+    /**
+     * The text of the element just started, read piece by piece up to its end; refused past
+     * {@value Parsing#MAX_CELL_CHARS} characters, so no single text is ever held whole beyond that.
+     */
+    private static String readText(XMLStreamReader r, String where) throws XMLStreamException {
+        StringBuilder s = new StringBuilder();
+        int depth = 1;
+        while (depth > 0) {
+            int ev = r.next();
+            switch (ev) {
+                case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA, XMLStreamConstants.SPACE -> {
+                    if (s.length() + r.getTextLength() > Parsing.MAX_CELL_CHARS) {
+                        throw Parsing.unreadable(
+                                "A text " + where + " is longer than " + Parsing.MAX_CELL_CHARS + " characters.");
+                    }
+                    s.append(r.getTextCharacters(), r.getTextStart(), r.getTextLength());
+                }
+                case XMLStreamConstants.START_ELEMENT -> depth++;
+                case XMLStreamConstants.END_ELEMENT -> depth--;
+                case XMLStreamConstants.END_DOCUMENT -> throw Parsing.unreadable("A text " + where + " is cut off.");
+                default -> {}
+            }
+        }
+        return s.toString();
     }
 
     private static final class Workbook {
@@ -143,7 +199,34 @@ final class XlsxRows {
         private final Map<Integer, String> customFormats = new HashMap<>();
         private final List<Integer> styleFormats = new ArrayList<>();
         private boolean date1904;
-        private long sharedChars;
+        private final Caps caps;
+        private long held;
+
+        Workbook(Caps caps) {
+            this.caps = caps;
+        }
+
+        /**
+         * Charges one kept entry against {@link Caps#heldBytes}: 56 bytes for its objects and the list's slot, so an empty
+         * string costs what it really does, and a byte a character (a compact Latin-1 string) or two otherwise.
+         */
+        private void charge(int chars) {
+            charge(56L + chars);
+        }
+
+        private void charge(CharSequence s) {
+            boolean latin1 = s.chars().allMatch(c -> c < 256);
+            charge(56L + (latin1 ? s.length() : 2L * s.length()));
+        }
+
+        private void charge(long bytes) {
+            held += bytes;
+            if (held > caps.heldBytes()) {
+                throw new Parsing.Failure(
+                        Parsing.FILE_TOO_LARGE,
+                        "The workbook holds more text than an import can read at once; split it and upload the parts.");
+            }
+        }
 
         void readWorkbook(InputStream in) throws XMLStreamException {
             XMLStreamReader r = xml(in);
@@ -155,6 +238,7 @@ final class XlsxRows {
                             date1904 = "1".equals(v) || "true".equals(v);
                         }
                         case "sheet" -> {
+                            charge(64);
                             String state = attr(r, "state");
                             sheets.add(new Declared(
                                     attr(r, "name"),
@@ -173,6 +257,7 @@ final class XlsxRows {
                 if (r.next() == XMLStreamConstants.START_ELEMENT && "Relationship".equals(r.getLocalName())) {
                     String target = attr(r, "Target");
                     if (target != null) {
+                        charge(target.length() + 32);
                         targets.put(attr(r, "Id"), target.startsWith("/") ? target.substring(1) : "xl/" + target);
                     }
                 }
@@ -186,11 +271,15 @@ final class XlsxRows {
                 int ev = r.next();
                 if (ev == XMLStreamConstants.START_ELEMENT) {
                     switch (r.getLocalName()) {
-                        case "numFmt" ->
-                            customFormats.put(intAttr(r, "numFmtId", -1), String.valueOf(attr(r, "formatCode")));
+                        case "numFmt" -> {
+                            String code = String.valueOf(attr(r, "formatCode"));
+                            charge(code.length());
+                            customFormats.put(intAttr(r, "numFmtId", -1), code);
+                        }
                         case "cellXfs" -> inCellXfs = true;
                         case "xf" -> {
                             if (inCellXfs) {
+                                charge(0);
                                 styleFormats.add(intAttr(r, "numFmtId", 0));
                             }
                         }
@@ -214,7 +303,11 @@ final class XlsxRows {
                         case "rPh" -> phonetic++;
                         case "t" -> {
                             if (si != null && phonetic == 0) {
-                                si.append(r.getElementText());
+                                si.append(readText(r, "in the shared strings"));
+                                if (si.length() > Parsing.MAX_CELL_CHARS) {
+                                    throw Parsing.unreadable("A text in the shared strings is longer than "
+                                            + Parsing.MAX_CELL_CHARS + " characters.");
+                                }
                             }
                         }
                         default -> {}
@@ -223,13 +316,8 @@ final class XlsxRows {
                     if ("rPh".equals(r.getLocalName())) {
                         phonetic--;
                     } else if ("si".equals(r.getLocalName()) && si != null) {
-                        sharedChars += si.length();
-                        if (sharedChars > MAX_SHARED_CHARS) {
-                            throw new Parsing.Failure(
-                                    Parsing.FILE_TOO_LARGE,
-                                    "The workbook holds more text than an import can read at once; split it and upload the parts.");
-                        }
-                        shared.add(si.toString());
+                        charge(si);
+                        shared.add(si.isEmpty() ? "" : si.toString());
                         si = null;
                     }
                 }
@@ -281,11 +369,11 @@ final class XlsxRows {
                             value = null;
                             inline = null;
                         }
-                        case "v" -> value = r.getElementText();
+                        case "v" -> value = readText(r, "on row " + rowNo);
                         case "is" -> inline = new StringBuilder();
                         case "t" -> {
                             if (inline != null) {
-                                inline.append(r.getElementText());
+                                inline.append(readText(r, "on row " + rowNo));
                             }
                         }
                         default -> {}
@@ -390,8 +478,10 @@ final class XlsxRows {
                     .replaceAll("\\\\.", "")
                     .replaceAll("\\[[^\\]]*\\]", "")
                     .toLowerCase(Locale.ROOT);
-            boolean date = bare.matches(".*[dy].*") || bare.matches(".*m.*") && !bare.matches(".*[hs].*");
             boolean time = bare.matches(".*[hs].*");
+            // A lone m is a month only in a format without digit placeholders: "0.0 mm" is a number with a unit.
+            boolean digits = bare.matches(".*[0#?].*");
+            boolean date = bare.matches(".*[dy].*") || (bare.matches(".*m.*") && !time && !digits);
             if (date && time) {
                 return DateKind.DATETIME;
             }
@@ -482,15 +572,22 @@ final class XlsxRows {
     }
 
     /**
-     * The zip's entries as the XML reader takes them: counts the inflated bytes of one pass and stops at
-     * {@link #MAX_INFLATED}, and never closes the zip under the loop when the reader is done with an entry.
+     * The zip's entries as the XML reader takes them: counts the inflated bytes of one pass, the entries skipped included,
+     * and stops at the cap, and never closes the zip under the loop when the reader is done with an entry.
      */
     private static final class Inflated extends FilterInputStream {
 
+        private final long cap;
         private long taken;
 
-        Inflated(ZipInputStream zip) {
+        Inflated(ZipInputStream zip, long cap) {
             super(zip);
+            this.cap = cap;
+        }
+
+        /** Reads past the rest of the current entry, counted, so an entry not read is not a way round the cap. */
+        void skipEntry() throws IOException {
+            transferTo(OutputStream.nullOutputStream());
         }
 
         @Override
@@ -509,7 +606,7 @@ final class XlsxRows {
 
         private void count(int n) {
             taken += n;
-            if (taken > MAX_INFLATED) {
+            if (taken > cap) {
                 throw new Parsing.Failure(
                         Parsing.FILE_TOO_LARGE,
                         "The workbook unpacks to more than an import can read; split it and upload the parts.");

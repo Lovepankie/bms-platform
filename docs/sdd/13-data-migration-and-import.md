@@ -724,7 +724,18 @@ tooling, as the commit is. Every call works on the bound business only: a run or
   commit). A run becomes `ready` only when no batch is `uploaded` or `failed`, and the commit writes the `pending` and
   `parsed` batches. Cancelling a batch deletes its rows and file.
 - **Cleanup.** The daily `core.imports.quarantine-cleanup` (chapter 9 section 9.9) removes the rows and files of cancelled
-  runs, files whose delete failed, files no batch names after 24 hours, and work files a crash left.
+  runs, files whose delete failed (a failed or cancelled batch keeps its file's key until storage confirms the delete),
+  files no batch names after 24 hours, and work files a crash left. The purge of a removed business deletes its quarantine
+  prefix and, when storage refuses any file, stops so it runs again the next night.
+- **Concurrency.** The parse writes in a transaction that first takes the run `FOR SHARE` and the batch `FOR UPDATE` and
+  checks again that the run is open and the batch still `uploaded` or `parsed` with the same file, so a cancel, a move to
+  ready or a second parse while the file was being fetched is refused and nothing is written; a refusal recorded after that
+  point is dropped the same way. The cancel takes the same locks in the same order.
+- **Memory.** Besides the row chunk, the XLSX reader keeps only what its first pass needs (shared strings, styles, sheet
+  list), charged at an estimate of its heap cost against 96 MiB, so many empty or short strings are stopped as surely as
+  long ones; every text is read in pieces and stopped at 32,767 characters; a part named twice is refused; and each pass may
+  unpack at most 1 GiB, skipped parts included. A NUL in a cell, which PostgreSQL cannot store, is `FILE_UNREADABLE`, as is
+  any value the database refuses to store.
 - **Proven by** `ImportUploadsIT` (only `import_*` and the audit log change; the stored object opens with the run's key and
   not without; each refusal; isolation; a file at the row limit streamed in blocks; no file content, personal value or file
   name in the logs; the cleanup), `UploadMemoryTest` (a CSV and an XLSX of 100,000 rows parse in a child JVM at the staging

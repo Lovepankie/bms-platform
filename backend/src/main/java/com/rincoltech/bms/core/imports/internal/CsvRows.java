@@ -86,6 +86,10 @@ final class CsvRows {
     }
 
     private static void append(StringBuilder field, char c, int rowNo) {
+        if (c == 0) {
+            // PostgreSQL cannot store a NUL in text or jsonb; a spreadsheet never writes one.
+            throw Parsing.unreadable("A cell on row " + rowNo + " holds a NUL character.");
+        }
         if (field.length() >= Parsing.MAX_CELL_CHARS) {
             throw Parsing.unreadable(
                     "A cell on row " + rowNo + " is longer than " + Parsing.MAX_CELL_CHARS + " characters.");

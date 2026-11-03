@@ -128,6 +128,11 @@ class QuarantineCleanup {
 
     /** As {@link #cleanBound()}, removing the files no batch names that storage wrote before {@code before}. */
     Result cleanBound(Instant before) {
+        // Storage is listed and deleted with no database transaction open, as in the upload.
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "The quarantine cleanup takes its own short transactions; call it outside one");
+        }
         // The batches of cancelled runs: rows gone and marked cancelled in one transaction; their files follow.
         int cancelled = tx.execute(s -> {
             List<UUID> ids = jdbc.sql("""

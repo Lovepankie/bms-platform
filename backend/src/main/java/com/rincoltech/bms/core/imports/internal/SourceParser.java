@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -119,6 +120,12 @@ final class SourceParser {
         public void row(int sourceRowNo, Map<String, Cell> raw) {
             Map<String, Object> json = new LinkedHashMap<>();
             raw.forEach((name, cell) -> {
+                // PostgreSQL cannot store a NUL in jsonb, though JSON may carry one (JSON Lines {"a":"\u0000"}).
+                if (name.indexOf('\0') >= 0
+                        || (cell.value() instanceof String s && s.indexOf('\0') >= 0)
+                        || (cell.value() instanceof JsonNode n && n.toString().contains("\\u0000"))) {
+                    throw Parsing.unreadable("Row " + sourceRowNo + " holds a NUL character.");
+                }
                 Map<String, Object> c = new LinkedHashMap<>();
                 c.put("value", cell.value());
                 c.put("type", cell.type());

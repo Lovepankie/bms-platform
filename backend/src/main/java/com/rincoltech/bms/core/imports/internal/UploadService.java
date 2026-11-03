@@ -21,6 +21,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -77,6 +79,9 @@ class UploadService implements ImportUploads {
     /** For tests: the free disk the next uploads see, in bytes; {@code null} reads the work directory's file store. */
     volatile java.util.function.LongSupplier freeDisk;
 
+    /** For tests: runs between fetching a batch's file and reading it, where a concurrent cancel or move can land. */
+    volatile Runnable afterFetch;
+
     UploadService(
             JdbcClient jdbc,
             DataSource dataSource,
@@ -102,6 +107,15 @@ class UploadService implements ImportUploads {
 
     @Override
     public Batch upload(UUID runId, Upload upload) {
+        // The caller's stream is closed whatever happens, a refusal before it is read included.
+        try (InputStream content = upload.content()) {
+            return store(runId, upload, content);
+        } catch (IOException e) {
+            throw new UncheckedIOException("the upload could not be closed", e);
+        }
+    }
+
+    private Batch store(UUID runId, Upload upload, InputStream content) {
         requireNoTransaction();
         UUID tenantId = TenantContext.require();
         long maxBytes = settings.maxFileSize().toBytes();
@@ -122,9 +136,8 @@ class UploadService implements ImportUploads {
         String objectKey = null;
         try {
             QuarantineWriter.Written written;
-            try (InputStream in = upload.content();
-                    OutputStream out = QuarantineCipher.encrypt(Files.newOutputStream(temp), dataKey, batchId)) {
-                written = QuarantineWriter.copy(in, type, maxBytes, out);
+            try (OutputStream out = QuarantineCipher.encrypt(Files.newOutputStream(temp), dataKey, batchId)) {
+                written = QuarantineWriter.copy(content, type, maxBytes, out);
             } catch (QuarantineWriter.Refused e) {
                 throw refusal(e);
             } catch (IOException e) {
@@ -143,6 +156,7 @@ class UploadService implements ImportUploads {
             objectKey = null;
             log.info("import upload stored: run {}, batch {}, {} bytes", runId, batchId, written.size());
         } finally {
+            Arrays.fill(dataKey, (byte) 0);
             deleteQuietly(temp);
             if (objectKey != null) {
                 deleteObjectQuietly(objectKey, batchId);
@@ -233,19 +247,25 @@ class UploadService implements ImportUploads {
             }
             return h;
         });
-        byte[] dataKey = unwrap(platformKey, held.wrappedKey(), tenantId, held.runId());
         requireDisk(held.sizeBytes());
-        Path temp = tempFile();
+        byte[] dataKey = unwrap(platformKey, held.wrappedKey(), tenantId, held.runId());
+        Path temp = null;
         try {
+            temp = tempFile();
             try (InputStream in = quarantine.open(held.objectKey()).orElseThrow(UploadService::fileGone)) {
                 Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 throw new UncheckedIOException("the quarantined file could not be fetched", e);
             }
+            Runnable hook = afterFetch;
+            if (hook != null) {
+                hook.run();
+            }
+            Path copy = temp;
             Parsing.Limits limits = new Parsing.Limits(
                     settings.maxRows(), settings.maxColumns(), opts.requiredHeaders(), opts.ignoredColumns());
             try {
-                SourceParser.Parsed parsed = tx.execute(s -> readInto(held, temp, dataKey, limits, opts));
+                SourceParser.Parsed parsed = tx.execute(s -> readInto(held, copy, dataKey, limits, opts));
                 log.info(
                         "import batch parsed: run {}, batch {}, {} rows, {} columns",
                         held.runId(),
@@ -256,15 +276,36 @@ class UploadService implements ImportUploads {
                 fail(held, f.code, f.getMessage());
             }
         } finally {
-            deleteQuietly(temp);
+            Arrays.fill(dataKey, (byte) 0);
+            if (temp != null) {
+                deleteQuietly(temp);
+            }
         }
         return batch(batchId);
     }
 
+    /**
+     * The run and the batch again, under locks, in the transaction that writes (review of #790): the run shared, so it
+     * cannot become ready or be cancelled while its file is read, then the batch, so a second parse waits. A batch
+     * cancelled, or a run moved on, while the file was being fetched is refused here and nothing is written.
+     */
+    private boolean stillOpen(Held held) {
+        String runStatus = jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR SHARE")
+                .param(held.runId())
+                .query(String.class)
+                .optional()
+                .orElseThrow(ApiException::notFound);
+        Held now = held(held.id(), true);
+        return OPEN.contains(runStatus)
+                && List.of("uploaded", "parsed").contains(now.status())
+                && held.objectKey().equals(now.objectKey());
+    }
+
     private SourceParser.Parsed readInto(
             Held held, Path temp, byte[] dataKey, Parsing.Limits limits, ParseOptions opts) {
-        // Lock the batch again: a second parse of it waits here and then reads it in full.
-        held(held.id(), true);
+        if (!stillOpen(held)) {
+            throw invalidTransition("The batch or its import changed while its file was read; nothing was written.");
+        }
         jdbc.sql("DELETE FROM import_rows WHERE batch_id = ?").param(held.id()).update();
         SourceParser.Parsed parsed;
         try {
@@ -317,22 +358,34 @@ class UploadService implements ImportUploads {
         for (StagedRow r : chunk) {
             args.add(new Object[] {UUID.randomUUID(), batchId, r.sourceRowNo(), r.rawJson()});
         }
-        batchJdbc.batchUpdate("""
-                INSERT INTO import_rows (id, tenant_id, batch_id, source_row_no, raw)
-                VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, CAST(? AS jsonb))
-                """, args);
+        try {
+            batchJdbc.batchUpdate("""
+                    INSERT INTO import_rows (id, tenant_id, batch_id, source_row_no, raw)
+                    VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, CAST(? AS jsonb))
+                    """, args);
+        } catch (DataIntegrityViolationException e) {
+            // A value PostgreSQL refuses to store (review of #790): the file's fault, so the batch fails with a code
+            // instead of staying uploaded behind a server error. The message may quote the value and is not kept.
+            throw Parsing.unreadable(
+                    "A row from line " + chunk.getFirst().sourceRowNo() + " holds a value that cannot be stored.");
+        }
     }
 
-    /** A whole-file refusal: the batch is failed with its code, holds no rows, and its file is deleted. */
+    /**
+     * A whole-file refusal: the batch is failed with its code, holds no rows, and its file is deleted. When the batch or
+     * its run moved on meanwhile (cancelled, ready), it is left as it is: the refusal no longer applies to it.
+     */
     private void fail(Held held, String code, String reason) {
-        tx.executeWithoutResult(s -> {
-            held(held.id(), true);
+        boolean failed = Boolean.TRUE.equals(tx.execute(s -> {
+            if (!stillOpen(held)) {
+                return false;
+            }
             jdbc.sql("DELETE FROM import_rows WHERE batch_id = ?")
                     .param(held.id())
                     .update();
             jdbc.sql("""
                             UPDATE import_batches SET status = 'failed', failure_code = ?, failure_reason = ?, failed_at = now(),
-                                   row_count = 0, object_key = NULL, quarantine_deleted_at = now()
+                                   row_count = 0
                              WHERE id = ?
                             """)
                     .params(code, reason.length() > 300 ? reason.substring(0, 300) : reason, held.id())
@@ -344,9 +397,23 @@ class UploadService implements ImportUploads {
                     null,
                     Map.of("status", held.status()),
                     Map.of("status", "failed", "code", code)));
-        });
-        log.info("import batch failed: run {}, batch {}, {}", held.runId(), held.id(), code);
-        deleteObjectQuietly(held.objectKey(), held.id());
+            return true;
+        }));
+        if (failed) {
+            log.info("import batch failed: run {}, batch {}, {}", held.runId(), held.id(), code);
+            deleteHeld(held.id(), held.objectKey());
+        }
+    }
+
+    /** Deletes a failed or cancelled batch's file, then forgets its key; a failed delete leaves it for the cleanup. */
+    private void deleteHeld(UUID batchId, String objectKey) {
+        if (deleteObjectQuietly(objectKey, batchId)) {
+            tx.executeWithoutResult(
+                    s -> jdbc.sql("""
+                            UPDATE import_batches SET object_key = NULL, quarantine_deleted_at = now()
+                             WHERE id = ? AND object_key = ?
+                            """).params(batchId, objectKey).update());
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -357,8 +424,13 @@ class UploadService implements ImportUploads {
     public Batch cancelBatch(UUID batchId) {
         requireNoTransaction();
         String objectKey = tx.execute(s -> {
+            // The run first, shared, then the batch: the order of the parse, so the two never wait on each other.
+            UUID runId = held(batchId, false).runId();
+            requireOpen(jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR SHARE")
+                    .param(runId)
+                    .query(String.class)
+                    .single());
             Held h = held(batchId, true);
-            requireOpen(run(h.runId(), false).status());
             if (List.of("committed", "cancelled").contains(h.status())) {
                 throw invalidTransition("The batch is " + h.status() + ", so it cannot be cancelled.");
             }
@@ -366,9 +438,7 @@ class UploadService implements ImportUploads {
                     .param(batchId)
                     .update();
             jdbc.sql("""
-                            UPDATE import_batches SET status = 'cancelled', cancelled_at = now(), object_key = NULL,
-                                   quarantine_deleted_at = coalesce(quarantine_deleted_at, now())
-                             WHERE id = ?
+                            UPDATE import_batches SET status = 'cancelled', cancelled_at = now() WHERE id = ?
                             """).param(batchId).update();
             audit.record(new AuditLog.Entry(
                     "core.import_batch.cancelled",
@@ -380,7 +450,7 @@ class UploadService implements ImportUploads {
             return h.objectKey();
         });
         if (objectKey != null) {
-            deleteObjectQuietly(objectKey, batchId);
+            deleteHeld(batchId, objectKey);
         }
         return batch(batchId);
     }
@@ -527,11 +597,14 @@ class UploadService implements ImportUploads {
         }
     }
 
-    private void deleteObjectQuietly(String objectKey, UUID batchId) {
+    /** @return whether storage confirmed the delete */
+    private boolean deleteObjectQuietly(String objectKey, UUID batchId) {
         try {
             quarantine.delete(objectKey);
+            return true;
         } catch (RuntimeException e) {
             log.warn("import batch {}: its quarantined file could not be deleted; the cleanup will", batchId);
+            return false;
         }
     }
 

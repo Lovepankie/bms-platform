@@ -48,6 +48,9 @@ class BusinessClosureIT extends IntegrationTest {
     @Autowired
     ClosureService closures;
 
+    @Autowired
+    com.rincoltech.bms.core.documents.QuarantineStorage quarantine;
+
     LocalDate today;
 
     /** The businesses this test made. */
@@ -630,7 +633,7 @@ class BusinessClosureIT extends IntegrationTest {
      * with personal data fails here until its module's eraser covers it.
      */
     @Test
-    void frTen09_theRemovalLeavesNoPersonalDataInAnyTable() {
+    void frTen09_theRemovalLeavesNoPersonalDataInAnyTable() throws java.io.IOException {
         TestDatabase.Fixture t = TestDatabase.tenant("close-all", true, true);
         businesses.add(t.tenantId());
         RlsIsolationIT.seedOneRowInEveryTable(t);
@@ -731,7 +734,20 @@ class BusinessClosureIT extends IntegrationTest {
                 .sql("UPDATE tenant_closures SET keep_until = ? WHERE id = ?")
                 .params(today.minusDays(1), closureId)
                 .update();
+        // A quarantined import file (#128) has no documents row; the purge deletes it by its prefix.
+        java.nio.file.Path file = java.nio.file.Files.createTempFile("closure-quarantine", ".bin");
+        java.nio.file.Files.write(file, new byte[] {1, 2, 3});
+        com.rincoltech.bms.kernel.TenantContext.callAs(
+                t.tenantId(), () -> quarantine.put(UUID.randomUUID(), UUID.randomUUID(), file));
+        java.nio.file.Files.delete(file);
+        assertThat(com.rincoltech.bms.kernel.TenantContext.callAs(
+                        t.tenantId(), () -> quarantine.list().toList()))
+                .hasSize(1);
         assertThat(closures.purgeDue()).isGreaterThanOrEqualTo(1);
+        assertThat(com.rincoltech.bms.kernel.TenantContext.callAs(
+                        t.tenantId(), () -> quarantine.list().toList()))
+                .as("the quarantined file is deleted with the business")
+                .isEmpty();
         List<String> kept = new ArrayList<>();
         for (String table : RlsIsolationIT.tenantOwnedTables()) {
             if (List.of("tenants", "users", "tenant_closures").contains(table)) {

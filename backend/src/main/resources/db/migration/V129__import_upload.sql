@@ -20,9 +20,10 @@
 -- Personal data: `import_rows.raw` holds a customer's cells, which may be personal; that is the quarantine, read by no business
 -- module and purged by #139. `source_filename` is the customer's file name as given. No other new column holds personal data.
 --
--- Locks, said plainly. ALTER TABLE ADD COLUMN without a default and the check replacement take ACCESS EXCLUSIVE on
--- `import_runs` and `import_batches` for milliseconds (the new check is added NOT VALID and validated after, under SHARE UPDATE
--- EXCLUSIVE); the new table and its foreign key take SHARE ROW EXCLUSIVE on `tenants` and `import_batches` until the commit.
+-- Locks, said plainly. The new columns and the replaced checks take ACCESS EXCLUSIVE on `import_runs` and `import_batches`,
+-- held until the migration commits, like every lock of one Flyway transaction; both tables are empty or nearly so on every
+-- server (no screen reaches them yet), so each check is validated in milliseconds. The new table and its foreign key take
+-- SHARE ROW EXCLUSIVE on `tenants` and `import_batches` until the commit; reads go on.
 
 SET LOCAL lock_timeout = '5s';
 
@@ -63,8 +64,7 @@ ALTER TABLE import_batches
 
 ALTER TABLE import_batches DROP CONSTRAINT import_batches_status_check;
 ALTER TABLE import_batches ADD CONSTRAINT import_batches_status_check
-    CHECK (status IN ('pending', 'uploaded', 'parsed', 'failed', 'cancelled', 'committed')) NOT VALID;
-ALTER TABLE import_batches VALIDATE CONSTRAINT import_batches_status_check;
+    CHECK (status IN ('pending', 'uploaded', 'parsed', 'failed', 'cancelled', 'committed'));
 
 -- One file once per run (a second upload of the same bytes is refused with FILE_ALREADY_UPLOADED).
 CREATE UNIQUE INDEX import_batches_one_file_per_run ON import_batches (run_id, source_sha256)
