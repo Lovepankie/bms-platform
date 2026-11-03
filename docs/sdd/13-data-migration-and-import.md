@@ -645,3 +645,37 @@ retail command. ADR-027 makes the framework the one pipeline for every tenant's 
 
 The build order is the spec's section 9. FR-IMP-01 to FR-IMP-09 keep their meaning; the new
 requirements are written with the tasks that build them.
+
+### 13.14.1 As built
+
+**1/16, runs and guards (#127, migration `V127`).** The module `core.imports` (public API `ImportRuns`) holds:
+
+- `import_runs` with the states above, enforced by the service: an illegal move is `invalid_status_transition` (409), and
+  `committing` and `committed` are reached only through the commit.
+- `import_batches` in its first form (run, order, `pending` or `committed`, counts); #128 adds the upload columns of 13.4.
+- `platform_import_settings`, the kill switch (chapter 6 section 6.4).
+
+The commit is a sequence of transactions:
+
+1. **Start.** The kill switch must be on (`imports_disabled`) and the dump recorded (`pre_import_dump_missing`). The trading
+   tenant guard asks every `LiveRecordProbe` (a kernel port: retail answers for sales and retail journals not in
+   `retail_import_refs`, lending for loan transactions and lending journals, the ledger for journals posted by a core
+   module). A trading business without the approved override is refused with `TENANT_TRADING`, and the refusal is audited.
+   Otherwise the run moves `ready` to `committing`. A second committing run of the business hits the partial unique index
+   and gets `IMPORT_IN_PROGRESS`, as does a second commit of the same run.
+2. **One transaction per batch, in `seq` order.** Each takes `pg_advisory_xact_lock` on the business's import key and skips
+   a batch already committed. It checks the kill switch and the run's halt before the batch and every 1,000 rows through the
+   `BatchWriter` checkpoint. A stop rolls the batch back and leaves the run `committing` (`HALTED`). Any other failure of
+   the writer does the same, is audited as `core.import_run.batch_failed` (the batch and the kind of failure, never the
+   message, which may quote a row) and is rethrown.
+3. **Finish.** The run moves to `committed`, and a halt pressed during the last batch, after its last checkpoint, is cleared.
+
+`resume` continues a committing run from its first pending batch and clears the halt. While a batch is being written it
+holds the business's lock, so `resume` asks for that lock with `pg_try_advisory_xact_lock` and answers `IMPORT_IN_PROGRESS`
+when it is taken: a resume never clears a halt under a writer that is still running. It does not ask the trading guard
+again: the batches already committed are the business's records now. The override is set by one platform operator with a
+reason and approved by a different one (the CHECK `import_runs_checker_not_maker`, and `self_approval_forbidden`); both
+steps are audited. Branch limits are each template writer's: a writer checks that every row it writes falls in a branch
+the import may write to, first in the template of #136. The maker-checker
+`import_commit` request is #133; until then the commit is called by the operator's tooling. The operator screens and the
+stop button are #141.

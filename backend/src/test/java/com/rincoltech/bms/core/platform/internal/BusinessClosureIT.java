@@ -718,6 +718,12 @@ class BusinessClosureIT extends IntegrationTest {
         assertThat(closures.purgeDue()).as("nothing is due before keep_until").isZero();
         assertThat(count("SELECT count(*) FROM retail_sales WHERE tenant_id = ?", t.tenantId()))
                 .isPositive();
+        // The import run and its batch (V127, #127), seeded by RlsIsolationIT.seedOneRowInEveryTable. The batch names
+        // its run with no ON DELETE CASCADE, so the purge's passes must delete the batch before the run (#736).
+        assertThat(count("SELECT count(*) FROM import_runs WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM import_batches WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
         TestDatabase.owner()
                 .sql("UPDATE tenant_closures SET keep_until = ? WHERE id = ?")
                 .params(today.minusDays(1), closureId)
@@ -749,6 +755,12 @@ class BusinessClosureIT extends IntegrationTest {
                 .isZero();
         assertThat(count("SELECT count(*) FROM help_setup_drafts WHERE tenant_id = ?", t.tenantId()))
                 .as("and the purge leaves none")
+                .isZero();
+        assertThat(count("SELECT count(*) FROM import_batches WHERE tenant_id = ?", t.tenantId()))
+                .as("the import batch is purged")
+                .isZero();
+        assertThat(count("SELECT count(*) FROM import_runs WHERE tenant_id = ?", t.tenantId()))
+                .as("and the import run it named")
                 .isZero();
         assertThat(count(
                         "SELECT count(*) FROM tenant_closures WHERE id = ? AND status = 'purged' AND purged_at IS NOT NULL",
