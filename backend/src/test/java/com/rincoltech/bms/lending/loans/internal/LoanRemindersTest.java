@@ -79,6 +79,22 @@ class LoanRemindersTest {
                 .containsExactly(tuple(LoanNotices.OVERDUE_7, second.id, TODAY.minusDays(10)));
     }
 
+    /**
+     * Issue #772: {@code remind} passes each notice's own expiry, which would shorten a transactional text's hour, so no
+     * notice it sends is ever transactional: over every day of a year around a loan's instalments, only reminder or
+     * arrears.
+     */
+    @Test
+    void noReminderOrArrearsNoticeIsEverTransactional() {
+        List<Item> items =
+                List.of(item(1, TODAY.minusDays(60)), item(2, TODAY.minusDays(30)), item(3, TODAY.plusDays(3)));
+        for (int d = -200; d <= 200; d++) {
+            assertThat(on(items, TODAY.plusDays(d)))
+                    .extracting(Reminder::category)
+                    .allMatch(c -> c.equals("reminder") || c.equals("arrears"));
+        }
+    }
+
     /** The second review of #290: the first night never texts a backlog, a loan 400 days late gets nothing. */
     @Test
     void aLoanFarInArrearsIsNotTextedABacklog() {

@@ -1,5 +1,5 @@
 import type { LoanSchedule } from '../../../api/lending';
-import type { PaymentIntent } from '../../../api/payments';
+import type { PaymentIntent, PaymentLinkText } from '../../../api/payments';
 import { words } from './loan-state';
 
 // Pure helpers of "Collect by mobile money or card" (issue #216, spec 3.2 step 7 and 3.8): what the status means in plain words, how
@@ -93,6 +93,37 @@ const FLAGS: Record<string, string> = {
 };
 
 export const flagWords = (flags: string[] | undefined): string[] => (flags ?? []).map((f) => FLAGS[f]).filter((t): t is string => !!t);
+
+/**
+ * The sentence under the link once it was sent by text message (issue #772): what the outbox says, never more. A text is "sent" only
+ * when the provider took it; one that failed or expired is said plainly, and `renew` is true so the screen offers a new link.
+ * JUSTIFICATION-A3: a new pure helper beside its siblings, so the words are tested without a screen.
+ */
+export function linkTextWords(
+  text: Pick<PaymentLinkText, 'already_sent' | 'text_status'>,
+  phone: string | undefined,
+): { words: string; renew: boolean; pending: boolean } {
+  const to = phone ?? 'the payer';
+  switch (text.text_status) {
+    case 'sent':
+      return { words: `The link was sent by text message to ${to}.`, renew: false, pending: false };
+    case 'failed':
+      return { words: 'The text message with the link did not reach the payer. Make a new payment link to send it again.', renew: true, pending: false };
+    case 'expired':
+      return { words: 'The text message with the link ran out of time before it went. Make a new payment link to send it again.', renew: true, pending: false };
+    // It may have arrived: no new link is pushed, so a link the payer may hold is not cancelled.
+    case 'unconfirmed':
+      return { words: 'We could not confirm that the text message reached the payer. Ask the payer, or copy the link and send it another way.', renew: false, pending: false };
+    default:
+      return {
+        words: text.already_sent
+          ? `The link was queued earlier to go by text message to ${to}. It has not gone yet.`
+          : `The link is queued to go by text message to ${to}.`,
+        renew: false,
+        pending: true,
+      };
+  }
+}
 
 /**
  * The amount to offer first: the arrears if any, otherwise what is left on the first instalment not yet paid, never more than the

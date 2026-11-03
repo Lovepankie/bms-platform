@@ -904,6 +904,124 @@ class LoanRepaymentByGatewayIT extends LoanFixtures {
                 .asString()
                 .contains("member_id")
                 .doesNotContain("700000216");
+        // Issue #772: the answer says where the text stands, read from the outbox; a new one is only queued.
+        assertThat(sent.getBody().get("text_status").asString()).isEqualTo("queued");
+        assertThat(again.getBody().get("text_status").asString()).isEqualTo("queued");
+    }
+
+    // ---- issue #772: the link text's real status, and its withdrawal when the payment closes -----
+    // JUSTIFICATION-A3: new cases for issue #772 on this suite's loan, merchant account and fake gateway.
+
+    /** The outbox row of the intent's link text, moved by hand as the sender would move it. */
+    void linkTextOutcome(JsonNode intent, String outboxStatus, String lastError, String delivery) {
+        UUID row = TestDatabase.owner()
+                .sql(
+                        "SELECT id FROM notification_outbox WHERE template_key = 'payment.link' AND idempotency_key LIKE ?")
+                .param("sms:payment.link:%:" + intent.get("id").asString() + ":%")
+                .query(UUID.class)
+                .single();
+        TestDatabase.owner()
+                // With the time the sender records, as the operator's outbox page reads it for every failed row.
+                .sql("UPDATE notification_outbox SET status = ?, last_error = ?,"
+                        + " failed_at = CASE WHEN ? = 'failed' THEN now() END,"
+                        + " sent_at = CASE WHEN ? = 'sent' THEN now() END WHERE id = ?")
+                .params(outboxStatus, lastError, outboxStatus, outboxStatus, row)
+                .update();
+        if (delivery != null) {
+            TestDatabase.owner()
+                    .sql(
+                            "INSERT INTO sms_deliveries (id, tenant_id, outbox_id, template_key, category, recipient_masked,"
+                                    + " recipient_hash, provider, status) VALUES (?, ?, ?, 'payment.link', 'transactional',"
+                                    + " '+256*****0216', repeat('a', 64), 'fake', ?)")
+                    .params(UUID.randomUUID(), t.tenantId(), row, delivery)
+                    .update();
+        }
+    }
+
+    @Test
+    void theLinkTextSaysSentOnlyWhenTheProviderTookItAndFailedOrExpiredWhenItDidNot() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode sent = intentFor(loan, 100_000);
+        JsonNode failed = intentFor(loan, 100_000);
+        JsonNode expired = intentFor(loan, 100_000);
+        for (JsonNode i : List.of(sent, failed, expired)) {
+            assertThat(textLink(i).getBody().get("text_status").asString()).isEqualTo("queued");
+        }
+        linkTextOutcome(sent, "sent", null, "delivered");
+        linkTextOutcome(failed, "failed", "rejected", "rejected");
+        // Dropped before the provider: the row is known and no longer waiting, so it will never go. Expired at once.
+        linkTextOutcome(expired, "failed", "expired", null);
+        assertThat(textLink(sent).getBody().get("text_status").asString()).isEqualTo("sent");
+        assertThat(textLink(failed).getBody().get("text_status").asString()).isEqualTo("failed");
+        assertThat(textLink(expired).getBody().get("text_status").asString()).isEqualTo("expired");
+        // A send whose outcome the provider left unknown is said as such, on another member's loan.
+        JsonNode unknown = intentFor(activeLoan(), 100_000);
+        assertThat(textLink(unknown).getStatusCode().value()).isEqualTo(200);
+        linkTextOutcome(unknown, "failed", "unknown", "unknown");
+        assertThat(textLink(unknown).getBody().get("text_status").asString()).isEqualTo("unconfirmed");
+        clock.set(Instant.parse(expired.get("expires_at").asString()).plusSeconds(60));
+        ResponseEntity<JsonNode> late = textLink(expired);
+        assertThat(late.getStatusCode().value()).isEqualTo(200);
+        assertThat(late.getBody().get("already_sent").asBoolean()).isTrue();
+        assertThat(late.getBody().get("text_status").asString()).isEqualTo("expired");
+        // Asking again never writes a second text.
+        assertThat(linkTexts(sent)).hasSize(1);
+        assertThat(linkTexts(failed)).hasSize(1);
+    }
+
+    @Test
+    void aQueuedLinkTextIsWithdrawnWhenThePaymentIsPaidOrCancelledBeforeItGoes() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String loan = activeLoan();
+        JsonNode paid = intentFor(loan, 100_000);
+        JsonNode cancelled = intentFor(loan, 100_000);
+        JsonNode open = intentFor(loan, 100_000);
+        for (JsonNode i : List.of(paid, cancelled, open)) {
+            assertThat(textLink(i).getStatusCode().value()).isEqualTo(200);
+        }
+        pay(paid, 100_000, "CONF-772-PAID");
+        tick(Duration.ofMinutes(3));
+        assertThat(row(paid).get("status")).isIn("paid", "booked");
+        ResponseEntity<JsonNode> c = call(
+                HttpMethod.POST,
+                "/api/v1/payments/intents/" + cancelled.get("id").asString() + "/cancel",
+                null,
+                null);
+        assertThat(c.getStatusCode().value()).as("%s", c.getBody()).isEqualTo(200);
+
+        for (JsonNode closed : List.of(paid, cancelled)) {
+            Map<String, Object> text = TestDatabase.owner()
+                    .sql("SELECT status, last_error, params::text AS params FROM notification_outbox"
+                            + " WHERE template_key = 'payment.link' AND idempotency_key LIKE ?")
+                    .param("sms:payment.link:%:" + closed.get("id").asString() + ":%")
+                    .query()
+                    .singleRow();
+            assertThat(text.get("status")).isEqualTo("failed");
+            assertThat(text.get("last_error")).isEqualTo("cancelled_settled");
+            assertThat(text.get("params")).isEqualTo("{}");
+        }
+        // The payment still open keeps its text.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status FROM notification_outbox WHERE template_key = 'payment.link'"
+                                + " AND idempotency_key LIKE ?")
+                        .param("sms:payment.link:%:" + open.get("id").asString() + ":%")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("pending");
+        // Until the poller expires it, in its own tenant bound job: then its text is withdrawn too.
+        clock.set(Instant.parse(open.get("expires_at").asString()).plusSeconds(60));
+        poller.tick();
+        assertThat(row(open).get("status")).isEqualTo("expired");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT last_error FROM notification_outbox WHERE template_key = 'payment.link'"
+                                + " AND idempotency_key LIKE ?")
+                        .param("sms:payment.link:%:" + open.get("id").asString() + ":%")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("cancelled_settled");
     }
 
     @Test

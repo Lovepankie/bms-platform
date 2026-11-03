@@ -46,6 +46,16 @@ class JdbcOutbox implements Outbox {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean enqueue(Message message) {
+        return enqueueTracked(message).written();
+    }
+
+    /**
+     * Every row gets a fresh random id, so only the idempotency key decides a repeat ({@code ON CONFLICT} on its
+     * index, the arbiter): a concurrent duplicate waits for the first and then writes nothing, it never errs.
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Enqueued enqueueTracked(Message message) {
         if (!CHANNELS.contains(message.channel())) {
             throw new IllegalArgumentException("unknown outbox channel " + message.channel());
         }
@@ -68,10 +78,11 @@ class JdbcOutbox implements Outbox {
             expiresAt = expiresAt == null || expiresAt.isAfter(windowEnd) ? windowEnd : expiresAt;
         }
         Subject subject = message.subject();
-        return Boolean.TRUE.equals(
+        UUID id = UUID.randomUUID();
+        boolean written = Boolean.TRUE.equals(
                 jdbc.sql("SELECT notification_outbox_enqueue(?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?, ?, ?, ?, ?, ?)")
                         .params(
-                                UUID.randomUUID(),
+                                id,
                                 message.channel(),
                                 message.recipient(),
                                 message.templateKey(),
@@ -86,6 +97,7 @@ class JdbcOutbox implements Outbox {
                                 notBefore == null ? null : Timestamp.from(notBefore))
                         .query(Boolean.class)
                         .single());
+        return new Enqueued(written, written ? id : null);
     }
 
     @Override

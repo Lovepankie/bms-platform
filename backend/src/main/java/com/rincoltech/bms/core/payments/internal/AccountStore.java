@@ -1,11 +1,13 @@
 package com.rincoltech.bms.core.payments.internal;
 
+import com.rincoltech.bms.core.notifications.SmsEvents;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -48,9 +50,12 @@ class AccountStore {
                     + " data_key_id, status, ipn_id, ipn_registered_at, last_checked_at, failure_reason";
 
     private final JdbcClient jdbc;
+    // Looked up when used: the SMS port's settings reach the payments settings, which reach this store.
+    private final ObjectProvider<SmsEvents> sms;
 
-    AccountStore(JdbcClient jdbc) {
+    AccountStore(JdbcClient jdbc, ObjectProvider<SmsEvents> sms) {
         this.jdbc = jdbc;
+        this.sms = sms;
     }
 
     /** The bound tenant's account, if it has saved one. */
@@ -191,12 +196,17 @@ class AccountStore {
      */
     int retireIntentsOfOtherMerchants(UUID merchantId, Instant now) {
         Object[] p = {IntentStore.ts(now), merchantId};
-        int a = jdbc.sql("""
+        List<UUID> handedOver = jdbc.sql("""
                         UPDATE payment_intents SET status = 'needs_attention', refusal_code = 'merchant_changed',
                                next_check_at = NULL, check_requested_at = NULL, updated_at = ?
                          WHERE merchant_id IS NOT NULL AND merchant_id <> ?
                            AND status IN ('pending', 'expired', 'failed', 'cancelled') AND next_check_at IS NOT NULL
-                        """).params(p).update();
+                        RETURNING id
+                        """).params(p).query(UUID.class).list();
+        // A pending one closes here too: its link text still waiting is withdrawn, as IntentStore.update does (#772).
+        // For the others there is nothing left to withdraw, and the call finds nothing.
+        handedOver.forEach(id -> sms.getObject().cancelSettled(id.toString()));
+        int a = handedOver.size();
         int b = jdbc.sql("""
                         UPDATE payment_intents SET status = 'failed', failure_reason = 'merchant_changed',
                                next_check_at = NULL, creation_lease_until = NULL, updated_at = ?

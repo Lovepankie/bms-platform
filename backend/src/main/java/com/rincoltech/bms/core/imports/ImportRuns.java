@@ -60,8 +60,8 @@ public interface ImportRuns {
     void setCommitEnabled(boolean enabled, UUID platformUserId, String reason);
 
     /**
-     * How a commit ended: every batch committed, or stopped by the kill switch or the halt with the run still
-     * {@code committing} and resumable.
+     * How a commit ended: every batch committed, or stopped by the kill switch, the halt or a lost loop claim with the
+     * run still {@code committing} and resumable.
      */
     enum CommitOutcome {
         COMMITTED,

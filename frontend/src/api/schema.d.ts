@@ -11629,6 +11629,8 @@ export interface components {
             expires_at?: string;
             /** Format: uuid */
             intent_id?: string;
+            /** @enum {string} */
+            text_status?: "queued" | "sent" | "failed" | "unconfirmed" | "expired";
         };
         PaymentMethodMapping: {
             account_code?: string;

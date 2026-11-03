@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.payments.internal;
 
+import com.rincoltech.bms.core.notifications.SmsEvents;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -167,9 +168,11 @@ class IntentStore {
     }
 
     private final JdbcClient jdbc;
+    private final SmsEvents sms;
 
-    IntentStore(JdbcClient jdbc) {
+    IntentStore(JdbcClient jdbc, SmsEvents sms) {
         this.jdbc = jdbc;
+        this.sms = sms;
     }
 
     static Timestamp ts(Instant instant) {
@@ -314,7 +317,17 @@ class IntentStore {
             sql.append(" AND status = ?");
             params.add(from);
         }
-        return jdbc.sql(sql.toString()).params(params).update() == 1;
+        boolean updated = jdbc.sql(sql.toString()).params(params).update() == 1;
+        // A move with no expected status (from null) may close a pending intent too; otherwise it finds nothing.
+        if (updated && (from == null || "pending".equals(from)) && to != null && !"pending".equals(to)) {
+            // The payment closed (paid, cancelled, failed or expired) before its link text went: withdraw the text, so
+            // the payer never gets a dead or already paid link (issue #772, spec 4.13). Only a text no sender holds yet
+            // is withdrawn. A row was updated, so this runs in a transaction bound to the intent's tenant: the binding
+            // is transaction local and payment_intents has forced row-level security, so outside one no row matches.
+            // Inside it the withdrawal runs in a savepoint and a failure there never harms this transaction.
+            sms.cancelSettled(id.toString());
+        }
+        return updated;
     }
 
     /**

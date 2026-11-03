@@ -716,8 +716,26 @@ Built in slice #231 (no migration). Where the build sharpens the text above:
   branch. It queues through `SmsEvents` like the money events; the member for the opt-out comes from the purpose handler's new
   `memberOf` (a loan's borrower, an account's holder), so the payments core still names no vertical.
 - **Once per intent.** The outbox key is per intent and member; a repeat answers `already_sent: true` and writes nothing.
+- **The real status (issue #772).** Every answer carries `text_status`: `queued` (still waiting in the outbox or at the
+  sender), `sent` (the provider or, on staging, the sink took it), `failed` (the provider failed, refused or blocked
+  it), `unconfirmed` (the send's outcome is `unknown`: it may have arrived) or `expired` (its row is no longer waiting and never
+  reached the provider: its time ran out, it was dropped or withdrawn, so it will never go). `already_sent` alone only proves the audit row. The status
+  is read through `SmsEvents.status` by the outbox row's id, which `SmsEvents.queueTracked` answers when the text is queued
+  and the link text keeps in its audit row (`outbox_id`, never the number). Every outbox row keeps a random id, so only the
+  idempotency key decides a repeat (`ON CONFLICT` on its index): two transactions queueing the same event at once write one
+  row and the second no-ops without an error (`SmsEventsIT`). The outbox is read only through its functions, and none reads
+  by key, so the id is kept rather than adding a function (no migration). `notification_outbox_is_pending` says whether it
+  waits, and the tenant's one `sms_deliveries` row (`UNIQUE (tenant_id, outbox_id)`, row-level security) says what the
+  provider did. A text queued before this release has no `outbox_id`: it reads `queued` until its time is up. The screen says "queued earlier" while it waits, "sent" only when sent, after `failed` or `expired` offers "Make a
+  new payment link" (it cancels this payment first, only while it can be cancelled), and after `unconfirmed` asks staff to
+  check with the payer or copy the link, without pushing a new one.
+- **Withdrawn when the payment closes (issue #772).** When an intent leaves `pending` (paid, cancelled, failed or expired
+  through `IntentStore.update`, or handed to a person when the payment account changes), its link text still waiting in the
+  outbox and held by no sender is withdrawn (`cancelled_settled`), as a reversal withdraws a receipt, so a dead or already
+  paid link never goes.
 - **Open only, and it expires with the intent.** `pending` with a link and before `expires_at`; a transactional message now
-  takes the earlier of its own expiry and its usual hour.
+  takes the earlier of its own expiry and its usual hour. No other transactional caller passes an expiry:
+  `SmsExpiryCallersTest` pins the callers of the forms that take one (the loan reminders and arrears notices, and this link).
 - **Polite refusals, nothing written.** `collections_disabled`, `sms_off` (either switch off, or a cap of 0),
   `member_opted_out` (an opt-out of all SMS; a reminders-only opt-out does not block a link), and 429 `too_many_link_texts`
   above 3 link texts per member in an hour and 429 `link_text_daily_limit` above 200 per business in 24 hours (a user who
@@ -730,7 +748,10 @@ Built in slice #231 (no migration). Where the build sharpens the text above:
 - **The wording.** `{tenant_name}: Pay {currency} {amount} for {reference} at {link}`, where `reference` is `loan <loan_no>` or
   `savings account <account_no>` with any dash written as a space (`loan LN HQ 000123`), so the words of the text carry
   no dash; only the provider's address may. No name, no balance. The hosted address is about 113 characters, so the text is two GSM-7
-  segments; it is not one of the wordings a tenant can override (section 4.16).
+  segments; it is not one of the wordings a tenant can override (section 4.16). The business name is made plain for it
+  (issue #772, `SmsEvents.plainTenantName`): every dash is written as a space, a curly quote as a straight one, any other
+  character outside the GSM-7 default alphabet is dropped (one would make the text UCS-2, and the address alone would then
+  take two segments), and it is cut to 40 characters after a whole word, so the text stays within two segments.
 
 ### 4.14 Threat model (SMS)
 
@@ -742,6 +763,7 @@ Built in slice #231 (no migration). Where the build sharpens the text above:
 | Spam or abuse of the SMS-triggering endpoints (payment links, receipts) | Permission checks, one link per intent, per tenant daily cap on SMS (setting) and an alert at 80 percent |
 | Message content leaks personal data | Templates reviewed: no name, no balance in reminders; recipient masked everywhere; parameters cleared after sending |
 | Number reused by another person | Opt-out matches on member plus hash, not on the number alone |
+| A payment link texted to a number that asked for no texts | Accepted by design (issue #772): the link text (4.13) checks the opt-out of the member of the loan or savings account, not the number typed on the payment, which may be a relative's or a neighbour's phone. A member who opted out is never texted; a payer who is not a member has no opt-out to check. Staff type the number with the payer present, the text is once per intent and the per member and per business limits of 4.13 apply |
 | API key theft | Environment only, rotation runbook, alert on provider 401 |
 | Sender id spoofing or unapproved id | The approved flag; the provider rejects unregistered ids |
 | Cross-tenant leakage through the platform outbox | The tenant id is set from the bound tenant, the delivery log has row-level security, isolation tests on both |
