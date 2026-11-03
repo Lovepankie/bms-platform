@@ -56,16 +56,17 @@ class SaleRequestKeyTest {
     }
 
     // JUSTIFICATION-A3: the review of #834 asks for this one case; a test, not a mechanism.
-    private static SaleRequest credit(String contact, Instant at, EntryLocations.Fix where) {
+    private static SaleRequest credit(
+            String name, String contact, int dueInDays, Instant at, EntryLocations.Fix where) {
         LocalDate day = LocalDate.parse("2026-11-02");
         return new SaleRequest(
                 BRANCH,
                 day,
                 "credit",
                 null,
-                "Test Buyer 01",
+                name,
                 contact,
-                day.plusDays(30),
+                day.plusDays(dueInDays),
                 null,
                 "Test reason",
                 List.of(new SaleLineRequest(PRODUCT, BigDecimal.ONE, 2_000L, null, null)),
@@ -80,8 +81,16 @@ class SaleRequestKeyTest {
     @Test
     void anOnlineSaleWithoutAClientIdKeepsEveryFieldButTheLocation() {
         Instant at = Instant.parse("2026-11-02T09:10:00Z");
-        SaleRequest located = credit("+256700000001", at, new EntryLocations.Fix(0.3136, 32.5811, 12.0));
-        assertThat(SalesService.keyed(located)).isEqualTo(credit("+256700000001", at, null));
-        assertThat(SalesService.keyed(credit("+256700000002", at, null))).isNotEqualTo(SalesService.keyed(located));
+        String name = "Test Buyer 01";
+        String phone = "+256700000001";
+        SaleRequest located = credit(name, phone, 30, at, new EntryLocations.Fix(0.3136, 32.5811, 12.0));
+        SaleRequest key = SalesService.keyed(located);
+        assertThat(key).isEqualTo(credit(name, phone, 30, at, null));
+        // Each buyer field stays under the key: a change to any of them is a different request.
+        assertThat(SalesService.keyed(credit("Test Buyer 02", phone, 30, at, null)))
+                .isNotEqualTo(key);
+        assertThat(SalesService.keyed(credit(name, "+256700000002", 30, at, null)))
+                .isNotEqualTo(key);
+        assertThat(SalesService.keyed(credit(name, phone, 14, at, null))).isNotEqualTo(key);
     }
 }

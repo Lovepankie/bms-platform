@@ -271,6 +271,13 @@ class RetailEntryLocationIT extends IntegrationTest {
         assertThat(again.getStatusCode()).as("%s", again.getBody()).isEqualTo(HttpStatus.CREATED);
         assertThat(again.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
         assertThat(again.getBody().get("id")).isEqualTo(first.getBody().get("id"));
+        // Only the location is left out of the key: a changed buyer contact under it is still refused.
+        Map<String, Object> otherBuyer = sale(fix(NEAR_LAT, SHOP_LNG, 12));
+        otherBuyer.put("buyer_name", "Test Buyer 01");
+        otherBuyer.put("buyer_contact", "+256700000002");
+        ResponseEntity<JsonNode> changed = seller.postKeyed("/sales", otherBuyer, SALES, "*", key);
+        assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(changed.getBody().get("code").asString()).isEqualTo("idempotency_key_reused");
         assertThat(distance(owner, OWNER, "sale", first.getBody().get("id").asString())
                         .get(0)
                         .get("words")
