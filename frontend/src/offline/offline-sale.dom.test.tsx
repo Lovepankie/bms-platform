@@ -12,7 +12,7 @@ const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLEl
 // Record a sale with the network off (issue #458, ADR-067; NFR-OFF-07): the items come from the phone's copy, a credit sale
 // is not offered, the sale goes to the outbox with every price as charged, the provisional receipt shows, and once the
 // phone is online the server's number replaces it. Issue #769: online, a sale lost on the network or with no answer within
-// 8 seconds goes to the outbox at once under the same key, recorded offline, and the late answer makes no second sale. A sale whose
+// 3 seconds (8 before issue #812) goes to the outbox at once under the same key, recorded offline, and the late answer makes no second sale. A sale whose
 // answer was lost before a reload locks the form and is kept with the same client sale id and a new key, so it is recorded
 // once. Every request fails as with no network unless a test says otherwise. Fabricated people, items and amounts.
 
@@ -449,7 +449,7 @@ describe('Record a sale offline', () => {
     expect(qty.matches(':disabled')).toBe(true);
   });
 
-  it('keeps a sale with no answer within 8 seconds on the phone, and the late answer makes no second sale (issue #769)', async () => {
+  it('keeps a sale with no answer within 3 seconds on the phone, and the late answer makes no second sale (issue #769)', async () => {
     // A fake server as the real one behaves: one sale per Idempotency-Key, whose hash leaves the delivery fields out; while
     // the first request still holds the key a second is 409 idempotency_in_progress; once it is done, the same sale again.
     const delivery = ['occurred_at', 'recorded_offline', 'prices_as_of'];

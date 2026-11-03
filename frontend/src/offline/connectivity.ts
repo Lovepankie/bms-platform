@@ -17,8 +17,13 @@ export const PING_EVERY_MS = 30_000;
 /** A ping slower than this counts as offline (issue #769). */
 export const PING_TIMEOUT_MS = 3_000;
 
-/** A sale sent online with no answer within this goes to the outbox (issue #769). */
-export const SALE_ANSWER_MS = 8_000;
+/**
+ * A sale (issue #769) or a daily entry (issue #812) sent online with no answer within this goes to the outbox. 2 seconds since
+ * issue #812 (8 before): on a cheap phone (CPU four times slower) the tap takes about half a second before the request leaves
+ * and Saved on this phone is drawn, so no save takes over 3 seconds (measured in layout/offline-forms.layout.test.ts on the
+ * DevTools 3G and Slow 3G profiles: about 1 second on 3G, under 3 on Slow 3G, answered or kept).
+ */
+export const SALE_ANSWER_MS = 2_000;
 
 /** No answer within `ms` (issue #769): the request may still arrive, so what it did is not known. */
 export class NoAnswer extends Error {}
