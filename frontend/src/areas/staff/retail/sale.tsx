@@ -20,7 +20,7 @@ import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, 
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { chosenPack, enteredPriceMinor, enteredQty, quantityIn, sellingPacks, unitWord, unitWords } from './units-state';
 import { EmptyState } from '../../../components/states';
-import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useBranchRoles, useProfitAccess, useStockingBranch } from './ui';
+import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, StockWarning, money, useBranchRoles, useProfitAccess, useStockingBranch } from './ui';
 import { branchLabel } from '../../../auth/branch';
 import type { BranchRole } from '../../../api/retail';
 import { BRANCH_ROLES, CREDIT_OVERRIDE, CUSTOMER_ACCOUNTS, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
@@ -138,7 +138,9 @@ export function SaleBar({ children }: { children: ReactNode }) {
  * One line of the sale being made. The unit choice is drawn only while the tenant has the units capability
  * (`unitsOn`) and the item has active pack sizes; otherwise the line is exactly what it was before packs.
  */
-export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh, slide = false, notes, onFlashed, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
+export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh, slide = false, warnStock = false, notes, onFlashed, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
+  /** Issue #815, Record sale: Out of stock or Only N left under the item's name, from the stock read when it was picked. */
+  warnStock?: boolean;
   /** Set on the line just added or topped up, a new number each time: it flashes once (Hillary, 23 Oct 2026). */
   fresh?: number;
   /** Set while the line just went on the sale as a new line: it slides in (#508). */
@@ -176,6 +178,7 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
     <div className={`rt-card line-card${slide ? ' line-new' : ''}`}>
       {fresh !== undefined && <span key={fresh} className="line-added" aria-hidden="true" onAnimationEnd={onFlashed} />}
       <strong>{line.product.description}</strong>
+      {warnStock && <> <StockWarning product={line.product} /></>}
       {packs.length > 0 && (
         <div>
           <label htmlFor={`unit-${i}`}>Sell by</label>
@@ -697,6 +700,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
             id="sale-search"
             branchId={branchId}
             showPrice
+            warnStock
             onAdd={(p, readAt) => add(p, readAt ? new Date(readAt).toISOString() : undefined)}
             notFound={(term, clear, hold) => (
               <ScreenToast.Provider value={show}>
@@ -741,6 +745,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
           line={l}
           index={i}
           unitsOn={unitsOn}
+          warnStock
           fresh={fresh !== null && fresh.index === i ? fresh.n : undefined}
           slide={fresh !== null && fresh.index === i && fresh.created}
           onFlashed={() => setFresh(null)}

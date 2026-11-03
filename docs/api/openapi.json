@@ -16937,6 +16937,10 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "low_stock_level" : {
+            "description" : "Issue #815: with branch_id, the quantity at or below which the item is low at that branch: the branch's own minimum, else the item's, else low_stock_threshold of the stock list (ADR-029). The sale screen says Only N left at or below it, and Out of stock at zero",
+            "type" : "string"
+          },
           "negative" : {
             "description" : "True when the branch balance is below zero",
             "type" : "boolean"

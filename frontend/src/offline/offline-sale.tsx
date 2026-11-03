@@ -3,7 +3,7 @@ import { ItemCombobox } from '../app/ui/ItemCombobox';
 import { Highlight } from '../app/ui/SearchBox';
 import { useLiveSearch } from '../app/ui/useLiveSearch';
 import { showQty } from '../areas/staff/retail/maths';
-import { money } from '../areas/staff/retail/ui';
+import { StockWarning, money } from '../areas/staff/retail/ui';
 import { pricesAsOfWords, searchCatalogue } from './catalogue';
 import { useOffline, useOutbox } from './offline-context';
 import type { OutboxItem } from './outbox';
@@ -55,6 +55,7 @@ export function OfflineProductPicker({ branchId, onAdd }: { branchId: string; on
               {p.sell_minor !== undefined && `${money(p.sell_minor)} each, `}
               in stock when saved: {showQty(p.qty ?? '0')} {p.unit}
             </span>
+            <StockWarning product={p} />
           </span>
           <span className="cb-verb" aria-hidden="true">Add</span>
         </>

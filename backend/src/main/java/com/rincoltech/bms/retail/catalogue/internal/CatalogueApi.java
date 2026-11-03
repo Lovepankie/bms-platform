@@ -340,7 +340,70 @@ final class CatalogueApi {
                     description =
                             "Issue #345: the barcodes of this product and of its pack sizes, sent by the list, the get and"
                                     + " the barcode lookup; scan any of them to find the product")
-            List<Barcode> barcodes) {
+            List<Barcode> barcodes,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #815: with branch_id, the quantity at or below which the item is low at that branch: the"
+                                    + " branch's own minimum, else the item's, else low_stock_threshold of the stock list"
+                                    + " (ADR-029). The sale screen says Only N left at or below it, and Out of stock at zero")
+            String lowStockLevel) {
+
+        /** Every field but the low stock level, the shape every read had before issue #815. */
+        // JUSTIFICATION-A3: a record component needs the old canonical shape kept for its callers, as the barcodes did.
+        Product(
+                UUID id,
+                String code,
+                String description,
+                UUID categoryId,
+                String category,
+                UUID unitId,
+                String unit,
+                Long sellMinor,
+                Long costMinor,
+                String currency,
+                boolean active,
+                Instant createdAt,
+                Instant updatedAt,
+                int version,
+                String qty,
+                Boolean negative,
+                List<Pack> packs,
+                String stockOnHand,
+                Integer stockBranches,
+                VariantOf variant,
+                String reservedQty,
+                UUID photoId,
+                UUID itemPhotoId,
+                List<Barcode> barcodes) {
+            this(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    reservedQty,
+                    photoId,
+                    itemPhotoId,
+                    barcodes,
+                    null);
+        }
 
         /** Every field but the barcodes, the shape every read had before barcodes (issue #345). */
         Product(
@@ -638,7 +701,8 @@ final class CatalogueApi {
                     reservedQty,
                     photoId,
                     itemPhotoId,
-                    barcodes);
+                    barcodes,
+                    lowStockLevel);
         }
 
         Product withStock(String total, int branches) {
@@ -666,7 +730,8 @@ final class CatalogueApi {
                     reservedQty,
                     photoId,
                     itemPhotoId,
-                    barcodes);
+                    barcodes,
+                    lowStockLevel);
         }
 
         /** ADR-055: no selling price and no cost, for a caller who may see neither (a storekeeper). */
@@ -699,7 +764,8 @@ final class CatalogueApi {
                     reservedQty,
                     photoId,
                     itemPhotoId,
-                    barcodes);
+                    barcodes,
+                    lowStockLevel);
         }
 
         Product withoutCost() {
@@ -727,7 +793,8 @@ final class CatalogueApi {
                     reservedQty,
                     photoId,
                     itemPhotoId,
-                    barcodes);
+                    barcodes,
+                    lowStockLevel);
         }
 
         /** The same product with what customer orders keep aside of the branch balance (issue #385). */
@@ -756,7 +823,8 @@ final class CatalogueApi {
                     reserved,
                     photoId,
                     itemPhotoId,
-                    barcodes);
+                    barcodes,
+                    lowStockLevel);
         }
 
         Product withVariant(VariantOf v) {
@@ -784,7 +852,8 @@ final class CatalogueApi {
                     reservedQty,
                     photoId,
                     itemPhotoId,
-                    barcodes);
+                    barcodes,
+                    lowStockLevel);
         }
 
         Product withPhoto(UUID photo, UUID itemPhoto) {
@@ -840,7 +909,38 @@ final class CatalogueApi {
                     reservedQty,
                     photoId,
                     itemPhotoId,
-                    codes);
+                    codes,
+                    lowStockLevel);
+        }
+
+        // JUSTIFICATION-A3: the record's with-method shape, as withReserved and withBarcodes.
+        Product withLowStockLevel(String level) {
+            return new Product(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    reservedQty,
+                    photoId,
+                    itemPhotoId,
+                    barcodes,
+                    level);
         }
     }
 
