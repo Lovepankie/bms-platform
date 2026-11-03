@@ -13209,6 +13209,7 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            offline?: components["schemas"]["RetailOfflineEntry"];
             reference?: string;
         };
         /** @description Issue #345: one barcode of a product, for its base unit or one pack size */
@@ -14881,6 +14882,7 @@ export interface components {
             explanation?: string;
             /** Format: uuid */
             item_id: string;
+            offline?: components["schemas"]["RetailOfflineEntry"];
             /** Format: uuid */
             party_id?: string;
             /** Format: uuid */
@@ -15713,6 +15715,19 @@ export interface components {
             category?: components["schemas"]["RetailCategoryHint"];
             /** @description At most 5 items, those holding the typed name first, then those a few letters apart */
             did_you_mean?: components["schemas"]["RetailNameHint"][];
+        };
+        /** @description Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used */
+        RetailOfflineEntry: {
+            /**
+             * Format: date-time
+             * @description When the entry was made on the phone
+             */
+            occurred_at: string;
+            /**
+             * Format: date-time
+             * @description The server's time when the phone was last online, when it knows it
+             */
+            online_as_of?: string;
         };
         RetailOfflineFailure: {
             /** Format: uuid */
@@ -16992,6 +17007,7 @@ export interface components {
         RetailPurchaseRequest: {
             lines: components["schemas"]["RetailPurchaseLineRequest"][];
             note?: string;
+            offline?: components["schemas"]["RetailOfflineEntry"];
             /** @description cash, mobile_money, bank, or credit: owed to the supplier, who is then required (issue #557) */
             payment_method: string;
             /**
@@ -18202,6 +18218,7 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            offline?: components["schemas"]["RetailOfflineEntry"];
             /** @description Optional, even when the amount differs from the suggestion */
             overwrite_reason?: string;
             suggestion_token: string;
@@ -19454,6 +19471,7 @@ export interface components {
             from_branch_id?: string;
             lines: components["schemas"]["RetailTransferLineRequest"][];
             note?: string;
+            offline?: components["schemas"]["RetailOfflineEntry"];
             /**
              * Format: uuid
              * @description The destination branch; any active branch of the tenant
@@ -19625,6 +19643,7 @@ export interface components {
              * @description Defaults to today; not in the future
              */
             occurred_on?: string;
+            offline?: components["schemas"]["RetailOfflineEntry"];
             reason: string;
         };
         /** @description The usual size of a pack in a smaller unit, and what it is for */
@@ -19854,6 +19873,7 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            offline?: components["schemas"]["RetailOfflineEntry"];
             purpose?: string;
             /** Format: date-time */
             withdrawn_at?: string;

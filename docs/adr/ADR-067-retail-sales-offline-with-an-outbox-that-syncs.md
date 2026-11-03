@@ -9,6 +9,11 @@ Migration `V86` (main has `V80` to `V84` merged; agreed merge order: `V85` shop 
 #470, `V88` referrals #467, `V89` existing loans #475, `V90` modules #474, `V91` the data download #478; payments #315
 and #318 after `V91`).
 
+Amended by issue #812 (3 Nov 2026, the owner's feedback after comparing the old app screen by screen): decisions 12 and 13
+below. The same outbox, waiting count and online dot now carry the other daily forms (expenses, savings on the till's and the
+sales staff routes, banking, withdrawals, deliveries in Buy stock, Move stock, usage and damage), and no save waits more than 3
+seconds on a cheap phone on 3G. No migration. Edits of a saved entry (PR #832) and approval answers stay online only.
+
 ## Context
 
 A shop on a slow or dropped mobile connection could not ring up a sale: the sale screen searched items on the server and
@@ -181,6 +186,39 @@ left, the branch, the period, the person's roles.
     rule. (d) A seller or a Supervisor cannot discard their own failed sale. An administrator (an owner or administrator,
     `tenant_admin`) may, with a second written reason, audited as `self_discard` (Hillary's default, decided 22 Oct 2026,
     review of #463). (e) Waiting sales survive a sign-out on that device.
+12. **No save waits more than 3 seconds (issue #812).** A cash, mobile money or bank sale, or a daily entry of decision 13, sent
+    online with no answer within 2 seconds (8 before), or lost on the network, goes to the outbox at once under the same
+    `Idempotency-Key` and the same body, and the screen says it is saved on the phone. On a phone with the CPU four times slower
+    the tap takes about half a second before the request leaves, so the whole save stays under 3 seconds. Measured in the layout
+    suite (`layout/offline-forms.layout.test.ts`) in Chromium through the real API client on the DevTools profiles: about 1
+    second on 3G, about 2.5 on Slow 3G, under 3 when the server is slower still. The late answer and the outbox's send are one
+    record: a second request under a key still in progress is tried again later, then answered from the key.
+13. **The other daily forms are kept on the phone too (issue #812).** Expenses (`POST /retail/expenses`), savings
+    (`POST /retail/savings` and `/retail/savings/sales-staff`), banking (`POST /retail/bankings`), withdrawals
+    (`POST /retail/withdrawals`), deliveries (`POST /retail/purchases`), stock moves (`POST /retail/transfers`) and usage or
+    damage (`POST /retail/usage`) use the same outbox, in the one order by when each was made, mixed with the sales.
+    (a) **The item.** An entry is an outbox item with its route, its body as the form built it and its form's
+    `Idempotency-Key` (also its id on the device); a refused entry keeps its form's draft so it can be fixed. (b) **Made
+    offline**, the body leaves out its date fields and carries `offline: {occurred_at, online_as_of}`: the server dates the
+    entry the business day of `occurred_at`, judged as a sale is (decision 6): a time ahead of the server is now, and a time
+    more than 2 minutes before `online_as_of` (the server's time when the phone last refreshed) had a phone clock behind and
+    is dated now too; a date field sent with it is not used. The date rule of #811 (pending ADR-120, PR #831: the app sets the date,
+    only the owner may choose an earlier one) is kept: the person never chooses the day of an entry made offline, the phone's
+    clock does, so the owner's backdate check does not apply to it. Offline the forms show no date box. Buy stock's
+    `purchased_on` is still required by its route and not used for such an entry. (c) **Lost online**, the same body goes
+    again under the same key, so the server answers it once (dated when it first arrived). (d) **Sent.** Any 2xx records it,
+    including the 202 of an expense that waits for an administrator (ADR-091): the approval itself stays online only, as
+    every maker-checker answer does. A 409 that is not a key still in progress (the savings suggestion changed, the day is
+    saved already) is a refusal, not a retry. (e) **Refused.** The entry stays on the phone with the server's words; it does
+    not hold up the entries behind it and is never reported to a manager (the server has no record of it): its maker taps Fix
+    (its form opens on it with a new key), Send again, or Discard (asked first). (f) **Who.** Whoever records one of these
+    forms has offline support now, not only a seller: the outbox, the dot, the sign-out warning and the kept reads (ADR-116).
+    Only a seller's phone fills the catalogue copy, which the item pickers of Buy stock, Move stock and usage search while
+    offline. The lists these forms wait on are kept for reading: expense categories, beneficiaries, suppliers, the savings
+    suggestion and the cash expected for banking. (g) **Edits stay online.** Editing a saved expense or delivery (PR #832)
+    says plainly that it needs the internet and keeps nothing on the phone. (h) **Toasts** (#824): one when an entry is kept
+    on the phone, one when it is sent. (i) Other people's entries left on a shared phone wait for them to sign in again; the
+    managers' list of waiting sales (decision 9) stays a list of sales.
 
 ## Consequences
 

@@ -13,7 +13,7 @@ import java.time.ZoneId;
  * is (ADR-067 decision 6): a time ahead of the server is now (no clash is kept for an entry); before
  * {@code online_as_of} (the server's time when the phone was last online) by more than {@link #CLOCK_BEHIND_SKEW}, the
  * phone clock was behind and the entry is dated when it reached the server. A date sent with the entry is not used: the
- * person did not choose it (ADR-120), the phone did, when the entry was made.
+ * person did not choose it (issue #811, pending ADR-120), the phone did, when the entry was made.
  */
 @Schema(
         name = "RetailOfflineEntry",

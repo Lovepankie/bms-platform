@@ -259,6 +259,16 @@ scope (an unknown id is outside every scope short of all branches, so a scoped c
 `branch_required` stay 422. A branch checked as a field among others (a transfer's destination, an
 offline sale's branch, a stock minimum's branch) is still the 422 field problem above.
 
+**Entries kept on the phone offline (issue #812, ADR-067 decision 13).** `POST /retail/expenses`, `/retail/savings`,
+`/retail/savings/sales-staff`, `/retail/bankings`, `/retail/withdrawals`, `/retail/purchases`, `/retail/transfers` and
+`/retail/usage` take an optional `offline: {occurred_at, online_as_of?}` (`RetailOfflineEntry`; `occurred_at` required inside
+it, 422 otherwise). The entry is then dated the business day of `occurred_at`, judged as an offline sale is: a time ahead of
+the server is now, and a time more than 2 minutes before `online_as_of` (a phone clock behind) is now too; the date field of the
+route (`business_date`, `purchased_on`, `transfer_date`, `occurred_on`) is not used, and a banking's or withdrawal's time is
+the judged time unless sent. Everything else is checked as online, under the route's own `Idempotency-Key`; an expense that
+reaches the approval amount waits for an administrator with that day fixed (ADR-091). The edit routes (`/expenses/{id}/replace`,
+`/purchases/{id}/replace`) ignore `offline`: an edit is online only.
+
 ## 7.8 Idempotency (money-moving endpoints)
 
 Endpoints marked **M** in the catalogue move money or create financial records. They

@@ -1745,6 +1745,34 @@ profile, refreshed when the app comes online, at sign-in and every 15 minutes (`
 Tests: `outbox.test.ts`, `sync-engine.test.ts`, `catalogue.test.ts`, `offline-sale.dom.test.tsx`, `sync-status.dom.test.tsx`,
 `read-cache.test.ts`, `offline-reading.dom.test.tsx`; backend `RetailOfflineSalesIT` and `PushPublishersIT`.
 
+## The daily forms offline (issue #812, ADR-067 decisions 12 and 13, NFR-OFF-10)
+
+Expenses, Savings (the till's and the sales staff's), Banking, Withdrawals, Buy stock (a delivery), Move stock and Usage and
+damage keep working with no network, in the same outbox, count and dot as Sell.
+
+- **Offline**, each form opens with "**You are offline.** This expense is kept on this phone and sent when the phone is back
+  online." (savings record, banking, withdrawal, delivery, stock move, usage or damage record). No date is asked: the entry is
+  dated when it was made. Item search in Buy stock, Move stock and Usage reads the items saved on this phone. Savings needs the
+  day's figures loaded once while online ("The day's figures are not saved on this phone. Open Savings once while online to
+  save them."); Banking saves without its expected figures.
+- After saving, the form gives way to **Saved on this phone**, what was kept ("Expense, Transport, Fuel, UGX 20,000") and its
+  state: "Waiting to be sent", "Sending", "Waiting to try again: ...", then **Sent** with "Sent. It is recorded." or "Sent. It
+  waits for an administrator to approve it." A refused one reads "Not recorded:" and the server's words, with **Fix** (the form
+  opens on it), **Send again** and **Discard** ("Discard this entry? It is not recorded and is not sent again." **Discard** or
+  **Keep it**). **Record another** (**Move more stock**, **Record another delivery**) opens a fresh form.
+- **Online**, a save with no answer within 2 seconds, or lost on the network, is kept on the phone the same way, under the same
+  key, so a save never waits more than 3 seconds on a slow phone on 3G.
+- **Toasts**: "Expense, Transport, Fuel saved on this phone. It is sent when the phone is back online." when kept, and
+  "Expense sent" (or "Expense sent. It waits for an administrator to approve it.") when it reaches the server.
+- **The sheet** lists entries beside sales, as "Expense, Transport, Fuel 3 Nov 10:12, Test Shop A, UGX 20,000", with the same
+  state words and buttons, and the entries sent today under **Sent today**. Its words add: "So are expenses, savings, banking,
+  withdrawals, deliveries, stock moves, usage and damage. Changing a saved entry needs the internet."
+- **Edit** of a saved expense or delivery offline says "You are offline. Changing a saved entry needs the internet. Your change is
+  not kept on this phone." and does not save.
+
+Tests: `entries.test.ts`, `offline-forms.dom.test.tsx`, `layout/offline-forms.layout.test.ts` (412px, 48px targets, the time
+to save on 3G and Slow 3G); backend `RetailOfflineEntriesIT`.
+
 ## Barcodes, scanning and labels (issue #345)
 
 ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability switch.
