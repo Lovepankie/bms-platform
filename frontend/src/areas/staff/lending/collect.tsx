@@ -98,7 +98,7 @@ export function CollectForm({ target }: { target: CollectTarget }) {
       finish();
       setIntent(made);
     },
-    meta: { success: 'Payment link made' },
+    meta: { success: () => `Payment link for ${money(amountMinor ?? 0, target.currency)} made` },
   });
 
   if (intent) {
@@ -194,7 +194,7 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
   const cancel = useMutation({
     mutationFn: () => payments.cancelIntent(id),
     onSuccess: (view) => queryClient.setQueryData(['payments', 'intent', id], view),
-    meta: { success: 'Payment cancelled' },
+    meta: { success: () => `Payment link for ${money(intent.amount_minor, intent.currency)} cancelled` },
   });
   // Sending the link to the payer's number by text message (issue #231): once per payment; the server refuses in plain words when
   // the business has text messages or mobile money switched off, and a repeat sends nothing.
