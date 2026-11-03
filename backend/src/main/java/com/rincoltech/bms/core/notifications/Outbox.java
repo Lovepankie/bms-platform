@@ -44,6 +44,17 @@ public interface Outbox {
      */
     boolean enqueue(Message message);
 
+    /** What {@link #enqueueTracked} did: whether a row was written and, when it was, its id. */
+    record Enqueued(boolean written, UUID id) {}
+
+    /**
+     * As {@link #enqueue}, also answering the id of the row written, so a caller can later ask where it stands (issue
+     * #772). A test double that does not know its ids answers no id.
+     */
+    default Enqueued enqueueTracked(Message message) {
+        return new Enqueued(enqueue(message), null);
+    }
+
     /**
      * Withdraws the member SMS of one event of the bound tenant that nobody has claimed yet (pending, no attempt): the
      * rows whose key is {@code sms:<template>:<tenant>:<eventRef>:<member>}. A row a sender has claimed may be at the

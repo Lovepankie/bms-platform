@@ -196,10 +196,15 @@ it works only where collections are on (4d step 1) **and** both SMS switches are
 `docs/specs/client-extras.md` section 4.16). Nothing is switched on for any tenant by this change; the SMS add-on stays off by
 default, and on staging the SMS mode is `sink` against the provider's sandbox.
 
-1. **Once per payment.** A second press, or a second person, sends nothing and the screen says it went before. To send again,
-   make a new payment link.
+1. **Once per payment.** A second press, or a second person, sends nothing. The screen says where the text stands, read from
+   the outbox (`text_status`, issue #772): "queued" while it waits ("Check the text message" asks again), "sent" only once the
+   provider took it, and plainly when it failed or ran out of time, with "Make a new payment link", which cancels this payment
+   and starts a new one. When the provider's answer was unknown it says the text may not have arrived and offers no new link:
+   ask the payer, or copy the link. To send again, make a new payment link.
 2. **Only while open.** A link that expired, or a payment that was paid or cancelled, is refused (`intent_not_open`); the text
-   itself expires with the payment, so the outbox never sends a lapsed link.
+   itself expires with the payment, so the outbox never sends a lapsed link. A text still waiting in the outbox when the payment
+   is paid, cancelled, failed or expired is withdrawn (outbox row `failed`, `last_error = 'cancelled_settled'`, issue #772); one
+   a sender already holds may still go.
 3. **Refusals in plain words, nothing written:** `collections_disabled`, `sms_off`, `member_opted_out` (the member asked for no
    SMS at all; a reminders-only opt-out does not block it), `too_many_link_texts` above 3 link texts to one member in an hour,
    `link_text_daily_limit` above 200 link texts for the business in 24 hours, and `link_text_not_queued` when the SMS channel

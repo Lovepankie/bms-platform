@@ -8,7 +8,7 @@ import { QrCode, useCopy } from '../../auth/steps';
 import { useStaff } from '../context';
 import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
-import { flagWords, isCancellable, isSettled, pollDelay, statusWords, suggestedAmount, type CollectKind } from './collect-state';
+import { flagWords, isCancellable, isSettled, linkTextWords, pollDelay, statusWords, suggestedAmount, type CollectKind } from './collect-state';
 import { money, parseAmount } from './loan-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
@@ -198,10 +198,23 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
   });
   // Sending the link to the payer's number by text message (issue #231): once per payment; the server refuses in plain words when
   // the business has text messages or mobile money switched off, and a repeat sends nothing.
+  // The last answer is kept while "Check the text message" asks again, so the sentence never blinks out.
+  const [textAnswer, setTextAnswer] = useState<PaymentLinkText | null>(null);
   const text = useMutation({
     mutationFn: () => payments.textLink(id),
+    onSuccess: setTextAnswer,
     // The toast only when the server queued a new text; a repeat is said in the sentence under the link, a refusal in the problem.
-    meta: { success: (sent: PaymentLinkText) => (sent.already_sent ? null : 'Link sent by text message') },
+    // Queued, not sent: the sentence says sent only once the provider took it (issue #772).
+    meta: { success: (sent: PaymentLinkText) => (sent.already_sent ? null : 'Link queued for a text message') },
+  });
+  const textWords = textAnswer ? linkTextWords(textAnswer, intent.payer_phone) : null;
+  // A text that failed or expired cannot be sent again for this payment: this one is cancelled and a new link is made.
+  // toast-exempt: the screen moves to the new payment form, which is the answer.
+  const renew = useMutation({
+    mutationFn: async () => {
+      if (isCancellable(status)) await payments.cancelIntent(id);
+    },
+    onSuccess: onNew,
   });
   const link = intent.redirect_url;
   const open = status === 'pending' || status === 'created';
@@ -225,19 +238,23 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
           <button type="button" onClick={() => copy('link', link)}>
             {copied === 'link' ? 'Copied' : 'Copy the link'}
           </button>
-          {status === 'pending' && !text.data && (
+          {status === 'pending' && !textAnswer && (
             <BusyButton busy={text.isPending} type="button" onClick={() => text.mutate()}>
               Send the link by text message
             </BusyButton>
           )}
-          {text.data && (
-            <p role="status">
-              {text.data.already_sent
-                ? 'The link was already sent by text message to this number.'
-                : `The link was sent by text message to ${intent.payer_phone ?? 'the payer'}.`}
-            </p>
+          {textWords && <p role="status">{textWords.words}</p>}
+          {textWords?.pending && status === 'pending' && (
+            <BusyButton busy={text.isPending} type="button" onClick={() => text.mutate()}>
+              Check the text message
+            </BusyButton>
           )}
-          <Problem error={text.error} />
+          {textWords?.renew && isCancellable(status) && (
+            <BusyButton busy={renew.isPending} type="button" className="rt-primary" onClick={() => renew.mutate()}>
+              Make a new payment link
+            </BusyButton>
+          )}
+          <Problem error={text.error ?? renew.error} />
         </div>
       )}
       {intent.confirmation_code && (

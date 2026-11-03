@@ -10,9 +10,11 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -31,8 +33,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>The caller holds {@code core.payments.collect} in the intent's branch; anyone else is told it does not exist.
  *   <li>Collecting by mobile money or card is on for the business ({@code collections_disabled} otherwise) and SMS is
  *       on, both switches ({@code sms_off} otherwise): a plain refusal, nothing written.
- *   <li>Once per intent: a second send for the same intent writes nothing and answers {@code already_sent}. The outbox
- *       key is per intent and member, so even a race writes one row.
+ *   <li>Once per intent: a second send for the same intent writes nothing and answers {@code already_sent} with where
+ *       the earlier text stands ({@code text_status}: queued, sent, failed or expired, issue #772). The outbox key is per
+ *       intent and member, so even a race writes one row. A text still waiting when its payment closes is withdrawn
+ *       ({@link IntentStore#update}).
  *   <li>Only while the intent is open: {@code pending} with a link and before its expiry; the text expires with the
  *       intent, so a link that has lapsed is never sent ({@code intent_not_open}).
  *   <li>A member who asked for no SMS at all is not texted ({@code member_opted_out}).
@@ -57,9 +61,29 @@ class PaymentLinkTexts {
 
     static final int PER_BUSINESS_PER_DAY = 200;
 
-    /** What the screen is told. {@code alreadySent}: this intent's link had been texted before and nothing new went. */
+    /**
+     * The longest business name the text carries (issue #772): with the provider's address of about 113 characters, a
+     * large amount and a savings account reference, the text stays within two GSM-7 segments.
+     */
+    static final int NAME_MAX = 40;
+
+    /** How long a transactional text waits in the outbox at most, as the SMS channel sets it (spec 4.6). */
+    static final Duration TEXT_LIFETIME = Duration.ofHours(1);
+
+    /**
+     * What the screen is told. {@code alreadySent}: this intent's link had been texted before and nothing new went.
+     * {@code textStatus}: where that text stands, read from the outbox (issue #772), never assumed.
+     * JUSTIFICATION-A3: the answer gains one field and its two constants; no new mechanism.
+     */
     @Schema(name = "PaymentLinkText")
-    record LinkText(UUID intentId, boolean alreadySent, Instant expiresAt) {}
+    record LinkText(
+            UUID intentId,
+            boolean alreadySent,
+
+            @Schema(allowableValues = {"queued", "sent", "failed", "unconfirmed", "expired"})
+            String textStatus,
+
+            Instant expiresAt) {}
 
     private final IntentStore store;
     private final IntentAudit audit;
@@ -124,8 +148,9 @@ class PaymentLinkTexts {
                 .param("payments:link-text:" + intent.tenantId())
                 .query((rs, n) -> 0)
                 .list();
-        if (alreadyTexted(intentId)) {
-            return new LinkText(intentId, true, intent.expiresAt());
+        Optional<Texted> texted = texted(intentId);
+        if (texted.isPresent()) {
+            return new LinkText(intentId, true, textStatus(intent, texted.get()), intent.expiresAt());
         }
         // Read again under the intent's row lock: a payment confirmed since the first read is not texted.
         intent = store.lock(intentId).orElseThrow(ApiException::notFound);
@@ -163,6 +188,8 @@ class PaymentLinkTexts {
                             + " payment links in the last hour. Wait a while, or copy the link instead.");
         }
         Map<String, String> params = new LinkedHashMap<>();
+        // The name with no dash and bounded, so the words carry no dash and the text stays within two segments.
+        params.put("tenant_name", sms.plainTenantName(NAME_MAX));
         params.put("currency", intent.currency());
         params.put("amount", sms.amount(intent.amountMinor(), intent.currency()));
         // No dashes in the text: a loan number such as LN-HQ-000123 is written LN HQ 000123.
@@ -170,7 +197,7 @@ class PaymentLinkTexts {
                 "reference",
                 handler.label(intent.subjectId()).orElse("your payment").replace('-', ' '));
         params.put("link", intent.redirectUrl());
-        SmsEvents.Result result = sms.queue(new SmsEvents.MemberSms(
+        SmsEvents.Queued queued = sms.queueTracked(new SmsEvents.MemberSms(
                 TEMPLATE,
                 member,
                 intent.payerPhone(),
@@ -179,7 +206,7 @@ class PaymentLinkTexts {
                 Outbox.TRANSACTIONAL,
                 null,
                 intent.expiresAt()));
-        switch (result) {
+        switch (queued.result()) {
             case QUEUED -> {}
             // Not "already sent": the outbox row and the audit row are written in one transaction and the audit row was
             // looked for above, under the member's lock, so no row exists for this intent. The channel refused it (a
@@ -203,16 +230,59 @@ class PaymentLinkTexts {
         extra.put("member_id", member.toString());
         extra.put("template", TEMPLATE);
         extra.put("expires_at", intent.expiresAt().toString());
+        // The outbox row's id, so a later press reads where this text stands (issue #772): an internal id, not the
+        // number.
+        if (queued.rowId() != null) {
+            extra.put("outbox_id", queued.rowId().toString());
+        }
         audit.user(intent, "link_texted", intent.status(), extra);
-        return new LinkText(intentId, false, intent.expiresAt());
+        return new LinkText(intentId, false, "queued", intent.expiresAt());
     }
 
-    private boolean alreadyTexted(UUID intentId) {
-        return Boolean.TRUE.equals(
-                jdbc.sql("""
-                        SELECT EXISTS (SELECT 1 FROM audit_log
-                                       WHERE entity_type = 'payment_intent' AND entity_id = ? AND action = ?)
-                        """).params(intentId, ACTION).query(Boolean.class).single());
+    /** That an intent's link was texted: whether the text's hour has run out, and its outbox row (null before #772). */
+    record Texted(boolean hourOver, UUID outboxId) {}
+
+    /**
+     * Whether this intent's link was texted, from its audit row: empty when it never was. The hour is read on the
+     * database's clock, the one the audit row is stamped with.
+     */
+    private Optional<Texted> texted(UUID intentId) {
+        return jdbc.sql("""
+                        SELECT created_at <= now() - CAST(? AS interval) AS hour_over,
+                               data -> 'after' ->> 'outbox_id' AS outbox_id
+                        FROM audit_log
+                        WHERE entity_type = 'payment_intent' AND entity_id = ? AND action = ?
+                        ORDER BY created_at LIMIT 1
+                        """)
+                .params(TEXT_LIFETIME.toMinutes() + " minutes", intentId, ACTION)
+                .query((rs, n) -> new Texted(
+                        rs.getBoolean("hour_over"),
+                        rs.getString("outbox_id") == null ? null : UUID.fromString(rs.getString("outbox_id"))))
+                .optional();
+    }
+
+    /**
+     * Where the earlier text stands (issue #772). One that has not reached the provider is queued until its time runs out
+     * (the intent's expiry or the transactional hour) or its payment closes, and expired after.
+     */
+    private String textStatus(Intent intent, Texted texted) {
+        boolean hourOver = texted.hourOver();
+        return switch (sms.status(texted.outboxId())) {
+            case PENDING -> "queued";
+            case SENT -> "sent";
+            case FAILED -> "failed";
+            case UNCONFIRMED -> "unconfirmed";
+            // A known row no longer waiting that never reached the provider will never go: expired. Only a text queued
+            // before this release (no outbox id in its audit row, so its row cannot be read) is "queued" while its time
+            // lasts, so staff are not led to cancel a payment whose text may yet go.
+            case NOT_SENT ->
+                texted.outboxId() != null
+                                || hourOver
+                                || !clock.now().isBefore(intent.expiresAt())
+                                || !"pending".equals(intent.status())
+                        ? "expired"
+                        : "queued";
+        };
     }
 
     /**

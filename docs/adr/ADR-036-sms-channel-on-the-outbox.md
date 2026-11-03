@@ -6,7 +6,8 @@ Accepted. Designed in issue #210 (spec `docs/specs/client-extras.md` section 4);
 and 8 to 14 except the tenant screens, is built by issue #212 (see the first Amendment below), and the tenant settings,
 the sender id allow-list, the opt-out screens and the template overrides by issue #218 (see the second Amendment).
 Delivery reports (decision 7) come with #215, reminders with #227. The loan, savings and investment events (spec 4.11) are queued
-by issue #221 (see the third Amendment below; migration `V53`).
+by issue #221 (see the third Amendment below; migration `V53`). The payment link text's status is read as in the fourth
+Amendment (issue #772, no migration).
 Settles the SMS half of what chapter 12 section 12.3.3 carried as pending ADR-013; USSD remains pending ADR-013.
 Builds on ADR-008 (jobs), ADR-016 (definer functions), ADR-024 (the outbox), ADR-032 (savings
 receipts queued as SMS that expire unsent). Implements FR-NTF-02 to FR-NTF-07 and the SMS events of
@@ -425,3 +426,21 @@ administrator who forgets `notify_member: false` on an import after SMS is on st
 **Watch for:** an event that carries a new value must add the placeholder to its whitelist (a test renders every default and its worst
 case); the Pesapal repayment (#216) must pass its own receipt-notice decision to the loan port and queue through `SmsEvents`, not around
 it; a new reversal path must call the module's `reversed(...)` notice.
+
+## Amendment (issue #772, the payment link text's status)
+
+No migration. A caller that must later say where its text stands (the payment link of #231) queues it through
+`SmsEvents.queueTracked`, which answers the outbox row's id, and keeps that id (the link text keeps it in its audit row as
+`outbox_id`, never the number). `SmsEvents.status(id)` reads `notification_outbox_is_pending` and then the tenant's one
+`sms_deliveries` row (`UNIQUE (tenant_id, outbox_id)`): queued, sent, failed, unconfirmed (outcome unknown) or never reached
+the provider. Every outbox row keeps a random id, so only the idempotency key decides a repeat (`ON CONFLICT` on its index)
+and two concurrent enqueues of one key write one row without an error. The row is not read by its key: the application
+reaches the outbox only through its definer functions and none reads by key, and the lead chose this design over a new
+function.
+
+**Known gap, accepted:** a link text queued before this release has no `outbox_id`, so its real state cannot be read; it
+reads queued until its time is up (the hour or the intent's expiry), then expired, even if the provider delivered it.
+Accepted because no link text is live anywhere when this ships (staging SMS is a sink and no provider credit exists).
+
+A link text still waiting is withdrawn (`cancelled_settled`) when its payment leaves `pending`, as a reversal withdraws a
+receipt.

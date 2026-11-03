@@ -26,12 +26,17 @@ final class SmsSegments {
 
     private SmsSegments() {}
 
+    /** Whether {@code c} is one septet of the GSM 03.38 default alphabet (not the escape, not the extension table). */
+    static boolean basic(char c) {
+        return c != '\u001b' && BASIC.indexOf(c) >= 0;
+    }
+
     static Count count(String body) {
         int septets = 0;
         boolean gsm = true;
         for (int i = 0; i < body.length(); i++) {
             char c = body.charAt(i);
-            if (c != '\u001b' && BASIC.indexOf(c) >= 0) {
+            if (basic(c)) {
                 septets++;
             } else if (EXTENSION.contains(c)) {
                 septets += 2;
