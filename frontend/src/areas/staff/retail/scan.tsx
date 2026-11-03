@@ -58,6 +58,10 @@ const UNSTORABLE = /[%;?#/\\]/;
 
 type Outcome = { kind: 'added'; name: string } | { kind: 'refused'; message: string } | { kind: 'unknown'; code: string } | { kind: 'failed'; error: unknown } | null;
 
+/** When the copy a row came from was read (ms), carried on the row while a scan searches the copies; never on the line. */
+const READ_AT = Symbol('readAt');
+type Dated = Product & { [READ_AT]?: number };
+
 /**
  * The Scan box and the camera button over a form's lines. `onFound` gets the item, with its balance at `branchId` when
  * given, and the pack the barcode is on (absent for the item's own unit); it returns a message instead when the form
@@ -124,19 +128,20 @@ export function ScanBar({ id, branchId, onFound, autoFocus = false, toasts = fal
       // The phone's offline catalogue (issue #458) holds the items of each selling branch with their barcodes too.
       const onPhone = offline?.catalogue?.products ?? {};
       // Each copy's item keeps when that copy was read (issue #769): the phone's copy as of its prices, a screen's answer
-      // as of its query.
-      const readAt = new Map<Product, number>();
-      const phoneAt = offline?.catalogue?.pricesAsOf ? Date.parse(offline.catalogue.pricesAsOf) : undefined;
-      const phone = branchId ? onPhone[branchId] ?? [] : Object.values(onPhone).flat();
-      if (phoneAt) phone.forEach((p) => readAt.set(p, phoneAt));
+      // as of its query. Each row carries its own copy's time, so the item found is dated by the copy that matched, even
+      // when another copy holds the same item, or the search hands back a copy of the row (issue #776, review of #784);
+      // an unknown time stays unknown.
+      const dated = (rows: Product[], at: number | undefined): Dated[] => rows.map((p) => ({ ...p, [READ_AT]: at }));
+      const phone = dated(branchId ? onPhone[branchId] ?? [] : Object.values(onPhone).flat(), offline?.catalogue?.pricesAsOf ? Date.parse(offline.catalogue.pricesAsOf) || undefined : undefined);
       const screens = queryClient.getQueryCache().findAll({ queryKey: ['retail', 'products'] }).flatMap((q) => {
         const data = q.state.data as Product[] | { items?: Product[] } | undefined;
-        const rows = Array.isArray(data) ? data : data?.items ?? [];
-        rows.forEach((p) => q.state.dataUpdatedAt && readAt.set(p, q.state.dataUpdatedAt));
-        return rows;
+        return dated(Array.isArray(data) ? data : data?.items ?? [], q.state.dataUpdatedAt || undefined);
       });
       const hit = error instanceof TypeError ? findByBarcodeIn([...phone, ...screens], code) : null;
-      if (hit) found(hit.product, hit.unitId, readAt.get(hit.product));
+      if (hit) {
+        const { [READ_AT]: at, ...product } = hit.product as Dated;
+        found(product, hit.unitId, at);
+      }
       else {
         feedback(false);
         setOutcome({ kind: 'failed', error });

@@ -37,15 +37,18 @@ sometimes twice: the banner under the bar and the screen's own red error. The ow
    the kept reads already in memory leave the query cache too, whether or not the person still has offline support (selling
    taken away, signed out). Opened with no network, the rights come from the profile saved on the phone, which may lag the
    copy: a copy that does not match is then not shown, and not deleted either; it is deleted only once a ping of `/healthz`
-   confirms the server answers (the browser alone says online on Wi-Fi with no internet). A write of the old rights still
-   under way finishes before the copy is read again.
+   confirms the server answers (the browser alone says online on Wi-Fi with no internet). Until that ping, no new read is
+   written over it either (issue #774): each write that meets such a copy asks the ping again until one answers. The
+   removal runs in turn with these writes and only while the copy is still the other rights' one, so a fresh copy written
+   during a slow ping stays. A write of the old rights still under way finishes before the copy is read again.
 4. **Cap.** Sales older than 30 days by their sale date are cut from the kept sales lists, and a single sale that old is not
    kept, apart from credit sales still owing; any kept read older than 30 days is dropped; the whole copy is held under
    2,000,000 JSON characters, newest reads first. A read is written about two seconds after it loads, merged with what was
    kept before, so a screen not opened today keeps its last copy.
 5. **Cleared at sign-out.** The copy goes with the catalogue copy and the saved profile, after the sign-out warning of
    ADR-067 decision 9 has been answered; the kept reads leave the query cache first (so a device store that fails never leaves
-   them for the next person in the tab), a write under way is waited for and nothing is written after it. A person who no longer sells (no offline support) has their copy removed when they sign in and
+   them for the next person in the tab), a write under way is waited for and nothing is written after it, and a copy still
+   being read when the person signs out or the layout leaves is never put back (issue #774). A person who no longer sells (no offline support) has their copy removed when they sign in and
    when they sign out.
 6. **Read only, paused offline.** React Query takes the app as offline when the offline support does (the browser's events and
    the ping of `/healthz`, ADR-067 decision 4), so reads pause instead of failing. Going offline, a kept read that failed

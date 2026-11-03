@@ -16,7 +16,7 @@ import { newIdempotencyKey } from './idempotency';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { bigDrop, parseQty, qtyString, showQty } from './maths';
-import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
+import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, oldestRead, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { chosenPack, enteredPriceMinor, enteredQty, quantityIn, sellingPacks, unitWord, unitWords } from './units-state';
 import { EmptyState } from '../../../components/states';
@@ -618,8 +618,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
     // prices_as_of is sent then, and the server holds each price to today's (ADR-067 decision 4), never a later read time.
     const reads = draft.lines.map((l) => l.readAt);
     if (resolved) reads.push(resolution.dataUpdatedAt ? new Date(resolution.dataUpdatedAt).toISOString() : undefined);
-    const known = reads.length > 0 && reads.every((r) => !!r);
-    const pricesAt = draft.sent ? draft.sent.pricesAt : known ? (reads as string[]).sort()[0] : undefined;
+    const pricesAt = draft.sent ? draft.sent.pricesAt : oldestRead(reads);
     if (offline) setDraft((d) => ({ ...d, sent: d.sent ?? { body, at, ...(pricesAt ? { pricesAt } : {}) } }));
     save.mutate({ body, at, pricesAt });
   };

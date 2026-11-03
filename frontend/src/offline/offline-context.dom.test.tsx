@@ -218,6 +218,59 @@ describe('a shared phone', () => {
     expect(await store.readCache(scopeOf(HOST, 'u1'))).toEqual(stale);
   });
 
+  // JUSTIFICATION-A3: a new test case the #774 follow-up asks for (the restore chain against sign-out and unmount).
+  it('never puts back a copy still being read when the person signs out, or when the layout leaves (issue #774)', async () => {
+    const seller: Me = { ...mockMe('sales'), user_id: 'u1' };
+    const copy = { savedAt: 1, access: accessOf(seller), entries: [{ queryKey: ['retail', 'home', 'all'], queryHash: '["retail","home","all"]', state: { data: { title: 'Test kept figures' }, dataUpdatedAt: Date.now(), status: 'success' } }] } as never;
+    // A slow device store: the copy is read only when the test lets it go.
+    const slow = () => {
+      const store = memoryStore();
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((r) => (release = r));
+      const readCache = (scope: string) => gate.then(() => (scope === scopeOf(HOST, 'u1') ? copy : null));
+      return { store: { ...store, readCache }, release: () => release() };
+    };
+
+    const signOut = slow();
+    const first = new QueryClient();
+    const { result } = renderHook(() => useOfflineSupport(seller, false, services(signOut.store, async () => {}), first));
+    await waitFor(() => expect(result.current).not.toBeNull());
+    await act(() => result.current!.forget());
+    signOut.release();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(first.getQueryData(['retail', 'home', 'all'])).toBeUndefined();
+    cleanup();
+
+    const unmount = slow();
+    const second = new QueryClient();
+    const mounted = renderHook(() => useOfflineSupport(seller, false, services(unmount.store, async () => {}), second));
+    await waitFor(() => expect(mounted.result.current).not.toBeNull());
+    mounted.unmount();
+    unmount.release();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(second.getQueryData(['retail', 'home', 'all'])).toBeUndefined();
+  });
+
+  // JUSTIFICATION-A3: the test the review of #784 asks for (the restore's removal against the keeper's fresh write).
+  it("never removes the fresh copy the keeper wrote while the restore's ping was slow (review of #784)", async () => {
+    const store = memoryStore();
+    const seller: Me = { ...mockMe('sales'), user_id: 'u1' };
+    await store.putReadCache(scopeOf(HOST, 'u1'), { savedAt: 1, access: accessOf(mockMe('admin')), entries: [] });
+    // The restore's ping is slow on a cold link; the keeper's own ping, later, answers at once.
+    let answer: (ok: boolean) => void = () => undefined;
+    let pings = 0;
+    const base = services(store, async () => {});
+    const slowFirst = () => ({ ...base(), connectivity: { ...testConnectivity(true), check: () => (pings++ === 0 ? new Promise<boolean>((r) => (answer = r)) : Promise.resolve(true)) } });
+    const client = new QueryClient();
+    renderHook(() => useOfflineSupport(seller, false, slowFirst, client));
+    await waitFor(() => expect(pings).toBe(1));
+    await client.fetchQuery({ queryKey: ['retail', 'home', 'all'], queryFn: async () => ({ title: 'Test fresh figures' }) });
+    await waitFor(async () => expect((await store.readCache(scopeOf(HOST, 'u1')))?.access).toBe(accessOf(seller)), { timeout: 5000 });
+    answer(true);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(JSON.stringify(await store.readCache(scopeOf(HOST, 'u1')))).toContain('Test fresh figures');
+  });
+
   it('opened offline, keeps a copy the saved profile does not match, and shows a copy it does (issue #763)', async () => {
     const store = memoryStore();
     const seller: Me = { ...mockMe('sales'), user_id: 'u1' };

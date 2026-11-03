@@ -143,6 +143,67 @@ describe('keeping and restoring', () => {
     }
   });
 
+  // JUSTIFICATION-A3: a new test case the #774 follow-up asks for (no write over a copy of other rights before a ping).
+  it('never writes over a copy made under other rights before a ping confirms the network, then replaces it (issue #774)', async () => {
+    const store = memoryStore();
+    const other = { savedAt: 1, access: accessOf(mockMe('sales')), entries: [entry(['retail', 'home', 'all'], 'Test figures under other rights', Date.now())] };
+    await store.putReadCache(SHOP, other);
+    const client = new QueryClient();
+    let reachable = false;
+    let pings = 0;
+    const keeper = keepReads(client, store, SHOP, ADMIN, () => Date.now(), 0, async () => (pings++, reachable));
+    await fetched(client, ['retail', 'dashboard', 'all'], { title: 'Test fresh totals' });
+    await expect.poll(() => pings).toBe(1);
+    await keeper.settled();
+    expect(await store.readCache(SHOP)).toEqual(other);
+
+    reachable = true;
+    await fetched(client, ['retail', 'stock', 'b1'], { items: ['Test item 01'] });
+    await expect.poll(async () => (await store.readCache(SHOP))?.access).toBe(ADMIN);
+    keeper.stop();
+    const kept = JSON.stringify(await store.readCache(SHOP));
+    expect(kept).not.toContain('other rights');
+    expect(kept).toContain('Test fresh totals');
+  });
+
+  // JUSTIFICATION-A3: the tests the review of #784 asks for (a stop during a slow ping, a removal after a fresh write).
+  it('writes nothing when stopped or signed out during a slow ping, and never removes a fresh copy it wrote (review of #784)', async () => {
+    const other = () => ({ savedAt: 1, access: accessOf(mockMe('sales')), entries: [entry(['retail', 'home', 'all'], 'Test figures under other rights', Date.now())] });
+    for (const end of ['stop', 'forget'] as const) {
+      const store = memoryStore();
+      const before = other();
+      await store.putReadCache(SHOP, before);
+      const client = new QueryClient();
+      let answer: (ok: boolean) => void = () => undefined;
+      const keeper = keepReads(client, store, SHOP, ADMIN, () => Date.now(), 0, () => new Promise<boolean>((r) => (answer = r)));
+      await fetched(client, ['retail', 'dashboard', 'all'], { title: 'Test totals read during the ping' });
+      await settle();
+      if (end === 'stop') keeper.stop();
+      const ended = end === 'forget' ? keeper.forget() : Promise.resolve();
+      answer(true);
+      await ended;
+      await keeper.settled();
+      const kept = await store.readCache(SHOP);
+      expect(JSON.stringify(kept)).not.toContain('read during the ping');
+      if (end === 'stop') expect(kept).toEqual(before);
+    }
+
+    // A slow ping of the restore answers after the keeper has already replaced the copy: the fresh copy stays.
+    const store = memoryStore();
+    await store.putReadCache(SHOP, other());
+    const client = new QueryClient();
+    const keeper = keepReads(client, store, SHOP, ADMIN, () => Date.now(), 0, async () => true);
+    await fetched(client, ['retail', 'dashboard', 'all'], { title: 'Test fresh totals' });
+    await expect.poll(async () => (await store.readCache(SHOP))?.access).toBe(ADMIN);
+    await keeper.dropOther();
+    expect(JSON.stringify(await store.readCache(SHOP))).toContain('Test fresh totals');
+    // While the copy is still the other rights' one, it goes.
+    await store.putReadCache(SHOP, other());
+    await keeper.dropOther();
+    expect(await store.readCache(SHOP)).toBeNull();
+    keeper.stop();
+  });
+
   it('never puts back figures older than what the screen already holds', () => {
     const client = new QueryClient();
     client.setQueryData(['retail', 'home', 'all'], 'fresh', { updatedAt: NOW });

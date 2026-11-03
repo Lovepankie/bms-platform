@@ -29,6 +29,7 @@ globalThis.Request = class extends BaseRequest {
 
 const createSale = vi.fn();
 const listProducts = vi.fn();
+const resolvePrices = vi.fn();
 
 vi.mock('../api/retail', async (original) => {
   const real = await original<typeof import('../api/retail')>();
@@ -38,6 +39,7 @@ vi.mock('../api/retail', async (original) => {
       ...real.retail,
       createSale: (...a: unknown[]) => createSale(...a),
       listProducts: (...a: unknown[]) => listProducts(...a),
+      resolvePrices: (...a: unknown[]) => resolvePrices(...a),
       listCustomers: () => Promise.reject(new TypeError('Failed to fetch')),
       branchRoles: () => Promise.reject(new TypeError('Failed to fetch')),
       stockedBranches: () => Promise.reject(new TypeError('Failed to fetch')),
@@ -58,11 +60,11 @@ const branch = seller.branches?.[0]?.id ?? '';
 const bulb = { id: 'p2', code: 'BLB-9', description: 'Test Bulb 9W', category: 'Test Lighting', unit: 'pc', sell_minor: 5000, qty: '1.000', active: true } as Product;
 const catalogue = { pricesAsOf: '2026-10-22T09:14:00.000Z', products: { [branch]: [bulb] }, customers: [{ id: 'c1', name: 'Test Customer 05' }] };
 
-function screenWith(offline: ReturnType<typeof testOffline>) {
+function screenWith(offline: ReturnType<typeof testOffline>, me = seller) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <StaffContext.Provider value={{ me: seller, branch }}>
+      <StaffContext.Provider value={{ me, branch }}>
         <OfflineProvider value={offline}>
           <RecordSale />
         </OfflineProvider>
@@ -89,6 +91,7 @@ afterEach(() => {
   cleanup();
   createSale.mockReset();
   listProducts.mockReset();
+  resolvePrices.mockReset();
 });
 
 describe('Record a sale offline', () => {
@@ -307,6 +310,72 @@ describe('Record a sale offline', () => {
       const [item] = offline.engine.snapshot().items;
       expect(item?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
       expect(item?.request.occurred_at).toBe('2026-11-02T09:10:00.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // JUSTIFICATION-A3: the tests the #776 follow-up asks for (the oldest of several read times), not a mechanism.
+  it('dates the kept copy as of the oldest read: two lines, a cached answer picked later, a price list read later (issue #776)', async () => {
+    const cable = { id: 'p3', code: 'CBL-2', description: 'Test Cable 2.5mm', category: 'Test Wiring', unit: 'm', sell_minor: 3000, qty: '50.000', active: true } as Product;
+    createSale.mockRejectedValue(new TypeError('Failed to fetch'));
+    listProducts.mockImplementation(async ({ query }: { query: string }) => (query === 'cable' ? [cable] : [bulb]));
+    const pick = async (term: string, name: RegExp) => {
+      fireEvent.change(screen.getByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: term } });
+      return screen.findByRole('option', { name });
+    };
+    const record = async () => {
+      const save = screen.getByRole('button', { name: /^Record sale/ }) as HTMLButtonElement;
+      await waitFor(() => expect(ready(save)).toBe(true));
+      fireEvent.click(save);
+      expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
+    };
+    const at = (time: string) => vi.setSystemTime(new Date(`2026-11-02T${time}:00.000Z`));
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      // Two lines: the bulb read at 09:00, the cable at 09:05; the copy is priced as of 09:00.
+      const two = testOffline(seller, { online: true, catalogue });
+      if (!two) throw new Error('a seller sells offline');
+      at('09:00');
+      screenWith(two);
+      fireEvent.click(await pick('bulb', /^Test Bulb 9W/));
+      at('09:05');
+      fireEvent.click(await pick('cable', /^Test Cable 2.5mm/));
+      at('09:10');
+      await record();
+      expect(two.engine.snapshot().items[0]?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
+      cleanup();
+      sessionStorage.clear();
+
+      // The answer read at 09:00 and picked at 09:07: the copy is priced as of the read, not the pick.
+      const cached = testOffline(seller, { online: true, catalogue });
+      if (!cached) throw new Error('a seller sells offline');
+      at('09:00');
+      screenWith(cached);
+      const option = await pick('bulb', /^Test Bulb 9W/);
+      at('09:07');
+      fireEvent.click(option);
+      await record();
+      expect(cached.engine.snapshot().items[0]?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
+      cleanup();
+      sessionStorage.clear();
+
+      // Price lists on: the item read at 09:00, its list price resolved at 09:05; the copy is priced as of 09:00.
+      const lister = { ...seller, module_capabilities: { ...seller.module_capabilities, retail: [...(seller.module_capabilities?.retail ?? []), 'price_lists'] } };
+      const listed = testOffline(lister, { online: true, catalogue });
+      if (!listed) throw new Error('a seller sells offline');
+      resolvePrices.mockImplementation(async () => {
+        at('09:05');
+        return { price_list: 'Test List A', origin: 'sale', lines: [{ product_id: 'p2', qty: '1', unit_price_minor: 4800, line_total_minor: 4800, price_source: 'price_list' }] };
+      });
+      at('09:00');
+      screenWith(listed, lister);
+      fireEvent.click(await pick('bulb', /^Test Bulb 9W/));
+      expect(await screen.findByText(/Priced from the list Test List A/)).toBeTruthy();
+      expect(resolvePrices).toHaveBeenCalled();
+      at('09:10');
+      await record();
+      expect(listed.engine.snapshot().items[0]?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
     } finally {
       vi.useRealTimers();
     }

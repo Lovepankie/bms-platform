@@ -13,6 +13,7 @@ import { useStaff } from './context';
 import { PlanCard } from './plan';
 import { ShortLinkCard } from './short-link';
 import { Hint } from '../../app/ui/Hint';
+import { useHashSection } from '../../app/ui/useHashSection';
 import { sayDone } from './retail/toast';
 
 // Business set-up (FR-TEN-08): name, logo, theme colour and receipt footer, with a checklist a new
@@ -105,6 +106,8 @@ export function Setup() {
     setFooter(loaded.receipt_footer ?? '');
     setColour(loaded.theme_primary ?? '');
   }, [loaded]);
+  // A link to a section (the Reports page's switch them on goes to #reports, issue #783) lands on it once the settings load.
+  useHashSection(loaded !== undefined);
 
   if (settings.isError) return <p>Could not load the settings.</p>;
   if (!loaded) return <p>Loading</p>;

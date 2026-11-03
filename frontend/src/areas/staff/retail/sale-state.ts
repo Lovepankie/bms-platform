@@ -81,6 +81,15 @@ export function newLine(product: Product, readAt?: string): DraftLine {
   return { product, qty: '1', price: String(product.sell_minor ?? 0), ...(readAt ? { readAt } : {}) };
 }
 
+/**
+ * The oldest of the read times, as an ISO time, or undefined when there is none or one is not known or not a time (issue
+ * #776). Each is parsed, so a time with an offset or without milliseconds compares by the moment it names, not as text.
+ */
+export function oldestRead(reads: (string | undefined)[]): string | undefined {
+  const times = reads.map((r) => (r ? Date.parse(r) : NaN));
+  return times.length > 0 && times.every(Number.isFinite) ? new Date(Math.min(...times)).toISOString() : undefined;
+}
+
 /** Quantity and unit price as numbers when both are valid, and the line total they give. */
 export function lineFigures(line: DraftLine): { qtyMilli: number; priceMinor: number; totalMinor: number } | null {
   const qtyMilli = parseQty(line.qty);

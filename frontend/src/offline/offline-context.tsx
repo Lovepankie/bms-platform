@@ -265,6 +265,8 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
   const reads = useRef<ReadKeeper | null>(null);
   // The rights the kept reads in memory were loaded under, to drop them when the rights change in the session.
   const accessBefore = useRef<string | null>(null);
+  // Turns off the restore under way, so a copy still being read never comes back after sign-out or unmount (issue #774).
+  const stopRestore = useRef<(() => void) | null>(null);
   // A manager made a seller, a branch taken away, selling taken away, signed out: what was read under the old rights leaves
   // memory, never shown offline. Whether or not the person still has offline support, so before anything else.
   useEffect(() => {
@@ -275,10 +277,12 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
   useEffect(() => {
     if (!svc || !scope || !client) return;
     let live = true;
+    stopRestore.current = () => void (live = false);
     const now = () => svc.now().getTime();
     // The keeper of the old rights may still be writing: its copy is read (and thrown away) only once it has finished.
     const before = reads.current;
-    const keeper = keepReads(client, svc.store, scope, access, now);
+    // A copy made under other rights is written over only once a ping confirms the server answers (issue #774).
+    const keeper = keepReads(client, svc.store, scope, access, now, undefined, () => svc.connectivity.check());
     reads.current = keeper;
     void (before?.settled() ?? Promise.resolve())
       .then(() => svc.store.readCache(scope))
@@ -289,7 +293,9 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
             // Online the rights are the server's own, so a copy made under others goes, once a ping confirms the server
             // answers (Wi-Fi with no internet says online). Opened offline they come from the profile saved on the phone,
             // which may lag the copy: it is not shown, and not destroyed either.
-            if (await svc.connectivity.check().catch(() => false)) await svc.store.deleteReadCache(scope);
+            // In turn with the keeper's writes, and only while the copy is still the other rights' one: a fresh copy the
+            // keeper wrote during a slow ping is never removed.
+            if ((await svc.connectivity.check().catch(() => false)) && live) await keeper.dropOther();
             return;
           }
           keeper.adopt(restore(client, c, now(), access));
@@ -344,7 +350,9 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       catalogueLoading: readScope !== scope,
       refresh,
       forget: async () => {
-        // The kept reads leave memory first; a device store that fails here never stops the rest of the sign-out.
+        // The kept reads leave memory first, and a restore still reading the copy is turned off, so nothing comes back; a
+        // device store that fails here never stops the rest of the sign-out.
+        stopRestore.current?.();
         if (client) forgetInMemory(client);
         await reads.current?.forget().catch(() => undefined);
         await svc.store.deleteReadCache(scope).catch(() => undefined);

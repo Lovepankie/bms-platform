@@ -154,6 +154,8 @@ describe('the approval rules screen', () => {
       expect(scrolled).not.toHaveBeenCalled();
       answer(read);
       await waitFor(() => expect(scrolled).toHaveBeenCalledWith('rule-retail_sale_void'));
+      // The row takes the focus, never its amount field, so a phone's keyboard does not open over it (review of #784).
+      expect(document.activeElement?.id).toBe('rule-retail_sale_void');
     } finally {
       Element.prototype.scrollIntoView = original;
       window.location.hash = '';
