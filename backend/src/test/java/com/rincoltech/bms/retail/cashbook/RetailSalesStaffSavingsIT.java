@@ -28,8 +28,8 @@ import tools.jackson.databind.JsonNode;
 /**
  * Issue #799, ADR-115: with the Owner's switch "Salespeople can see and change the savings amount" on, a user signed in with
  * the Sales role alone (no till, no savings permission) opens the savings of a branch where they may sell, sees the suggested
- * amount, changes it and saves it, and sees this month's savings records with their amounts, including one made before the
- * switch was turned on; never the profit, the expenses or the cap. With the switch off they have no access. One product costs
+ * amount, changes it and saves it, and sees every month's savings records with their amounts (issue #827), including ones
+ * made before the switch was turned on, also grouped by shop, year, month and person with totals; never the profit, the expenses or the cap. With the switch off they have no access. One product costs
  * 1,000 and sells at 1,500. All names and amounts are fabricated.
  */
 class RetailSalesStaffSavingsIT extends IntegrationTest {
@@ -237,9 +237,10 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
         assertThat(rows.get(mine.toString()).get("amount_minor").asLong()).isEqualTo(2_000);
         assertThat(rows.get(older.toString()).get("amount_minor").asLong()).isEqualTo(1_000);
         rows.values().forEach(row -> assertThat(row.has("suggested_minor")).isFalse());
-        // This month only, even when an earlier day is asked for.
-        assertThat(rows).doesNotContainKey(lastMonths.toString());
-        assertThat(listed("?from=" + lastMonth + "&to=" + today)).doesNotContainKey(lastMonths.toString());
+        // Issue #827: every month, as the owner's old app did; last month's record made before the switch shows its
+        // amount.
+        assertThat(rows.get(lastMonths.toString()).has("amount_minor")).isTrue();
+        assertThat(listed("?from=" + lastMonth + "&to=" + today)).containsKey(lastMonths.toString());
 
         // Replacing a saved amount still needs retail.savings.overwrite.
         assertThat(cb.voidIt("/savings/" + mine, "Wrong amount", ALL).getStatusCode())
@@ -301,6 +302,10 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
             ResponseEntity<JsonNode> list = api.get(SALES_STAFF, seller);
             assertThat(list.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(list.toString()).doesNotContain(older.toString());
+            ResponseEntity<JsonNode> groups = api.get(SALES_STAFF + "/groups", seller);
+            assertThat(groups.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(groups.getBody().get("code").asString()).isEqualTo("permission_denied");
+            assertThat(groups.toString()).doesNotContain(older.toString());
             assertThat(api.get(R + "/savings/suggestion?branch_id=" + hq + "&date=" + today, seller)
                             .getStatusCode())
                     .isEqualTo(HttpStatus.FORBIDDEN);
@@ -332,6 +337,22 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
         assertThat(named.getStatusCode()).as("%s", named.getBody()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(named.getBody().get("code").asString()).isEqualTo("unknown_branch");
         assertThat(named.toString()).doesNotContain("amount_minor");
+        // The grouped view (issue #827) likewise: only the caller's branches, another named branch 404.
+        JsonNode ownGroups = api.get(SALES_STAFF + "/groups", hqSeller).getBody();
+        assertThat(ownGroups.get("shops")).isEmpty();
+        assertThat(ownGroups.get("total_minor").asLong()).isZero();
+        // With a record at the caller's own branch too: that one only, never the other branch's.
+        UUID atHq = tillRecords(hq, today);
+        JsonNode withOwn = api.get(SALES_STAFF + "/groups", hqSeller).getBody();
+        assertThat(withOwn.get("shops")).hasSize(1);
+        assertThat(withOwn.get("shops").get(0).get("branch_id").asString()).isEqualTo(hq.toString());
+        assertThat(withOwn.get("total_minor").asLong()).isEqualTo(2_500);
+        assertThat(withOwn.toString()).contains(atHq.toString()).doesNotContain(second.toString());
+        assertThat(api.get(SALES_STAFF, hqSeller).getBody().get("items")).hasSize(1);
+        ResponseEntity<JsonNode> namedGroups = api.get(SALES_STAFF + "/groups?branch_id=" + second, hqSeller);
+        assertThat(namedGroups.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(namedGroups.getBody().get("code").asString()).isEqualTo("unknown_branch");
+        assertThat(namedGroups.toString()).doesNotContain("total_minor");
         // Naming the caller's own branch is fine.
         assertThat(api.get(SALES_STAFF + "?branch_id=" + hq, hqSeller).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
@@ -436,6 +457,147 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
         }
         assertThat(statuses).containsExactlyInAnyOrder(HttpStatus.CREATED, HttpStatus.CONFLICT);
         assertThat(cb.accountMovement("savings_reserve", hq)).isEqualTo(2_500);
+    }
+
+    /** The month group of a shop for the month of that day, searched across its years. */
+    static JsonNode month(JsonNode shop, LocalDate day) {
+        for (JsonNode y : shop.get("years")) {
+            for (JsonNode m : y.get("months")) {
+                if (y.get("year").asInt() == day.getYear() && m.get("month").asInt() == day.getMonthValue()) {
+                    return m;
+                }
+            }
+        }
+        throw new AssertionError("no month " + day + " in " + shop);
+    }
+
+    static JsonNode shop(JsonNode groups, UUID branch) {
+        for (JsonNode s : groups.get("shops")) {
+            if (s.get("branch_id").asString().equals(branch.toString())) {
+                return s;
+            }
+        }
+        throw new AssertionError("no shop " + branch + " in " + groups);
+    }
+
+    /** Each level's total is the sum of the level below it, down to the records. */
+    static void totalsAddUp(JsonNode groups) {
+        long shops = 0;
+        for (JsonNode s : groups.get("shops")) {
+            long years = 0;
+            for (JsonNode y : s.get("years")) {
+                long months = 0;
+                for (JsonNode m : y.get("months")) {
+                    long people = 0;
+                    for (JsonNode p : m.get("people")) {
+                        long records = 0;
+                        for (JsonNode r : p.get("records")) {
+                            records += r.get("amount_minor").asLong();
+                        }
+                        assertThat(p.get("total_minor").asLong()).isEqualTo(records);
+                        people += records;
+                    }
+                    assertThat(m.get("total_minor").asLong()).isEqualTo(people);
+                    months += people;
+                }
+                assertThat(y.get("total_minor").asLong()).isEqualTo(months);
+                years += months;
+            }
+            assertThat(s.get("total_minor").asLong()).isEqualTo(years);
+            shops += years;
+        }
+        assertThat(groups.get("total_minor").asLong()).isEqualTo(shops);
+    }
+
+    // JUSTIFICATION-A3: issue #827 asks for one test of every month, grouped with totals, no profit and isolation.
+    @Test
+    void withTheSwitchOnASalesUserSeesEveryMonthGroupedByShopYearMonthAndPersonWithTotals() {
+        LocalDate lastMonth = today.withDayOfMonth(1).minusDays(1);
+        // Six sold last month at the head office: profit 3,000, so the till saves the suggestion of 1,500.
+        assertThat(cb.sale(hq, "cash", product, "6", lastMonth).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID lastMonths = tillRecords(hq, lastMonth);
+        UUID atSecond = tillRecords(second, today);
+        theSwitch(true);
+        String token =
+                suggestion(seller, hq, today).getBody().get("suggestion_token").asString();
+        UUID mine = RetailTestSupport.id(save(seller, hq, today, token, 2_000L));
+
+        // Another business with its own savings, never shown here, and its branch is unknown.
+        TestDatabase.Fixture b = TestDatabase.tenant("cb-sales-sav-b", false, true);
+        CashbookTestSupport other = new CashbookTestSupport(http, b);
+        UUID theirProduct = other.api.product("LAMP-9W", 1_000, 1_500);
+        other.api.stockUp(b.headOffice(), theirProduct, "10");
+        other.sale(b.headOffice(), "cash", theirProduct, "8", today);
+        JsonNode ts = other.get("/savings/suggestion?branch_id=" + b.headOffice() + "&date=" + today, ALL)
+                .getBody();
+        UUID theirs = RetailTestSupport.id(other.post(
+                "/savings",
+                Map.of(
+                        "branch_id",
+                        b.headOffice(),
+                        "business_date",
+                        today.toString(),
+                        "suggestion_token",
+                        ts.get("suggestion_token").asString()),
+                ALL));
+
+        // The records: last month's and this month's, with their amounts and never a profit figure.
+        Map<String, JsonNode> rows = listed("");
+        assertThat(rows.get(lastMonths.toString()).get("amount_minor").asLong()).isEqualTo(1_500);
+        assertThat(rows.get(mine.toString()).get("amount_minor").asLong()).isEqualTo(2_000);
+        assertThat(rows).doesNotContainKey(theirs.toString());
+        rows.values().forEach(row -> assertThat(row.has("suggested_minor")).isFalse());
+
+        // Grouped by shop, year, month and person, with the sum at each level.
+        ResponseEntity<JsonNode> r = api.get(SALES_STAFF + "/groups", seller);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        JsonNode g = r.getBody();
+        assertThat(g.get("total_minor").asLong()).isEqualTo(4_500);
+        assertThat(g.get("shops")).hasSize(2);
+        totalsAddUp(g);
+        JsonNode head = shop(g, hq);
+        assertThat(head.get("total_minor").asLong()).isEqualTo(3_500);
+        JsonNode earlier = month(head, lastMonth);
+        assertThat(earlier.get("total_minor").asLong()).isEqualTo(1_500);
+        assertThat(earlier.get("people")).hasSize(1);
+        JsonNode tillPerson = earlier.get("people").get(0);
+        assertThat(tillPerson.get("user_id").asString())
+                .isEqualTo(rows.get(lastMonths.toString()).get("by").asString());
+        assertThat(tillPerson.get("records").get(0).get("id").asString()).isEqualTo(lastMonths.toString());
+        JsonNode now = month(head, today);
+        assertThat(now.get("total_minor").asLong()).isEqualTo(2_000);
+        JsonNode me = now.get("people").get(0);
+        assertThat(me.get("user_id").asString())
+                .isEqualTo(rows.get(mine.toString()).get("by").asString());
+        assertThat(me.get("name").asString())
+                .isEqualTo(rows.get(mine.toString()).get("by_name").asString());
+        assertThat(me.get("records").get(0).get("business_date").asString()).isEqualTo(today.toString());
+        assertThat(shop(g, second).get("total_minor").asLong()).isEqualTo(1_000);
+        // Amounts saved only: no profit, no suggestion, no sales, and nothing of the other business.
+        assertThat(g.toString())
+                .doesNotContain("profit")
+                .doesNotContain("suggest")
+                .doesNotContain("sold")
+                .doesNotContain("available")
+                .doesNotContain(theirs.toString())
+                .doesNotContain(b.headOffice().toString());
+        // To a seller of every branch, another business's branch is an unknown id: the 422 field problem
+        // unknown_branch.
+        ResponseEntity<JsonNode> theirBranch = api.get(SALES_STAFF + "/groups?branch_id=" + b.headOffice(), seller);
+        assertThat(theirBranch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(theirBranch.getBody().get("errors").get(0).get("code").asString())
+                .isEqualTo("unknown_branch");
+        assertThat(theirBranch.toString()).doesNotContain(theirs.toString()).doesNotContain("total_minor");
+
+        // A voided record leaves the groups and their totals; a window narrows them.
+        assertThat(cb.voidIt("/savings/" + atSecond, "Wrong day", ALL).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        JsonNode afterVoid = api.get(SALES_STAFF + "/groups", seller).getBody();
+        assertThat(afterVoid.get("total_minor").asLong()).isEqualTo(3_500);
+        assertThat(afterVoid.get("shops")).hasSize(1);
+        JsonNode lastOnly =
+                api.get(SALES_STAFF + "/groups?to=" + lastMonth, seller).getBody();
+        assertThat(lastOnly.get("total_minor").asLong()).isEqualTo(1_500);
     }
 
     @Test

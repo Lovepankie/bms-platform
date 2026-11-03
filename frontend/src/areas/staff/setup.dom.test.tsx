@@ -351,7 +351,7 @@ describe('the salespeople savings setting', () => {
     const hint = document.getElementById(box.getAttribute('aria-describedby') ?? '')?.textContent?.replace(/\s+/g, ' ');
     expect(hint).toContain("A salesperson who sees the savings amount can work out the day's profit from it.");
     // Issue #799: the switch reaches everyone who sells, and the whole month.
-    expect(hint).toContain("Anyone who sells at a shop can then open its Savings, change the amount, save it and see this month's savings");
+    expect(hint).toContain("Anyone who sells at a shop can then open its Savings, change the amount, save it and see the savings of every month");
     expect(hint).toContain('including days saved before you turned this on');
     fireEvent.click(box);
     await screen.findByText('Salespeople can now see and change the savings amount');

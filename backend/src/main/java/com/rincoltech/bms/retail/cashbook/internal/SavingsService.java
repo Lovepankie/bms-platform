@@ -11,10 +11,16 @@ import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavedDay;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.Savings;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsGroups;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsMonth;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsPage;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsPerson;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsRequest;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsShop;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsSuggestion;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsYear;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.SavingsRow;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookSupport.SalespeopleSavings;
@@ -26,11 +32,15 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.ToLongFunction;
+import java.util.stream.Collectors;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -157,12 +167,11 @@ class SavingsService {
         Day d = day(branch, on);
         boolean gate = mayProfit(branch);
         boolean sees = gate || setting.on();
-        LocalDate monthStart = monthStart();
         UUID existing = repo.activeSavings(branch, on).orElse(null);
         Long existingAmount = existing == null
                 ? null
                 : repo.savings(existing, false)
-                        .filter(x -> amountShown(x, setting, monthStart))
+                        .filter(x -> amountShown(x, setting))
                         .map(SavingsRow::amountMinor)
                         .orElse(null);
         return new SavingsSuggestion(
@@ -316,7 +325,7 @@ class SavingsService {
             after.put("salespeople_setting", true);
         }
         audit.record(AuditLog.Entry.created("retail.savings.created", "retail.savings", id, branch, after));
-        return view(repo.savings(id, false).orElseThrow(), setting, monthStart());
+        return view(repo.savings(id, false).orElseThrow(), setting);
     }
 
     /**
@@ -373,7 +382,7 @@ class SavingsService {
 
     /**
      * The savings records. Through the sales staff routes (issue #799) only while the owner's setting is on, only at the
-     * branches where the caller may sell, and only this month's: an earlier {@code from} is moved to the first of the month.
+     * branches where the caller may sell; every month's since issue #827, as the owner's old app did.
      */
     @Transactional(readOnly = true)
     SavingsPage list(
@@ -385,26 +394,14 @@ class SavingsService {
             Integer limit,
             String cursor) {
         SalespeopleSavings setting = support.salespeopleSavings();
-        LocalDate monthStart = monthStart();
-        LocalDate since = from;
-        List<UUID> filter;
-        if (caller == Caller.SALES_STAFF) {
-            setting.requireOnForSalesStaff();
-            // A named branch outside the selling scope is 404 unknown_branch, as on the suggestion and the save
-            // (FR-RET-18).
-            if (branchIds != null) {
-                branchIds.forEach(b -> branchContext.resolve(CashbookSupport.SALE_CREATE, b));
-            }
-            filter = CurrentPrincipal.require().branchFilter(CashbookSupport.SALE_CREATE, branchIds);
-            since = from == null || from.isBefore(monthStart) ? monthStart : from;
-        } else {
-            filter = CurrentPrincipal.require().branchFilter(CashbookSupport.READ, branchIds);
-        }
+        List<UUID> filter = caller == Caller.SALES_STAFF
+                ? salesStaffBranches(setting, branchIds)
+                : CurrentPrincipal.require().branchFilter(CashbookSupport.READ, branchIds);
         int size = support.limit(limit);
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         List<SavingsRow> rows = repo.savingsPage(
                 filter,
-                since,
+                from,
                 to,
                 includeVoided,
                 after == null ? null : after.at(),
@@ -416,8 +413,91 @@ class SavingsService {
                 ? Cursor.encode(
                         items.getLast().createdAt() + "|" + items.getLast().id())
                 : null;
-        return new SavingsPage(
-                items.stream().map(x -> view(x, setting, monthStart)).toList(), next);
+        return new SavingsPage(items.stream().map(x -> view(x, setting)).toList(), next);
+    }
+
+    /**
+     * The branches a sales staff read covers (issue #799): only while the owner's setting is on, and only where the caller
+     * may sell; a named branch outside that scope is 404 unknown_branch, as on the suggestion and the save (FR-RET-18).
+     */
+    private List<UUID> salesStaffBranches(SalespeopleSavings setting, List<UUID> branchIds) {
+        setting.requireOnForSalesStaff();
+        if (branchIds != null) {
+            branchIds.forEach(b -> branchContext.resolve(CashbookSupport.SALE_CREATE, b));
+        }
+        return CurrentPrincipal.require().branchFilter(CashbookSupport.SALE_CREATE, branchIds);
+    }
+
+    // JUSTIFICATION-A3: issue #827's grouped view with a total at four levels is new behaviour; no existing code groups
+    // savings.
+    /**
+     * Issue #827, as the owner's old app did: every active savings record of the branches where the caller may sell, grouped
+     * by shop, year, month and the person who saved, with the sum of the amount saved at each level. Amounts saved only.
+     */
+    @Transactional(readOnly = true)
+    SavingsGroups groups(List<UUID> branchIds, LocalDate from, LocalDate to) {
+        List<UUID> filter = salesStaffBranches(support.salespeopleSavings(), branchIds);
+        // Rows come newest day first, so years and months keep that order.
+        List<SavingsShop> shops = group(repo.activeSavings(filter, from, to), SavingsRow::branchId).entrySet().stream()
+                .map(s -> {
+                    List<SavingsYear> years = group(
+                                    s.getValue(), r -> r.businessDate().getYear())
+                            .entrySet()
+                            .stream()
+                            .map(y -> {
+                                List<SavingsMonth> months =
+                                        group(
+                                                        y.getValue(),
+                                                        r -> r.businessDate().getMonthValue())
+                                                .entrySet()
+                                                .stream()
+                                                .map(m -> {
+                                                    List<SavingsPerson> people =
+                                                            group(m.getValue(), SavingsService::personKey)
+                                                                    .values()
+                                                                    .stream()
+                                                                    .map(SavingsService::person)
+                                                                    .sorted(Comparator.comparing(
+                                                                            SavingsPerson::name,
+                                                                            Comparator.nullsLast(
+                                                                                    Comparator.naturalOrder())))
+                                                                    .toList();
+                                                    return new SavingsMonth(
+                                                            m.getKey(), sum(people, SavingsPerson::totalMinor), people);
+                                                })
+                                                .toList();
+                                return new SavingsYear(y.getKey(), sum(months, SavingsMonth::totalMinor), months);
+                            })
+                            .toList();
+                    return new SavingsShop(s.getKey(), sum(years, SavingsYear::totalMinor), years);
+                })
+                .toList();
+        return new SavingsGroups(sum(shops, SavingsShop::totalMinor), shops);
+    }
+
+    private static <K> Map<K, List<SavingsRow>> group(List<SavingsRow> rows, Function<SavingsRow, K> key) {
+        return rows.stream().collect(Collectors.groupingBy(key, LinkedHashMap::new, Collectors.toList()));
+    }
+
+    private static <T> long sum(List<T> items, ToLongFunction<T> total) {
+        return items.stream().mapToLong(total).sum();
+    }
+
+    /** A record brought in from an earlier system may have no person: those group together. */
+    private static UUID personKey(SavingsRow r) {
+        return r.by() == null ? new UUID(0, 0) : r.by();
+    }
+
+    /** The name is the user's current one (joined from {@code users}), so every row of the group carries the same. */
+    private static SavingsPerson person(List<SavingsRow> rows) {
+        SavingsRow first = rows.getFirst();
+        return new SavingsPerson(
+                first.by(),
+                first.byName(),
+                sum(rows, SavingsRow::amountMinor),
+                rows.stream()
+                        .map(r -> new SavedDay(r.id(), r.businessDate(), r.amountMinor()))
+                        .toList());
     }
 
     /** The first day of the business month: the month whose records sales staff see with their amounts (issue #799). */
@@ -427,12 +507,11 @@ class SavingsService {
 
     /**
      * Whether the caller sees a record's amount and overwrite flag (ADR-115). Profit read sees every amount. Without it, only
-     * while the owner's setting is on, and then: a record made after the setting was last turned on, to a holder of
-     * {@code retail.savings.record} for its branch (issue #768); and every record dated this month, whenever it was made, to a
-     * caller who may record savings or sell at its branch (issue #799, the owner asked for the whole month). A reader of the
-     * cash book alone keeps the amount hidden.
+     * while the owner's setting is on, and then every record of any month, whenever it was made, to a caller who may record
+     * savings or sell at its branch (issue #827, as the owner's old app did; it replaces the this-month rule of #799 and the
+     * made-while-on rule of #768). A reader of the cash book alone keeps the amount hidden.
      */
-    static boolean amountShown(SavingsRow r, SalespeopleSavings setting, LocalDate monthStart) {
+    static boolean amountShown(SavingsRow r, SalespeopleSavings setting) {
         if (mayProfit(r.branchId())) {
             return true;
         }
@@ -440,18 +519,14 @@ class SavingsService {
             return false;
         }
         Principal principal = CurrentPrincipal.require();
-        boolean records = principal.may(CashbookSupport.SAVINGS_RECORD, r.branchId());
-        if (records && setting.shows(r.createdAt())) {
-            return true;
-        }
-        return (records || principal.may(CashbookSupport.SALE_CREATE, r.branchId()))
-                && !r.businessDate().isBefore(monthStart);
+        return principal.may(CashbookSupport.SAVINGS_RECORD, r.branchId())
+                || principal.may(CashbookSupport.SALE_CREATE, r.branchId());
     }
 
     /** A savings row as the caller may see it: the suggestion needs profit read; the amount follows {@link #amountShown}. */
-    static Savings view(SavingsRow r, SalespeopleSavings setting, LocalDate monthStart) {
+    static Savings view(SavingsRow r, SalespeopleSavings setting) {
         boolean profit = mayProfit(r.branchId());
-        boolean amount = amountShown(r, setting, monthStart);
+        boolean amount = amountShown(r, setting);
         return new Savings(
                 r.id(),
                 r.branchId(),
@@ -507,6 +582,6 @@ class SavingsService {
                 row.branchId(),
                 Map.of("business_date", row.businessDate().toString()),
                 Map.of("reason", reason)));
-        return view(repo.savings(id, false).orElseThrow(), support.salespeopleSavings(), monthStart());
+        return view(repo.savings(id, false).orElseThrow(), support.salespeopleSavings());
     }
 }

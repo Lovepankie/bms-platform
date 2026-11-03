@@ -7307,8 +7307,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * This month's savings records for sales staff, newest first
-         * @description Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create). Only records dated this month, at the branches where the caller may sell.
+         * Savings records of every month for sales staff, newest first
+         * @description Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create). Records of every month (issue #827), at the branches where the caller may sell.
          */
         get: operations["listRetailSalesStaffSavings"];
         put?: never;
@@ -7317,6 +7317,26 @@ export interface paths {
          * @description Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create).
          */
         post: operations["createRetailSalesStaffSavings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/savings/sales-staff/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Savings of every month for sales staff, by shop, year, month and person, with totals
+         * @description Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create). Issue #827: active records only, amounts saved only.
+         */
+        get: operations["getRetailSalesStaffSavingsGroups"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18068,6 +18088,14 @@ export interface components {
             credit?: components["schemas"]["RetailSalesSummaryMethod"];
             mobile_money?: components["schemas"]["RetailSalesSummaryMethod"];
         };
+        RetailSavedDay: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            id?: string;
+        };
         RetailSavings: {
             /**
              * Format: int64
@@ -18126,9 +18154,35 @@ export interface components {
             /** Format: int64 */
             total_sold_minor?: number;
         };
+        RetailSavingsGroups: {
+            shops?: components["schemas"]["RetailSavingsShop"][];
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailSavingsMonth: {
+            /**
+             * Format: int32
+             * @description 1 to 12
+             */
+            month?: number;
+            people?: components["schemas"]["RetailSavingsPerson"][];
+            /** Format: int64 */
+            total_minor?: number;
+        };
         RetailSavingsPage: {
             items?: components["schemas"]["RetailSavings"][];
             next_cursor?: string;
+        };
+        RetailSavingsPerson: {
+            name?: string;
+            records?: components["schemas"]["RetailSavedDay"][];
+            /** Format: int64 */
+            total_minor?: number;
+            /**
+             * Format: uuid
+             * @description Null on a record brought in from an earlier system with no person
+             */
+            user_id?: string;
         };
         RetailSavingsReport: {
             currency?: string;
@@ -18151,6 +18205,13 @@ export interface components {
             /** @description Optional, even when the amount differs from the suggestion */
             overwrite_reason?: string;
             suggestion_token: string;
+        };
+        RetailSavingsShop: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            years?: components["schemas"]["RetailSavingsYear"][];
         };
         RetailSavingsSuggestion: {
             /**
@@ -18190,6 +18251,13 @@ export interface components {
             suggestion_token: string;
             /** Format: int64 */
             total_sold_minor?: number;
+        };
+        RetailSavingsYear: {
+            months?: components["schemas"]["RetailSavingsMonth"][];
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: int32 */
+            year?: number;
         };
         /** @description Another branch in the caller's scope where the same item sells faster, and what to move there */
         RetailSellsBetterAt: {
@@ -33979,6 +34047,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSavings"];
+                };
+            };
+        };
+    };
+    getRetailSalesStaffSavingsGroups: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavingsGroups"];
                 };
             };
         };

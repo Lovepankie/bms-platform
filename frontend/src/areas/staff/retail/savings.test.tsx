@@ -104,7 +104,7 @@ describe('a new record shown at once', () => {
     // A list of rows under the same prefix that is not the records list (a report, an export) is left alone.
     const rowsReport = ['retail', 'savings', 'report', '2026-10-01', '2026-10-31'];
     const longer = ['retail', 'savings', [branch], '2026-10-01', '2026-10-31', 'by-day'];
-    // The sales staff list (issue #799) is the records list too, under its own key.
+    // A seller sees the grouped view since issue #827, refetched after the save; a list under the old sales staff key is left alone.
     const salesStaff = ['retail', 'savings', [branch], '2026-10-01', '2026-10-31', 'sales-staff'];
     client.setQueryData(salesStaff, []);
     client.setQueryData(rowsReport, [{ id: 'r1' }]);
@@ -125,7 +125,7 @@ describe('a new record shown at once', () => {
     expect(client.getQueryData(short)).toEqual([]);
     expect(client.getQueryData(rowsReport)).toEqual([{ id: 'r1' }]);
     expect(client.getQueryData(longer)).toEqual([]);
-    expect(client.getQueryData(salesStaff)).toEqual([saved]);
+    expect(client.getQueryData(salesStaff)).toEqual([]);
   });
 });
 

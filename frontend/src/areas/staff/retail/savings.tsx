@@ -1,15 +1,16 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { businessToday, retail, type Savings } from '../../../api/retail';
 import { useStaff } from '../context';
+import { monthLabel } from './cash-state';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, SALE_CREATE, SAVINGS_OVERWRITE, SAVINGS_RECORD, holds, savesAsSalesStaff } from './permissions';
 import { SAVINGS_REASONS, afterSavingsConflict, nowAboveWords, planSavings, reasonText, seesAmounts } from './savings-state';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
-import { BranchRequired, Gate, Note, Problem, money, useSingleBranch } from './ui';
+import { BranchRequired, Gate, Note, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
@@ -20,7 +21,8 @@ import { KeyFigure } from '../../../app/ui/KeyFigure';
 // the standard amount is recorded for them. When the owner turns on "Salespeople can see and change the savings amount"
 // (issue #768, ADR-115) that caller sees the suggestion, may change the amount, and sees what was saved; never the profit, the
 // expenses or the most the day allows (an amount above it is refused in words that do not state it). With that switch on, a seller
-// without the till (issue #799) uses the sales staff routes and sees this month's records, with no void. Every save echoes the suggestion token the form was shown; if
+// without the till (issue #799) uses the sales staff routes and sees every month's savings by shop, year, month and person with
+// the amount saved at each level (issue #827, as the owner's old app did), with no void. Every save echoes the suggestion token the form was shown; if
 // sales changed since, the server answers 409 suggestion_changed with the new token and writes nothing.
 // The day may save at most its profit less its expenses (ADR-080): the screen shows the three figures and
 // says so under the amount before anything is sent. The reason for a changed amount is optional (#538).
@@ -39,10 +41,10 @@ export const SALES_STAFF_KEY = 'sales-staff';
  */
 export function showInRecords(client: QueryClient, saved: Savings) {
   const day = saved.business_date ?? '';
-  // Only the records list itself: five parts, the branch ids (undefined for all) and a from and to date, and a sixth that marks
-  // the sales staff route (issue #799).
+  // Only the records list itself: five parts, the branch ids (undefined for all) and a from and to date. A seller's grouped
+  // view (issue #827, key ['retail', 'savings-groups', ...]) is refetched by the save's invalidation of the ['retail'] prefix.
   const holds = (key: readonly unknown[]): boolean => {
-    if (key.length !== 5 && !(key.length === 6 && key[5] === SALES_STAFF_KEY)) return false;
+    if (key.length !== 5) return false;
     const [, , scope, from, to] = key;
     if ((scope !== undefined && !Array.isArray(scope)) || typeof from !== 'string' || typeof to !== 'string') return false;
     const inScope = scope === undefined || scope.length === 0 || scope.includes(saved.branch_id);
@@ -186,29 +188,26 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   );
 }
 
-export function SavingsRecords({ onVoided, salesStaff = false }: { onVoided?: (message: string) => void; salesStaff?: boolean }) {
+export function SavingsRecords({ onVoided }: { onVoided?: (message: string) => void }) {
   const scope = useReadScope();
   const window = useWindow();
-  // Issue #799: sales staff see this month's records only, so the period is fixed to it.
-  const today = businessToday();
-  const from = salesStaff ? `${today.slice(0, 8)}01` : window.from;
-  const to = salesStaff ? today : window.to;
+  const { from, to } = window;
   const rows = useQuery({
-    queryKey: ['retail', 'savings', scope, from, to, ...(salesStaff ? [SALES_STAFF_KEY] : [])],
-    queryFn: () => retail.listSavings({ branchIds: scope, from, to, includeVoided: true, salesStaff }),
+    queryKey: ['retail', 'savings', scope, from, to],
+    queryFn: () => retail.listSavings({ branchIds: scope, from, to, includeVoided: true }),
   });
   return (
     <section aria-label="Savings records" data-tour="savings-records">
-      <h2>{salesStaff ? 'Savings this month' : 'Savings records'}</h2>
-      {!salesStaff && <WindowFields id="savings-list" window={window} />}
+      <h2>Savings records</h2>
+      <WindowFields id="savings-list" window={window} />
       {rows.isError && <Problem error={rows.error} />}
       {rows.isPending && <p className="loading">Loading</p>}
       {rows.data && (
         <RecordsByShop
           rows={rows.data}
-          empty={salesStaff ? 'No savings recorded this month.' : 'No savings recorded in this period.'}
+          empty="No savings recorded in this period."
           what="savings record"
-          voidWith={salesStaff ? undefined : (row, reason, key) => retail.voidSavings(row.id ?? '', reason, key)}
+          voidWith={(row, reason, key) => retail.voidSavings(row.id ?? '', reason, key)}
           onVoided={() => onVoided?.('Savings record voided.')}
           renderRow={(row) => (
             <>
@@ -220,6 +219,63 @@ export function SavingsRecords({ onVoided, salesStaff = false }: { onVoided?: (m
             </>
           )}
         />
+      )}
+    </section>
+  );
+}
+
+// JUSTIFICATION-A3: issue #827 asks for the old app's grouped view with a total at four levels; no screen shows it yet.
+/** One line of the grouped view: what it is and the amount saved, the amount at the end of the line. */
+function Total({ label, minor }: { label: ReactNode; minor: number | undefined }) {
+  return <span className="rt-savings-total"><span>{label}</span> <strong>{money(minor ?? 0)}</strong></span>;
+}
+
+/**
+ * Issue #827, as the owner's old app did: a seller's savings of every month, by shop, year, month and the person who saved,
+ * with the amount saved at each level. Amounts saved only, never the profit or a suggestion. The newest year is open.
+ */
+export function SavingsByShop() {
+  const scope = useReadScope();
+  const shopName = useBranchName();
+  const groups = useQuery({ queryKey: ['retail', 'savings-groups', scope, SALES_STAFF_KEY], queryFn: () => retail.savingsGroups({ branchIds: scope }) });
+  const g = groups.data;
+  return (
+    <section aria-label="Savings records" data-tour="savings-records">
+      <h2>Savings records</h2>
+      {groups.isError && <Problem error={groups.error} />}
+      {groups.isPending && <p className="loading">Loading</p>}
+      {g && (g.shops?.length ?? 0) === 0 && <p className="empty-state">No savings recorded yet.</p>}
+      {g && (g.shops?.length ?? 0) > 0 && (
+        <>
+          <p><Total label="Saved in all shops" minor={g.total_minor} /></p>
+          {g.shops?.map((shop) => (
+            <section key={shop.branch_id} aria-label={shopName(shop.branch_id)}>
+              <h3><Total label={shopName(shop.branch_id)} minor={shop.total_minor} /></h3>
+              {shop.years?.map((year, i) => (
+                <details key={year.year} className="rt-groupby" open={i === 0}>
+                  <summary><Total label={year.year} minor={year.total_minor} /></summary>
+                  {year.months?.map((month) => (
+                    <div key={month.month} className="rt-savings-month">
+                      <h4><Total label={monthLabel(`${year.year}-${String(month.month).padStart(2, '0')}`)} minor={month.total_minor} /></h4>
+                      <ul className="rt-savings-people">
+                        {month.people?.map((person) => (
+                          <li key={person.user_id ?? 'none'} className="rt-card">
+                            <Total label={person.name ?? 'Not recorded'} minor={person.total_minor} />
+                            <ul className="rt-savings-days">
+                              {person.records?.map((r) => (
+                                <li key={r.id}><Total label={showDate(r.business_date)} minor={r.amount_minor} /></li>
+                              ))}
+                            </ul>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </details>
+              ))}
+            </section>
+          ))}
+        </>
       )}
     </section>
   );
@@ -252,7 +308,7 @@ export function SavingsScreen() {
       )}
       </div>
       {toast}
-      {salesStaff ? <SavingsRecords salesStaff /> : holds(me, CASHBOOK_READ) && <SavingsRecords onVoided={(text) => show(text, 'success')} />}
+      {salesStaff ? <SavingsByShop /> : holds(me, CASHBOOK_READ) && <SavingsRecords onVoided={(text) => show(text, 'success')} />}
     </Gate>
   );
 }

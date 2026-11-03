@@ -200,7 +200,8 @@ class CashbookSupport {
     /**
      * Issue #768, ADR-115: {@code salespeople_see_savings_amount}, set by the Owner in Business set-up, and since when it is on.
      * When on, a caller without {@code retail.profit.read} sees the suggested savings amount and may change it, never the
-     * profit, the expenses or the cap; a record shows its amount to such a caller only when it was made while the setting was on.
+     * profit, the expenses or the cap; since issue #827 every record of any month shows its amount to such a caller who may record
+     * savings or sell at its branch ({@code SavingsService.amountShown}); {@code since} only records when it was turned on.
      */
     record SalespeopleSavings(boolean on, Instant since) {
         static final SalespeopleSavings OFF = new SalespeopleSavings(false, null);
@@ -217,11 +218,6 @@ class CashbookSupport {
                         "Permission denied",
                         "You do not have permission to perform this action.");
             }
-        }
-
-        /** True for a record made after the setting was last turned on, while it is still on. */
-        boolean shows(Instant createdAt) {
-            return on && since != null && !createdAt.isBefore(since);
         }
     }
 

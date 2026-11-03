@@ -565,6 +565,18 @@ class CashbookRepository {
                 .list();
     }
 
+    /** Every active savings record of the branches in the window, newest day first (issue #827, the grouped view). */
+    List<SavingsRow> activeSavings(List<UUID> branches, LocalDate from, LocalDate to) {
+        Filter f = new Filter()
+                .branches("t.branch_id", branches)
+                .dates("t.business_date", from, to)
+                .live("t", false);
+        return jdbc.sql(SAVINGS_SELECT + f.sql + " ORDER BY t.business_date DESC, t.id")
+                .params(f.params)
+                .query((rs, n) -> savings(rs))
+                .list();
+    }
+
     // ---- banking
 
     private static final String BANKING_SELECT = """

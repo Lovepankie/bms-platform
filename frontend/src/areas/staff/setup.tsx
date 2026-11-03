@@ -419,7 +419,7 @@ export function Setup() {
               Salespeople can see and change the savings amount
             </label>
             <p id="salespeople-savings-hint" className="hint">
-              Anyone who sells at a shop can then open its Savings, change the amount, save it and see this month&apos;s savings with their
+              Anyone who sells at a shop can then open its Savings, change the amount, save it and see the savings of every month with their
               amounts, including days saved before you turned this on. A salesperson who sees the savings amount can work out the
               day&apos;s profit from it. Only you, the owner, can change this.
             </p>

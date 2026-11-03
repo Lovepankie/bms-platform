@@ -38,18 +38,26 @@ describe('the savings form of a salesperson at 412px (#768)', () => {
   });
 
   // JUSTIFICATION-A3: the 412px case for sales staff that issue #799 asks for, beside the #768 case.
-  it("as sales staff with the owner's switch on (#799): the form and this month's records fit, no void, no profit", async () => {
+  it("as sales staff with the owner's switch on (#799, #827): the form and every month's savings grouped with totals fit, no void, no profit", async () => {
     const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
-    await openLayout(page, 'layout/savings.html?sales', page.getByText('Saved UGX 1,150,000'));
+    await openLayout(page, 'layout/savings.html?sales', page.getByText('Saved in all shops'));
     expect(await page.evaluate(() => document.documentElement.scrollWidth), 'page width').toBeLessThanOrEqual(WIDTH);
     expect(await page.locator('.key-figure-value').textContent()).toBe('UGX 240,000');
-    expect(await page.getByRole('heading', { name: 'Savings this month' }).count()).toBe(1);
-    expect(await page.getByText('Saved UGX 200,000').count()).toBe(1);
+    expect(await page.getByRole('heading', { name: /November 2026\s*UGX 1,350,000/ }).count()).toBe(1);
+    expect(await page.getByRole('heading', { name: /October 2026\s*UGX 250,000/ }).count()).toBe(1);
     expect(await page.getByRole('button', { name: /Void/ }).count()).toBe(0);
-    for (const card of await page.locator('.rt-card').all()) {
-      const box = await card.boundingBox();
+    for (const line of await page.locator('.rt-card, .rt-savings-total').all()) {
+      const box = await line.boundingBox();
       expect(box && box.x >= 0 && box.x + box.width <= WIDTH).toBe(true);
     }
+    // The year opens and closes with a 48px target; every amount is in tabular figures.
+    const summary = await page.locator('details.rt-groupby > summary').first().boundingBox();
+    expect(summary && summary.height >= 48).toBe(true);
+    const amounts = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.rt-savings-total strong')].map((e) => getComputedStyle(e).fontVariantNumeric),
+    );
+    expect(amounts.length).toBeGreaterThan(5);
+    expect(amounts.every((v) => v.includes('tabular-nums'))).toBe(true);
     const text = (await page.locator('main').textContent()) ?? '';
     expect(text).not.toMatch(/Profit|Expenses for the day|Available to save/);
     await page.close();
