@@ -16,4 +16,6 @@ A purchase is never deleted. You correct it, and then enter it again with the ri
 3. Enter the purchase again on **Buy stock** with the right quantity, unit or price.
    ![Enter it again with the right figures](fix-a-purchase-3.webp)
 
+> Quicker: tap **Edit** on the purchase instead. Buy stock opens with it filled in; change what was wrong and tap **Save changes**. The old one stays in the list as voided, and the new one says which it replaces.
+
 > If less than its quantity is left on the shelf, use **Correct** on the Stock page instead.

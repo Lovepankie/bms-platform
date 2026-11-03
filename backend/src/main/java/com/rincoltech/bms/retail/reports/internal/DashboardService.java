@@ -46,7 +46,7 @@ class DashboardService {
     static final String STOCK_READ = "retail.stock.read";
     static final String SALE_READ = "retail.sale.read";
     /** The low stock threshold of ADR-029 (the stock lists report the same value as low_stock_threshold). */
-    static final BigDecimal LOW_STOCK = new BigDecimal("5.000");
+    static final BigDecimal LOW_STOCK = new BigDecimal("10.000");
 
     private final DashboardRepository repo;
     private final SalesAnalysisRepository analysis;

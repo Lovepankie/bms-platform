@@ -55,7 +55,7 @@ const BY_CODE: Record<string, string> = {
   documents_busy: 'Too many documents are being made right now. Wait a moment and try again.',
   // Customer returns (ADR-033, issue #201).
   return_exceeds_sold: 'More of this item is being returned than was sold and not yet returned.',
-  sale_has_returns: 'This sale has returns against it. Void the returns first.',
+  sale_has_returns: 'This sale has returns against it. Void the returns first, then delete the sale.',
   account_refund_unavailable: 'There is no balance to take this off. Refund it in money instead.',
   account_refund_historical: 'This is an imported credit sale. Refund it in money instead.',
   refund_remainder_method_required: 'Choose how the part that is not taken off the balance is paid out.',
@@ -108,10 +108,10 @@ const BY_CODE: Record<string, string> = {
   credit_stock_moved: 'The stock this credit note changed has moved on since, so it can no longer be voided.',
   retail_chart_missing: 'The accounts needed for this are not set up for this business. Ask your administrator or support.',
   amount_out_of_range: 'That amount is too large or too small. Check it.',
-  sale_voided: 'This sale has already been voided.',
+  sale_voided: 'This sale has already been deleted.',
   // Payments on a credit sale and voiding a sale (issues #326, #327).
   sale_not_payable: 'Only a credit sale that is not voided takes payments.',
-  sale_has_payments: 'This credit sale has had a payment or a return. A sale with payments cannot be voided.',
+  sale_has_payments: 'This credit sale has had a payment or a return. A sale with payments cannot be deleted.',
   stocktake_committed: 'This stock count has already been saved.',
   stocktake_discarded: 'This stock count was cancelled. Count the items again.',
   transfer_voided: 'This move has already been undone.',

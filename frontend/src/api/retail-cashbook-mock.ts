@@ -29,7 +29,7 @@ export interface CashbookEnv {
 
 type Keys = 'savingsSuggestion' | 'createSavings' | 'listSavings' | 'voidSavings' | 'bankingExpected' | 'createBanking' | 'listBankings' | 'voidBanking'
   | 'createWithdrawal' | 'listWithdrawals' | 'voidWithdrawal' | 'listExpenseCategories' | 'createExpenseCategory' | 'updateExpenseCategory'
-  | 'createExpenseItem' | 'updateExpenseItem' | 'listCashParties' | 'createCashParty' | 'createExpense' | 'listExpenses' | 'voidExpense'
+  | 'createExpenseItem' | 'updateExpenseItem' | 'listCashParties' | 'createCashParty' | 'createExpense' | 'listExpenses' | 'voidExpense' | 'replaceExpense'
   | 'createAdvance' | 'listAdvances' | 'getAdvance' | 'voidAdvance' | 'createRepayment' | 'voidRepayment' | 'cashDaily' | 'bankingReport'
   | 'expensesReport' | 'advancesReport';
 
@@ -310,6 +310,22 @@ export function createCashbookMock(env: CashbookEnv): Pick<RetailApi, Keys> {
     listExpenses: (q) =>
       delay(newestFirst(expenses.filter((r) => inWindow(r, q) && (!q.categoryId || r.category_id === q.categoryId) && (!q.itemId || r.item_id === q.itemId))).map(expenseRow)),
     voidExpense: (id, reason, key) => run(() => once(`void|${key}`, { id, reason }, () => expenseRow(voidIt(expenses.find((r) => r.id === id), reason)))),
+    // Issue #830: as the server's one transaction, every refusal comes before the old expense is voided.
+    replaceExpense: (id, body, key) =>
+      run(() => once(`replace-expense|${key}`, { id, body }, () => {
+        const old = expenses.find((r) => r.id === id);
+        const category = categories.find((c) => c.id === body.category_id);
+        if (!category?.items?.some((i) => i.id === body.item_id)) refuse(422, 'item_not_in_category', 'The item is not in the category.');
+        if (!category?.active) refuse(422, 'category_inactive', 'Inactive.');
+        if (env.waiting('retail_expense', body.amount_minor)) refuse(422, 'edit_needs_approval', 'This amount needs an administrator\'s approval, so it cannot be edited in place. Delete the expense and record it again.');
+        const fresh = base(old?.branch_id, body.business_date, 'x');
+        const was = expenseRow(voidIt(old, 'Edited: entered again with the changes'));
+        const own = body.explanation?.trim();
+        const explanation = `${own ? `${own} ` : ''}Replaces the ${was.item_name ?? 'expense'} entry of ${was.business_date ?? ''}, edited.`;
+        const row = { ...fresh, amount: body.amount_minor, category_id: body.category_id, item_id: body.item_id, ...(body.party_id ? { party_id: body.party_id } : {}), explanation };
+        expenses.push(row);
+        return expenseRow(row);
+      })),
 
     createAdvance: (body, key) =>
       run(() => once(`advance|${key}`, body, (): Advance => {

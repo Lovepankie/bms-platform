@@ -286,7 +286,7 @@ const LEVELS: { value: StockLevel | ''; label: string }[] = [
 ];
 
 /**
- * Tabs for the stock lists: everything, out of stock (zero or less) or low stock (at or below the item's minimum, else 5 or fewer,
+ * Tabs for the stock lists: everything, out of stock (zero or less) or low stock (at or below the item's minimum, else 10 or fewer,
  * out included); out and low keep only items the shop has stocked (issue #490).
  */
 export function StockLevelFilter({ level, onChange }: { level: StockLevel | ''; onChange: (level: StockLevel | '') => void }) {
@@ -294,7 +294,7 @@ export function StockLevelFilter({ level, onChange }: { level: StockLevel | ''; 
     <>
       <Segmented label="Show" options={LEVELS} value={level} onChange={onChange} />
       {level === 'out' && <p className="hint">Items you have stocked with none left, or less than none.</p>}
-      {level === 'low' && <Hint>Items you have stocked that are at or below their minimum, or 5 or fewer without one, including those out of stock.</Hint>}
+      {level === 'low' && <Hint>Items you have stocked that are at or below their minimum, or 10 or fewer without one, including those out of stock.</Hint>}
     </>
   );
 }

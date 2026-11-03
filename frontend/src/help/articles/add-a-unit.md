@@ -17,4 +17,4 @@ Units come in two kinds. A **Single unit** is the one thing a customer can buy o
 6. A carton is a package of pieces, never the item's single unit. Keep the single unit Piece, then add the carton under **Cartons, boxes and other packs** on the item and type how many pieces one holds.
 7. A package can keep a usual number, such as 24 pieces, that an item's package starts from. To change it, tap **Usually holds** on the package in Units, change the number and tap **Save**, or tap **Remove the usual number**. Items keep the packages they have.
 
-> A unit is never deleted. Tap **Switch off** on one you stop using; items that use it keep it.
+> Tap **Delete** on a unit you stop using. It is hidden, but items that use it keep it, and **Bring back** after Show deleted switches it on again.

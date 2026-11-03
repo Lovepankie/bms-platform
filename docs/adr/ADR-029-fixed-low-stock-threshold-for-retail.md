@@ -5,7 +5,8 @@
 Accepted (2026-10-06, review of pull request #154, issue #145). Builds on ADR-020. The per-product reorder level it left for
 later is superseded by ADR-057 (issue #412): a low-stock minimum per item and branch, judged with the pace rule. The fixed 5 of the
 Stock list's Low stock tab stands. Amended by ADR-077 (issue #490): the fixed 5 applies only to an item with no minimum, and
-only items a branch has held count as out or low.
+only items a branch has held count as out or low. Amended by issue #830: the fixed level is 10, the owner's old app's rule,
+not 5; an item's own minimum still wins. Where this record says 5 below, read 10 from issue #830 on.
 
 ## Context
 
@@ -17,8 +18,8 @@ signal for some of them.
 
 ## Decision
 
-- **One threshold of 5 for every unit, product, branch and tenant.** It is the constant
-  `StockService.LOW_STOCK_MILLI` (5,000 thousandths), compared with the branch balance, or in All
+- **One threshold of 5 (10 from issue #830) for every unit, product, branch and tenant.** It is the constant
+  `StockService.LOW_STOCK_MILLI` (10,000 thousandths from issue #830), compared with the branch balance, or in All
   branches with the total across the listed branches. A balance at or below it is low, and so is any
   balance of zero or less. The API reports the value as `low_stock_threshold` on both stock lists so
   the screens never hard-code it.

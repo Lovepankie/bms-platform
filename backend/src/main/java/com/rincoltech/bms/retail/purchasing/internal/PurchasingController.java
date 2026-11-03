@@ -154,4 +154,23 @@ class PurchasingController {
         }
         return response.body(outcome.body());
     }
+
+    @PostMapping("/purchases/{purchase_id}/replace")
+    @RequiresPermission("retail.purchase.create")
+    @Operation(
+            summary =
+                    "Edit a delivery: void the restock and record the request in its place, in one transaction (issue #830); M",
+            operationId = "replaceRetailPurchase")
+    ResponseEntity<Purchase> replacePurchase(
+            @PathVariable("purchase_id") UUID id,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody PurchaseRequest request) {
+        Outcome<Purchase> outcome = service.replace(idempotencyKey, id, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.created(
+                URI.create(PurchasingService.PATH + "/" + outcome.body().id()));
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
+    }
 }

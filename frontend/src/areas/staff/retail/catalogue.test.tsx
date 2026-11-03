@@ -65,15 +65,17 @@ describe('catalogue permission gating', () => {
 describe('categories and units', () => {
   const row: Category = { id: 'c1', name: 'Lighting', active: true, product_count: 3 };
 
-  it('says how many items use a row, and that a switched-off one cannot be chosen', () => {
+  it('says how many items use a row, and that a deleted one is hidden and can be brought back (issue #830)', () => {
     expect(usedText(0, 'unit')).toBe('No items use this unit yet.');
     expect(usedText(1, 'category')).toBe('Used by 1 item.');
     const html = renderToString(<ul><NamedRow row={{ ...row, active: false }} noun="category" onRename={() => undefined} onToggle={() => undefined} /></ul>);
     expect(html).toContain('Used by 3 items.');
-    expect(html).toContain('Switched off');
-    expect(html).toContain('New items cannot choose it.');
-    expect(html).toContain('Switch on');
-    expect(html).not.toMatch(/delete|remove/i);
+    expect(html).toContain('>Deleted<');
+    expect(html).toContain('Hidden from lists and pickers; past records keep it.');
+    expect(html).toContain('Bring back');
+    const on = renderToString(<ul><NamedRow row={row} noun="category" onRename={() => undefined} onToggle={() => undefined} /></ul>);
+    expect(on).toContain('>Delete<');
+    expect(on).not.toMatch(/switch off/i);
   });
 });
 

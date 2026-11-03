@@ -15,11 +15,11 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 | AppSheet view | Equivalent screen | Status | What remains |
 |---|---|---|---|
 | Record a sale (cash or credit, buyer, proposed payment date) | Record a sale (`sale`) | done | Nothing. The category shows beside each item in the picker (#145) |
-| Edit a credit sale | Replaced on purpose by payments against the sale (FR-RET-05, behaviour spec section 8) | done | An opened credit sale, the Credit sales list and the All sales list take "Record payment" and "Mark as fully paid" (`POST /retail/sales/{id}/payments`, issue #326); an imported sale shows a note instead |
+| Edit a credit sale | Replaced on purpose by payments against the sale (FR-RET-05, behaviour spec section 8) | done | An opened credit sale, the Credit sales list and the All sales list take "Record payment" and "Mark as paid" (`POST /retail/sales/{id}/payments`, issue #326; the old app's words from issue #830); an imported sale shows a note instead |
 | Credit sales (sales where the type is Credit) | Credit sales (`credit-sales`): buyer, date, amount, due date, state (Unpaid, Part paid, Overdue, Paid); filter by buyer and by what is owed; open a sale for its lines | done | Nothing for the list. Payment history on a sale is not shown yet |
 | Sales list and history | All sales (`sales`): filters by date range, branch (the Branch box), buyer, payment method and item; open a sale for its lines | done | Nothing for the list |
 | Sales by cash and by profit margin, grouped by shop, year and month | Sales analysis (`sales-analysis`): by day, week or month, by shop, category, item and seller; Margins (`margins`): profit and margin percent by item and category; Daily profit (`profit`) per branch and day | done | Nothing for the grouping and the margin. The year is a range of up to 366 days. The cash against credit split of a day is on the retail home dashboard; there is no "by cash" cut of the profit report |
-| Void or return a sale | "Void this sale" on an opened sale (`sale-actions.tsx`); Customer returns (`returns`), Take goods back from an opened sale (`returns/new/$saleId`) and the credit note (`returns/$returnId`) while the returns capability is on (issue #201, ADR-033) | done | Nothing. Customer returns were recorded as restocks in the AppSheet app; here they are credit notes with `return` movements |
+| Void or return a sale | "Delete this sale" on an opened sale, the old app's words for the void (`sale-actions.tsx`, issue #830); Customer returns (`returns`), Take goods back from an opened sale (`returns/new/$saleId`) and the credit note (`returns/$returnId`) while the returns capability is on (issue #201, ADR-033) | done | Nothing. Customer returns were recorded as restocks in the AppSheet app; here they are credit notes with `return` movements |
 
 ## Stock
 
@@ -27,7 +27,7 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 |---|---|---|---|
 | Product catalogue (quantity and selling price, no cost for sales staff) | Stock (`stock`): item, category, quantity, price, cost only with `retail.profit.read`; search by name, code or category; category filter | done | Nothing |
 | Product categories (with related products) | Stock category filter and the by-category table on Stock value | done | Managing categories is on the Categories screen (see Catalogue management) |
-| Low stock items | Stock tab "Low stock" (out of stock included): at or below the item's own minimum at that branch, or for every branch, where one is set; else the fixed level of 5 (issue #412, ADR-057; `LowStockRule`, issue #490) | done | Nothing. The AppSheet app had no per-product reorder level; a minimum is set per item and branch |
+| Low stock items | Stock tab "Low stock" (out of stock included): at or below the item's own minimum at that branch, or for every branch, where one is set; else the fixed level of 10, the old app's rule (issue #830; issue #412, ADR-057; `LowStockRule`, issue #490) | done | Nothing. The AppSheet app had no per-product reorder level; a minimum is set per item and branch |
 | Out of stock items | Stock tab "Out of stock" (zero or less) | done | Nothing |
 | Stock per shop and across shops | Stock with the Branch box on one branch, or All branches (a column per branch, a total, the negative flag per cell; on a phone the total with a per-branch breakdown) | done | Nothing |
 | Stock-take | Stock-take (`stocktake`) | done | Nothing |
@@ -40,7 +40,7 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 | AppSheet view | Equivalent screen | Status | What remains |
 |---|---|---|---|
 | Restock form (admin): per-shop quantities, unit cost and sell price, supplier | Restock (`restock`) | done | Nothing. The category shows beside each item in the picker |
-| Purchase records (admin) | Past purchases (`restocks`), linked from Buy stock: filtered by date range and voided or not, a list or grouped by shop, month, supplier, category and item; Correct this purchase voids one and enters it again (issue #351, ADR-044) | done | Nothing |
+| Purchase records (admin) | Past purchases (`restocks`), linked from Buy stock: filtered by date range and voided or not, a list or grouped by shop, month, supplier, category and item; Correct this purchase voids one and enters it again (issue #351, ADR-044); Edit opens Buy stock filled in and Save changes voids it and saves the new one naming it (issue #830) | done | Nothing |
 | Stock valuation per shop and combined (admin) | Stock value (`valuation`): at cost and at selling price, per branch with All branches, per item | done | Nothing |
 | Expected sales and expected profit, and percent profit | Stock value: Expected profit and Profit % (over cost) per item, branch, category and total, only with `retail.profit.read` | done | Nothing |
 | Valuation by category | Stock value, "By category" table | done | Nothing |

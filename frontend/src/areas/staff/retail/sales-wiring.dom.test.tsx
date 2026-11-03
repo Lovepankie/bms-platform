@@ -91,7 +91,7 @@ describe('the Credit sales list', () => {
     await openEveryGroup();
     const owing = (await screen.findAllByRole('button', { name: 'Record payment' }))[0]?.closest('li') as HTMLElement;
     fireEvent.click(within(owing).getByRole('button', { name: /^Open the sale/ }));
-    expect(await screen.findByRole('button', { name: 'Mark as fully paid' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Mark as paid' })).toBeTruthy();
   });
 });
 
@@ -102,17 +102,18 @@ describe('the All sales list', () => {
     expect((await screen.findAllByRole('button', { name: 'Record payment' })).length).toBeGreaterThan(0);
   });
 
-  it('shows Void this sale on an opened cash sale, and Voided with the reason after it is voided', async () => {
+  it('shows Delete this sale on an opened cash sale, and keeps it marked Deleted with the reason (issue #830)', async () => {
     screenOf(<AllSales />);
     await openEveryGroup();
     const rows = (await screen.findAllByRole('button', { name: /^Open the sale/ })).map((b) => b.closest('li') as HTMLElement);
     const cashRow = rows.find((li) => within(li).queryByText('Cash', { selector: 'strong' })) as HTMLElement;
     fireEvent.click(within(cashRow).getByRole('button', { name: /^Open the sale/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Void this sale' }));
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'Rung up twice' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    expect(await screen.findByText('Voided because')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete this sale' }));
+    expect(screen.getByTestId('void-sale-question').textContent).toMatch(/^Delete this sale\? The stock goes back/);
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: 'Rung up twice' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete it' }));
+    expect(await screen.findByText('Deleted because')).toBeTruthy();
     expect(screen.getByText('Rung up twice')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
   });
 });

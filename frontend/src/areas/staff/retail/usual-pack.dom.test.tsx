@@ -123,6 +123,9 @@ describe('a usual pack on the Units page (issue #637)', () => {
     fireEvent.keyDown(sheet, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
+    // Issue #830: the switched-off (deleted) Carton is hidden until Show deleted is ticked.
+    expect(screen.queryByRole('button', { name: 'What one Carton usually holds' })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Show deleted (1)'));
     fireEvent.click(screen.getByRole('button', { name: 'What one Carton usually holds' }));
     sheet = await screen.findByRole('dialog');
     expect(within(sheet).getByText('Carton is switched off, so what it usually holds can only be removed.')).toBeTruthy();

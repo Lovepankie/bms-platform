@@ -60,19 +60,31 @@ export function NamedRow({ row, noun, busy, onRename, onToggle, extra, detail }:
   onToggle: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [name, setName] = useState(row.name ?? '');
   const off = row.active === false;
   return (
     <li className="rt-card">
       <p>
-        <strong>{row.name}</strong> {off && <span className="badge badge-warning">Switched off</span>}
+        <strong>{row.name}</strong> {off && <span className="badge badge-warning">Deleted</span>}
       </p>
       {detail}
       <p className="hint">
         {usedText(row.product_count, noun)}
-        {off ? ' New items cannot choose it.' : ''}
+        {off ? ' Hidden from lists and pickers; past records keep it.' : ''}
       </p>
-      {editing ? (
+      {asking ? (
+        // Issue #830: the old app's Delete, asked first. Underneath the row is switched off, never removed.
+        <div className="stack">
+          <p className="alert alert-warning" data-testid={`delete-${noun}-question`}>
+            <strong>Delete {row.name}?</strong> It is hidden from lists and pickers. Items, history and reports keep it, and Show deleted brings it back.
+          </p>
+          <p className="cluster">
+            <BusyButton busy={busy ?? false} type="button" className="btn-danger" onClick={() => { setAsking(false); onToggle(); }}>Yes, delete it</BusyButton>
+            <button type="button" className="btn-ghost" onClick={() => setAsking(false)}>Keep it</button>
+          </p>
+        </div>
+      ) : editing ? (
         <div className="stack">
           <label htmlFor={`rename-${row.id}`}>New name</label>
           <input id={`rename-${row.id}`} value={name} maxLength={noun === 'category' ? 100 : 30} onChange={(e) => setName(e.target.value)} />
@@ -86,8 +98,8 @@ export function NamedRow({ row, noun, busy, onRename, onToggle, extra, detail }:
       ) : (
         <p className="cluster">
           <button type="button" className="btn-sm" onClick={() => setEditing(true)} aria-label={`Rename ${row.name}`}>Rename</button>
-          <BusyButton busy={busy ?? false} type="button" className="btn-sm" onClick={onToggle} aria-label={`${off ? 'Switch on' : 'Switch off'} ${row.name}`}>
-            {off ? 'Switch on' : 'Switch off'}
+          <BusyButton busy={busy ?? false} type="button" className={off ? 'btn-sm' : 'btn-sm btn-danger'} onClick={off ? onToggle : () => setAsking(true)} aria-label={`${off ? 'Bring back' : 'Delete'} ${row.name}`}>
+            {off ? 'Bring back' : 'Delete'}
           </BusyButton>
           {extra}
         </p>
@@ -121,6 +133,10 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false, sec
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
   const back = useComeBack();
   const all = rows.data ?? [];
+  // Issue #830: a deleted (switched off) row is hidden until Show deleted is ticked.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const deletedCount = all.filter((r) => r.active === false).length;
+  const shown = showDeleted ? all : all.filter((r) => r.active !== false);
   const singles = all.filter((r) => r.active !== false && !isPackageRow(r));
   const done = (text: string) => {
     show(text, 'success');
@@ -241,8 +257,8 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false, sec
           version: r.version,
           body: { active: r.active === false },
           text: (x) => (x.active === false
-            ? `"${x.name}" is switched off. Items that use it keep it; new items cannot choose it.`
-            : `"${x.name}" is switched on again.`),
+            ? `Deleted "${x.name}". Items that use it keep it; Show deleted brings it back.`
+            : `"${x.name}" is back.`),
         })}
     />
   );
@@ -253,6 +269,11 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false, sec
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       {rows.data && rows.data.length === 0 && <p className="empty-state">No {plural} yet. Add the first one {sections ? 'below' : 'above'}.</p>}
+      {deletedCount > 0 && (
+        <label htmlFor={`show-deleted-${plural}`}>
+          <input id={`show-deleted-${plural}`} type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Show deleted ({deletedCount})
+        </label>
+      )}
       {sections ? sections.map((s, i) => (
         <section key={s.key} className="stack" aria-labelledby={`${plural}-${s.key}`} data-testid={`${plural}-${s.key}`}>
           <div className="help-tip-heading">
@@ -262,12 +283,12 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false, sec
           <p className="hint">{s.hint}</p>
           <div data-tour={i === 0 ? 'named-add' : undefined}>{addPanel(s.key, s.add, `Name of the new ${s.key === 'packages' ? 'package' : 'single unit'}`, s.add)}</div>
           <ul style={{ listStyle: 'none', padding: 0 }} data-tour={i === 0 ? 'named-list' : undefined}>
-            {all.filter(s.holds).map(rowOf)}
+            {shown.filter(s.holds).map(rowOf)}
           </ul>
         </section>
       )) : (
         <ul style={{ listStyle: 'none', padding: 0 }} data-tour="named-list">
-          {all.map(rowOf)}
+          {shown.map(rowOf)}
         </ul>
       )}
       {all.filter((r) => r.id === packFor).map((r) => (

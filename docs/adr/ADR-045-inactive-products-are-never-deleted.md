@@ -4,6 +4,11 @@
 
 Proposed (2026-10-20, issue #342). Builds on ADR-020 (retail stock and cost, the `active` flag of a product) and ADR-044 (entry mistakes are corrected without deleting). No migration: `retail_products.active` exists since `V10`.
 
+Screens amended by issue #830 (the decision is unchanged): the button says **Delete**, the owner's old app's word, on an item, a
+category and a unit, and asks first; underneath it is this record's switch off, so nothing is removed and history and reports keep
+the row. A deleted row is hidden from the lists and the pickers that choose one for an item (a filter still lists it, so history can be
+found); **Show deleted** brings it into view, where Bring back switches it on.
+
 ## Context
 
 The owner asked to delete products the business no longer sells. History and analysis depend on the record: sale lines, restocks, stock movements and price history all name the product, and the reports read them. The agreed answer is that nothing is deleted. The `active` flag existed and `PATCH /retail/products/{id}` already edited it, but a sale refused an inactive product only on the sale route; a restock, a transfer and the sale price resolver did not, and the stock lists still showed an inactive product that held stock.

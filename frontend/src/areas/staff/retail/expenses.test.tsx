@@ -120,16 +120,20 @@ describe('expense records, report and lists', () => {
     { id: 'x2', branch_id: branch, business_date: today, amount_minor: 1000, category_name: 'Utilities', item_name: 'Others', explanation: 'Generator oil', voided: true, void_reason: 'Wrong day' },
   ];
 
-  it('lists expenses grouped by shop and month with Void only for a holder of the void permission', () => {
+  it('lists expenses grouped by shop and month with Edit and Delete only for a holder of the void permission (issue #830)', () => {
     const client = new QueryClient();
     client.setQueryData(['retail', 'expenses', [branch], daysBefore(today, 30), today], rows);
     const admin = page('admin', <ExpenseRecords />, client);
     expect(admin).toContain('Test Branch A');
     expect(admin).toContain('Transport / Fuel, for Test Vendor 01');
     expect(admin).toContain('Generator oil');
-    expect(admin).toContain('>Void<');
+    expect(admin).toContain('>Delete<');
+    expect(admin).toContain('>Edit<');
+    expect(admin).not.toContain('>Void<');
     expect(admin).toContain('Wrong day');
-    expect(page('cashier', <ExpenseRecords />, client)).not.toContain('>Void<');
+    const cashier = page('cashier', <ExpenseRecords />, client);
+    expect(cashier).not.toContain('>Delete<');
+    expect(cashier).not.toContain('>Edit<');
   });
 
   it('shows totals and counts by group', () => {

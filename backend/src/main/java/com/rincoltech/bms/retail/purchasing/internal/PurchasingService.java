@@ -617,6 +617,31 @@ class PurchasingService implements QuickAddPurchase {
                 idempotencyKey, "POST", PATH + "/" + id + "/void", r, Purchase.class, () -> voidNow(id, r));
     }
 
+    /** The reason an edited restock is voided with (issue #830). */
+    static final String EDIT_REASON = "Edited: entered again with the changes";
+
+    /**
+     * Edit a delivery, the owner's old app's word (issue #830): in one transaction the restock is voided by {@link #voidNow}
+     * (issue #351) and the request is recorded as a new restock whose note names the one it replaces, so a refusal of either
+     * (its stock moved, an item switched off, a date not allowed) leaves the old restock as it was.
+     * JUSTIFICATION-A3: the review of #830 asks the void and the new restock to be one server call; both steps are reused.
+     */
+    @Transactional
+    Outcome<Purchase> replace(String idempotencyKey, UUID id, PurchaseRequest r) {
+        return idempotency.once(idempotencyKey, "POST", PATH + "/" + id + "/replace", r, Purchase.class, () -> {
+            Purchase old = voidNow(id, new VoidPurchaseRequest(EDIT_REASON));
+            String link = "Replaces " + old.purchaseNo() + ", edited";
+            String typed = blankToNull(r.note());
+            String note = typed == null || typed.equals(link) ? link : typed + ". " + link;
+            return record(new PurchaseRequest(
+                    r.supplierId(),
+                    r.purchasedOn(),
+                    r.paymentMethod(),
+                    note.length() > 300 ? note.substring(0, 300) : note,
+                    r.lines()));
+        });
+    }
+
     /**
      * Undoes a restock as a whole, once, in one transaction: the stock it added is taken out again (refused when some of it
      * was sold, used or moved since), its journal entries are reversed today, the product prices it set go back while it is

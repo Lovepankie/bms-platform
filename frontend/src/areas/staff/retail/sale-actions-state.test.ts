@@ -81,7 +81,7 @@ describe('voiding', () => {
     expect(voidBlocked({ status: 'completed', payment_method: 'cash', paid_minor: 5000 })).toBeNull();
     expect(voidBlocked(credit)).toMatch(/had a payment or a return/);
     expect(voidBlocked({ ...credit, paid_minor: 0, historical: true })).toMatch(/imported from the old records/);
-    expect(voidBlocked({ ...credit, status: 'voided' })).toMatch(/already voided/);
+    expect(voidBlocked({ ...credit, status: 'voided' })).toMatch(/already deleted/);
   });
 
   it('needs a reason of five characters', () => {

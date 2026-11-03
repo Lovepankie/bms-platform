@@ -160,7 +160,7 @@ describe('low stock and out of stock tabs', () => {
     expect(html).toContain('>Out of stock<');
     expect(html).toMatch(/aria-checked="true"[^>]*>Low stock</);
     expect(html).toMatch(/aria-checked="false"[^>]*>Out of stock</);
-    expect(html).toContain('at or below their minimum, or 5 or fewer without one, including those out of stock');
+    expect(html).toContain('at or below their minimum, or 10 or fewer without one, including those out of stock');
   });
 
   it('the Stock page starts on all items', () => {
@@ -613,7 +613,7 @@ describe('Credit sales and All sales (#145)', () => {
     expect(saleState({ ...base, due_date: '2026-10-06' }, today).label).toBe('Unpaid');
     expect(saleState({ ...base, paid_minor: 12000, balance_minor: 0 }, today).label).toBe('Paid');
     expect(saleState({ ...base, payment_method: 'cash', paid_minor: 12000, balance_minor: 0 }, today).label).toBe('Paid');
-    expect(saleState({ ...base, status: 'voided' }, today).label).toBe('Voided');
+    expect(saleState({ ...base, status: 'voided' }, today).label).toBe('Deleted');
   });
 
   it('lists a credit sale with buyer, date, amount, due date and status', () => {

@@ -80,6 +80,7 @@ export function CorrectPanel({ purchase, onDone, onCancel }: { purchase: Purchas
 
 export function RestockCard({ purchase, supplier, onDone }: { purchase: Purchase; supplier?: string; onDone: (message: string | null) => void }) {
   const { me } = useStaff();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const voided = purchase.status === 'voided';
   // A scoped caller's copy hides the other branches the restock touched (`partial`): the server would refuse the void with 403.
@@ -100,12 +101,20 @@ export function RestockCard({ purchase, supplier, onDone }: { purchase: Purchase
           </li>
         ))}
       </ul>
+      {/* Issue #830: an edited delivery names the one it replaces, which stays in this list marked Voided. */}
+      {purchase.note && <p className="hint" data-testid="purchase-note">{purchase.note}</p>}
       {voided && (
         <p className="hint" data-testid="void-note">
           Voided {showDate(purchase.voided_on)}. Reason: {purchase.void_reason}
         </p>
       )}
-      {!voided && !open && mayVoid && <p><button type="button" className="btn-sm" onClick={() => setOpen(true)} aria-label={`Correct purchase ${purchase.purchase_no}`}>Correct this purchase</button></p>}
+      {!voided && !open && mayVoid && (
+        <p className="cluster">
+          {/* Issue #830: the old app's Edit opens the Buy stock form filled in; saving goes through the same void and enters it again. */}
+          <button type="button" className="btn-sm" onClick={() => void navigate({ to: '/staff/retail/restock', search: { edit: purchase.id } as never })} aria-label={`Edit delivery ${purchase.purchase_no}`}>Edit</button>
+          <button type="button" className="btn-sm" onClick={() => setOpen(true)} aria-label={`Correct purchase ${purchase.purchase_no}`}>Correct this purchase</button>
+        </p>
+      )}
       {!voided && !mayVoid && <p className="hint">Only someone who manages every branch this purchase touched can correct it.</p>}
       {!voided && open && <CorrectPanel purchase={purchase} onDone={(m) => { setOpen(false); onDone(m); }} onCancel={() => setOpen(false)} />}
     </li>

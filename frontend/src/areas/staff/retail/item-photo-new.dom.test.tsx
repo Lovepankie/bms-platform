@@ -148,7 +148,7 @@ describe('a photo while adding an item on Items', () => {
 });
 
 describe('the photo on Edit', () => {
-  it('comes first, under the name, before Inactive, the packs, the barcodes and the stock levels', async () => {
+  it('comes first, under the name, before Delete this item, the packs, the barcodes and the stock levels', async () => {
     items = [made];
     getProduct.mockResolvedValue(made);
     open(<ProductsPage />);
@@ -156,7 +156,7 @@ describe('the photo on Edit', () => {
     const photo = await screen.findByLabelText('Add a photo');
     const form = photo.closest('form') as HTMLFormElement;
     const description = within(form).getByLabelText(/^Description/);
-    const inactive = within(form).getByLabelText(/Inactive/);
+    const inactive = within(form).getByRole('button', { name: 'Delete this item' });
     expect(description.compareDocumentPosition(photo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(photo.compareDocumentPosition(inactive) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Every editor after the name sits below the photo.

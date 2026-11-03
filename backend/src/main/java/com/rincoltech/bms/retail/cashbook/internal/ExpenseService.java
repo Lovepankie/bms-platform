@@ -303,37 +303,82 @@ class ExpenseService {
 
     @Transactional
     Outcome<Expense> voidExpense(String key, UUID id, VoidRequest r) {
-        return idempotency.once(key, "POST", PATH + "/" + id + "/void", r, Expense.class, () -> {
-            Principal principal = CurrentPrincipal.require();
-            ExpenseRow row = repo.expense(id, true)
-                    .filter(x -> principal.may(CashbookSupport.VOID, x.branchId()))
-                    .orElseThrow(ApiException::notFound);
-            if (row.voided().voided()) {
-                throw CashbookSupport.alreadyVoided();
+        return idempotency.once(
+                key, "POST", PATH + "/" + id + "/void", r, Expense.class, () -> voidNow(id, CashbookSupport.reason(r)));
+    }
+
+    /** The reason an edited expense is voided with (issue #830). */
+    static final String EDIT_REASON = "Edited: entered again with the changes";
+
+    /**
+     * Edit an expense, the owner's old app's word (issue #830): in one transaction the expense is voided (FR-RET-28) and the
+     * request is recorded as a new expense at the same branch whose explanation names the one it replaces, so a refusal of
+     * either leaves the old expense as it was. An edit whose new amount would wait for an administrator (ADR-091) is refused
+     * with 422 {@code edit_needs_approval}: the old expense is never voided while its replacement waits.
+     */
+    @Transactional
+    Outcome<Expense> replace(String key, UUID id, ExpenseRequest r) {
+        return idempotency.once(key, "POST", PATH + "/" + id + "/replace", r, Expense.class, () -> {
+            Expense old = voidNow(id, EDIT_REASON);
+            ExpenseRequest edited = new ExpenseRequest(
+                    old.branchId(),
+                    r.businessDate(),
+                    r.categoryId(),
+                    r.itemId(),
+                    r.partyId(),
+                    r.amountMinor(),
+                    linked(r.explanation(), old),
+                    r.receiptDocumentId());
+            UUID branch = branchContext.resolve(CashbookSupport.EXPENSE_RECORD, old.branchId());
+            Checked c = check(branch, edited);
+            if (approvals.rule(ExpenseAction.TYPE).asks(edited.amountMinor())) {
+                throw ApiException.rule(
+                        "edit_needs_approval",
+                        "This amount needs an administrator's approval, so it cannot be edited in place. Delete the expense"
+                                + " and record it again.");
             }
-            if (row.historical()) {
-                throw CashbookSupport.historicalRecord();
-            }
-            // The same branch-day lock as the savings create and the expense create (ADR-080 decision 3).
-            repo.lockBranchDay(row.branchId(), row.businessDate());
-            String reason = CashbookSupport.reason(r);
-            Instant at = support.now();
-            if (row.journalEntryId() != null) {
-                books.reverse(
-                        row.journalEntryId(),
-                        support.dayOf(at),
-                        CashPostings.ref("Void expense", id),
-                        CashPostings.voidKey(CashPostings.EXPENSE, id));
-            }
-            repo.markVoided("retail_expenses", id, principal.userId(), reason, at);
-            audit.record(new AuditLog.Entry(
-                    "retail.expense.voided",
-                    "retail.expense",
-                    id,
-                    row.branchId(),
-                    Map.of("business_date", row.businessDate().toString()),
-                    Map.of("reason", reason)));
-            return view(repo.expense(id, false).orElseThrow());
+            return write(
+                    UUID.randomUUID(), c, edited, CurrentPrincipal.require().userId());
         });
+    }
+
+    /** The explanation of an edited expense: what was typed, then the words that name the one it replaces. */
+    static String linked(String typed, Expense old) {
+        String own = CashbookSupport.blankToNull(typed);
+        String link = "Replaces the " + old.itemName() + " entry of " + old.businessDate() + ", edited.";
+        String all = own == null ? link : own + " " + link;
+        return all.length() > 500 ? all.substring(0, 500) : all;
+    }
+
+    private Expense voidNow(UUID id, String reason) {
+        Principal principal = CurrentPrincipal.require();
+        ExpenseRow row = repo.expense(id, true)
+                .filter(x -> principal.may(CashbookSupport.VOID, x.branchId()))
+                .orElseThrow(ApiException::notFound);
+        if (row.voided().voided()) {
+            throw CashbookSupport.alreadyVoided();
+        }
+        if (row.historical()) {
+            throw CashbookSupport.historicalRecord();
+        }
+        // The same branch-day lock as the savings create and the expense create (ADR-080 decision 3).
+        repo.lockBranchDay(row.branchId(), row.businessDate());
+        Instant at = support.now();
+        if (row.journalEntryId() != null) {
+            books.reverse(
+                    row.journalEntryId(),
+                    support.dayOf(at),
+                    CashPostings.ref("Void expense", id),
+                    CashPostings.voidKey(CashPostings.EXPENSE, id));
+        }
+        repo.markVoided("retail_expenses", id, principal.userId(), reason, at);
+        audit.record(new AuditLog.Entry(
+                "retail.expense.voided",
+                "retail.expense",
+                id,
+                row.branchId(),
+                Map.of("business_date", row.businessDate().toString()),
+                Map.of("reason", reason)));
+        return view(repo.expense(id, false).orElseThrow());
     }
 }

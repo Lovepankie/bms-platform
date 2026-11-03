@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
-import { businessToday, isWaiting, retail, type Expense, type ExpenseCategory, type ExpenseGroup, type ExpenseItem } from '../../../api/retail';
+import { businessToday, isWaiting, retail, type ApprovalWaiting, type Expense, type ExpenseCategory, type ExpenseGroup, type ExpenseItem } from '../../../api/retail';
 import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
-import { MIN_EXPLANATION, activeCategories, itemsOf, needsExplanation, planExpense, withItem } from './expenses-state';
-import { usePersistedDraft } from './idempotency';
+import {
+  MIN_EXPLANATION, activeCategories, deleteExpenseReason, draftOfExpense, itemsOf, needsExplanation, planExpense, withItem,
+} from './expenses-state';
+import { newIdempotencyKey, usePersistedDraft } from './idempotency';
 import { PartyPicker, useCashParties } from './party-picker';
 import { CASHBOOK_READ, EXPENSE_RECORD, holds, holdsAt, needsOf } from './permissions';
 import { ScreenLink } from './screen-link';
@@ -24,10 +26,17 @@ import { addOn } from './screen-link';
 
 interface ExpenseDraft { date: string; categoryId: string; itemId: string; partyId: string; amount: string; explanation: string }
 
-export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string; onSaved?: (saved: Expense) => void; onWaiting?: (amountMinor: number) => void }) {
+export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }: {
+  branchId: string;
+  onSaved?: (saved: Expense) => void;
+  onWaiting?: (amountMinor: number) => void;
+  /** Edit (issue #830): the form opens filled in with this expense; saving voids it and saves the form as a new one naming it. */
+  replaces?: Expense;
+  onCancel?: () => void;
+}) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish } = usePersistedDraft<ExpenseDraft>(`expense:${me.user_id ?? ''}:${branchId}`, {
+  const { key, draft, setDraft, finish } = usePersistedDraft<ExpenseDraft>(replaces ? `expense-edit:${me.user_id ?? ''}:${replaces.id ?? ''}` : `expense:${me.user_id ?? ''}:${branchId}`, replaces ? draftOfExpense(replaces) : {
     date: businessToday(), categoryId: '', itemId: '', partyId: '', amount: '', explanation: '',
   });
   const categories = useQuery({ queryKey: ['retail', 'expense-categories', true], queryFn: () => retail.listExpenseCategories({ activeOnly: true }) });
@@ -36,10 +45,12 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
   const items = itemsOf(list, draft.categoryId);
   const explain = needsExplanation(list, draft.categoryId, draft.itemId);
   const plan = planExpense({ branchId, ...draft }, list);
-  // success-screen: the Saved panel replaces the form; one that waits for approval says so on the form instead
+  // success-screen: the Saved panel replaces the form; one that waits for approval says so on the form instead; an edited one (issue #830) closes its form
   const save = useMutation({
-    mutationFn: () => retail.createExpense(plan.request, key),
-    meta: { success: (saved: Expense) => (isWaiting(saved) ? null : 'Expense saved') },
+    // Edit (issue #830): one call voids the old expense and saves this one naming it, in one transaction on the server, so any
+    // refusal (an amount that would wait for an administrator, an item switched off) leaves the old expense as it was.
+    mutationFn: async (): Promise<Expense | ApprovalWaiting> => (replaces?.id ? retail.replaceExpense(replaces.id, plan.request, key) : retail.createExpense(plan.request, key)),
+    meta: { success: (saved: Expense) => (isWaiting(saved) ? null : replaces ? 'Expense updated' : 'Expense saved') },
     onSuccess: (saved) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
@@ -123,10 +134,60 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
       <Problem error={save.error} />
       <ActionBar>
         <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={blocked}>
-          Save expense
+          {replaces ? 'Save changes' : 'Save expense'}
         </BusyButton>
+        {onCancel && <button type="button" /* busy-exempt: cancel waits for the save */ className="btn-ghost" disabled={save.isPending} onClick={onCancel}>Cancel</button>}
       </ActionBar>
     </form>
+  );
+}
+
+/**
+ * Edit and Delete on an expense, the old app's buttons (issue #830), offered where the expense may be voided (retail.cashbook.void,
+ * the owner's). Delete asks first and voids it; Edit opens the expense form filled in, and saving voids the old one and saves the new
+ * one naming it (needs retail.expense.record there too). Both keep the old expense, marked Voided.
+ * JUSTIFICATION-A3: #830 asks for Edit and Delete on each expense row; the void and the form are reused, this only joins them.
+ */
+export function ExpenseRowActions({ row, onDeleted }: { row: Expense; onDeleted?: () => void }) {
+  const { me } = useStaff();
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<'edit' | 'delete' | null>(null);
+  const [reason, setReason] = useState('');
+  const key = useRef(newIdempotencyKey());
+  // toast-exempt: the Expenses screen says it through onDeleted (show with success)
+  const remove = useMutation({
+    mutationFn: () => retail.voidExpense(row.id ?? '', deleteExpenseReason(reason), key.current),
+    onSuccess: () => {
+      setMode(null);
+      void queryClient.invalidateQueries({ queryKey: ['retail'] });
+      onDeleted?.();
+    },
+  });
+  const branchId = row.branch_id ?? '';
+  if (mode === 'edit') {
+    return <ExpenseForm branchId={branchId} replaces={row} onSaved={() => setMode(null)} onWaiting={() => setMode(null)} onCancel={() => setMode(null)} />;
+  }
+  if (mode === 'delete') {
+    return (
+      <form className="stack" aria-label="Delete this expense" onSubmit={(e) => { e.preventDefault(); if (!remove.isPending) remove.mutate(); }}>
+        <p className="alert alert-warning" data-testid="delete-expense-question">
+          <strong>Delete this expense?</strong> It stops counting in the cash book and the reports. It stays in this list marked Voided.
+        </p>
+        <label htmlFor={`delete-expense-${row.id ?? ''}`}>Why? (optional)</label>
+        <input id={`delete-expense-${row.id ?? ''}`} maxLength={300} value={reason} onChange={(e) => { key.current = newIdempotencyKey(); setReason(e.target.value); }} />
+        <Problem error={remove.error} />
+        <p className="cluster">
+          <BusyButton busy={remove.isPending} type="submit" className="btn-danger">Yes, delete it</BusyButton>
+          <button type="button" /* busy-exempt: keep waits for the delete */ className="btn-ghost" disabled={remove.isPending} onClick={() => { setMode(null); setReason(''); remove.reset(); }}>Keep it</button>
+        </p>
+      </form>
+    );
+  }
+  return (
+    <p className="cluster">
+      {holdsAt(me, EXPENSE_RECORD, branchId) && <button type="button" className="btn-sm" onClick={() => setMode('edit')}>Edit</button>}
+      <button type="button" className="btn-sm btn-danger" onClick={() => setMode('delete')}>Delete</button>
+    </p>
   );
 }
 
@@ -148,8 +209,7 @@ export function ExpenseRecords({ onVoided }: { onVoided?: (message: string) => v
           rows={rows.data}
           empty="No expenses recorded in this period."
           what="expense"
-          voidWith={(row, reason, key) => retail.voidExpense(row.id ?? '', reason, key)}
-          onVoided={() => onVoided?.('Expense voided.')}
+          actions={(row, mayVoid) => (mayVoid ? <ExpenseRowActions row={row} onDeleted={() => onVoided?.('Expense deleted.')} /> : null)}
           renderRow={(row) => (
             <>
               <strong>{showDate(row.business_date)}</strong> <span className="muted">{money(row.amount_minor ?? 0)}</span>
