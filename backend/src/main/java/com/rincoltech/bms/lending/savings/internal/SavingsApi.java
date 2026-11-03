@@ -240,7 +240,38 @@ final class SavingsApi {
             UUID reversedByTxnId,
             UUID approvalRequestId,
             String source,
-            Instant recordedAt) {}
+            Instant recordedAt,
+
+            @Schema(
+                    description =
+                            "The provider's payment code (confirmation code) of a deposit paid by mobile money or card, as on"
+                                    + " the member's text message. Filled only by GET .../transactions; always null in the"
+                                    + " answers of a deposit, withdrawal, reversal or action, which do not look it up")
+            String paymentCode) {
+
+        Transaction withPaymentCode(String code) {
+            return new Transaction(
+                    id,
+                    seq,
+                    txnType,
+                    amountMinor,
+                    currency,
+                    credit,
+                    balanceAfterMinor,
+                    valueDate,
+                    paymentMethodKey,
+                    externalReference,
+                    receiptNo,
+                    reason,
+                    relatedTxnId,
+                    reversesTxnId,
+                    reversedByTxnId,
+                    approvalRequestId,
+                    source,
+                    recordedAt,
+                    code);
+        }
+    }
 
     @Schema(name = "SavingsTransactionPage")
     record TransactionPage(List<Transaction> items, String nextCursor) {}

@@ -492,8 +492,11 @@ The twin of 3.14; only what differs is listed.
   receipts exactly as in 3.14. A payment dated on or before the last end of day written (or before the account opened) is booked dated today (note "dated today"); a closed period is retried
   dated today. Only the allow-listed business refusals become receipts; any other error is retried.
 - **Reversal.** Staff cannot reverse a gateway deposit (`gateway_reversal_pending`) until #224, and the screen hides Reverse.
-- **Not built here.** The same as 3.14 (a payment in another currency; the system user, the reversal request and the allocation and refund of a receipt, FR-PAY-04, are built since in #224 part 1, section 3.16). The savings
-  transaction list does not yet show the provider's payment code (it is on the collect screen and the intent).
+- **Not built here.** The same as 3.14 (a payment in another currency; the system user, the reversal request and the allocation and refund of a receipt, FR-PAY-04, are built since in #224 part 1, section 3.16).
+- **The payment code in the transaction list** (issue #314, ADR-035 decision 68). `GET .../transactions` returns `payment_code`, the provider's
+  confirmation code, on each deposit a gateway payment booked (at once or allocated from the queue), read through `payment_intents.booked_subject_txn_id`
+  in one query per page; null on every other row. The account page shows it as "Payment code" under the deposit, as the collect screen does, so staff
+  can match the member's text message. It is read with the list's own `lending.savings.read` in the account's branch (else 404); the payer's number is never returned.
 
 ### 3.16 As built in slice #224, part 1 (the unallocated receipts queue, governed reversal, review windows)
 

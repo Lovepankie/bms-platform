@@ -62,6 +62,9 @@ class UnallocatedReceiptsIT extends LoanFixtures {
 
     static final String PURPOSE = "lending.loan_repayment";
     static final String SAVINGS = "lending.savings_deposit";
+    /** The payer's number a savings or other intent here is made with, as staff type it. */
+    static final String PAYER = "0700000224";
+
     static final String ACCOUNTS = "/api/v1/lending/savings-accounts";
     static final String UNALLOCATED = "/api/v1/payments/unallocated";
     static final Instant NOW = Instant.parse("2026-10-16T06:00:00Z");
@@ -392,7 +395,7 @@ class UnallocatedReceiptsIT extends LoanFixtures {
         ResponseEntity<JsonNode> r = call(
                 HttpMethod.POST,
                 "/api/v1/payments/intents",
-                Map.of("purpose", purpose, "subject_id", subject, "amount_minor", amount, "payer_phone", "0700000224"),
+                Map.of("purpose", purpose, "subject_id", subject, "amount_minor", amount, "payer_phone", PAYER),
                 "key-" + UUID.randomUUID());
         assertThat(r.getStatusCode().value()).as("%s", r.getBody()).isEqualTo(201);
         return r.getBody();
@@ -733,10 +736,77 @@ class UnallocatedReceiptsIT extends LoanFixtures {
                         .query(String.class)
                         .single())
                 .isEqualTo("gateway:gateway");
+        // Issue #314: the allocated deposit shows the payment code in the account's transaction list, as one booked at
+        // once does.
+        JsonNode items = send(
+                        HttpMethod.GET,
+                        ACCOUNTS + "/" + account + "/transactions",
+                        as(cashier, cashierPerms, "*", null),
+                        null)
+                .getBody()
+                .get("items");
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).get("id").asString())
+                .isEqualTo(row.get("allocated_txn_id").toString());
+        assertThat(items.get(0).get("payment_code").asString()).isEqualTo("CONF-224-0011");
         // A second approval of the same request books nothing more.
         assertThat(decide(approval, "approve").getStatusCode().is2xxSuccessful())
                 .isFalse();
         assertThat(savingsBalance(account)).isEqualTo(520_000);
+    }
+
+    // JUSTIFICATION-A3: the end to end case issue #314 exists for, asked for by the review of 2762001; no test covers
+    // it.
+    @Test
+    void aSavingsPaymentMadeAfterItExpiredOntoAFrozenAccountIsAllocatedAndTheListShowsItsPaymentCode() {
+        String account = account();
+        JsonNode intent = intentFor(account, SAVINGS, 50_000);
+        tick(Duration.ofMinutes(31));
+        assertThat(row(intent).get("status")).isEqualTo("expired");
+        // Expiry alone does not hold the money: a late payment onto an active account books at once, flagged late
+        // (SavingsDepositByGatewayIT.aPaymentCompletedAfterTheOrderExpiredStillBooksAndIsFlaggedLate). What holds it
+        // here is
+        // the account being frozen by the time the member pays: book() refuses it with account_frozen, one of the
+        // allow-listed
+        // refusals that become an unallocated receipt (ADR-035 decision 36). The refusal code is asserted below.
+        TestDatabase.owner()
+                .sql("UPDATE lending_savings_accounts SET status = 'frozen' WHERE id = ?")
+                .param(UUID.fromString(account))
+                .update();
+        pay(intent, 50_000, "CONF-314-LATE");
+        tick(Duration.ofMinutes(15));
+        assertThat(row(intent).get("status")).isEqualTo("booked_unallocated");
+        assertThat(row(intent).get("refusal_code")).isEqualTo("account_frozen");
+        assertThat(row(intent).get("booked_subject_txn_id")).isNull();
+        UUID receipt = TestDatabase.owner()
+                .sql("SELECT id FROM unallocated_receipts WHERE intent_id = ?")
+                .param(UUID.fromString(intent.get("id").asString()))
+                .query(UUID.class)
+                .single();
+
+        // Staff put the account right and allocate the money to it; a second person approves.
+        TestDatabase.owner()
+                .sql("UPDATE lending_savings_accounts SET status = 'active' WHERE id = ?")
+                .param(UUID.fromString(account))
+                .update();
+        String approval = requested(askAllocate(receipt, SAVINGS, account));
+        assertThat(decide(approval, "approve").getStatusCode().value()).isEqualTo(200);
+        Object txn = receiptRow(receipt).get("allocated_txn_id");
+        assertThat(row(intent).get("booked_subject_txn_id")).isEqualTo(txn);
+
+        // The deposit list shows the code from the member's text message, and never the number they paid from.
+        ResponseEntity<JsonNode> list = send(
+                HttpMethod.GET, ACCOUNTS + "/" + account + "/transactions", as(cashier, cashierPerms, "*", null), null);
+        assertThat(list.getStatusCode().value()).as("%s", list.getBody()).isEqualTo(200);
+        JsonNode items = list.getBody().get("items");
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).get("id").asString()).isEqualTo(txn.toString());
+        assertThat(items.get(0).get("txn_type").asString()).isEqualTo("deposit");
+        assertThat(items.get(0).get("payment_method_key").asString()).isEqualTo("gateway");
+        assertThat(items.get(0).get("payment_code").asString()).isEqualTo("CONF-314-LATE");
+        // No phone field, no long run of digits, and not the number the provider holds for the order.
+        String phone = fake.orderFor(intent.get("merchant_reference").asString()).payerPhoneE164;
+        assertNoPayerNumber(list.getBody(), phone, "CONF-314-LATE");
     }
 
     @Test

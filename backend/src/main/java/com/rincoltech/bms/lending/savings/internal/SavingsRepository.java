@@ -573,7 +573,8 @@ class SavingsRepository {
                 rs.getObject("reversed_by", UUID.class),
                 rs.getObject("approval_request_id", UUID.class),
                 rs.getString("source"),
-                rs.getTimestamp("created_at").toInstant());
+                rs.getTimestamp("created_at").toInstant(),
+                null);
     }
 
     // ---- Balances by value date -------------------------------------------------------------

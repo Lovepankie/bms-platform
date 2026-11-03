@@ -109,6 +109,9 @@ export function SavingsTransactions({ account, items }: { account: SavingsAccoun
             {t.payment_method_key && `, ${methodWords(t.payment_method_key)}`}
             {t.external_reference && `, ref ${t.external_reference}`}
           </p>
+          {t.payment_code && (
+            <p className="ln-muted">Payment code <strong>{t.payment_code}</strong></p>
+          )}
           <p className="ln-muted">Balance after {money(t.balance_after_minor, account.currency)}</p>
           {t.reversed_by_txn_id && <p><span className="badge badge-danger">Reversed</span></p>}
           {t.reason && <p className="ln-muted">{t.txn_type === 'interest' ? t.reason : `Reason: ${t.reason}`}</p>}

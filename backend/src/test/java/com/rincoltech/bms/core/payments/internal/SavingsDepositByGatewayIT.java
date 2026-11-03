@@ -65,6 +65,9 @@ import tools.jackson.databind.JsonNode;
 class SavingsDepositByGatewayIT extends LoanFixtures {
 
     static final String PURPOSE = "lending.savings_deposit";
+    /** The payer's number every intent here is made with, as staff type it. */
+    static final String PAYER = "0700000219";
+
     static final String ACCOUNTS = "/api/v1/lending/savings-accounts";
     static final Instant NOW = Instant.parse("2026-10-16T06:00:00Z");
     static final LocalDate TODAY = LocalDate.of(2026, 10, 16);
@@ -208,7 +211,7 @@ class SavingsDepositByGatewayIT extends LoanFixtures {
         return call(
                 HttpMethod.POST,
                 "/api/v1/payments/intents",
-                Map.of("purpose", PURPOSE, "subject_id", account, "amount_minor", amount, "payer_phone", "0700000219"),
+                Map.of("purpose", PURPOSE, "subject_id", account, "amount_minor", amount, "payer_phone", PAYER),
                 "key-" + UUID.randomUUID());
     }
 
@@ -266,7 +269,7 @@ class SavingsDepositByGatewayIT extends LoanFixtures {
                 HttpMethod.POST,
                 ACCOUNTS + "/" + account + "/deposits",
                 h,
-                Map.of("amount_minor", amount, "payment_method_key", "cash", "external_reference", "TEST-CASH-219"));
+                Map.of("amount_minor", amount, "payment_method_key", "cash", "external_reference", "TEST-CASH-REF"));
         assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
         return r.getBody();
     }
@@ -721,6 +724,45 @@ class SavingsDepositByGatewayIT extends LoanFixtures {
         assertThat(r.getStatusCode().value()).as("%s", r.getBody()).isEqualTo(422);
         assertThat(r.getBody().get("code").asString()).isEqualTo("gateway_reversal_pending");
         assertThat(balance(account)).isEqualTo(50_000L);
+    }
+
+    // JUSTIFICATION-A3: a new test case for issue #314; no existing test reads the transaction list after a gateway
+    // deposit.
+    @Test
+    void theTransactionListShowsThePaymentCodeOnAGatewayDepositOnlyAndNeverThePayersNumber() {
+        String account = account();
+        cashDeposit(account, 20_000);
+        JsonNode intent = intentFor(account, 50_000);
+        pay(intent, 50_000, "CONF-314-0001");
+        tick(Duration.ofMinutes(3));
+        assertThat(row(intent).get("status")).isEqualTo("booked");
+        String path = ACCOUNTS + "/" + account + "/transactions";
+
+        // A cashier with lending.savings.read in the branch sees the code on the gateway deposit, not on the cash one.
+        ResponseEntity<JsonNode> r = send(HttpMethod.GET, path, as(cashier, cashierPerms, "*", null), null);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        JsonNode items = r.getBody().get("items");
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).get("payment_method_key").asString()).isEqualTo("gateway");
+        assertThat(items.get(0).get("payment_code").asString()).isEqualTo("CONF-314-0001");
+        assertThat(items.get(1).get("payment_method_key").asString()).isEqualTo("cash");
+        assertThat(items.get(1).get("payment_code").isNull()).isTrue();
+        // Only the code: no phone field, no long run of digits, and not the number the provider holds for the order.
+        String phone = fake.orderFor(intent.get("merchant_reference").asString()).payerPhoneE164;
+        assertNoPayerNumber(r.getBody(), phone, "CONF-314-0001");
+
+        // A caller who may not read the account (another branch, or no savings read at all) gets no code.
+        ResponseEntity<JsonNode> otherBranch = send(
+                HttpMethod.GET,
+                path,
+                as(UUID.randomUUID(), "lending.savings.read", UUID.randomUUID().toString(), null),
+                null);
+        assertThat(otherBranch.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(String.valueOf(otherBranch.getBody())).doesNotContain("CONF-314-0001");
+        ResponseEntity<JsonNode> noRead =
+                send(HttpMethod.GET, path, as(UUID.randomUUID(), "core.payments.collect", "*", null), null);
+        assertThat(noRead.getStatusCode().value()).isIn(403, 404);
+        assertThat(String.valueOf(noRead.getBody())).doesNotContain("CONF-314-0001");
     }
 
     @Test

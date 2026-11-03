@@ -32,6 +32,13 @@ public interface PaymentCollections {
     /** The provider confirmation code of the intent whose booking created this subject transaction, if any (for a receipt). */
     java.util.Optional<String> confirmationCodeOf(UUID bookedTransactionId);
 
+    /**
+     * The provider confirmation codes of the intents whose booking created these subject transactions, keyed by
+     * transaction id; a transaction no gateway payment booked, or one whose intent has no code, is absent. The caller
+     * has already checked that the caller may read the subject (issue #314).
+     */
+    java.util.Map<UUID, String> confirmationCodesOf(java.util.Collection<UUID> bookedTransactionIds);
+
     /** Cancels an order that is not paid (best effort at the provider) and ends the intent {@code cancelled}. */
     IntentView cancel(UUID intentId);
 

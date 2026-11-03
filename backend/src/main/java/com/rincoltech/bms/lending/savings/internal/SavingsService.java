@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.notifications.SmsEvents;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
+import com.rincoltech.bms.core.payments.PaymentCollections;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -71,6 +72,7 @@ class SavingsService {
     private final MemberLookup members;
     private final CurrentTenant currentTenant;
     private final AuditLog audit;
+    private final PaymentCollections collections;
 
     SavingsService(
             SavingsRepository repo,
@@ -79,7 +81,9 @@ class SavingsService {
             Idempotency idempotency,
             MemberLookup members,
             CurrentTenant currentTenant,
-            AuditLog audit) {
+            AuditLog audit,
+            PaymentCollections collections) {
+        this.collections = collections;
         this.repo = repo;
         this.servicer = servicer;
         this.approvals = approvals;
@@ -247,8 +251,15 @@ class SavingsService {
         List<Transaction> rows = repo.transactions(id, before, size + 1);
         boolean more = rows.size() > size;
         List<Transaction> items = more ? rows.subList(0, size) : rows;
+        // Issue #314: the payment code staff match a member's text message against. Asked for every row of the page (at
+        // most
+        // 200 ids, one query): only a transaction a gateway payment booked is linked from an intent, so no method key
+        // or
+        // type is filtered on here and a renamed key cannot hide a code.
+        Map<UUID, String> codes = collections.confirmationCodesOf(
+                items.stream().map(Transaction::id).toList());
         return new TransactionPage(
-                List.copyOf(items),
+                items.stream().map(t -> t.withPaymentCode(codes.get(t.id()))).toList(),
                 more ? Cursor.encode(String.valueOf(items.getLast().seq())) : null);
     }
 
