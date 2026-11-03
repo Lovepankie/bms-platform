@@ -236,7 +236,8 @@ class CashReportsService {
                     r.businessDate(),
                     r.totalSoldMinor(),
                     profit ? r.amountMinor() : null,
-                    profit ? r.suggestedMinor() : null,
+                    // Issue #799: a saved day's suggestion is sent to no one, the Owner included.
+                    profit && r.voided().voided() ? r.suggestedMinor() : null,
                     profit ? r.overwritten() : null,
                     dailyProfit));
         }

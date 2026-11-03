@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
 import { staffMenu } from '../menu';
-import { SCREENS, canOpenAccount, canSeeProfit, canUse, holdsAt, screensFor, showRetail } from './permissions';
+import { moneyLinks } from '../tabs';
+import { SCREENS, canOpenAccount, canSeeProfit, canUse, holdsAt, savesAsSalesStaff, screensFor, showRetail } from './permissions';
 
 describe('retail permission gating', () => {
   const sales = mockMe('sales');
@@ -16,6 +17,17 @@ describe('retail permission gating', () => {
     // Since V74 the cash book is the till's (ADR-055), so the seeded sales role has no cash book tile.
     expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'orders', 'usage', 'stock', 'transfers', 'stockHealth', 'creditControl', 'catalogue']);
     expect(canUse(sales, 'transfer')).toBe(false);
+  });
+
+  it("offers a seller the Savings screen in Money only while the owner's switch is on (issue #799)", () => {
+    expect(canUse({ ...sales, salespeople_see_savings_amount: false }, 'savings')).toBe(false);
+    expect(savesAsSalesStaff({ ...sales, salespeople_see_savings_amount: true })).toBe(true);
+    expect(canUse({ ...sales, salespeople_see_savings_amount: true }, 'savings')).toBe(true);
+    expect(moneyLinks({ ...sales, salespeople_see_savings_amount: true }).map((l) => l.to)).toContain('/staff/retail/savings');
+    expect(moneyLinks({ ...sales, salespeople_see_savings_amount: false }).map((l) => l.to)).not.toContain('/staff/retail/savings');
+    // Whoever has the till keeps the till's routes; without the right to sell the switch gives nothing.
+    expect(savesAsSalesStaff({ ...admin, salespeople_see_savings_amount: true })).toBe(false);
+    expect(savesAsSalesStaff({ permissions: ['retail.stock.read'], salespeople_see_savings_amount: true })).toBe(false);
   });
 
   it('maps each screen to the permission the API route declares', () => {

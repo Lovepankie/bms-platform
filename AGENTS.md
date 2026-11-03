@@ -1344,12 +1344,16 @@ Accepted (this list is the ADR index):
 - ADR-111 Sizes, colours and types in Add an item, picked from ready lists shipped with the app: the same one form asks
   about sizes, `POST /retail/product-families` takes `packs` made on every size in its transaction, and `GET
   /retail/product-families/options` offers the sizes and colours a shop used before (#697, D81, D98; no migration)
-- ADR-115 Salespeople may see and change the savings amount when the owner allows it (Proposed, #768): the setting
+- ADR-115 Salespeople may see and change the savings amount when the owner allows it (Accepted, #768, D124): the setting
   `salespeople_see_savings_amount` in the settings document, off by default, set by the Owner only (403 `owner_only`); when
   on, a caller without `retail.profit.read` sees the suggestion and may change it before the day is saved, and sees the amount
   of records made while it is on if they hold `retail.savings.record`; the cap, the profit and the expenses stay hidden, and
   the profit can still be worked out from the suggestion; replacing a saved amount needs `retail.savings.overwrite` for
-  everyone; the audit flags `salespeople_setting` (no migration)
+  everyone; the audit flags `salespeople_setting` (no migration). Amended by #799: while it is on, a seller
+  (`retail.sale.create` at the branch) without the till records the branch's savings through
+  `/retail/savings/sales-staff` (403 while off), and this month's records show their amounts to whoever may record savings or
+  sell at the branch, whenever they were made; sellers open and save days of this month only; `/me` carries the switch so the
+  Savings screen shows for sellers only then; once a day is saved its suggestion is sent to no one, the Owner included
 - ADR-116 The figures last loaded are kept on the phone for reading offline: an allowlist of retail reads (Home and Retail
   summaries, sales of the last 30 days, stock, customers and what they owe, past usage, the reports already made) in the
   `bms-offline` store per business and person, never lending or sign-in, capped, cleared at sign-out; one offline banner

@@ -84,6 +84,8 @@ export const PURCHASE_APPROVE = 'retail.purchase.approve';
 export const PAYABLE_MANAGE = 'retail.payable.manage';
 export const SETTINGS_MANAGE = 'core.settings.manage';
 export const SAVINGS_RECORD = 'retail.savings.record';
+/** Record a sale; with the owner's savings switch on, also the day's savings at that branch (issue #799). */
+export const SALE_CREATE = 'retail.sale.create';
 /** Close the till and do the banking (ADR-055, the owner's decision of 21 October 2026): given per person, the administrators everywhere. */
 export const TILL = 'retail.till.close';
 export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
@@ -230,8 +232,20 @@ export function recordsSalesOffline(me: Pick<Me, 'permissions' | 'module_capabil
   return sellsOffline(me) && canUse(me, 'sale');
 }
 
-export function canUse(me: Pick<Me, 'permissions' | 'module_capabilities'>, screen: RetailScreen): boolean {
+/**
+ * Issue #799, ADR-115: a seller without the till records the day's savings through the sales staff routes, offered only while
+ * the owner's switch "Salespeople can see and change the savings amount" is on and the session may sell. Whoever has the
+ * till's savings permissions keeps the till's routes.
+ */
+export function savesAsSalesStaff(me: Pick<Me, 'permissions'> & { salespeople_see_savings_amount?: boolean }): boolean {
+  const held = permissionsOf(me);
+  const till = NEEDS.savings.every((p) => held.includes(p));
+  return !till && me.salespeople_see_savings_amount === true && held.includes(SALE_CREATE);
+}
+
+export function canUse(me: Pick<Me, 'permissions' | 'module_capabilities'> & { salespeople_see_savings_amount?: boolean }, screen: RetailScreen): boolean {
   if (screen === 'catalogue') return CATALOGUE_SCREENS.some((s) => canUse(me, s));
+  if (screen === 'savings' && savesAsSalesStaff(me)) return true;
   const capability = SCREEN_CAPABILITY[screen];
   if (capability && !capabilityOn(me, 'retail', capability)) return false;
   const held = permissionsOf(me);

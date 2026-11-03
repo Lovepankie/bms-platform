@@ -348,9 +348,11 @@ describe('the salespeople savings setting', () => {
     show({ modules: ['retail'], owner: true });
     const box = (await screen.findByLabelText('Salespeople can see and change the savings amount')) as HTMLInputElement;
     expect(box.checked).toBe(false);
-    expect(document.getElementById(box.getAttribute('aria-describedby') ?? '')?.textContent).toContain(
-      "A salesperson who sees the savings amount can work out the day's profit from it.",
-    );
+    const hint = document.getElementById(box.getAttribute('aria-describedby') ?? '')?.textContent?.replace(/\s+/g, ' ');
+    expect(hint).toContain("A salesperson who sees the savings amount can work out the day's profit from it.");
+    // Issue #799: the switch reaches everyone who sells, and the whole month.
+    expect(hint).toContain("Anyone who sells at a shop can then open its Savings, change the amount, save it and see this month's savings");
+    expect(hint).toContain('including days saved before you turned this on');
     fireEvent.click(box);
     await screen.findByText('Salespeople can now see and change the savings amount');
     expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { salespeople_see_savings_amount: true } }));

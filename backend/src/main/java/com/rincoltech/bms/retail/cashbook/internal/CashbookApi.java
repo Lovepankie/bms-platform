@@ -22,6 +22,11 @@ import java.util.UUID;
 final class CashbookApi {
 
     static final String PROFIT_ONLY = "Present only with retail.profit.read in the record's branch";
+    /** Issue #799: a saved day's suggestion is sent to no one; only a voided record keeps it, for profit read. */
+    static final String SAVED_DAY_SUGGESTION =
+            "Present only with retail.profit.read in the record's branch and only on a voided record: an active record"
+                    + " is a saved day, whose suggestion is sent to no one (issue #799)";
+
     static final long MAX_MINOR = 10_000_000_000_000L;
 
     private CashbookApi() {}
@@ -91,7 +96,10 @@ final class CashbookApi {
             @Schema(description = "Opaque; echo it on the create call", requiredMode = Schema.RequiredMode.REQUIRED)
             String suggestionToken,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description = PROFIT_ONLY + "; absent for every caller once the day has an active savings record"
+                            + " (issue #799)")
             Long suggestedMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
@@ -117,7 +125,8 @@ final class CashbookApi {
             @Schema(
                     description = "True when this caller may save an amount different from the suggestion: with"
                             + " retail.savings.overwrite, or with salespeople_see_savings_amount on when no saved record of"
-                            + " the day was voided (replacing a saved amount needs retail.savings.overwrite; ADR-115)")
+                            + " the day was voided (replacing a saved amount needs retail.savings.overwrite; ADR-115);"
+                            + " false once the day has an active savings record (issue #799)")
             boolean mayChangeAmount) {}
 
     @Schema(name = "RetailSavingsRequest")
@@ -144,7 +153,7 @@ final class CashbookApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
             Long amountMinor,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = SAVED_DAY_SUGGESTION)
             Long suggestedMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
@@ -491,7 +500,7 @@ final class CashbookApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
             Long amountMinor,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = SAVED_DAY_SUGGESTION)
             Long suggestedMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)

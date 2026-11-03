@@ -668,9 +668,11 @@ export interface RetailApi {
   // The cash book (FR-RET-17 to FR-RET-29, ADR-022). Every write takes the Idempotency-Key of its draft;
   // a void takes one too. Figures the schema marks "present only with retail.profit.read" are absent
   // from a body for any other caller, and the screens never infer them.
-  savingsSuggestion(q: { branchId: string; date: string }): Promise<SavingsSuggestion>;
-  createSavings(body: SavingsRequest, idempotencyKey: string): Promise<Savings>;
-  listSavings(q: CashQuery): Promise<Savings[]>;
+  // `salesStaff` (issue #799, ADR-115): the routes for a seller without the till, open only while the owner's switch is on;
+  // the same bodies, this month's records only.
+  savingsSuggestion(q: { branchId: string; date: string; salesStaff?: boolean }): Promise<SavingsSuggestion>;
+  createSavings(body: SavingsRequest, idempotencyKey: string, opts?: { salesStaff?: boolean }): Promise<Savings>;
+  listSavings(q: CashQuery & { salesStaff?: boolean }): Promise<Savings[]>;
   voidSavings(id: string, reason: string, idempotencyKey: string): Promise<Savings>;
   bankingExpected(q: { branchId: string; date: string }): Promise<BankingExpected>;
   createBanking(body: BankingRequest, idempotencyKey: string): Promise<Banking>;
@@ -1557,16 +1559,25 @@ const realRetail: RetailApi = {
   },
 
   // The cash book. Lists read every page of the window asked for (200 a page, the most the server allows).
-  async savingsSuggestion({ branchId, date }) {
-    return unwrap(await api.GET('/api/v1/retail/savings/suggestion', { params: { query: { branch_id: branchId, date } } }));
+  async savingsSuggestion({ branchId, date, salesStaff }) {
+    const query = { branch_id: branchId, date };
+    return unwrap(salesStaff
+      ? await api.GET('/api/v1/retail/savings/sales-staff/suggestion', { params: { query } })
+      : await api.GET('/api/v1/retail/savings/suggestion', { params: { query } }));
   },
 
-  async createSavings(body, key) {
-    return unwrap(await api.POST('/api/v1/retail/savings', { body, params: { header: { 'Idempotency-Key': key } } }));
+  async createSavings(body, key, opts) {
+    const params = { header: { 'Idempotency-Key': key } };
+    return unwrap(opts?.salesStaff
+      ? await api.POST('/api/v1/retail/savings/sales-staff', { body, params })
+      : await api.POST('/api/v1/retail/savings', { body, params }));
   },
 
   async listSavings(q) {
-    return allPages((cursor) => api.GET('/api/v1/retail/savings', { params: { query: { ...cashParams(q), limit: 200, cursor } } }));
+    return allPages((cursor) => {
+      const query = { ...cashParams(q), limit: 200, cursor };
+      return q.salesStaff ? api.GET('/api/v1/retail/savings/sales-staff', { params: { query } }) : api.GET('/api/v1/retail/savings', { params: { query } });
+    });
   },
 
   async voidSavings(id, reason, key) {

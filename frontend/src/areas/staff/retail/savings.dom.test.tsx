@@ -36,6 +36,8 @@ vi.mock('../../../api/retail', async (original) => {
 });
 
 const { businessToday } = await import('../../../api/retail');
+const { retail: realRetail } = await vi.importActual<typeof import('../../../api/retail')>('../../../api/retail');
+const { api } = await import('../../../api/client');
 const { SavingsScreen } = await import('./savings');
 
 afterEach(() => {
@@ -218,5 +220,83 @@ describe('the savings screen for a salesperson', () => {
     expect(panel.textContent).toContain('Amount saved: UGX 3,000');
     const records = screen.getByRole('region', { name: 'Savings records' });
     await waitFor(() => expect(records.textContent).toContain('Saved UGX 3,000'));
+  });
+});
+
+// JUSTIFICATION-A3: the on and off DOM tests issue #799 asks for, appended after the last describe block.
+// Issue #799: a user with the Sales role alone (no till, no savings permission) under the owner's switch.
+describe('the savings screen for sales staff', () => {
+  const sales = mockMe('sales');
+  const shown: SavingsSuggestion = { branch_id: branch, business_date: today, total_sold_minor: 50000, suggestion_token: 'tok-1', suggested_minor: 4000, may_change_amount: true };
+  const monthStart = `${today.slice(0, 8)}01`;
+
+  // The owner's request on PR #800: a saved day shows only what was saved, for the seller and for the owner, never its suggestion.
+  it.each([
+    ['a seller', { ...sales, salespeople_see_savings_amount: true }],
+    ['the owner', { ...admin, is_owner: true }],
+  ])('for a day already saved shows %s only the saved amount, no suggestion and no amount field', async (_who, me) => {
+    savingsSuggestion.mockResolvedValue({ ...shown, suggested_minor: undefined, may_change_amount: false, existing_id: 'sv-1', existing_amount_minor: 3500 });
+    listSavings.mockResolvedValue([]);
+    open(me);
+    await screen.findByText(/Savings are already recorded for this shop on this day/);
+    expect(screen.getByText('UGX 3,500', { selector: '.key-figure-value' })).toBeTruthy();
+    expect(screen.queryByText('Suggested savings')).toBeNull();
+    expect(screen.queryByLabelText(/Amount to save/)).toBeNull();
+    expect(screen.queryByText('Savings will be recorded using the standard amount.')).toBeNull();
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
+  });
+
+  it('with the switch off has no access and asks nothing of the server', () => {
+    open({ ...sales, salespeople_see_savings_amount: false });
+    expect(screen.getByRole('heading', { name: 'Savings' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save savings' })).toBeNull();
+    expect(savingsSuggestion).not.toHaveBeenCalled();
+    expect(listSavings).not.toHaveBeenCalled();
+  });
+
+  it("with the switch on sees the amount, changes it and saves it through the sales staff routes, and sees this month's records", async () => {
+    savingsSuggestion.mockResolvedValue(shown);
+    const older: Savings = { ...saved, id: 'sv-0', business_date: monthStart, amount_minor: 2500, suggested_minor: undefined };
+    const mine: Savings = { ...saved, amount_minor: 3000, suggested_minor: undefined, overwritten: true };
+    listSavings.mockResolvedValueOnce([older]).mockResolvedValue([mine, older]);
+    createSavings.mockResolvedValue(mine);
+    open({ ...sales, salespeople_see_savings_amount: true });
+
+    await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
+    expect(savingsSuggestion).toHaveBeenCalledWith(expect.objectContaining({ salesStaff: true }));
+    expect((screen.getByLabelText('Date') as HTMLInputElement).min).toBe(monthStart);
+    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day/);
+    const records = await screen.findByRole('region', { name: 'Savings records' });
+    expect(records.textContent).toContain('Savings this month');
+    await waitFor(() => expect(records.textContent).toContain('Saved UGX 2,500'));
+    // The records ask for the branch the seller works in (the branch switcher's choice, not a cash book permission).
+    expect(listSavings).toHaveBeenCalledWith(expect.objectContaining({ salesStaff: true, branchIds: [branch], from: monthStart, to: today }));
+    expect(screen.queryByRole('button', { name: /Void/ })).toBeNull();
+
+    fireEvent.change(amount(), { target: { value: '3000' } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(createSavings).toHaveBeenCalledTimes(1));
+    expect(createSavings.mock.calls[0]?.[0]).toMatchObject({ amount_minor: 3000, suggestion_token: 'tok-1' });
+    expect(createSavings.mock.calls[0]?.[2]).toEqual({ salesStaff: true });
+    const panel = await screen.findByRole('region', { name: 'Savings recorded' });
+    expect(panel.textContent).toContain('Amount saved: UGX 3,000');
+    await waitFor(() => expect(records.textContent).toContain('Saved UGX 3,000'));
+  });
+
+  // JUSTIFICATION-A3: a new test the review of PR #800 asks for (item 7), appended after the last test of the block.
+  // The records list goes through the real client, so the branch_id the request carries is the one checked.
+  it("asks the sales staff records route for this month's records of the branch the seller works in", async () => {
+    const get = vi.spyOn(api, 'GET').mockImplementation((async () => ({ data: { items: [] }, response: new Response(null, { status: 200 }) })) as never);
+    savingsSuggestion.mockResolvedValue(shown);
+    listSavings.mockImplementation((q: Parameters<typeof realRetail.listSavings>[0]) => realRetail.listSavings(q));
+    try {
+      open({ ...sales, salespeople_see_savings_amount: true });
+      await screen.findByText('No savings recorded this month.');
+      expect(get.mock.calls.map((c) => c[0] as string)).toEqual(['/api/v1/retail/savings/sales-staff']);
+      const { query } = (get.mock.calls[0]?.[1] as unknown as { params: { query: Record<string, unknown> } }).params;
+      expect(query).toMatchObject({ branch_id: [branch], from: monthStart, to: today });
+    } finally {
+      get.mockRestore();
+    }
   });
 });

@@ -61,4 +61,10 @@ public interface TenantSettings {
      * listed until then.
      */
     boolean reportsEnabled();
+
+    /**
+     * ADR-115 (issues #768 and #799): whether the Owner turned on "Salespeople can see and change the savings amount". Off by
+     * default; {@code /me} carries it so the PWA offers the Savings screen to sales staff only while it is on.
+     */
+    boolean salespeopleSeeSavingsAmount();
 }

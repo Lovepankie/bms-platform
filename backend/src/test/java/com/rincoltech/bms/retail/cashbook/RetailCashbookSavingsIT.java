@@ -650,41 +650,65 @@ class RetailCashbookSavingsIT extends IntegrationTest {
         throw new AssertionError("not listed: " + id);
     }
 
+    /** The default savings of a day other than the fixture's, recorded with the given permissions. */
+    ResponseEntity<JsonNode> recordOn(LocalDate date, String perms) {
+        JsonNode s = cb.get("/savings/suggestion?branch_id=" + hq + "&date=" + date, perms)
+                .getBody();
+        Map<String, Object> b = new LinkedHashMap<>();
+        b.put("branch_id", hq);
+        b.put("business_date", date.toString());
+        b.put("suggestion_token", s.get("suggestion_token").asString());
+        return cb.post("/savings", b, perms);
+    }
+
+    // JUSTIFICATION-A3: issue #799 changes which records show amounts; the test now proves both rules on fixed months.
     @Test
-    void withTheSettingOnOnlyRecordsMadeWhileItIsOnShowAmountsAndOnlyToARecorderOfSavings() {
-        // Made before the Owner turned the setting on: its amount stays hidden from a salesperson afterwards.
-        UUID older = RetailTestSupport.id(
-                cb.post("/savings", body(suggestion(PROFIT_RECORDER), null, null), PROFIT_RECORDER));
+    void withTheSettingOnThisMonthsRecordsAndLaterOnesShowAmountsButNeverToAReaderOfTheCashBookOnly() {
+        LocalDate today = LocalDate.now(BusinessClock.DEFAULT_ZONE);
+        LocalDate lastMonth = today.withDayOfMonth(1).minusDays(1);
+        // Made before the Owner turned the setting on: one last month and one this month.
+        UUID earlier = RetailTestSupport.id(recordOn(lastMonth, PROFIT_RECORDER));
+        UUID thisMonths = RetailTestSupport.id(recordOn(today, PROFIT_RECORDER));
         salespeopleSeeSavingsAmount(true);
-        JsonNode s = suggestion(CASHIER);
-        assertThat(s.get("existing_id").asString()).isEqualTo(older.toString());
+
+        // Issue #799 (the owner asked for the whole month): this month's record shows, whenever it was made.
+        assertThat(listed(thisMonths, CASHIER).has("amount_minor")).isTrue();
+        assertThat(listed(thisMonths, CASHIER).has("overwritten")).isTrue();
+        // An earlier month's record made before the setting was turned on stays hidden.
+        assertThat(listed(earlier, CASHIER).has("amount_minor")).isFalse();
+        assertThat(listed(earlier, CASHIER).has("overwritten")).isFalse();
+        JsonNode s = cb.get("/savings/suggestion?branch_id=" + hq + "&date=" + lastMonth, CASHIER)
+                .getBody();
+        assertThat(s.get("existing_id").asString()).isEqualTo(earlier.toString());
         assertThat(s.has("existing_amount_minor")).isFalse();
-        assertThat(listed(older, CASHIER).has("amount_minor")).isFalse();
-        assertThat(listed(older, CASHIER).has("overwritten")).isFalse();
 
-        // Made while it is on: shown to a caller holding retail.savings.record.
-        assertThat(cb.voidIt("/savings/" + older, "Wrong day", ALL).getStatusCode())
+        // Made while it is on, even for an earlier month: shown to a caller holding retail.savings.record (#768).
+        assertThat(cb.voidIt("/savings/" + earlier, "Wrong day", ALL).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
-        ResponseEntity<JsonNode> made = cb.post("/savings", body(suggestion(CASHIER), null, null), CASHIER);
-        assertThat(made.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> made = recordOn(lastMonth, CASHIER);
+        assertThat(made.getStatusCode()).as("%s", made.getBody()).isEqualTo(HttpStatus.CREATED);
         UUID fresh = RetailTestSupport.id(made);
-        assertThat(made.getBody().get("amount_minor").asLong()).isEqualTo(2_500);
-        assertThat(listed(fresh, CASHIER).get("amount_minor").asLong()).isEqualTo(2_500);
-        assertThat(suggestion(CASHIER).get("existing_amount_minor").asLong()).isEqualTo(2_500);
-        assertThat(listed(older, CASHIER).has("amount_minor")).isFalse();
+        assertThat(made.getBody().has("amount_minor")).isTrue();
+        assertThat(listed(fresh, CASHIER).has("amount_minor")).isTrue();
+        assertThat(listed(earlier, CASHIER).has("amount_minor")).isFalse();
 
-        // A reader of the cash book who does not record savings sees no amount, not even on the new record.
-        assertThat(listed(fresh, AUDIT_ONLY).has("amount_minor")).isFalse();
-        assertThat(listed(fresh, AUDIT_ONLY).has("overwritten")).isFalse();
+        // A reader of the cash book who neither records savings nor sells sees no amount, on any record.
+        for (UUID id : java.util.List.of(fresh, thisMonths)) {
+            assertThat(listed(id, AUDIT_ONLY).has("amount_minor")).isFalse();
+            assertThat(listed(id, AUDIT_ONLY).has("overwritten")).isFalse();
+        }
 
-        // Off again: every amount is hidden again; on once more, only records made from then on show.
+        // Off again: every amount is hidden again. On once more: this month's show, the earlier month's made before the
+        // new
+        // moment do not.
         salespeopleSeeSavingsAmount(false);
         assertThat(listed(fresh, CASHIER).has("amount_minor")).isFalse();
+        assertThat(listed(thisMonths, CASHIER).has("amount_minor")).isFalse();
         salespeopleSeeSavingsAmount(true);
         assertThat(listed(fresh, CASHIER).has("amount_minor")).isFalse();
-        assertThat(suggestion(CASHIER).has("existing_amount_minor")).isFalse();
+        assertThat(listed(thisMonths, CASHIER).has("amount_minor")).isTrue();
         // A caller with profit read sees every amount, as before.
-        assertThat(listed(older, PROFIT_RECORDER).get("amount_minor").asLong()).isEqualTo(2_500);
+        assertThat(listed(earlier, PROFIT_RECORDER).has("amount_minor")).isTrue();
     }
 
     // JUSTIFICATION-A3: the review's fourth must-fix asks for tests that no caller gets more by holding less.

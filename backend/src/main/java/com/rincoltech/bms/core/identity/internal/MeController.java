@@ -122,7 +122,8 @@ class MeController {
                 settings.twoStepPolicy().mode(),
                 tenant.profile().timezone().getId(),
                 tenant.profile().currency(),
-                user.isOwner());
+                user.isOwner(),
+                settings.salespeopleSeeSavingsAmount());
     }
 
     /**

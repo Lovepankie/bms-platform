@@ -114,7 +114,8 @@ export function createCashbookMock(env: CashbookEnv): Pick<RetailApi, Keys> {
 
   const savingsRow = (r: (typeof savings)[number]): Savings => ({
     ...common(r), total_sold_minor: r.total_sold, overwritten: r.overwritten,
-    ...(env.profit() ? { amount_minor: r.amount, suggested_minor: r.suggested } : {}),
+    // Issue #799: a saved day shows only what was saved; the suggestion stays only on a voided record.
+    ...(env.profit() ? { amount_minor: r.amount, ...(r.voided ? { suggested_minor: r.suggested } : {}) } : {}),
   });
   const bankingRow = (r: (typeof bankings)[number]): Banking => {
     const f = figures(r.branch_id, r.business_date);

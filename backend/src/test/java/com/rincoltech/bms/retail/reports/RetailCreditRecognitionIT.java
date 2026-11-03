@@ -599,8 +599,11 @@ class RetailCreditRecognitionIT extends IntegrationTest {
                 .as("the sale of the day of the switch stays at the sale, and its payment adds nothing")
                 .isEqualTo(800);
         assertThat(report.get("profit_minor").asLong()).isEqualTo(40_800);
-        assertThat(suggestion(hq, today()).get("suggested_minor").asLong()).isEqualTo(400);
-        assertThat(suggestion(hq, ago(3)).get("suggested_minor").asLong()).isEqualTo(20_000);
+        // Issue #799: a saved day carries no suggestion any more; the profit it rested on has not moved.
+        assertThat(suggestion(hq, today()).has("suggested_minor")).isFalse();
+        assertThat(suggestion(hq, today()).get("daily_profit_minor").asLong()).isEqualTo(800);
+        assertThat(suggestion(hq, ago(3)).has("suggested_minor")).isFalse();
+        assertThat(suggestion(hq, ago(3)).get("daily_profit_minor").asLong()).isEqualTo(40_000);
         assertThat(dashboard().get("today").get("gross_profit_minor").asLong()).isEqualTo(800);
     }
 

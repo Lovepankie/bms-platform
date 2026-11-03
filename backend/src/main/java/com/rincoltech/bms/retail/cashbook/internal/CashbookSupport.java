@@ -35,6 +35,9 @@ class CashbookSupport {
     static final String READ = "retail.cashbook.read";
     static final String SAVINGS_RECORD = "retail.savings.record";
     static final String SAVINGS_OVERWRITE = "retail.savings.overwrite";
+    /** ADR-115, issue #799: with the owner's savings switch on, a caller who may sell at a branch may record its savings. */
+    static final String SALE_CREATE = "retail.sale.create";
+
     static final String BANKING_RECORD = "retail.banking.record";
     static final String EXPENSE_RECORD = "retail.expense.record";
     static final String EXPENSE_MANAGE = "retail.expense.manage";
@@ -201,6 +204,20 @@ class CashbookSupport {
      */
     record SalespeopleSavings(boolean on, Instant since) {
         static final SalespeopleSavings OFF = new SalespeopleSavings(false, null);
+
+        /**
+         * Issue #799: the sales staff routes answer only while the setting is on; off, they are refused as if the caller held
+         * nothing more than the right to sell, which is what the till's routes already say to a seller.
+         */
+        void requireOnForSalesStaff() {
+            if (!on) {
+                throw new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "permission_denied",
+                        "Permission denied",
+                        "You do not have permission to perform this action.");
+            }
+        }
 
         /** True for a record made after the setting was last turned on, while it is still on. */
         boolean shows(Instant createdAt) {

@@ -7262,6 +7262,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/savings/sales-staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This month's savings records for sales staff, newest first
+         * @description Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create). Only records dated this month, at the branches where the caller may sell.
+         */
+        get: operations["listRetailSalesStaffSavings"];
+        put?: never;
+        /**
+         * Record the day's savings as sales staff (FR-RET-18 to FR-RET-20); M
+         * @description Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create).
+         */
+        post: operations["createRetailSalesStaffSavings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/savings/sales-staff/suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The day's savings suggestion for sales staff (FR-RET-18)
+         * @description Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create).
+         */
+        get: operations["getRetailSalesStaffSavingsSuggestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/savings/suggestion": {
         parameters: {
             query?: never;
@@ -11276,6 +11320,8 @@ export interface components {
             /** @description True when the tenant has switched report runs on (setting reports_enabled, ADR-038); the PWA shows the Reports tab only then */
             reports_enabled?: boolean;
             roles?: components["schemas"]["RoleAssignment"][];
+            /** @description True while the Owner lets salespeople see and change the savings amount (ADR-115, issue #799): the PWA offers the Savings screen to a seller only then */
+            salespeople_see_savings_amount?: boolean;
             /** @description The business's currency (ISO 4217): forms type and show money in it before the record they make carries one (issue #289) */
             tenant_currency?: string;
             /** @description The business's time zone, in which mfa_due_by is a day's end (ADR-046) */
@@ -17943,7 +17989,7 @@ export interface components {
             overwritten?: boolean;
             /**
              * Format: int64
-             * @description Present only with retail.profit.read in the record's branch
+             * @description Present only with retail.profit.read in the record's branch and only on a voided record: an active record is a saved day, whose suggestion is sent to no one (issue #799)
              */
             suggested_minor?: number;
             /** Format: int64 */
@@ -17972,7 +18018,7 @@ export interface components {
             overwritten?: boolean;
             /**
              * Format: int64
-             * @description Present only with retail.profit.read in the record's branch
+             * @description Present only with retail.profit.read in the record's branch and only on a voided record: an active record is a saved day, whose suggestion is sent to no one (issue #799)
              */
             suggested_minor?: number;
             /** Format: int64 */
@@ -18031,11 +18077,11 @@ export interface components {
             existing_amount_minor?: number;
             /** Format: uuid */
             existing_id?: string;
-            /** @description True when this caller may save an amount different from the suggestion: with retail.savings.overwrite, or with salespeople_see_savings_amount on when no saved record of the day was voided (replacing a saved amount needs retail.savings.overwrite; ADR-115) */
+            /** @description True when this caller may save an amount different from the suggestion: with retail.savings.overwrite, or with salespeople_see_savings_amount on when no saved record of the day was voided (replacing a saved amount needs retail.savings.overwrite; ADR-115); false once the day has an active savings record (issue #799) */
             may_change_amount?: boolean;
             /**
              * Format: int64
-             * @description Present only with retail.profit.read in the record's branch
+             * @description Present only with retail.profit.read in the record's branch; absent for every caller once the day has an active savings record (issue #799)
              */
             suggested_minor?: number;
             /** @description Opaque; echo it on the create call */
@@ -33700,6 +33746,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSavings"];
+                };
+            };
+        };
+    };
+    listRetailSalesStaffSavings: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                include_voided?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavingsPage"];
+                };
+            };
+        };
+    };
+    createRetailSalesStaffSavings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSavingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavings"];
+                };
+            };
+        };
+    };
+    getRetailSalesStaffSavingsSuggestion: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavingsSuggestion"];
                 };
             };
         };

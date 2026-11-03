@@ -487,6 +487,12 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
         return current().reportsEnabled();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean salespeopleSeeSavingsAmount() {
+        return current().salespeopleSeeSavingsAmount();
+    }
+
     // ---- the go-live date (ADR-071) ------------------------------------------------------------
 
     @Override

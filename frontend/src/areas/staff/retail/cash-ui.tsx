@@ -14,11 +14,11 @@ import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 // shop, year and month.
 
 /** A date in the business zone, never after today (the server refuses a future date). */
-export function DateField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+export function DateField({ id, label, value, onChange, min }: { id: string; label: string; value: string; onChange: (value: string) => void; min?: string }) {
   return (
     <>
       <label htmlFor={id}>{label}</label>
-      <input id={id} type="date" value={value} max={businessToday()} onChange={(e) => onChange(e.target.value)} />
+      <input id={id} type="date" value={value} min={min} max={businessToday()} onChange={(e) => onChange(e.target.value)} />
     </>
   );
 }

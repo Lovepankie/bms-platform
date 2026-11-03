@@ -211,7 +211,12 @@ final class UserApi {
             @Schema(
                     description =
                             "True when the signed-in user is the Owner of the business (ADR-062): the PWA offers the owner-only actions and the Transfer ownership action only then")
-            boolean isOwner) {}
+            boolean isOwner,
+
+            @Schema(
+                    description =
+                            "True while the Owner lets salespeople see and change the savings amount (ADR-115, issue #799): the PWA offers the Savings screen to a seller only then")
+            boolean salespeopleSeeSavingsAmount) {}
 
     @Schema(name = "PlatformMe")
     record PlatformMeResponse(UUID userId, String kind, String fullName, String email, List<String> permissions) {}
