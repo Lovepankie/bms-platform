@@ -1219,7 +1219,7 @@ an overdue row of Credit control, a delivered order and a converted quotation op
 `branch`, so the item and branch names on Sales analysis, Margins, Daily profit, Stock value, Stock health, slow movers,
 Business evaluation and a saved stock move open that item or branch. Tested in `retail/record-links.dom.test.tsx` and
 `retail/links-retail-reports.dom.test.tsx`. Still plain: category and unit rows, Insights drill-down rows, the used, damaged
-and found-missing counts on Stock health, and the allocations on an account's payments (listed in the follow-up issue).
+and found-missing counts on Stock health, and the allocations on an account's payments (listed in the follow-up issue #798).
 
 ## The three rules, screen by screen (issue #336, task #794)
 
@@ -1235,7 +1235,7 @@ named below passes both rules: the sales, stock, restock, controls and cash reco
 collateral, documents, opt-outs, the purchasing lists, buyers and suppliers are paged; the reports are bounded by a date
 range or a top count.
 
-**Rule 1: screens that break it** (all larger, left for the follow-up issue):
+**Rule 1: screens that break it** (all larger, left for the follow-up issue #798):
 
 | Route | What breaks it |
 |---|---|
@@ -1270,7 +1270,7 @@ range or a top count.
 | `/staff/lending`, `/staff/lending/investments`, `/staff/lending/savings` | No match: change the search, or start one (savings: from the member's page) |
 | `/staff/lending/savings/products`, `/staff/lending/investments/products` | Empty: add the first one with New product |
 
-Left for the follow-up issue (each needs a look at the flow, not only a sentence):
+Left for the follow-up issue #798 (each needs a look at the flow, not only a sentence):
 
 | Route | What breaks it |
 |---|---|
