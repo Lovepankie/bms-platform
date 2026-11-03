@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RetailError, type Savings, type SavingsSuggestion } from '../../../api/retail';
+import { RetailError, type Savings, type SavingsGroups, type SavingsSuggestion } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { monthLabel } from './cash-state';
 import { showDate } from './transfers';
 
 // Saving the day's savings as a person does it (issue #538): the three figures (profit, expenses, available), an amount above the
@@ -17,6 +18,7 @@ vi.setConfig({ testTimeout: 20000 });
 const savingsSuggestion = vi.fn();
 const createSavings = vi.fn();
 const listSavings = vi.fn();
+const savingsGroups = vi.fn();
 
 vi.mock('@tanstack/react-router', async (original) => {
   const real = await original<typeof import('@tanstack/react-router')>();
@@ -32,6 +34,7 @@ vi.mock('../../../api/retail', async (original) => {
       savingsSuggestion: (...a: unknown[]) => savingsSuggestion(...a),
       createSavings: (...a: unknown[]) => createSavings(...a),
       listSavings: (...a: unknown[]) => listSavings(...a),
+      savingsGroups: (...a: unknown[]) => savingsGroups(...a),
     },
   };
 });
@@ -46,6 +49,7 @@ afterEach(() => {
   savingsSuggestion.mockReset();
   createSavings.mockReset();
   listSavings.mockReset();
+  savingsGroups.mockReset();
   sessionStorage.clear();
   localStorage.clear();
 });
@@ -237,6 +241,7 @@ describe('the savings screen for sales staff', () => {
   ])('for a day already saved shows %s only the saved amount, no suggestion and no amount field', async (_who, me) => {
     savingsSuggestion.mockResolvedValue({ ...shown, suggested_minor: undefined, may_change_amount: false, existing_id: 'sv-1', existing_amount_minor: 3500 });
     listSavings.mockResolvedValue([]);
+    savingsGroups.mockResolvedValue({ total_minor: 0, shops: [] });
     open(me);
     await screen.findByText(/Savings are already recorded for this shop on this day/);
     expect(screen.getByText('UGX 3,500', { selector: '.key-figure-value' })).toBeTruthy();
@@ -252,26 +257,53 @@ describe('the savings screen for sales staff', () => {
     expect(screen.queryByRole('button', { name: 'Save savings' })).toBeNull();
     expect(savingsSuggestion).not.toHaveBeenCalled();
     expect(listSavings).not.toHaveBeenCalled();
+    expect(savingsGroups).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Savings records' })).toBeNull();
   });
 
-  it("with the switch on sees the amount, changes it and saves it through the sales staff routes, and sees this month's records", async () => {
+  // Issue #827: last month's and this month's savings, by shop, year, month and person, with the amount saved at each level.
+  const lastMonthDay = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10);
+  const groupsOf = (thisMonthMinor: number): SavingsGroups => {
+    const month = (day: string, people: { name: string; minor: number; id: string }[]) => ({
+      month: Number(day.slice(5, 7)),
+      total_minor: people.reduce((n, p) => n + p.minor, 0),
+      people: people.map((p) => ({ user_id: `u-${p.name}`, name: p.name, total_minor: p.minor, records: [{ id: p.id, business_date: day, amount_minor: p.minor }] })),
+    });
+    const now = month(today, [{ name: 'Test Seller 01', minor: thisMonthMinor, id: 'sv-1' }]);
+    const before = month(lastMonthDay, [{ name: 'Test Till 01', minor: 2500, id: 'sv-0' }]);
+    const sameYear = lastMonthDay.slice(0, 4) === today.slice(0, 4);
+    const years = sameYear
+      ? [{ year: Number(today.slice(0, 4)), total_minor: now.total_minor + before.total_minor, months: [now, before] }]
+      : [{ year: Number(today.slice(0, 4)), total_minor: now.total_minor, months: [now] }, { year: Number(lastMonthDay.slice(0, 4)), total_minor: before.total_minor, months: [before] }];
+    const total = now.total_minor + before.total_minor;
+    return { total_minor: total, shops: [{ branch_id: branch, total_minor: total, years }] };
+  };
+
+  it('with the switch on sees the amount, saves it through the sales staff routes, and sees every month grouped with totals', async () => {
     savingsSuggestion.mockResolvedValue(shown);
-    const older: Savings = { ...saved, id: 'sv-0', business_date: monthStart, amount_minor: 2500, suggested_minor: undefined };
     const mine: Savings = { ...saved, amount_minor: 3000, suggested_minor: undefined, overwritten: true };
-    listSavings.mockResolvedValueOnce([older]).mockResolvedValue([mine, older]);
+    savingsGroups.mockResolvedValueOnce(groupsOf(1000)).mockResolvedValue(groupsOf(4000));
     createSavings.mockResolvedValue(mine);
     open({ ...sales, salespeople_see_savings_amount: true });
 
     await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
     expect(savingsSuggestion).toHaveBeenCalledWith(expect.objectContaining({ salesStaff: true }));
     expect((screen.getByLabelText('Date') as HTMLInputElement).min).toBe(monthStart);
-    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day/);
     const records = await screen.findByRole('region', { name: 'Savings records' });
-    expect(records.textContent).toContain('Savings this month');
-    await waitFor(() => expect(records.textContent).toContain('Saved UGX 2,500'));
-    // The records ask for the branch the seller works in (the branch switcher's choice, not a cash book permission).
-    expect(listSavings).toHaveBeenCalledWith(expect.objectContaining({ salesStaff: true, branchIds: [branch], from: monthStart, to: today }));
+    await waitFor(() => expect(records.textContent).toContain('Saved in all shops UGX 3,500'));
+    // The month headings carry their totals, last month's included, and each person their own.
+    expect(within(records).getByRole('heading', { name: new RegExp(`${monthLabel(today)}\\s*UGX 1,000`) })).toBeTruthy();
+    expect(within(records).getByRole('heading', { name: new RegExp(`${monthLabel(lastMonthDay)}\\s*UGX 2,500`) })).toBeTruthy();
+    expect(records.textContent).toMatch(/Test Till 01\s*UGX 2,500/);
+    expect(records.textContent).toMatch(/Test Seller 01\s*UGX 1,000/);
+    expect(records.textContent).toContain(showDate(lastMonthDay));
+    // The grouped view asks for the branch the seller works in (the branch switcher's choice, not a cash book permission).
+    expect(savingsGroups).toHaveBeenCalledWith({ branchIds: [branch] });
+    expect(listSavings).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Void/ })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day/);
+    // Amounts saved only: no suggestion and no sales in the records.
+    expect(records.textContent).not.toMatch(/Suggest|Sold/);
 
     fireEvent.change(amount(), { target: { value: '3000' } });
     fireEvent.click(saveButton());
@@ -280,21 +312,25 @@ describe('the savings screen for sales staff', () => {
     expect(createSavings.mock.calls[0]?.[2]).toEqual({ salesStaff: true });
     const panel = await screen.findByRole('region', { name: 'Savings recorded' });
     expect(panel.textContent).toContain('Amount saved: UGX 3,000');
-    await waitFor(() => expect(records.textContent).toContain('Saved UGX 3,000'));
+    // The totals are read again (the toast is in save-toasts.dom.test.tsx).
+    await waitFor(() => expect(records.textContent).toContain('Saved in all shops UGX 6,500'));
+    // The new record is in its group right after the save: the seller's line, the month and the shop carry it.
+    expect(savingsGroups).toHaveBeenCalledTimes(2);
+    expect(records.textContent).toMatch(/Test Seller 01\s*UGX 4,000/);
+    expect(within(records).getByRole('heading', { name: new RegExp(`${monthLabel(today)}\\s*UGX 4,000`) })).toBeTruthy();
   });
 
-  // JUSTIFICATION-A3: a new test the review of PR #800 asks for (item 7), appended after the last test of the block.
-  // The records list goes through the real client, so the branch_id the request carries is the one checked.
-  it("asks the sales staff records route for this month's records of the branch the seller works in", async () => {
-    const get = vi.spyOn(api, 'GET').mockImplementation((async () => ({ data: { items: [] }, response: new Response(null, { status: 200 }) })) as never);
+  // JUSTIFICATION-A3: the review of PR #800 (item 7) checks the request through the real client; issue #827 moves it to /groups.
+  it('asks the sales staff groups route for every month of the branch the seller works in', async () => {
+    const get = vi.spyOn(api, 'GET').mockImplementation((async () => ({ data: { total_minor: 0, shops: [] }, response: new Response(null, { status: 200 }) })) as never);
     savingsSuggestion.mockResolvedValue(shown);
-    listSavings.mockImplementation((q: Parameters<typeof realRetail.listSavings>[0]) => realRetail.listSavings(q));
+    savingsGroups.mockImplementation((q: Parameters<typeof realRetail.savingsGroups>[0]) => realRetail.savingsGroups(q));
     try {
       open({ ...sales, salespeople_see_savings_amount: true });
-      await screen.findByText('No savings recorded this month.');
-      expect(get.mock.calls.map((c) => c[0] as string)).toEqual(['/api/v1/retail/savings/sales-staff']);
+      await screen.findByText('No savings recorded yet.');
+      expect(get.mock.calls.map((c) => c[0] as string)).toEqual(['/api/v1/retail/savings/sales-staff/groups']);
       const { query } = (get.mock.calls[0]?.[1] as unknown as { params: { query: Record<string, unknown> } }).params;
-      expect(query).toMatchObject({ branch_id: [branch], from: monthStart, to: today });
+      expect(query).toEqual({ branch_id: [branch] });
     } finally {
       get.mockRestore();
     }

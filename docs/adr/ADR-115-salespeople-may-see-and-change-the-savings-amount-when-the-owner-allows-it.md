@@ -7,6 +7,9 @@ when the Owner turns the new setting on; it answers ADR-022 open question 8 for 
 carries flags, never the amount) and ADR-080 (the cap) are unchanged. No migration. Renumbered at merge if needed.
 Amended by issue #799 (3 Nov 2026): the setting reaches sales staff, who hold `retail.sale.create` but not
 `retail.savings.record` or the till, and shows the whole month's amounts (decision 8; decision 3 changed). No migration.
+Amended by issue #827 (3 Nov 2026), as the owner's old app did: every month's records, not only this month's, show their
+amounts to whoever may record savings or sell at the branch, and sellers see them grouped by shop, year, month and person with
+the sum at each level (decisions 3 and 8 changed, decision 10 added). No migration.
 
 ## Context
 
@@ -45,7 +48,11 @@ want the person closing the till to set the savings aside by hand and to check t
    months only those made from the new moment show. **Changed by issue #799:** besides those, while the setting is on, every record dated in the current business
    month shows its amount and `overwritten`, whenever it was made, to a caller who holds `retail.savings.record` or
    `retail.sale.create` for its branch (the owner asked for the whole month). A record of an earlier month made before the
-   moment, and a reader holding `retail.cashbook.read` alone, still keep the amounts hidden.
+   moment, and a reader holding `retail.cashbook.read` alone, still keep the amounts hidden. **Changed again by issue #827**
+   (as the owner's old app did): while the setting is on, every record of any month, whenever it was made, shows its amount
+   and `overwritten` to a caller who holds `retail.savings.record` or `retail.sale.create` for its branch; the this-month rule
+   and the made-while-on rule above no longer limit it. A reader holding `retail.cashbook.read` alone still sees no amount, and
+   with the setting off every amount is hidden again.
 4. **The same rule for everyone to change the amount.** With the setting on, changing the suggested amount before the day is
    saved needs `retail.savings.record`, for a caller with profit read as much as for one without; no caller gets more by holding
    less. Replacing a saved amount (the day has a voided record, so the new amount takes the place of a saved one) needs
@@ -75,7 +82,8 @@ want the person closing the till to set the savings aside by hand and to check t
    needs `retail.savings.overwrite`. The owner gave them the month, so the sales staff routes take only days of the current
    business month: an earlier `date` or `business_date` is 422 `outside_this_month` ("Savings can be opened and saved for days
    of this month only."), so no earlier day's suggestion reaches them and nothing they save falls outside what they see; the
-   till keeps every day. The list moves an earlier `from` to the first day of the business month and offers no void. The
+   till keeps every day. The list offers no void; since issue #827 it no longer moves an earlier `from` to the first day of the
+   business month, so a seller reads every month's records (decision 10), while opening and saving stay this month's. The
    switch is checked before an idempotent replay, so a key replayed after the Owner turned it off is 403. `/me` carries `salespeople_see_savings_amount`, and the PWA shows the Savings screen in Money to a seller without the
    till only while it is true. Whoever holds the till's savings permissions keeps the till's routes.
 9. **A saved day shows only what was saved (issue #799, the owner's request, as in the shop's old spreadsheet app).** Once a
@@ -88,11 +96,20 @@ want the person closing the till to set the savings aside by hand and to check t
    it), with no suggestion and no amount field. Voiding the record brings the suggestion back. The day's profit, expenses and
    available amount still reach a caller with `retail.profit.read`, and the ADR-080 note "Saved UGX X; profit less expenses is
    now UGX Y" stays. The suggestion is shown on no other screen: Home, Money and the cash summary never carried it.
+10. **Every month, grouped with totals, for sellers (issue #827, as the owner's old app did).** The old app's "Daily savings
+    records" had no filter: everyone saw every month's records, grouped by shop, year, month and the person who saved, with
+    the sum of the amount saved at each level. While the setting is on, `GET /retail/savings/sales-staff` returns records of
+    every month (still only the branches where the caller may sell; a named branch outside them stays 404 `unknown_branch`),
+    and `GET /retail/savings/sales-staff/groups` returns the active records of those branches in that shape:
+    `{total_minor, shops: [{branch_id, total_minor, years: [{year, total_minor, months: [{month, total_minor, people:
+    [{user_id, name, total_minor, records: [{id, business_date, amount_minor}]}]}]}]}]}`, newest day first, with optional
+    `branch_id`, `from` and `to`. It carries amounts saved only: no profit, no suggestion, no sales, no voided record. The
+    Savings screen shows a seller that view below the form, the newest year open. Off, the route is 403 `permission_denied`.
 
 ## Consequences
 
 **Better:** the owner chooses whether the person closing the till sees and sets the savings, as the shop did before; no one but
-the Owner can make that choice; the cap and the audit still apply; earlier days stay hidden; a business that leaves it off is
+the Owner can make that choice; the cap and the audit still apply; a business that leaves it off is
 unaffected.
 
 **Worse:** with it on, a salesperson can work out the day's profit from the savings amount: the suggestion is a share of the
@@ -104,10 +121,11 @@ salesperson who sees the savings amount can work out the day's profit.
 
 With issue #799 the setting reaches every seller of the branch, not only the people given the till, and turning it on shows
 the amounts of the current month's records made before it, so a salesperson can work out the profit of every day of the month
-so far; the help text says so. The owner asked for this.
+so far; the help text says so. The owner asked for this. With issue #827 that reaches every month, not only the current
+one: a salesperson can work out the profit of every saved day the business has. The owner asked for this too, as the old app
+showed it; the help text says so.
 
 **Watch for:** an owner who turns it on and later off: the amounts disappear again from the screens, but what a salesperson saw
-while it was on cannot be taken back. Turning it on again shows the current month's records, but not those of earlier months
-made before it. A request to show
+while it was on cannot be taken back. Turning it on again shows every month's records again (issue #827). A request to show
 the savings report or the expected-to-bank figures to salespeople is a further relaxation of ADR-022 decision 13 and needs its
 own decision.

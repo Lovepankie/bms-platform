@@ -881,6 +881,36 @@ th[scope='rowgroup'] .cat-head {
   font-weight: var(--weight-semibold);
 }
 
+/* Issue #827: a seller's savings by shop, year, month and person; each line is what it is, then the amount saved at its end. */
+.rt-savings-total {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.rt-groupby > summary .rt-savings-total {
+  width: calc(100% - 1.5em);
+}
+
+.rt-savings-month {
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.rt-savings-people,
+.rt-savings-days {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rt-savings-days li {
+  padding: var(--space-1) 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
 .rt-groupby button {
   min-height: var(--tap);
 }

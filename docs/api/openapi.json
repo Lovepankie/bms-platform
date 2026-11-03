@@ -19696,6 +19696,22 @@
           }
         }
       },
+      "RetailSavedDay" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "RetailSavings" : {
         "properties" : {
           "amount_minor" : {
@@ -19792,6 +19808,39 @@
           }
         }
       },
+      "RetailSavingsGroups" : {
+        "properties" : {
+          "shops" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSavingsShop"
+            },
+            "type" : "array"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSavingsMonth" : {
+        "properties" : {
+          "month" : {
+            "description" : "1 to 12",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "people" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSavingsPerson"
+            },
+            "type" : "array"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailSavingsPage" : {
         "properties" : {
           "items" : {
@@ -19801,6 +19850,28 @@
             "type" : "array"
           },
           "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSavingsPerson" : {
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "records" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSavedDay"
+            },
+            "type" : "array"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "user_id" : {
+            "description" : "Null on a record brought in from an earlier system with no person",
+            "format" : "uuid",
             "type" : "string"
           }
         }
@@ -19855,6 +19926,24 @@
         },
         "required" : [ "suggestion_token" ]
       },
+      "RetailSavingsShop" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "years" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSavingsYear"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "RetailSavingsSuggestion" : {
         "properties" : {
           "available_minor" : {
@@ -19908,6 +19997,24 @@
           }
         },
         "required" : [ "suggestion_token" ]
+      },
+      "RetailSavingsYear" : {
+        "properties" : {
+          "months" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSavingsMonth"
+            },
+            "type" : "array"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "year" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
       },
       "RetailSellsBetterAt" : {
         "description" : "Another branch in the caller's scope where the same item sells faster, and what to move there",
@@ -45497,7 +45604,7 @@
     },
     "/api/v1/retail/savings/sales-staff" : {
       "get" : {
-        "description" : "Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create). Only records dated this month, at the branches where the caller may sell.",
+        "description" : "Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create). Records of every month (issue #827), at the branches where the caller may sell.",
         "operationId" : "listRetailSalesStaffSavings",
         "parameters" : [ {
           "in" : "query",
@@ -45562,7 +45669,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "This month's savings records for sales staff, newest first",
+        "summary" : "Savings records of every month for sales staff, newest first",
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
@@ -45599,6 +45706,54 @@
           }
         },
         "summary" : "Record the day's savings as sales staff (FR-RET-18 to FR-RET-20); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/savings/sales-staff/groups" : {
+      "get" : {
+        "description" : "Issue #799, ADR-115: only while the Owner's setting salespeople_see_savings_amount is on, else 403 permission_denied; the branch must be one where the caller may sell (retail.sale.create). Issue #827: active records only, amounts saved only.",
+        "operationId" : "getRetailSalesStaffSavingsGroups",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSavingsGroups"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Savings of every month for sales staff, by shop, year, month and person, with totals",
         "tags" : [ "retail-cashbook" ]
       }
     },
