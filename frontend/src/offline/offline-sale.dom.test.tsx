@@ -562,4 +562,32 @@ describe('Record a sale offline', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Clear it' }));
     await waitFor(() => expect(screen.queryByTestId('lost-answer')).toBeNull());
   });
+
+  // JUSTIFICATION-A3: a new test case, the review of #837 asks for the saved copy to be proven end to end.
+  it('keeps the low stock level when the copy is saved from the server, and says Only N left from it offline (issue #815)', async () => {
+    const { browserServices } = await import('./offline-context');
+    const { refreshCatalogue } = await import('./catalogue');
+    const { memoryStore, scopeOf } = await import('./store');
+    // The server's page of items for a branch, as GET /retail/products?branch_id= answers it: 4 left of a minimum of 10.
+    const page = { items: [{ ...bulb, qty: '4.000', low_stock_level: '10.000' }] };
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify(page), { status: 200, headers: { 'Content-Type': 'application/json', Date: 'Tue, 03 Nov 2026 09:00:00 GMT' } }));
+    const store = memoryStore();
+    const scope = scopeOf('test.example', seller.user_id ?? 'nobody');
+    try {
+      await refreshCatalogue(browserServices().source, seller, scope, store, new Date());
+    } finally {
+      vi.mocked(fetch).mockImplementation(noNetwork);
+    }
+    const saved = await store.catalogue(scope);
+    expect(saved?.products[branch]?.[0]?.low_stock_level).toBe('10.000');
+
+    const offline = testOffline(seller, { online: false, catalogue: saved });
+    if (!offline) throw new Error('a seller sells offline');
+    screenWith(offline);
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'bulb' } });
+    const option = await screen.findByRole('option', { name: /^Test Bulb 9W/ });
+    expect(option.querySelector('[data-testid="stock-warning"]')?.textContent).toBe('Only 4 left');
+    fireEvent.click(option);
+    await waitFor(() => expect(document.querySelector('.line-card [data-testid="stock-warning"]')?.textContent).toBe('Only 4 left'));
+  });
 });

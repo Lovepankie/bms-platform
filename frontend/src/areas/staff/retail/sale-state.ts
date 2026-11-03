@@ -25,6 +25,19 @@ export interface DraftLine {
   readAt?: string;
 }
 
+/**
+ * Issue #815, the owner's old app: what the sale screen says about an item's stock at this shop. Out of stock at zero or below;
+ * Only N left at or below its low stock level (`low_stock_level`, read with the stock and kept in the phone's copy); else
+ * nothing. Words only: selling past the stock is still the server's decision, as before.
+ */
+export function stockWarning(product: Pick<Product, 'qty' | 'low_stock_level'>): string | null {
+  if (product.qty === undefined) return null;
+  const left = milliOf(product.qty);
+  if (left <= 0) return 'Out of stock';
+  if (product.low_stock_level !== undefined && left <= milliOf(product.low_stock_level)) return `Only ${showQty(product.qty)} left`;
+  return null;
+}
+
 /** The price the server defaults to for the line's unit: the sell price, or a pack's own price, else times the factor (#624). */
 export function defaultPrice(product: Product, unitId: string | undefined): number {
   const pack = chosenPack(product, unitId);

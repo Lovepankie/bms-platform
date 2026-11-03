@@ -13,6 +13,7 @@ Record every sale as you make it, so your stock and your money stay right.
    ![Tap Sell in the menu](record-a-sale-1.webp)
 2. Type part of the item's name, code or category in **Find an item**, then tap the item in the list. Tap more items the same way, or scan them.
    ![Type part of the name and tap the item](record-a-sale-2.webp)
+   An item with none left here says **Out of stock**, and one running low says **Only 4 left** (its number), in the list and on the sale. The number is what the shop had when you added the item, not how many you are selling. Buy or count more soon.
 3. Check the quantity on each line, then choose how the customer pays. For cash, type what the customer gave: the change shows in large figures.
    ![Choose how the customer pays](record-a-sale-3.webp)
 4. Check the total and tap **Record sale**. You get a receipt you can show or share on WhatsApp.
