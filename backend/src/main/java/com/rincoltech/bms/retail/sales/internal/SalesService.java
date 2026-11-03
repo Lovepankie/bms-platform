@@ -1664,12 +1664,21 @@ class SalesService {
 
     /** As above, with the rule's start read once by a caller that shows a list. */
     Sale visible(Sale s, CreditPeriods periods) {
-        Principal principal = CurrentPrincipal.require();
-        boolean hideCost = !principal.may("retail.profit.read", s.branchId());
+        return visible(s, periods, CurrentPrincipal.require());
+    }
+
+    /** A sale read for its receipt link (issue #760, ADR-116), where nobody is signed in: as a reader without cost sees it. */
+    Optional<Sale> forReceiptLink(UUID id) {
+        return repo.find(id, false).map(Header::sale).map(s -> visible(s, capabilities.onPaymentPeriods(), null));
+    }
+
+    /** As above for this caller, or for nobody ({@code null}): then cost, profit and who made the sale are left out. */
+    private Sale visible(Sale s, CreditPeriods periods, Principal principal) {
+        boolean hideCost = principal == null || !principal.may("retail.profit.read", s.branchId());
+        UUID me = principal == null ? null : principal.userId();
         // Who made or voided a sale is shown to those who may read profit there, and to the person themselves.
-        UUID createdBy =
-                hideCost && !java.util.Objects.equals(principal.userId(), s.createdBy()) ? null : s.createdBy();
-        UUID voidedBy = hideCost && !java.util.Objects.equals(principal.userId(), s.voidedBy()) ? null : s.voidedBy();
+        UUID createdBy = hideCost && !java.util.Objects.equals(me, s.createdBy()) ? null : s.createdBy();
+        UUID voidedBy = hideCost && !java.util.Objects.equals(me, s.voidedBy()) ? null : s.voidedBy();
         boolean hidePricing = !pricing.on();
         // A credit sale whose counting day (the later of its date and its entry day) is on or after the first day of
         // the rule "when the buyer pays" is paid on the day the payment

@@ -44,6 +44,7 @@ import { FirstItemsCard, useNoItemsYet } from './first-items';
 import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 import { ScreenLink, addOn } from './screen-link';
 import { CustomerPicker } from './customer-picker';
+import { CashCustomerName } from './cash-customer';
 import { dropWords } from './stocktake';
 import { useBranchHold } from '../branch-picker';
 import { SELL_COUNT_NOTE, savingCount, unfinishedKey } from './unfinished-counts';
@@ -638,7 +639,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         branchName,
         // A request sent online was priced from the items as read then (#769), absent when not known; offline, from the copy.
         pricesAsOf: draft.sent ? draft.sent.pricesAt : offline.catalogue?.pricesAsOf,
-        buyerName: draft.newBuyerName,
+        // A name typed for the receipt while online goes with a sale the network then made wait (issue #760).
+        buyerName: draft.newBuyerName.trim() || (draft.cashName ?? '').trim(),
+        buyerContact: draft.newBuyerName.trim() ? undefined : draft.cashPhone,
         now: new Date(),
       });
       await offline.engine.queue(item);
@@ -788,6 +791,11 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         ))}
         {offlineMode && <p className="hint">A credit sale needs the internet.</p>}
       </fieldset>
+
+      {/* Issue #760: a name for the receipt of a sale paid now, behind one button so the fast sale is unchanged. */}
+      {!offlineMode && draft.method !== 'credit' && !(pricesOn && draft.customerId) && (
+        <CashCustomerName name={draft.cashName ?? ''} phone={draft.cashPhone ?? ''} onChange={update} />
+      )}
 
       {offlineMode && (
         <fieldset>

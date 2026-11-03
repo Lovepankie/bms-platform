@@ -48,6 +48,12 @@ export interface Draft {
   priceListId?: string;
   /** Why a credit sale goes above the buyer's credit limit (customer accounts; retail.credit.override); sent when filled in. */
   creditReason?: string;
+  /**
+   * The customer's name and phone on a sale paid now (issue #760), typed behind Add customer name: printed on the receipt
+   * (blank keeps Cash customer) and kept on the sale, never a customer record.
+   */
+  cashName?: string;
+  cashPhone?: string;
   lines: DraftLine[];
 }
 
@@ -155,6 +161,9 @@ export function buildSaleRequest(draft: Draft, pricing?: Pricing, accounts?: Acc
     ...(pricing && draft.priceListId ? { price_list_id: draft.priceListId } : {}),
     ...(credit && !draft.customerId ? { buyer_name: draft.newBuyerName.trim() } : {}),
     ...(credit && !draft.customerId && draft.newBuyerContact.trim() ? { buyer_contact: draft.newBuyerContact.trim() } : {}),
+    // A sale paid now that names no customer may carry a name for its receipt (issue #760).
+    ...(!credit && !(pricing && draft.customerId) && draft.cashName?.trim() ? { buyer_name: draft.cashName.trim() } : {}),
+    ...(!credit && !(pricing && draft.customerId) && draft.cashPhone?.trim() ? { buyer_contact: draft.cashPhone.trim() } : {}),
     // With customer accounts on and no date typed, the server dates the sale from the buyer's terms.
     ...(credit && (draft.dueDate !== '' || !accounts) ? { due_date: draft.dueDate } : {}),
     ...(credit && accounts && draft.creditReason?.trim() ? { credit_override_reason: draft.creditReason.trim() } : {}),

@@ -6558,6 +6558,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/receipt-links/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The receipt PDF a receipt link opens, with no sign-in; a wrong or expired link is a plain page (issue #760) */
+        get: operations["openRetailReceiptLink"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/reports/business-evaluation": {
         parameters: {
             query?: never;
@@ -7095,6 +7112,23 @@ export interface paths {
         get: operations["getRetailSaleReceipt"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}/receipt/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A short link to the sale's receipt PDF for a message to a typed WhatsApp number: read only, no sign-in, valid for 90 days; the same check as the receipt PDF (issue #760) */
+        post: operations["createRetailSaleReceiptLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17096,6 +17130,17 @@ export interface components {
              * @description Not before the quotation date
              */
             valid_until: string;
+        };
+        RetailReceiptLink: {
+            /**
+             * Format: date-time
+             * @description When the link stops working, 90 days on
+             */
+            expires_at?: string;
+            /** @description As a person reads it, for example rincoltech.com/<token> */
+            link?: string;
+            /** @description The link with https://, for the WhatsApp message */
+            url?: string;
         };
         RetailReceiptPreview: {
             printed?: components["schemas"]["RetailReceiptPrint"];
@@ -27724,12 +27769,30 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Location is the shop's address or the not found page */
+            /** @description Location is the shop's address, a module's page or the not found page */
             302: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description A module's link that is wrong or has expired, such as a receipt link (issue #760) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Too many names no shop has from this address in ten minutes: a plain page */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
             };
         };
     };
@@ -27744,12 +27807,30 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Location is the shop's address or the not found page */
+            /** @description Location is the shop's address, a module's page or the not found page */
             302: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description A module's link that is wrong or has expired, such as a receipt link (issue #760) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Too many names no shop has from this address in ten minutes: a plain page */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
             };
         };
     };
@@ -32440,6 +32521,46 @@ export interface operations {
             };
         };
     };
+    openRetailReceiptLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description This receipt link has expired: a plain page */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Too many opens of this link or from this address: a plain page */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
     getRetailBusinessEvaluation: {
         parameters: {
             query?: {
@@ -33265,6 +33386,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSaleReceipt"];
+                };
+            };
+        };
+    };
+    createRetailSaleReceiptLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailReceiptLink"];
                 };
             };
         };

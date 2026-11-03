@@ -47,6 +47,28 @@ describe('sale form', () => {
     expect(req).not.toHaveProperty('due_date');
   });
 
+  it('sends the name and phone typed for the receipt of a sale paid now, and nothing when they are blank (issue #760)', () => {
+    expect(buildSaleRequest(draft({ cashName: ' Test Customer 07 ', cashPhone: ' 0700 000 041 ' }))).toMatchObject({
+      payment_method: 'cash', buyer_name: 'Test Customer 07', buyer_contact: '0700 000 041',
+    });
+    expect(buildSaleRequest(draft({ method: 'mobile_money', cashName: 'Test Customer 08' }))).toMatchObject({ buyer_name: 'Test Customer 08' });
+    const blank = buildSaleRequest(draft({ cashName: '  ', cashPhone: '' }));
+    expect(blank).not.toHaveProperty('buyer_name');
+    expect(blank).not.toHaveProperty('buyer_contact');
+    expect(buildSaleRequest(draft())).not.toHaveProperty('buyer_name');
+    // Never on a credit sale, which names its buyer its own way, nor beside a customer chosen for the price list.
+    const credit = buildSaleRequest(draft({ method: 'credit', newBuyerName: 'Test Buyer 03', dueDate: '2026-11-01', cashName: 'Test Customer 09' }));
+    expect(credit.buyer_name).toBe('Test Buyer 03');
+    const listed = buildSaleRequest(draft({ customerId: 'c1', cashName: 'Test Customer 10' }), { checking: false, resolved: [] });
+    expect(listed).not.toHaveProperty('buyer_name');
+    // A customer left over from a credit choice is not sent on a cash sale with price lists off, so the name is the
+    // sale's only buyer: never both together (second review of #762).
+    const leftOver = buildSaleRequest(draft({ customerId: 'c1', cashName: 'Test Customer 11' }));
+    expect(leftOver).not.toHaveProperty('customer_id');
+    expect(leftOver.buyer_name).toBe('Test Customer 11');
+    expect(draftProblem(draft({ cashName: 'Test Customer 07' }))).toBeNull();
+  });
+
   it('refuses a quantity above the branch stock as an early hint', () => {
     const stocked = { ...bulb, qty: '3.000' };
     expect(lineHint({ ...newLine(stocked), qty: '3' })).toBeNull();

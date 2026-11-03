@@ -100,6 +100,7 @@ class DocumentsService {
     private final ObjectMapper mapper;
     private final TransactionTemplate reading;
     private final TransactionTemplate writing;
+    private final ReceiptLinks links;
 
     DocumentsService(
             DocumentsRepository repo,
@@ -117,7 +118,9 @@ class DocumentsService {
             AuditLog audit,
             JdbcClient jdbc,
             ObjectMapper mapper,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions,
+            ReceiptLinks links) {
+        this.links = links;
         this.repo = repo;
         this.sales = sales;
         this.accounts = accounts;
@@ -193,7 +196,14 @@ class DocumentsService {
         LocalDate today = today();
         String number = nextNumber(type, sale.branchId());
         int seq = Integer.parseInt(number.substring(number.lastIndexOf('-') + 1));
-        DocumentSnapshot snapshot = saleSnapshot(sale, type, number, today, showPrices, quotation);
+        DocumentSnapshot snapshot = saleSnapshot(
+                sale,
+                type,
+                number,
+                today,
+                showPrices,
+                quotation,
+                CurrentPrincipal.require().userId());
         UUID id = UUID.randomUUID();
         insert(id, snapshot, seq, sale.branchId(), sale.id(), null, null, quotation == null ? null : quotation.id());
         return new Ref(id, true);
@@ -334,8 +344,9 @@ class DocumentsService {
         audit.record(AuditLog.Entry.created("retail.document.issued", "retail.document", id, branchId, after));
     }
 
+    /** {@code issuer}: who the document says issued it, the caller, or for a receipt link who made the link (#760). */
     private DocumentSnapshot saleSnapshot(
-            Sale sale, String type, String number, LocalDate today, boolean showPrices, Doc quotation) {
+            Sale sale, String type, String number, LocalDate today, boolean showPrices, Doc quotation, UUID issuer) {
         BranchInfo branch = repo.branch(sale.branchId()).orElseThrow();
         String name = sale.buyerName();
         String contact = sale.buyerContact();
@@ -392,7 +403,7 @@ class DocumentsService {
                 sale.priceList(),
                 lines,
                 sale.totalMinor(),
-                repo.userName(CurrentPrincipal.require().userId()),
+                repo.userName(issuer),
                 showPrices,
                 null);
     }
@@ -730,6 +741,11 @@ class DocumentsService {
         if (!own && !principal.may(SalesSummaryService.ALL_SELLERS, sale.branchId())) {
             throw ApiException.notFound();
         }
+        return receiptOf(sale, madeBy);
+    }
+
+    /** Whether the sale has a receipt (the 422s above), whoever asks: the seller, or a receipt link (issue #760). */
+    private Receipt receiptOf(Sale sale, UUID madeBy) {
         if (!sale.status().equals("completed")) {
             throw ApiException.rule("sale_voided", "A cancelled sale has no receipt to share.");
         }
@@ -805,7 +821,8 @@ class DocumentsService {
             Sale sale = r.sale();
             DocumentsApi.ReceiptPrint printed = null;
             try {
-                printed = models.printed(receiptModel(r));
+                printed = models.printed(
+                        receiptModel(r, CurrentPrincipal.require().userId()));
             } catch (RuntimeException e) {
                 log.warn("The receipt of sale {} could not be laid out for the screen", sale.id(), e);
             }
@@ -814,9 +831,9 @@ class DocumentsService {
     }
 
     /** The model of the receipt PDF, which the screen's preview reads too (issue #500). */
-    private Map<String, Object> receiptModel(Receipt r) {
+    private Map<String, Object> receiptModel(Receipt r, UUID issuer) {
         Sale sale = r.sale();
-        DocumentSnapshot snapshot = saleSnapshot(sale, "invoice", sale.saleNo(), today(), true, null);
+        DocumentSnapshot snapshot = saleSnapshot(sale, "invoice", sale.saleNo(), today(), true, null, issuer);
         return models.receipt(
                 snapshot,
                 repo.userName(r.madeBy()),
@@ -836,7 +853,61 @@ class DocumentsService {
      */
     byte[] receiptPdf(UUID saleId) {
         reading.executeWithoutResult(status -> receipt(saleId));
-        return documents.renderSharedPdf("invoice", () -> reading.execute(status -> receiptModel(receipt(saleId))));
+        UUID me = CurrentPrincipal.require().userId();
+        return documents.renderSharedPdf("invoice", () -> reading.execute(status -> receiptModel(receipt(saleId), me)));
+    }
+
+    // JUSTIFICATION-A3: the receipt link of issue #760 (ADR-116) reuses the receipt's checks and model above.
+    /**
+     * A link to the sale's receipt for a message to a typed WhatsApp number (issue #760, ADR-116): whoever may share the
+     * receipt may ask for it, with the same 404 and 422 refusals. The sale's live link is given again until it expires;
+     * then a new one is made for 90 days. Only a new one is audited.
+     */
+    ReceiptLinks.Minted receiptLink(UUID saleId) {
+        return writing.execute(status -> {
+            Sale sale = receipt(saleId).sale();
+            ReceiptLinks.Minted minted =
+                    links.mint(sale.id(), CurrentPrincipal.require().userId());
+            if (minted.created()) {
+                audit.record(AuditLog.Entry.created(
+                        "retail.receipt_link.created",
+                        "retail.sale",
+                        sale.id(),
+                        sale.branchId(),
+                        Map.of("expires_at", minted.expiresAt().toString())));
+            }
+            return minted;
+        });
+    }
+
+    /** Whether this open of the public route may go on (review of #762): limited per link and per client address. */
+    boolean mayOpenLink(String token) {
+        return links.mayOpen(com.rincoltech.bms.kernel.RequestContext.clientIp(), token);
+    }
+
+    /**
+     * The receipt PDF a live link opens, with nobody signed in (issue #760): the receipt the seller shares, as it stands
+     * now, issued by whoever made the link. Empty when the link is wrong or expired, or its sale has no receipt any more.
+     */
+    Optional<byte[]> linkedReceiptPdf(String token) {
+        Optional<ReceiptLinks.Live> live =
+                reading.execute(status -> links.live(token).filter(l -> linked(l) != null));
+        return live.map(l -> documents.renderSharedPdf(
+                "invoice",
+                () -> reading.execute(status -> receiptModel(
+                        Optional.ofNullable(linked(l)).orElseThrow(ApiException::notFound), l.createdBy()))));
+    }
+
+    /** The receipt of a live link's sale, or null when it was voided, written off or wholly returned since. */
+    private Receipt linked(ReceiptLinks.Live l) {
+        Sale sale = sales.forReceiptLink(l.saleId()).orElse(null);
+        try {
+            return sale == null
+                    ? null
+                    : receiptOf(sale, repo.saleMadeBy(sale.id()).orElse(null));
+        } catch (ApiException e) {
+            return null;
+        }
     }
 
     LocalDate today() {

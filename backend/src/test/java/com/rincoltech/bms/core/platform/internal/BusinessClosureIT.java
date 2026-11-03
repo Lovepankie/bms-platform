@@ -677,6 +677,9 @@ class BusinessClosureIT extends IntegrationTest {
         assertThat(count("SELECT count(*) FROM help_setup_drafts WHERE tenant_id = ?", t.tenantId()))
                 .as("the setup helper's draft row seeded by RlsIsolationIT.seedOneRowInEveryTable")
                 .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .as("the receipt link seeded by RlsIsolationIT.seedOneRowInEveryTable (V128, #760)")
+                .isEqualTo(1);
         ResponseEntity<JsonNode> removed = remove(op, closureId, code(op));
         assertThat(removed.getStatusCode()).as("%s", removed.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(removed.getBody().get("erased").get("core").asInt()).isPositive();
@@ -761,6 +764,11 @@ class BusinessClosureIT extends IntegrationTest {
                 .isZero();
         assertThat(count("SELECT count(*) FROM import_runs WHERE tenant_id = ?", t.tenantId()))
                 .as("and the import run it named")
+                .isZero();
+        // V128 (#760): the receipt link points at a sale; the purge removes both, the link first.
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+        assertThat(count("SELECT count(*) FROM retail_sales WHERE tenant_id = ?", t.tenantId()))
                 .isZero();
         assertThat(count(
                         "SELECT count(*) FROM tenant_closures WHERE id = ? AND status = 'purged' AND purged_at IS NOT NULL",

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { retail, type ReceiptPreview, type Sale } from '../../../api/retail';
+import { retail, type ReceiptLink, type ReceiptPreview, type Sale } from '../../../api/retail';
 import { useStaff } from '../context';
 import { ALL_SELLERS, holdsAt } from './permissions';
 import { normalisePhone, receiptCaption, shownPhone, whatsAppLink } from './receipt-share-state';
@@ -17,7 +17,10 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 export const DOWNLOADED = 'This browser cannot share files, so the receipt PDF was downloaded. Send it from your downloads.';
 export const SHARE_AGAIN = 'The receipt is ready. Tap Share receipt again to send it.';
 export const SHARE_REFUSED = 'Your phone would not open its share options, so the receipt PDF was downloaded. Send it from your downloads.';
-export const WHATSAPP_HINT = 'WhatsApp opens with the receipt details. To send the PDF itself, use Share receipt and pick WhatsApp.';
+export const WHATSAPP_HINT = 'WhatsApp opens with the receipt details and a link to the receipt PDF. The link works for 90 days.';
+/** How long the tap waits for the receipt link before the message goes without it. */
+export const LINK_WAIT_MS = 8000;
+export const NO_LINK ='The link to the receipt could not be made, so the message has the receipt details only.';
 export const WHATSAPP_FAILED = 'WhatsApp could not be opened with these details. Check the number and try again.';
 
 export const NOT_DRAWN = 'The receipt could not be shown on the screen. Download the PDF to see it.';
@@ -185,6 +188,10 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
     enabled: allowed && shownFor === key,
     retry: false,
   });
+  // The link to the receipt PDF (issue #760), which a wa.me message cannot attach: made only when WhatsApp customer is
+  // tapped, never by viewing the screen, and once per sale on this screen (review of #762).
+  const linkQuery = { queryKey: ['retail', 'sale-receipt-link', sale.id], queryFn: () => retail.saleReceiptLink(sale.id ?? ''), staleTime: Infinity, retry: false };
+  const [linking, setLinking] = useState(false);
   // The PDF once fetched, for this state of the sale only: a second tap shares it at once, inside the tap, which a phone that
   // let the first tap's wait run out needs. `refused` counts the phone's refusals of the share sheet for this file. `pending`
   // is the fetch under way, which Share and Download the PDF both wait on rather than fetching it twice.
@@ -275,15 +282,38 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
     if (!f) return;
     const check = normalisePhone(phone);
     if (!check.ok) return setPhoneProblem(check.problem);
-    let link: string;
+    const chatWith = (url?: string) => whatsAppLink(check.digits, receiptCaption(f, url));
+    const made = queryClient.getQueryData<ReceiptLink>(linkQuery.queryKey)?.url;
+    let address: string;
     try {
-      link = whatsAppLink(check.digits, receiptCaption(f));
+      address = chatWith(made);
     } catch {
       return setPhoneProblem(WHATSAPP_FAILED);
     }
     setPhoneProblem(null);
-    window.open(link, '_blank', 'noopener,noreferrer');
+    setNote(null);
     if (mayKeep && keep) save.mutate(shownPhone(check.digits));
+    if (made) {
+      window.open(address, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    // The window is opened inside the tap, so a phone never blocks it as a pop-up, and is sent to WhatsApp once the link is
+    // made; when it cannot be made the message goes without it, with a note saying so (review of #762).
+    // Opened without noopener on purpose: noopener would give no window to send on. The opener is cleared at once; a
+    // browser that ignores that still only ever loads wa.me in it.
+    const chat = window.open('', '_blank');
+    if (chat) chat.opener = null;
+    setLinking(true);
+    // On a stalled connection the chat never waits more than LINK_WAIT_MS: it then goes without the link (second review).
+    const link = queryClient.fetchQuery(linkQuery).then((l) => l.url, () => undefined);
+    const waited = new Promise<undefined>((done) => setTimeout(() => done(undefined), LINK_WAIT_MS));
+    void Promise.race([link, waited]).then((url) => {
+      setLinking(false);
+      if (!url) setNote(NO_LINK);
+      const to = url ? chatWith(url) : address;
+      if (chat) chat.location.href = to;
+      else window.open(to, '_blank', 'noopener,noreferrer');
+    });
   }
 
   return (
@@ -330,7 +360,7 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
             </label>
           )}
           <p className="cluster">
-            <BusyButton type="button" className="btn" busy={save.isPending} onClick={whatsApp}>WhatsApp customer</BusyButton>
+            <BusyButton type="button" className="btn" busy={save.isPending || linking} onClick={whatsApp}>WhatsApp customer</BusyButton>
 
           </p>
           <p className="field-hint">{WHATSAPP_HINT}</p>
