@@ -739,4 +739,7 @@ tooling, as the commit is. Every call works on the bound business only: a run or
 - **Proven by** `ImportUploadsIT` (only `import_*` and the audit log change; the stored object opens with the run's key and
   not without; each refusal; isolation; a file at the row limit streamed in blocks; no file content, personal value or file
   name in the logs; the cleanup), `UploadMemoryTest` (a CSV and an XLSX of 100,000 rows parse in a child JVM at the staging
-  heap of 224 MB), `SourceParserTest` and `QuarantineCipherTest`.
+  heap of 224 MB), `SourceParserTest`, `QuarantineCipherTest`, `ReaderLimitsTest` (the memory budget, a zip bomb in a
+  skipped part, texts over the cell limit, a part named twice, a number format with a unit, NUL in every format) and
+  `ImportUploadReviewIT` (a cancel or a move to ready while a file is fetched writes nothing, a NUL fails the batch with a
+  code, the daily job as the scheduler runs it); `BusinessClosureIT` shows a removed business's quarantined file deleted.

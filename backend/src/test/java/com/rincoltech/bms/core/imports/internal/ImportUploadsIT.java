@@ -373,11 +373,13 @@ class ImportUploadsIT extends IntegrationTest {
         TestFiles.writeCsv(csv, TestFiles.header(12), TestFiles.generated(UploadMemoryTest.ROWS, 12));
         UUID runId = openRun(t);
         AtomicInteger largestRead = new AtomicInteger();
+        AtomicInteger reads = new AtomicInteger();
         Batch batch;
         try (InputStream in = new FilterInputStream(Files.newInputStream(csv)) {
             @Override
             public int read(byte[] b, int off, int len) throws IOException {
                 largestRead.accumulateAndGet(len, Math::max);
+                reads.incrementAndGet();
                 return super.read(b, off, len);
             }
         }) {
@@ -388,9 +390,12 @@ class ImportUploadsIT extends IntegrationTest {
         assertThat(batch.sizeBytes()).isEqualTo(Files.size(csv));
         assertThat(batch.rowCount()).isEqualTo(UploadMemoryTest.ROWS);
         assertThat(rows(batch.id())).isEqualTo(UploadMemoryTest.ROWS);
-        assertThat(largestRead.get())
-                .as("read in blocks of 64 KiB, never as a whole")
-                .isLessThanOrEqualTo(64 * 1024);
+        // What the reads ask for, not the heap: the memory at the row limit is proven by UploadMemoryTest, in a JVM
+        // capped
+        // at the staging heap. Here: a stream of unknown size, taken in many reads of at most 64 KiB, all the way into
+        // the database.
+        assertThat(largestRead.get()).isLessThanOrEqualTo(64 * 1024);
+        assertThat(reads.get()).isGreaterThanOrEqualTo((int) (Files.size(csv) / (64 * 1024)));
         try (var work = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
             assertThat(work.filter(p -> p.getFileName().toString().startsWith(UploadService.TEMP_PREFIX))
                             .filter(p -> !p.startsWith(dir))
