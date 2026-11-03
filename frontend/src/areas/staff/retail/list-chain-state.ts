@@ -1,3 +1,4 @@
+import type { UsageLevel } from '../../../api/retail';
 import { toggleGroup, type OpenGroups } from './sales-chain-state';
 
 // The stock list and the restocks list grouped by a chain of levels (issue #350): the pure rules behind the screens. The same
@@ -58,8 +59,21 @@ export function parseOf<L extends string>(text: string | null, order: readonly L
   }
 }
 
-/** Which list the choice belongs to: stock and past restocks each remember their own. */
-export type ListName = 'stock' | 'restocks';
+/** Which list the choice belongs to: stock, past restocks, past usage and damage and each cash book list remember their own. */
+export type ListName = 'stock' | 'restocks' | 'usage' | CashList;
+
+/** The cash book record lists (issue #816), grouped with a total at every level as the owner's old app did. */
+export type CashList = 'expenses' | 'bankings' | 'savings' | 'withdrawals' | 'advances';
+
+/** Past usage and damage grouped as the old app did (issue #816): shop, month, category and item. */
+export const USAGE_ORDER: readonly UsageLevel[] = ['branch', 'month', 'category', 'item'];
+export const USAGE_PLURALS: Record<UsageLevel, string> = { branch: 'shops', month: 'months', category: 'categories', item: 'items' };
+
+/** The cash book levels: shop, year and month, and for expenses the category and the day too (issue #816). */
+export type CashLevel = 'branch' | 'year' | 'month' | 'category' | 'day';
+export const CASH_ORDER: readonly CashLevel[] = ['branch', 'year', 'month'];
+export const EXPENSE_ORDER: readonly CashLevel[] = ['branch', 'year', 'month', 'category', 'day'];
+export const CASH_PLURALS: Record<CashLevel, string> = { branch: 'shops', year: 'years', month: 'months', category: 'categories', day: 'days' };
 
 /** Who the remembered choice belongs to: the user's id, never an email or a phone number. */
 export const listUser = (me: { user_id?: string }) => me.user_id ?? 'staff';

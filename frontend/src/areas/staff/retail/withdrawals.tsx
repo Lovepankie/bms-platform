@@ -73,6 +73,9 @@ export function WithdrawalRecords({ onVoided }: { onVoided?: (message: string) =
           rows={rows.data}
           empty="No cash withdrawn in this period."
           what="withdrawal"
+          list="withdrawals"
+          figures={{ amount: (r) => r.amount_minor }}
+          totalWord="Withdrawn"
           voidWith={(row, reason, key) => retail.voidWithdrawal(row.id ?? '', reason, key)}
           onVoided={() => onVoided?.('Withdrawal voided.')}
           renderRow={(row) => (

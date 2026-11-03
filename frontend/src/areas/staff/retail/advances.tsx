@@ -170,6 +170,9 @@ export function AdvanceList({ onOpen }: { onOpen: (id: string) => void }) {
           rows={rows.data}
           empty={openOnly ? 'No advance has a balance.' : 'No advances recorded yet.'}
           what="advance"
+          list="advances"
+          figures={{ amount: (a) => a.principal_minor, owed: (a) => a.balance_minor }}
+          totalWord="Advanced"
           renderRow={(a) => (
             <>
               <strong>{a.advance_no}</strong> <span className="muted">{showDate(a.business_date)}</span>

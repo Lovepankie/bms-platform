@@ -207,6 +207,9 @@ export function SavingsRecords({ onVoided }: { onVoided?: (message: string) => v
           rows={rows.data}
           empty="No savings recorded in this period."
           what="savings record"
+          list="savings"
+          figures={{ amount: (r) => r.amount_minor }}
+          totalWord="Saved"
           voidWith={(row, reason, key) => retail.voidSavings(row.id ?? '', reason, key)}
           onVoided={() => onVoided?.('Savings record voided.')}
           renderRow={(row) => (

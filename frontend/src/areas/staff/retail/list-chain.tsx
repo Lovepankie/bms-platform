@@ -14,10 +14,11 @@ import { Problem } from './ui';
 // a restock opened for correction finds the same groups open.
 
 /** The view the person chose and the chain, remembered per user and list; changing either closes everything. */
-export function useListView<L extends string>(user: string, list: ListName, order: readonly L[], known: readonly L[] = order) {
+export function useListView<L extends string>(user: string, list: ListName, order: readonly L[], known: readonly L[] = order, start?: (chain: L[]) => OpenGroups) {
   const [view, setViewState] = useState<ListView>(() => readView(user, list));
   const [chain, setChainState] = useState<L[]>(() => readChainOf(user, list, order, known));
-  const [open, setOpen] = useState<OpenGroups>(new Map());
+  // Issue #816: a list whose groups are already in hand (the cash book) can start with its newest records open.
+  const [open, setOpen] = useState<OpenGroups>(() => start?.(chain) ?? new Map());
   return {
     view,
     setView: (next: ListView) => { setViewState(next); writeView(user, list, next); },
@@ -93,6 +94,11 @@ export interface TreeKind<L extends string, G extends TreeGroup> {
   name: string;
   plurals: Record<L, string>;
   fetch: (level: L, chain: L[], sel: ListSelection, page: { to?: string; offset?: number }, signal?: AbortSignal) => Promise<Page<G>>;
+  /**
+   * Issue #816: the groups of a level summed from rows the screen already holds in full (the cash book lists are not paged),
+   * in place of a request; `fetch` is then never called.
+   */
+  local?: (level: L, sel: ListSelection) => G[];
   title: (level: L, group: G) => string;
   figures: (level: L, group: G, sel: ListSelection) => ReactNode;
   /** The words for a level with nothing in it. */
@@ -122,18 +128,19 @@ function useLevel<L extends string, G extends TreeGroup>({ kind, filterKey, chai
     queryFn: ({ pageParam, signal }) => kind.fetch(level, chain, chosen, time ? { to: typeof pageParam === 'string' ? pageParam : chosen.to } : { offset: typeof pageParam === 'number' ? pageParam : 0 }, signal),
     initialPageParam: undefined as string | number | undefined,
     getNextPageParam: (last) => (last.has_more ? (time ? last.next_to : last.next_offset) : undefined),
-    enabled,
+    enabled: enabled && !kind.local,
     placeholderData: keepPreviousData,
   });
+  const local = enabled ? kind.local?.(level, chosen) : undefined;
   // A group can come twice when pages are cut by an order that moves between requests: the first one stands.
   const seen = new Set<string>();
-  const items = (query.data?.pages ?? []).flatMap((p) => p.items ?? []).filter((g) => {
+  const items = (local ?? (query.data?.pages ?? []).flatMap((p) => p.items ?? [])).filter((g) => {
     const key = g.key ?? '';
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
-  return { query, items };
+  return { query, items, local: local !== undefined };
 }
 
 export function ListChain<L extends string, G extends TreeGroup>({ range, rootLabel, empty, ...shared }: Shared<L, G> & { range: ListSelection; rootLabel: string; empty?: ReactNode }) {
@@ -164,9 +171,9 @@ export function ListChain<L extends string, G extends TreeGroup>({ range, rootLa
 function LevelList<L extends string, G extends TreeGroup>({ index, sel, parent, empty, ...shared }: Shared<L, G> & { index: number; sel: ListSelection; parent: string; empty?: ReactNode }) {
   const { kind, chain } = shared;
   const level = chain[index] as L;
-  const { query, items } = useLevel(shared, level, sel);
-  if (query.isPending && query.fetchStatus !== 'idle') return <p className="loading">Loading</p>;
-  if (query.error) {
+  const { query, items, local } = useLevel(shared, level, sel);
+  if (!local && query.isPending && query.fetchStatus !== 'idle') return <p className="loading">Loading</p>;
+  if (!local && query.error) {
     return (
       <>
         <Problem error={query.error} />
@@ -174,7 +181,7 @@ function LevelList<L extends string, G extends TreeGroup>({ index, sel, parent, 
       </>
     );
   }
-  if (query.data && items.length === 0) return <>{empty ?? <p className="empty-state">{kind.nothing}</p>}</>;
+  if ((local || query.data) && items.length === 0) return <>{empty ?? <p className="empty-state">{kind.nothing}</p>}</>;
   return (
     <>
       <ul className="rt-group-list">

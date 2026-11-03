@@ -114,7 +114,7 @@ describe('no Void on an imported record (review C5)', () => {
   ];
 
   it('draws Void on the live row only in a record list', () => {
-    const out = page('admin', <RecordsByShop rows={rows} empty="none" what="record" renderRow={(r) => <span>{r.id}</span>} voidWith={() => Promise.resolve()} />);
+    const out = page('admin', <RecordsByShop list="expenses" rows={rows} empty="none" what="record" renderRow={(r) => <span>{r.id}</span>} voidWith={() => Promise.resolve()} />);
     expect((out.match(/>Void</g) ?? []).length).toBe(1);
   });
 
