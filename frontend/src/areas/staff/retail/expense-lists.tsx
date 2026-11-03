@@ -13,6 +13,9 @@ import { useComeBack } from '../../../app/ui/EmptyChoice';
 // Every change carries the version the list showed (If-Match); if someone else changed it first the server
 // refuses in plain words and the list is read again.
 
+/** A change to the lists, with the words its toast says when it works (issue #836), such as 'Category Transport added'. */
+type Change = (run: () => Promise<unknown>, words: string, item?: boolean) => void;
+
 function RenameField({ label, value, disabled, onSave }: { label: string; value: string; disabled: boolean; onSave: (name: string) => void }) {
   const id = useId();
   const [name, setName] = useState(value);
@@ -28,10 +31,14 @@ function RenameField({ label, value, disabled, onSave }: { label: string; value:
   );
 }
 
-export function ItemRow({ category, item, busy, change }: { category: ExpenseCategory; item: ExpenseItem; busy: boolean; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
+export function ItemRow({ category, item, busy, change }: { category: ExpenseCategory; item: ExpenseItem; busy: boolean; change: Change }) {
   const id = useId();
   const version = item.version ?? 0;
-  const update = (body: { name?: string; active?: boolean; requires_explanation?: boolean }) => change(() => retail.updateExpenseItem(category.id ?? '', item.id ?? '', body, version));
+  const words = (body: { name?: string; active?: boolean; requires_explanation?: boolean }) =>
+    body.name !== undefined ? `Item ${item.name} renamed to ${body.name}`
+      : body.active !== undefined ? `Item ${item.name} switched ${body.active ? 'on' : 'off'}`
+        : `Item ${item.name} ${body.requires_explanation ? 'now needs' : 'no longer needs'} an explanation`;
+  const update = (body: { name?: string; active?: boolean; requires_explanation?: boolean }) => change(() => retail.updateExpenseItem(category.id ?? '', item.id ?? '', body, version), words(body));
   return (
     <li className="rt-card">
       <strong>
@@ -52,7 +59,7 @@ export function ItemRow({ category, item, busy, change }: { category: ExpenseCat
   );
 }
 
-function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
+function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: Change }) {
   const nameId = useId();
   const flagId = useId();
   const [name, setName] = useState('');
@@ -61,7 +68,7 @@ function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: 
     <form onSubmit={(e) => {
       e.preventDefault();
       if (name.trim() === '' || busy) return;
-      change(() => retail.createExpenseItem(category.id ?? '', { name: name.trim(), requires_explanation: flag }), true);
+      change(() => retail.createExpenseItem(category.id ?? '', { name: name.trim(), requires_explanation: flag }), `Item ${name.trim()} added to ${category.name}`, true);
       setName('');
       setFlag(false);
     }}>
@@ -76,9 +83,11 @@ function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: 
   );
 }
 
-export function CategoryCard({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
+export function CategoryCard({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: Change }) {
   const version = category.version ?? 0;
-  const update = (body: { name?: string; active?: boolean }) => change(() => retail.updateExpenseCategory(category.id ?? '', body, version));
+  const words = (body: { name?: string; active?: boolean }) =>
+    body.name !== undefined ? `Category ${category.name} renamed to ${body.name}` : `Category ${category.name} switched ${body.active ? 'on' : 'off'}`;
+  const update = (body: { name?: string; active?: boolean }) => change(() => retail.updateExpenseCategory(category.id ?? '', body, version), words(body));
   return (
     <section className="rt-card" aria-label={category.name}>
       <strong>
@@ -97,7 +106,7 @@ export function CategoryCard({ category, busy, change }: { category: ExpenseCate
   );
 }
 
-export function ExpenseLists({ categories, busy, error, change }: { categories: ExpenseCategory[]; busy: boolean; error: unknown; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
+export function ExpenseLists({ categories, busy, error, change }: { categories: ExpenseCategory[]; busy: boolean; error: unknown; change: Change }) {
   const nameId = useId();
   const [name, setName] = useState('');
   return (
@@ -106,7 +115,7 @@ export function ExpenseLists({ categories, busy, error, change }: { categories: 
       <form onSubmit={(e) => {
         e.preventDefault();
         if (name.trim() === '' || busy) return;
-        change(() => retail.createExpenseCategory({ name: name.trim() }));
+        change(() => retail.createExpenseCategory({ name: name.trim() }), `Category ${name.trim()} added`);
         setName('');
       }}>
         <label htmlFor={nameId}>New category</label>
@@ -125,9 +134,9 @@ export function ExpenseListsScreen() {
   const back = useComeBack();
   const categories = useQuery({ queryKey: ['retail', 'expense-categories', false], queryFn: () => retail.listExpenseCategories() });
   const change = useMutation({
-    mutationFn: ({ run }: { run: () => Promise<unknown>; item?: boolean }) => run(),
-    onSuccess: (_, { item }) => {
-      show('Saved.', 'success');
+    mutationFn: ({ run }: { run: () => Promise<unknown>; words: string; item?: boolean }) => run(),
+    onSuccess: (_, { words, item }) => {
+      show(words, 'success');
       // Opened from an empty list on the expense form (issue #619): the form needs an item, so a new item takes the person back.
       if (item) back?.();
     },
@@ -140,7 +149,7 @@ export function ExpenseListsScreen() {
       <div data-tour="expense-lists-body">
         {categories.isError && <Problem error={categories.error} />}
         {categories.isPending && <p className="loading">Loading</p>}
-        {categories.data && <ExpenseLists categories={categories.data} busy={change.isPending} error={change.error} change={(run, item) => change.mutate({ run, item })} />}
+        {categories.data && <ExpenseLists categories={categories.data} busy={change.isPending} error={change.error} change={(run, words, item) => change.mutate({ run, words, item })} />}
       </div>
       {toast}
     </Gate>
