@@ -21,7 +21,11 @@ const WIDTH = 412;
 
 async function open(font: number, extra = ''): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
-  const ready = extra.includes('empty') ? page.getByText('You have not run a report yet.') : page.getByText('Download Excel');
+  const ready = extra.includes('off')
+    ? page.getByText('Reports are switched off for this business.')
+    : extra.includes('empty')
+      ? page.getByText('You have not run a report yet.')
+      : page.getByText('Download Excel');
   return openLayout(page, `layout/reports.html?font=${font}${extra}`, ready);
 }
 
@@ -108,6 +112,21 @@ describe.each([1, 2])('The report centre at 412px, font scale %i', (font) => {
     expect(await section.getByRole('button').count()).toBe(1);
     const action = section.getByRole('button', { name: 'Choose a report' });
     expect((await action.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(48);
+    await page.close();
+  });
+
+  it('shows the switched off note plain and grey, the link to the switch a full target (issue #764)', async () => {
+    const page = await open(font, '&off=1');
+    expect(await pageWidth(page), 'page width').toBeLessThanOrEqual(WIDTH);
+    const note = await page.locator('.alert-info').evaluate((el) => {
+      const s = getComputedStyle(el);
+      const rgb = (/(\d+), (\d+), (\d+)/.exec(s.backgroundColor) ?? []).slice(1).map(Number);
+      return { edges: new Set([s.borderLeftWidth, s.borderTopWidth, s.borderRightWidth]).size, plain: s.backgroundImage === 'none', tint: Math.max(...rgb) - Math.min(...rgb) };
+    });
+    expect(note).toMatchObject({ edges: 1, plain: true });
+    expect(note.tint, 'neutral grey').toBeLessThanOrEqual(12);
+    const link = await page.getByRole('link', { name: 'Switch them on in Business set-up' }).boundingBox();
+    expect(link?.height ?? 0).toBeGreaterThanOrEqual(48);
     await page.close();
   });
 

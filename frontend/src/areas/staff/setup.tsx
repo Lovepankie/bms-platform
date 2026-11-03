@@ -399,7 +399,7 @@ export function Setup() {
 
         <ShortLinkCard />
 
-        <fieldset>
+        <fieldset id="reports">
           <legend>Reports</legend>
           <label>
             <input type="checkbox" checked={current.reports_enabled === true} disabled={busy} onChange={(e) => setReports(e.target.checked)} />{' '}

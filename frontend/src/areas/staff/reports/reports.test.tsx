@@ -18,7 +18,7 @@ import {
   sizeText,
   words,
 } from './page';
-import { showReports } from './permissions';
+import { holdsReports, maySwitchReportsOn, showReports } from './permissions';
 
 const renderToString = (node: ReactElement) =>
   render(<QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>).replaceAll('<!-- -->', '');
@@ -71,9 +71,17 @@ describe('who sees the Reports tab', () => {
     expect(showReports({ permissions: ['lending.reports.portfolio'], reports_enabled: true, modules: ['retail'] })).toBe(false);
   });
 
-  it('hides the tab while the tenant has not switched reports on, whatever the user holds', () => {
+  it('may not run reports while the tenant has not switched them on, but still holds them (issue #764)', () => {
     expect(showReports({ permissions: ['lending.reports.portfolio'], reports_enabled: false, modules: ['lending'] })).toBe(false);
     expect(showReports({ permissions: ['lending.reports.portfolio'], modules: ['lending'] })).toBe(false);
+    expect(holdsReports({ permissions: ['lending.reports.portfolio'], reports_enabled: false, modules: ['lending'] })).toBe(true);
+    expect(holdsReports({ permissions: ['lending.members.read'], reports_enabled: true, modules: ['lending'] })).toBe(false);
+    expect(holdsReports({ permissions: ['lending.reports.portfolio'], modules: ['retail'] })).toBe(false);
+  });
+
+  it('lets only a holder of core.settings.manage switch them on', () => {
+    expect(maySwitchReportsOn({ permissions: ['core.settings.manage'] })).toBe(true);
+    expect(maySwitchReportsOn({ permissions: ['lending.reports.portfolio'] })).toBe(false);
   });
 });
 

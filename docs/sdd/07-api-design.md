@@ -734,7 +734,7 @@ generic `POST /documents`. Built (#12): these two routes and the member document
 | PUT | `/data-export/settings` | `core.data_export.run` | `{weekly_email}`: the weekly email of the workbook to the Owner, on by default; the Owner only (anyone else 403 `owner_only`); audited; returns the card. **Built (#334)** |
 
 Responses of these routes are `Cache-Control: no-store`. The switch is the tenant setting `reports_enabled` (`PATCH /settings`,
-`core.settings.manage`; also `GET /me` `reports_enabled`, which the PWA reads to show the Reports tab), off by default. No new permission exists: a report is run under its own `lending.reports.*`
+`core.settings.manage`; also `GET /me` `reports_enabled`, which the PWA reads to mark the Reports tab Off and, on the page, to say "Reports are switched off for this business." with a link to the switch for a holder of `core.settings.manage`, issue #764; the tab is listed for any holder of a report permission), off by default. No new permission exists: a report is run under its own `lending.reports.*`
 permission and a loan officer sees only their own loans. The lending report `lending.par` additionally needs
 `lending.insights.read`, because its branch scope is the insights page's. So does `lending.regulatory_summary` (slice D4, issue #225);
 `lending.collateral_register` does not: its branches are those of `lending.reports.members`. Both offer all four formats; no route is

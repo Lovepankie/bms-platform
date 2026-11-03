@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { businessZone } from '../../../api/retail';
 import {
@@ -18,7 +18,7 @@ import { EmptyState, NoAccess } from '../../../app/ui/EmptyState';
 import { Segmented } from '../../../app/ui/Segmented';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
-import { showReports } from './permissions';
+import { holdsReports, maySwitchReportsOn, showReports } from './permissions';
 
 // The report centre (extras slices D1 and D5, issues #214 and #229; ADR-038): the monthly pack first, then every report this
 // user may run, grouped by what it is about, each with its own form; then the user's own runs with their status, a filter, a
@@ -111,9 +111,10 @@ export function grouped(entries: ReportCatalogueEntry[]): { title: string; entri
   return out;
 }
 
+/** No report permission: no access. A holder while runs are off: the switched off note. Otherwise the report centre. */
 export function Reports() {
   const { me } = useStaff();
-  if (!showReports(me)) {
+  if (!holdsReports(me)) {
     return (
       <main className="rt ln">
         <h1>Reports</h1>
@@ -121,11 +122,40 @@ export function Reports() {
       </main>
     );
   }
+  if (!showReports(me)) return <ReportsOff canSwitch={maySwitchReportsOn(me)} />;
   return <ReportsPage />;
 }
 
+/**
+ * Report runs switched off for the business (issue #764): never "no access", since Staff users cannot fix it. Someone who may
+ * change the business settings gets a link to the switch in Business set-up; anyone else is told who can switch it on.
+ */
+export function ReportsOff({ canSwitch }: { canSwitch: boolean }) {
+  const router = useRouter({ warn: false });
+  const label = 'Switch them on in Business set-up';
+  return (
+    <main className="rt ln">
+      <h1>Reports</h1>
+      <p className="alert alert-info" role="status">Reports are switched off for this business.</p>
+      {canSwitch ? (
+        router ? (
+          <Link className="btn" to="/staff/setup" hash="reports">
+            {label}
+          </Link>
+        ) : (
+          <a className="btn" href="/staff/setup#reports">
+            {label}
+          </a>
+        )
+      ) : (
+        <p className="ln-muted">Ask the owner to switch them on in Business set-up.</p>
+      )}
+    </main>
+  );
+}
+
 function ReportsPage() {
-  const { branch } = useStaff();
+  const { branch, me } = useStaff();
   const queryClient = useQueryClient();
   const catalogue = useQuery({ queryKey: ['reports', 'catalogue'], queryFn: reports.catalogue, retry: false });
   // Off is a 404 from the server, like every report route: the tab is hidden by /me, and a stale page says so.
@@ -160,15 +190,7 @@ function ReportsPage() {
       </main>
     );
   }
-  if (off) {
-    return (
-      <main className="rt ln">
-        <h1>Reports</h1>
-        <p className="alert alert-info">Reports are switched off for this business.</p>
-        <p className="ln-muted">A business administrator can switch them on in Business set-up.</p>
-      </main>
-    );
-  }
+  if (off) return <ReportsOff canSwitch={maySwitchReportsOn(me)} />;
   if (catalogue.isError || !catalogue.data) {
     return (
       <main className="rt ln">

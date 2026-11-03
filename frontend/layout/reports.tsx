@@ -13,7 +13,8 @@ import { layoutRouter } from './router';
 // The page reports.layout.test.ts lays out in a real browser (issue #229): the report centre on a phone, with the monthly pack,
 // reports with long titles and descriptions in their groups, and runs with long titles, a pack's two downloads and a long
 // failure. The answers are put in the query cache, so the page asks no server. ?font= scales the root font size as a phone's
-// large text setting does, ?empty=1 draws a user with no run yet. Every name is invented.
+// large text setting does, ?empty=1 draws a user with no run yet, ?off=1 an administrator of a business with report runs switched
+// off (issue #764). Every name is invented.
 
 const query = new URLSearchParams(window.location.search);
 document.documentElement.style.fontSize = `${16 * Number(query.get('font') ?? '1')}px`;
@@ -22,8 +23,8 @@ const permissions = ['lending.reports.portfolio', 'lending.reports.collections',
 const me = {
   ...mockMe('admin'),
   modules: ['lending'],
-  reports_enabled: true,
-  permissions,
+  reports_enabled: query.get('off') !== '1',
+  permissions: query.get('off') === '1' ? [...permissions, 'core.settings.manage'] : permissions,
   tours: { 'tours-off': { status: 'dismissed', version: 1 } },
 } as unknown as Me;
 const branch = me.branches?.[0]?.id ?? '';
