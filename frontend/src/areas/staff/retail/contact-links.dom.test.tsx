@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Advance, Customer, Sale, Supplier } from '../../../api/retail';
@@ -41,6 +41,8 @@ const { AccountRow } = await import('./accounts');
 const { AccountScreen } = await import('./account');
 const { SaleDetail } = await import('./sales');
 const { AdvanceDetailView, OutstandingView } = await import('./advances');
+const { QuotationCard } = await import('./quotations');
+const { OrderSummary } = await import('./orders');
 
 afterEach(() => {
   cleanup();
@@ -164,12 +166,28 @@ describe("a buyer's account page", () => {
     expect(listCustomerPage.mock.calls[0]?.[0]).toMatchObject({ query: 'Test Buyer 01' });
   });
 
-  it('has none when the buyer has no number', async () => {
-    listCustomerPage.mockResolvedValue({ items: [{ id: 'c1', name: 'Test Buyer 01' }] });
+  it('pages through the search until it finds the buyer', async () => {
+    listCustomerPage
+      .mockResolvedValueOnce({ items: [{ id: 'c9', name: 'Test Buyer 01', contact: '0700 000 099' }], next_cursor: 'n1' })
+      .mockResolvedValueOnce({ items: [{ id: 'c1', name: 'Test Buyer 01', contact: NUMBER }] });
+    page();
+    expect(await screen.findByRole('link', { name: 'Call Test Buyer 01' })).toBeTruthy();
+    expectLinks('Test Buyer 01');
+    expect(listCustomerPage.mock.calls[1]?.[0]).toMatchObject({ query: 'Test Buyer 01', cursor: 'n1' });
+  });
+
+  it('has none when the buyer has no number, once the search has answered', async () => {
+    let answer: (v: unknown) => void = () => undefined;
+    listCustomerPage.mockReturnValue(new Promise((done) => { answer = done; }));
     page();
     await screen.findByRole('heading', { name: 'Test Buyer 01' });
     await vi.waitFor(() => expect(listCustomerPage).toHaveBeenCalled());
+    await act(async () => {
+      answer({ items: [{ id: 'c1', name: 'Test Buyer 01' }] });
+      await new Promise((r) => setTimeout(r, 0));
+    });
     noLinks();
+    expect(screen.queryByText(NUMBER)).toBeNull();
   });
 });
 
@@ -196,5 +214,27 @@ describe('an advance', () => {
     screenOf(<OutstandingView report={report} contactOf={(id) => (id === 'p1' ? NUMBER : undefined)} />);
     expectLinks('Test Owner 01');
     expect(screen.queryByRole('link', { name: 'Call Test Staff 01' })).toBeNull();
+  });
+});
+
+// JUSTIFICATION-A3: two more places a number shows (review of #842); new test cases, not new mechanism.
+describe('a quotation and a customer order', () => {
+  it('offers the links for the buyer of a quotation, and none for one with no number', () => {
+    const q = { id: 'q1', number: 'QT-HQ-000001', branch_id: branch, status: 'cancelled', buyer_name: 'Test Buyer 03', buyer_contact: NUMBER, quote_date: '2026-10-10', valid_until: '2026-10-20', total_minor: 1 };
+    screenOf(<ul><QuotationCard q={q} /></ul>);
+    expectLinks('Test Buyer 03');
+    cleanup();
+    screenOf(<ul><QuotationCard q={{ ...q, buyer_contact: undefined }} /></ul>);
+    noLinks();
+  });
+
+  it('offers the links for the customer of an order, and text only for a number it cannot read', () => {
+    const order = { id: 'o1', order_no: 'ORD-000001', branch_id: branch, status: 'new', source: 'phone', customer_name: 'Test Buyer 04', customer_phone: NUMBER, lines: [] };
+    screenOf(<OrderSummary order={order} />);
+    expectLinks('Test Buyer 04');
+    cleanup();
+    screenOf(<OrderSummary order={{ ...order, customer_phone: UNREADABLE }} />);
+    expect(screen.getByText(UNREADABLE)).toBeTruthy();
+    noLinks();
   });
 });

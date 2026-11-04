@@ -292,16 +292,25 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   const payments = useQuery({ queryKey: ['retail', 'account-payments', customerId], queryFn: () => retail.listAccountPayments(customerId), enabled: allowed });
   const ranged = from !== '' && to !== '' && from <= to;
   const statement = useQuery({ queryKey: ['retail', 'account-statement', customerId, from, to], queryFn: () => retail.customerStatement(customerId, { from, to }), enabled: allowed && ranged });
-  // The buyer's phone (issue #817): the account carries no contact, so it is read from the customer list searched by the name.
+  // The buyer's phone (issue #817): the account carries no contact, so it is read from the customer list searched by the name,
+  // page by page until this buyer is found (a few pages at most: many buyers of one name is rare).
   const buyerName = account.data?.name ?? '';
   const buyer = useQuery({
     queryKey: ['retail', 'account-contact', customerId, buyerName],
-    queryFn: ({ signal }) => retail.listCustomerPage({ query: buyerName, signal }),
+    queryFn: async ({ signal }) => {
+      let cursor: string | undefined;
+      for (let pages = 0; pages < 5; pages++) {
+        const page = await retail.listCustomerPage({ query: buyerName, ...(cursor ? { cursor } : {}), signal });
+        const found = (page.items ?? []).find((c) => c.id === customerId);
+        if (found || !page.next_cursor) return found?.contact ?? null;
+        cursor = page.next_cursor;
+      }
+      return null;
+    },
     enabled: allowed && buyerName !== '',
-    select: (page) => (page.items ?? []).find((c) => c.id === customerId)?.contact,
   });
   useCrumbLabel(account.data?.name);
-  const done =(text: string) => { show(text, 'success'); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
+  const done = (text: string) => { show(text, 'success'); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
   const save = useMutation({
     mutationFn: (form: AccountForm) => retail.setCustomerAccount(customerId, requireVersion(account.data?.version), accountRequest(form)),
     onSuccess: () => done('Credit limit and terms saved'),

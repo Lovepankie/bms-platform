@@ -1950,8 +1950,10 @@ it: **Call** (`tel:+256...`), **Text** (`sms:+256...`) and **WhatsApp** (`https:
 dialler, messages or WhatsApp; the app sends nothing.
 
 - **Where.** A sale (Sales and Credit sales), a credit buyer and a supplier (Credit buyers, Suppliers), a customer who owes
-  (Customer accounts), a buyer's account page (its number is read from the customer list by the buyer's name, since the
-  account carries none), an advance and each party on Who owes (the number saved on the party).
+  (Customer accounts), a buyer's account page (its number is read from the customer list by the buyer's name, paging until
+  that buyer is found, since the account carries none), an advance and each party on Who owes (the number saved on the
+  party), a quotation and a customer order. Lists that show no number (the Credit sales and Advances rows, the pickers) get
+  no links; the sale or advance they open has them.
 - **The number.** It is read with the receipt sender's normaliser (`normalisePhone`): Uganda by default (`07...`, `7...`,
   `256...`, `+256...`), another country with its `+` and code. No number draws no links; a contact it cannot read (a
   landline, an email, a number with digits missing) stays text only, as it was.

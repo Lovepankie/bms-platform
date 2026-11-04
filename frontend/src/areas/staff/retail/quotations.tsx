@@ -17,6 +17,7 @@ import { CustomerPicker } from './customer-picker';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Hint } from '../../../app/ui/Hint';
+import { ContactLinks } from './contact-links';
 
 // Quotations (documents capability, ADR-033, issue #197): prices offered to a buyer until a date. A quotation reserves no stock and
 // posts nothing; it is numbered and its PDF stored like every document, and it can be made into a sale (and its invoice) once,
@@ -67,7 +68,7 @@ export function ConvertPanel({ form, hasTerms, busy, onChange, onConvert }: { fo
 }
 
 /** One quotation: who it is for, until when, what it comes to, its lines, and what can still be done with it. */
-function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string }) {
+export function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const state = quotationState(q);
@@ -111,6 +112,7 @@ function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string })
         <strong>{q.number}</strong> <span className={`badge badge-${state.tone}`}>{state.label}</span>
       </p>
       <p>{q.buyer_name}{q.buyer_contact ? `, ${q.buyer_contact}` : ''}</p>
+      <ContactLinks contact={q.buyer_contact} name={q.buyer_name} />
       <p className="hint">
         {showDate(q.quote_date)}, valid until <strong>{showDate(q.valid_until)}</strong>, <strong>{money(q.total_minor ?? 0)}</strong>{branchName ? `, ${branchName}` : ''}
         {q.price_list ? `, price list ${q.price_list}` : ''}

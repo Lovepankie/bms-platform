@@ -264,15 +264,15 @@ export function OutstandingView({ report, contactOf }: { report: AdvanceReport; 
   return (
     <>
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        {parties.map((p) => (
+        {parties.map((p) => ({ p, contact: contactOf?.(p.party_id) })).map(({ p, contact }) => (
           <li key={p.party_id} className="rt-card">
             <strong>{p.party_name}</strong>
-            {contactOf?.(p.party_id) && <p className="hint">{contactOf(p.party_id)}</p>}
+            {contact && <p className="hint">{contact}</p>}
             <p className="rt-row"><span>Advanced</span><span>{money(p.principal_minor ?? 0)}</span></p>
             <p className="rt-row"><span>Repaid</span><span>{money(p.repaid_minor ?? 0)}</span></p>
             <p className="rt-row"><span>Owes</span><strong>{money(p.balance_minor ?? 0)}</strong></p>
             <p className="hint">{p.count} {p.count === 1 ? 'advance' : 'advances'}, the oldest from {showDate(p.oldest_advance_date)}</p>
-            <ContactLinks contact={contactOf?.(p.party_id)} name={p.party_name} />
+            <ContactLinks contact={contact} name={p.party_name} />
           </li>
         ))}
       </ul>
