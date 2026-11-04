@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute, useNavigate } from '@tanstack/react-router';
+import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
+import { RowChevron } from '../../../app/ui/ListRow';
+import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useRef, useState } from 'react';
 import { businessToday, daysBefore, retail, type Purchase } from '../../../api/retail';
 import { useStaff } from '../context';
@@ -182,3 +184,41 @@ export function RestocksPage() {
 }
 
 export const Route = createLazyRoute('/staff/retail/restocks')({ component: RestocksPage });
+
+// JUSTIFICATION-A3: a supplier's deliveries open one purchase (issue #820); the page is the list's own card, read by id.
+/** One purchase on its own page, the card of the list with its Edit and Correct this purchase. */
+export function PurchasePage({ purchaseId }: { purchaseId: string }) {
+  const [message, setMessage] = useState<string | null>(null);
+  const purchase = useQuery({ queryKey: ['retail', 'restocks', 'one', purchaseId], queryFn: () => retail.getPurchase(purchaseId) });
+  const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
+  const p = purchase.data;
+  useCrumbLabel(p?.purchase_no ? `Purchase ${p.purchase_no}` : undefined);
+  const supplier = (suppliers.data ?? []).find((s) => s.id === p?.supplier_id);
+  return (
+    <Gate screen="restock" title={p?.purchase_no ? `Purchase ${p.purchase_no}` : 'Purchase'}>
+      {message && <Success>{message}</Success>}
+      {purchase.isPending && <p className="loading">Loading</p>}
+      <Problem error={purchase.error} />
+      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="purchase-card">
+        {p && <RestockCard purchase={p} supplier={supplier?.name} onDone={setMessage} />}
+      </ul>
+      <p data-tour="purchase-links">
+        {supplier?.id && (
+          <Link className="link-row" to="/staff/retail/catalogue/suppliers/$supplierId" params={{ supplierId: supplier.id }}>
+            {`More from ${supplier.name}`}<RowChevron />
+          </Link>
+        )}
+        <Link className="link-row" to="/staff/retail/restocks">{WORDS.pastPurchases}<RowChevron /></Link>
+      </p>
+    </Gate>
+  );
+}
+
+const purchaseRoute = getRouteApi('/staff/retail/restocks/$purchaseId');
+
+function PurchaseRoutePage() {
+  const { purchaseId } = purchaseRoute.useParams();
+  return <PurchasePage key={purchaseId} purchaseId={purchaseId} />;
+}
+
+export const PurchaseRoute = createLazyRoute('/staff/retail/restocks/$purchaseId')({ component: PurchaseRoutePage });

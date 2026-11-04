@@ -143,6 +143,8 @@ const retailOrderRoute = retailScreen('/orders/$orderId', 'Order').lazy(() => im
 const retailOrdersReportRoute = retailScreen('/orders-report', 'Delivery fees and cancellations').lazy(() => import('../areas/staff/retail/orders-report').then((m) => m.Route));
 const retailRestockRoute = retailScreen('/restock', WORDS.buyStock).lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
 const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(() => import('../areas/staff/retail/restocks').then((m) => m.Route));
+// One purchase, opened from a supplier's deliveries (issue #820).
+const retailPurchaseRoute = retailScreen('/restocks/$purchaseId', 'Purchase').lazy(() => import('../areas/staff/retail/restocks').then((m) => m.PurchaseRoute));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
 const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage').lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock', 'Stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
@@ -174,7 +176,9 @@ const retailCategoriesRoute = retailScreen('/catalogue/categories', 'Categories'
 // One category with its items and Add an item there (issue #493): under Categories, so the trail reads Catalogue, Categories, then the category.
 const retailCategoryRoute = retailScreen('/catalogue/categories/$categoryId', 'Category').lazy(() => import('../areas/staff/retail/catalogue-category').then((m) => m.CategoryRoute));
 const retailUnitsRoute = retailScreen('/catalogue/units', 'Units').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.UnitsRoute));
-const retailSuppliersRoute = retailScreen('/catalogue/suppliers', 'Suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
+const retailSuppliersRoute = retailScreen('/catalogue/suppliers', 'Suppliers').lazy(() => import('../areas/staff/retail/suppliers').then((m) => m.SuppliersRoute));
+// One supplier with its details and deliveries (issue #820): under Suppliers, so the trail reads Catalogue, Suppliers, then the name.
+const retailSupplierRoute = retailScreen('/catalogue/suppliers/$supplierId', 'Supplier').lazy(() => import('../areas/staff/retail/suppliers').then((m) => m.SupplierRoute));
 // Set up your shop (issue #625): the starting categories, units and packs of a kind of shop, under Catalogue.
 const retailShopSetupRoute = retailScreen('/catalogue/set-up', 'Set up your shop').lazy(() => import('../areas/staff/retail/shop-setup').then((m) => m.ShopSetupRoute));
 const retailImportRoute = retailScreen('/catalogue/import', 'Import items').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
@@ -436,6 +440,7 @@ export const router = createRouter({
         retailOrdersReportRoute,
         retailRestockRoute,
         retailRestocksRoute,
+        retailPurchaseRoute,
         retailUsageRoute,
         retailUsageHistoryRoute,
         retailStockRoute,
@@ -463,6 +468,7 @@ export const router = createRouter({
         retailCategoryRoute,
         retailUnitsRoute,
         retailSuppliersRoute,
+        retailSupplierRoute,
         retailBuyersRoute,
         retailImportRoute,
         retailShopSetupRoute,

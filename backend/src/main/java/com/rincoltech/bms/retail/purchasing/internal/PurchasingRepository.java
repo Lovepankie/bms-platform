@@ -4,6 +4,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.LineBranch;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Purchase;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseLine;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierDetails;
 import com.rincoltech.bms.retail.stock.Quantities;
 import java.math.BigDecimal;
 import java.sql.Date;
@@ -48,22 +49,34 @@ class PurchasingRepository {
     // ---- Suppliers -----------------------------------------------------------------------
 
     void insertSupplier(Supplier s, UUID by) {
+        SupplierDetails d = s.details();
         jdbc.sql("""
-                        INSERT INTO retail_suppliers (id, tenant_id, name, contact, created_by)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?)
-                        """).params(s.id(), s.name(), s.contact(), by).update();
-    }
-
-    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
-    int updateSupplier(UUID id, String name, String contact, boolean active, int expectedVersion) {
-        return jdbc.sql(
-                        "UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
-                .params(name, contact, active, id, expectedVersion)
+                        INSERT INTO retail_suppliers (id, tenant_id, name, contact, created_by, email, address, country, website,
+                            payment_terms, bank_account, supplier_type, notes)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(s.id(), s.name(), s.contact(), by, d.email(), d.address(), d.country(), d.website())
+                .params(d.paymentTerms(), d.bankAccount(), d.supplierType(), d.notes())
                 .update();
     }
 
+    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
+    int updateSupplier(UUID id, String name, String contact, boolean active, SupplierDetails d, int expectedVersion) {
+        return jdbc.sql("""
+                        UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, email = ?, address = ?, country = ?,
+                               website = ?, payment_terms = ?, bank_account = ?, supplier_type = ?, notes = ?,
+                               updated_at = now(), version = version + 1
+                         WHERE id = ? AND version = ?
+                        """)
+                .params(name, contact, active, d.email(), d.address(), d.country(), d.website())
+                .params(d.paymentTerms(), d.bankAccount(), d.supplierType(), d.notes(), id, expectedVersion)
+                .update();
+    }
+
+    /** The supplier with every detail (issue #820) and no last delivery date: the writers' and the checks' read. */
     Optional<Supplier> supplier(UUID id) {
-        return jdbc.sql("SELECT id, name, contact, active, created_at, version FROM retail_suppliers WHERE id = ?")
+        return jdbc.sql("SELECT " + SuppliersRepository.COLUMNS
+                        + ", NULL::date AS last_delivery_on FROM retail_suppliers s WHERE s.id = ?")
                 .param(id)
                 .query(PurchasingRepository::supplier)
                 .optional();
@@ -84,21 +97,8 @@ class PurchasingRepository {
                 .isPresent();
     }
 
-    List<Supplier> suppliers() {
-        return jdbc.sql(
-                        "SELECT id, name, contact, active, created_at, version FROM retail_suppliers ORDER BY lower(name), id")
-                .query(PurchasingRepository::supplier)
-                .list();
-    }
-
     private static Supplier supplier(ResultSet rs, int n) throws SQLException {
-        return new Supplier(
-                rs.getObject("id", UUID.class),
-                rs.getString("name"),
-                rs.getString("contact"),
-                rs.getBoolean("active"),
-                rs.getTimestamp("created_at").toInstant(),
-                rs.getInt("version"));
+        return SuppliersRepository.row(rs, n);
     }
 
     // ---- Purchases -----------------------------------------------------------------------

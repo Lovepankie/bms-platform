@@ -2458,6 +2458,12 @@ under a SHARE lock with a five second `lock_timeout`, as V101.
 ### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 `name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`, `updated_at` (V28).
+V134 (issue #820, ADR-125) adds the optional details, each nullable with no default: `email varchar(254)`, `address
+varchar(300)`, `country varchar(100)`, `website varchar(300)`, `payment_terms varchar(100)`, `bank_account varchar(60)`
+(returned only to holders of `retail.catalogue.manage`), `supplier_type varchar(60)` and `notes varchar(1000)`. The date
+added is `created_at`; the last delivery date is not stored but read as the newest `purchased_on` of the supplier's
+restocks without a `retail_purchase_voids` row, through the new index `retail_purchases_supplier (tenant_id, supplier_id,
+purchased_on DESC, created_at DESC) WHERE supplier_id IS NOT NULL`. Removing a closed business clears the eight details.
 
 ### `retail_purchases`, `retail_purchase_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 

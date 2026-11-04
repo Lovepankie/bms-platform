@@ -25,16 +25,66 @@ final class PurchasingApi {
 
     private PurchasingApi() {}
 
-    @Schema(name = "RetailSupplierRequest")
+    @Schema(name = "RetailSupplierRequest", description = "Every field but the name is optional (issue #820)")
     record SupplierRequest(
             @NotBlank @Size(max = 200) String name,
-            @Size(max = 100) String contact) {}
+            @Size(max = 100) String contact,
+            @Valid SupplierDetails details) {
 
-    @Schema(name = "RetailSupplierUpdate", description = "Omitted fields are unchanged; an empty contact clears it")
+        // JUSTIFICATION-A3: the existing callers and tests send a name and a contact only.
+        SupplierRequest(String name, String contact) {
+            this(name, contact, null);
+        }
+    }
+
+    /**
+     * The optional details of a supplier (issue #820, ADR-125, FR-RET-90), as the owner's old app kept them. In a request an
+     * omitted field is unchanged and an empty one clears it; the email and the website are checked by the service.
+     */
+    @Schema(name = "RetailSupplierDetails")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record SupplierDetails(
+            @Size(max = 254) String email,
+            @Size(max = 300) String address,
+            @Size(max = 100) String country,
+
+            @Size(max = 300) @Schema(description = "A web address, with or without https://")
+            String website,
+
+            @Size(max = 100) @Schema(description = "As typed, for example 30 days")
+            String paymentTerms,
+
+            @Size(max = 60)
+            @Schema(description = "Shown only to those who may edit suppliers (retail.catalogue.manage)")
+            String bankAccount,
+
+            @Size(max = 60) @Schema(description = "A short free label, for example Wholesaler")
+            String supplierType,
+
+            @Size(max = 1000) String notes) {
+
+        static final SupplierDetails NONE = new SupplierDetails(null, null, null, null, null, null, null, null);
+
+        /** These details with the bank account left out, for a reader who may not edit suppliers. */
+        SupplierDetails withoutBankAccount() {
+            return new SupplierDetails(email, address, country, website, paymentTerms, null, supplierType, notes);
+        }
+    }
+
+    @Schema(
+            name = "RetailSupplierUpdate",
+            description = "Omitted fields are unchanged; an empty contact or detail clears it")
     record UpdateSupplierRequest(
             @Size(min = 1, max = 200) String name,
             @Size(max = 100) String contact,
-            Boolean active) {}
+            Boolean active,
+            @Valid SupplierDetails details) {
+
+        // JUSTIFICATION-A3: the existing callers and tests send these three only.
+        UpdateSupplierRequest(String name, String contact, Boolean active) {
+            this(name, contact, active, null);
+        }
+    }
 
     @Schema(name = "RetailSupplier")
     record Supplier(
@@ -42,10 +92,26 @@ final class PurchasingApi {
             String name,
             String contact,
             boolean active,
+
+            @Schema(description = "The date added, set by the server")
             Instant createdAt,
 
             @Schema(description = "Send as If-Match when updating")
-            int version) {}
+            int version,
+
+            // Issue #820: the optional details; the bank account only for those who may edit suppliers.
+            SupplierDetails details,
+
+            @Schema(
+                    description =
+                            "Issue #820: the day of the newest restock from this supplier that is not voided, among"
+                                    + " those the caller may list; never typed")
+            LocalDate lastDeliveryOn) {
+
+        Supplier withDetails(SupplierDetails shown) {
+            return new Supplier(id, name, contact, active, createdAt, version, shown, lastDeliveryOn);
+        }
+    }
 
     @Schema(name = "RetailSupplierList")
     record SupplierList(List<Supplier> items) {}

@@ -2,7 +2,7 @@ import type {
   ApprovalWaiting,
   Barcode,
   AllBranchesRow, Category, EntryConfirmation, EntryNorms, NameHints, CapabilitiesRead, Family, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
-  Supplier, Transfer, Unit, Usage, UsualPackRequest, Valuation, ValuationRow,
+  Supplier, SupplierDelivery, SupplierDetails, Transfer, Unit, Usage, UsualPackRequest, Valuation, ValuationRow,
 } from './retail';
 import type { SalesQuery } from './retail';
 import { NO_SUPPLIER, RetailError, businessToday, daysBefore } from './retail';
@@ -114,6 +114,12 @@ export function setMockProfitAccess(allowed: boolean): void {
   profitAccess = allowed;
 }
 
+let supplierEditAccess = true;
+/** Issue #820: whether the session may edit suppliers, and so read their bank account number. */
+export function setMockSupplierEdit(allowed: boolean): void {
+  supplierEditAccess = allowed;
+}
+
 // Issue #353: the mock keeps no entry history of its own, so no screen warns unless a test or a screenshot sets one here.
 const entryNormsSet = new Map<string, Partial<EntryNorms>>();
 /** Confirmed entry warnings, newest last, for the tests to read. */
@@ -135,6 +141,29 @@ interface MockProduct {
 
 /** The mock's page size for credit buyers, as the API's default limit is 50. */
 const CUSTOMER_PAGE = 50;
+const SUPPLIER_DELIVERY_PAGE = 20;
+
+// JUSTIFICATION-A3: the mock has no supplier details to merge until issue #820; the server's merge rule needs its twin here.
+/**
+ * Issue #820: a supplier's details after a write, as the server leaves them: an omitted field unchanged, an empty one cleared,
+ * a bad email or web address refused in the server's words.
+ */
+function mergedDetails(before: SupplierDetails | undefined, typed: SupplierDetails | undefined): SupplierDetails {
+  const out: Record<string, string> = { ...(before ?? {}) } as Record<string, string>;
+  for (const [key, value] of Object.entries(typed ?? {})) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text === '') delete out[key];
+    else out[key] = text;
+  }
+  if (out.email && out.email !== before?.email && !/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(out.email)) {
+    refuse(422, 'validation_failed', 'That email does not look right. Write it like name@example.com.');
+  }
+  if (out.website && out.website !== before?.website && !/^(https?:\/\/)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(\/\S*)?$/i.test(out.website)) {
+    refuse(422, 'validation_failed', 'That web address does not look right. Write it like example.com.');
+  }
+  return out as SupplierDetails;
+}
 
 const CATEGORIES: Category[] = ['Cables', 'Lighting', 'Fittings', 'Solar'].map((name, i) => ({
   id: `00000000-0000-4000-8000-0000000c${String(i + 1).padStart(4, '0')}`,
@@ -399,6 +428,18 @@ export function createMockRetail(): RetailApi {
     { id: 's0000000-0000-4000-8000-000000000001', name: 'Test Supplier 01', active: true, version: 1 },
     { id: 's0000000-0000-4000-8000-000000000002', name: 'Test Forwarder 01', active: true, version: 1 },
   ];
+  // Issue #820: a supplier's restocks, the newest day first, and the day of the newest one not voided.
+  const deliveriesOf = (id: string): SupplierDelivery[] => purchases
+    .filter((p) => p.supplier_id === id)
+    .sort((a, b) => (b.purchased_on ?? '').localeCompare(a.purchased_on ?? ''))
+    .map((p) => ({ id: p.id, purchase_no: p.purchase_no, purchased_on: p.purchased_on, voided: p.status === 'voided', lines: (p.lines ?? []).length }));
+  const supplierRead = (s: Supplier): Supplier => {
+    const last = deliveriesOf(s.id ?? '').find((d) => !d.voided)?.purchased_on;
+    // The bank account is the editors' alone, as on the server.
+    const { bank_account: bank, ...open } = s.details ?? {};
+    const details = supplierEditAccess && bank ? { ...open, bank_account: bank } : open;
+    return { ...s, details, ...(last ? { last_delivery_on: last } : {}) };
+  };
   const stocktakes = new Map<string, Stocktake>();
   const sales: (Sale & { costTotal: number })[] = [];
   const usageCostByDay = new Map<string, number>();
@@ -1148,13 +1189,36 @@ export function createMockRetail(): RetailApi {
       }));
       return delay({ items, ...(start + CUSTOMER_PAGE < all.length ? { next_cursor: String(start + CUSTOMER_PAGE) } : {}) });
     },
-    listSuppliers: () => delay([...suppliers]),
+    // Issue #820: the search finds a name, a type or the digits of a phone; the last delivery date and the deliveries are read
+    // from the restocks, as the server reads them.
+    listSuppliers: (q) => {
+      const text = (q?.query ?? '').trim().toLowerCase();
+      const digits = text.replace(/\D/g, '').replace(/^(256|0)/, '');
+      return delay(suppliers
+        .filter((s) => !text || (s.name ?? '').toLowerCase().includes(text) || (s.details?.supplier_type ?? '').toLowerCase().includes(text)
+          || (digits.length >= 4 && (s.contact ?? '').replace(/\D/g, '').includes(digits)))
+        .map(supplierRead));
+    },
+    getSupplier: (id) => run(() => {
+      const s = suppliers.find((x) => x.id === id);
+      return s ? supplierRead(s) : refuse(404, 'not_found', 'The resource does not exist.');
+    }),
+    listSupplierDeliveries: (id, { cursor }) => run(() => {
+      if (!suppliers.some((x) => x.id === id)) return refuse(404, 'not_found', 'The resource does not exist.');
+      const all = deliveriesOf(id);
+      const start = cursor ? Number(cursor) : 0;
+      return { items: all.slice(start, start + SUPPLIER_DELIVERY_PAGE), ...(start + SUPPLIER_DELIVERY_PAGE < all.length ? { next_cursor: String(start + SUPPLIER_DELIVERY_PAGE) } : {}) };
+    }),
+    listSupplierTypes: () => delay([...new Set(suppliers.map((s) => s.details?.supplier_type?.trim()).filter((t): t is string => !!t))]),
     createSupplier: (body) =>
       run(() => {
         clash(suppliers as { id: string; name: string }[], '', body.name, 'duplicate_supplier', 'supplier');
-        const s: Supplier = { id: nextId('s'), name: body.name.trim(), active: true, version: 1, ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}) };
+        const s: Supplier = {
+          id: nextId('s'), name: body.name.trim(), active: true, version: 1, created_at: new Date().toISOString(),
+          details: mergedDetails(undefined, body.details), ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}),
+        };
         suppliers.push(s);
-        return s;
+        return supplierRead(s);
       }),
 
     updateSupplier: (id, version, body) =>
@@ -1168,8 +1232,9 @@ export function createMockRetail(): RetailApi {
         }
         if (body.contact !== undefined) s.contact = body.contact.trim() || undefined;
         s.active = body.active ?? s.active;
+        s.details = mergedDetails(s.details, body.details);
         s.version = (s.version ?? 1) + 1;
-        return { ...s };
+        return supplierRead(s);
       }),
 
     createCustomer: (body) =>

@@ -21,7 +21,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseLineR
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchasePage;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
-import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierDetails;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.VoidPurchaseRequest;
@@ -133,7 +133,15 @@ class PurchasingService implements QuickAddPurchase {
 
     @Transactional
     Supplier createSupplier(SupplierRequest r) {
-        Supplier s = new Supplier(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), true, null, 1);
+        Supplier s = new Supplier(
+                UUID.randomUUID(),
+                r.name().trim(),
+                blankToNull(r.contact()),
+                true,
+                null,
+                1,
+                SuppliersService.merged(null, r.details()),
+                null);
         try {
             repo.insertSupplier(s, CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
@@ -159,16 +167,23 @@ class PurchasingService implements QuickAddPurchase {
         if (name.isEmpty()) {
             throw ApiException.validation(List.of(new FieldProblem("name", "invalid", "The name must not be blank.")));
         }
+        SupplierDetails details = SuppliersService.merged(before.details(), r.details());
         Map<String, Object> was = new LinkedHashMap<>();
         Map<String, Object> now = new LinkedHashMap<>();
         change(was, now, "name", before.name(), name);
         change(was, now, "contact_changed", false, !java.util.Objects.equals(before.contact(), contact));
         change(was, now, "active", before.active(), active);
+        // Issue #820: which details changed, never what they hold.
+        List<String> detailsChanged = SuppliersService.changed(before.details(), details);
+        if (!detailsChanged.isEmpty()) {
+            was.put("details_changed", List.of());
+            now.put("details_changed", detailsChanged);
+        }
         if (now.isEmpty()) {
             return before;
         }
         try {
-            if (repo.updateSupplier(id, name, contact, active, expected) == 0) {
+            if (repo.updateSupplier(id, name, contact, active, details, expected) == 0) {
                 throw repo.supplier(id).map(s -> Versions.conflict(s.version())).orElseGet(ApiException::notFound);
             }
         } catch (DuplicateKeyException e) {
@@ -184,11 +199,6 @@ class PurchasingService implements QuickAddPurchase {
             was.put(key, x);
             now.put(key, y);
         }
-    }
-
-    @Transactional(readOnly = true)
-    SupplierList suppliers() {
-        return new SupplierList(repo.suppliers());
     }
 
     // ---- Purchases -----------------------------------------------------------------------

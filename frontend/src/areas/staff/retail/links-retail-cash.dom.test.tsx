@@ -9,7 +9,7 @@ import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 import { DaysList } from './cash-summary';
-import { SuppliersPage } from './catalogue-people';
+import { SuppliersPage } from './suppliers';
 import { CustomerGroups } from './customer-groups';
 
 // The links of the cash book, supplier and customer group pages (issue #336): a figure opens the rows behind it, a supplier its open
@@ -50,7 +50,7 @@ describe('links of the cash summary', () => {
 describe('a supplier on the Suppliers page', () => {
   it('opens its open items, ready to pay', () => {
     show(<SuppliersPage />, (client) =>
-      client.setQueryData(['retail', 'catalogue', 'suppliers', ''], { pages: [{ items: [{ id: 's-1', name: 'Test Supplier 01', active: true, version: 1 }] }], pageParams: [''] }),
+      client.setQueryData(['retail', 'catalogue', 'suppliers', ''], [{ id: 's-1', name: 'Test Supplier 01', active: true, version: 1 }]),
     );
     expect(href('Open items of Test Supplier 01')).toBe('/staff/retail/supplier-payments/new?supplier=s-1');
   });

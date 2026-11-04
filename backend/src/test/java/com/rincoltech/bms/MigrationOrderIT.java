@@ -64,7 +64,12 @@ class MigrationOrderIT {
             // for; named with their table, so a column of that name elsewhere (stock movements' occurred_at) still
             // counts.
             + " AND NOT (table_name = 'retail_sales'"
-            + " AND column_name IN ('client_sale_id', 'occurred_at', 'recorded_offline', 'request_hash'))";
+            + " AND column_name IN ('client_sale_id', 'occurred_at', 'recorded_offline', 'request_hash'))"
+            // V134 (a supplier's details, #820) adds eight nullable columns to retail_suppliers; it answers for them in
+            // supplierDetailsMigrationKeepsEverySupplier.
+            + " AND NOT (table_name = 'retail_suppliers'"
+            + " AND column_name IN ('email', 'address', 'country', 'website', 'payment_terms', 'bank_account',"
+            + " 'supplier_type', 'notes'))";
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
@@ -2980,6 +2985,59 @@ class MigrationOrderIT {
                             .query(String.class)
                             .list())
                     .containsExactly("SELECT");
+        }
+    }
+
+    /**
+     * V134 (issue #820, ADR-125) is expand only: eight nullable columns on retail_suppliers, so a supplier from before keeps
+     * its name, contact, date added and version with every new detail empty, and one index on retail_purchases.
+     * JUSTIFICATION-A3: a new test case; no existing case covers the supplier details.
+     */
+    @Test
+    void supplierDetailsMigrationKeepsEverySupplier() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("134") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            UUID supplier = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v134', 'Test Tenant V134',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            owner.sql("INSERT INTO retail_suppliers (id, tenant_id, name, contact, created_at)"
+                            + " VALUES (?, ?, 'Test Supplier 01', '+256700000001', TIMESTAMPTZ '2026-01-15 09:00+03')")
+                    .params(supplier, tenant)
+                    .update();
+            String kept = "SELECT name || '|' || contact || '|' || created_at::date || '|' || version || '|' || active"
+                    + " FROM retail_suppliers WHERE id = ?";
+            String was = owner.sql(kept).param(supplier).query(String.class).single();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql(kept).param(supplier).query(String.class).single())
+                    .isEqualTo(was);
+            assertThat(owner.sql("SELECT num_nulls(email, address, country, website, payment_terms, bank_account,"
+                                    + " supplier_type, notes) FROM retail_suppliers WHERE id = ?")
+                            .param(supplier)
+                            .query(Integer.class)
+                            .single())
+                    .as("every new detail is empty")
+                    .isEqualTo(8);
+            assertThat(owner.sql("SELECT count(*) FROM information_schema.columns WHERE table_name = 'retail_suppliers'"
+                                    + " AND column_name IN ('email', 'address', 'country', 'website', 'payment_terms',"
+                                    + " 'bank_account', 'supplier_type', 'notes') AND is_nullable = 'YES'")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(8);
+            assertThat(owner.sql("SELECT count(*) FROM pg_indexes WHERE indexname = 'retail_purchases_supplier'")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(1);
         }
     }
 

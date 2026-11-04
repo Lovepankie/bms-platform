@@ -171,6 +171,10 @@ export type SupplierCreditRequest = S['RetailSupplierCreditRequest'];
 export type SupplierCreditLineRequest = S['RetailSupplierCreditLineRequest'];
 export type SupplierCreditPage = S['RetailSupplierCreditList'];
 export type Supplier = S['RetailSupplier'];
+/** Issue #820: a supplier's optional details; `bank_account` only for those who may edit suppliers. */
+export type SupplierDetails = S['RetailSupplierDetails'];
+export type SupplierDelivery = S['RetailSupplierDelivery'];
+export type SupplierDeliveryPage = S['RetailSupplierDeliveryPage'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
 /** `sale_*` and `unit_factor` are present only for a line entered in a pack; `qty` and `unit_price_minor` are always per base unit. */
@@ -515,9 +519,15 @@ export interface RetailApi {
   listCustomers(): Promise<Customer[]>;
   /** The credit buyers screen: server-side search and cursor paging. */
   listCustomerPage(q: { query?: string; cursor?: string; signal?: AbortSignal }): Promise<CustomerPage>;
-  listSuppliers(): Promise<Supplier[]>;
-  createSupplier(body: { name: string; contact?: string }): Promise<Supplier>;
-  updateSupplier(id: string, version: number, body: { name?: string; contact?: string; active?: boolean }): Promise<Supplier>;
+  /** Every supplier, or those `query` finds by name, phone or type (issue #820). */
+  listSuppliers(q?: { query?: string; signal?: AbortSignal }): Promise<Supplier[]>;
+  getSupplier(id: string): Promise<Supplier>;
+  /** The supplier's deliveries (restocks), the newest day first, a page at a time (issue #820). */
+  listSupplierDeliveries(id: string, q: { cursor?: string; signal?: AbortSignal }): Promise<SupplierDeliveryPage>;
+  /** The supplier types already used, the most used first, for the form's suggestions. */
+  listSupplierTypes(): Promise<string[]>;
+  createSupplier(body: { name: string; contact?: string; details?: SupplierDetails }): Promise<Supplier>;
+  updateSupplier(id: string, version: number, body: { name?: string; contact?: string; active?: boolean; details?: SupplierDetails }): Promise<Supplier>;
   createCustomer(body: { name: string; contact?: string }): Promise<Customer>;
   /** The price lists, their items and customer groups (the price_lists capability, issue #195); 404 capability_not_enabled while it is off. */
   listPriceLists(): Promise<PriceList[]>;
@@ -1074,8 +1084,21 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/customers', { params: { query: { query: query || undefined, limit: 50, cursor } }, signal }));
   },
 
-  async listSuppliers() {
-    return unwrap(await api.GET('/api/v1/retail/suppliers')).items ?? [];
+  async listSuppliers(q) {
+    const query = q?.query?.trim();
+    return unwrap(await api.GET('/api/v1/retail/suppliers', { params: { query: { q: query || undefined } }, signal: q?.signal })).items ?? [];
+  },
+
+  async getSupplier(id) {
+    return unwrap(await api.GET('/api/v1/retail/suppliers/{supplier_id}', { params: { path: { supplier_id: id } } }));
+  },
+
+  async listSupplierDeliveries(id, { cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/suppliers/{supplier_id}/deliveries', { params: { path: { supplier_id: id }, query: { cursor: cursor || undefined } }, signal }));
+  },
+
+  async listSupplierTypes() {
+    return unwrap(await api.GET('/api/v1/retail/suppliers/types')).items ?? [];
   },
 
   async createSupplier(body) {

@@ -163,14 +163,32 @@ export const unitsPage: Tour = {
 export const suppliersPage: Tour = {
   id: 'page-suppliers',
   // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 2,
+  // Version 3 adds the search and the supplier's own page (issue #820).
+  version: 3,
   title: 'This page: suppliers',
   audience: (me) => held(me, CATALOGUE) && held(me, PURCHASE),
   autoStart: false,
   page: '/staff/retail/catalogue/suppliers',
   steps: [
-    step({ id: 'add', target: 'person-add', optional: true, title: 'Add a supplier', body: 'Tap here and type the name and a phone number. You pick a supplier when you buy stock.' }),
-    step({ id: 'list', target: 'person-list', title: 'Your suppliers', body: 'Tap Edit to fix a name or phone. Tap Switch off for a supplier you no longer use. Past purchases keep it.' }),
+    step({ id: 'add', target: 'person-add', optional: true, title: 'Add a supplier', body: 'Tap here and type the name. A phone, email, payment terms and the other details are optional. You pick a supplier when you buy stock.' }),
+    step({ id: 'search', target: 'person-search', title: 'Find a supplier', body: 'Type a name, a phone number or a supplier type, such as Wholesaler. The list narrows as you type.' }),
+    step({ id: 'list', target: 'person-list', title: 'Your suppliers', body: 'Each card shows the phone and the last delivery. Tap Call, Text or WhatsApp to reach them. Tap Details and deliveries to see everything about a supplier.' }),
+  ],
+};
+
+// JUSTIFICATION-A3: a page tour for the new supplier page (issue #820), of the same shape as the page tours around it.
+export const supplierPage: Tour = {
+  id: 'page-supplier',
+  version: 1,
+  title: 'This page: one supplier',
+  audience: (me) => held(me, CATALOGUE) && held(me, PURCHASE),
+  autoStart: false,
+  page: '/staff/retail/catalogue/suppliers/$supplierId',
+  steps: [
+    step({ id: 'details', target: 'supplier-details', title: 'The details', body: 'The type, phone, email, address, payment terms and notes, the day the supplier was added and the last delivery. The last delivery comes from your purchases, so you never type it.' }),
+    step({ id: 'contact', target: 'supplier-contact', title: 'Reach them', body: 'Tap Call, Text or WhatsApp for the phone, Email to write, or Website to open their page.' }),
+    step({ id: 'edit', target: 'supplier-edit', optional: true, title: 'Edit or switch off', body: 'Tap Edit to change any detail. Tap Switch off for a supplier you no longer use. Past purchases keep it.' }),
+    step({ id: 'deliveries', target: 'supplier-deliveries', title: 'Deliveries', body: 'Every purchase from this supplier, the newest first. Tap one to open it.' }),
   ],
 };
 
@@ -407,7 +425,7 @@ export const customerAgeingPage: Tour = {
 };
 
 export const RETAIL_CASH_TOURS: readonly Tour[] = [
-  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, categoryPage, unitsPage, suppliersPage, buyersPage, importPage, shopSetupPage, labelsPage,
+  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, categoryPage, unitsPage, suppliersPage, supplierPage, buyersPage, importPage, shopSetupPage, labelsPage,
   bankingPage, bankingReportPage, expensesPage, expensesReportPage, expenseListsPage, withdrawalsPage, advancesPage, cashSummaryPage, savingsPage,
   branchRolesPage, customerGroupsPage, customerAgeingPage,
 ];

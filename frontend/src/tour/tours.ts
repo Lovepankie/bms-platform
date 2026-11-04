@@ -746,6 +746,20 @@ export const restocksPage: Tour = {
   ],
 };
 
+// JUSTIFICATION-A3: a page tour for one purchase, opened from a supplier's deliveries (issue #820); no existing tour covers it.
+export const purchasePage: Tour = {
+  id: 'page-purchase',
+  version: 1,
+  title: 'This page: one purchase',
+  audience: (me) => held(me, RESTOCK),
+  autoStart: false,
+  page: '/staff/retail/restocks/$purchaseId',
+  steps: [
+    { id: 'purchase-card', target: 'purchase-card', module: 'retail', title: 'The purchase', body: 'When it was bought, from whom, how it was paid and the items. Tap Edit or Correct this purchase if it was entered wrongly.' },
+    { id: 'purchase-links', target: 'purchase-links', module: 'retail', title: 'More purchases', body: 'Tap the supplier to see everything bought from them, or Past purchases for all of them.' },
+  ],
+};
+
 // JUSTIFICATION-A3: two page tours of the same shape as stockPage, one per grouped list (issue #328); no existing tour covers these pages.
 // The All sales and Credit sales lists grouped by a chain of levels (issues #328, #341).
 const salesGroupsStep: TourStep = {
@@ -2085,7 +2099,7 @@ export const referralsPage: Tour = {
 
 /** The tours whose screens tours.test.tsx maps one by one; the slices below carry their own test files (test-kit.tsx). */
 export const CORE_TOURS: readonly Tour[] = [
-  adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
+  adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, purchasePage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, wholesaleGroup, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
   purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, notificationsPage, feedbackPage, helpPage, helpArticlePage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,

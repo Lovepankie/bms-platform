@@ -41,23 +41,59 @@ class PurchasingController {
 
     private final PurchasesSummaryService summaryService;
 
-    PurchasingController(PurchasingService service, PurchasesSummaryService summaryService) {
+    private final SuppliersService suppliers;
+
+    PurchasingController(
+            PurchasingService service, PurchasesSummaryService summaryService, SuppliersService suppliers) {
         this.service = service;
         this.summaryService = summaryService;
+        this.suppliers = suppliers;
     }
 
     @GetMapping("/suppliers")
     @RequiresPermission("retail.purchase.create")
-    @Operation(summary = "Suppliers", operationId = "listRetailSuppliers")
-    SupplierList suppliers() {
-        return service.suppliers();
+    @Operation(
+            summary = "Suppliers, or those a search finds by name, type or phone (FR-RET-90)",
+            operationId = "listRetailSuppliers")
+    SupplierList suppliers(@RequestParam(name = "q", required = false) String q) {
+        return suppliers.list(q);
+    }
+
+    // JUSTIFICATION-A3: the supplier page's three reads (issue #820) are one handler each over SuppliersService.
+    @GetMapping("/suppliers/types")
+    @RequiresPermission("retail.purchase.create")
+    @Operation(summary = "The supplier types already used (FR-RET-90)", operationId = "listRetailSupplierTypes")
+    SuppliersApi.SupplierTypes supplierTypes() {
+        return suppliers.types();
+    }
+
+    @GetMapping("/suppliers/{supplier_id}")
+    @RequiresPermission("retail.purchase.create")
+    @Operation(
+            summary = "One supplier with its details and last delivery date (FR-RET-90)",
+            operationId = "getRetailSupplier")
+    ResponseEntity<Supplier> supplier(@PathVariable("supplier_id") UUID id) {
+        Supplier s = suppliers.get(id);
+        return ResponseEntity.ok().eTag(String.valueOf(s.version())).body(s);
+    }
+
+    @GetMapping("/suppliers/{supplier_id}/deliveries")
+    @RequiresPermission("retail.purchase.create")
+    @Operation(
+            summary = "The supplier's deliveries (restocks), the newest day first, paged (FR-RET-90)",
+            operationId = "listRetailSupplierDeliveries")
+    SuppliersApi.DeliveryPage deliveries(
+            @PathVariable("supplier_id") UUID id,
+            @RequestParam(name = "limit", required = false) Integer limit,
+            @RequestParam(name = "cursor", required = false) String cursor) {
+        return suppliers.deliveries(id, limit, cursor);
     }
 
     @PostMapping("/suppliers")
     @RequiresPermission("retail.purchase.create")
-    @Operation(summary = "Add a supplier (FR-RET-06)", operationId = "createRetailSupplier")
+    @Operation(summary = "Add a supplier (FR-RET-06, FR-RET-90)", operationId = "createRetailSupplier")
     ResponseEntity<Supplier> createSupplier(@Valid @RequestBody SupplierRequest request) {
-        Supplier created = service.createSupplier(request);
+        Supplier created = suppliers.get(service.createSupplier(request).id());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(String.valueOf(created.version()))
                 .body(created);
@@ -70,7 +106,7 @@ class PurchasingController {
             @PathVariable("supplier_id") UUID id,
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
             @Valid @RequestBody UpdateSupplierRequest request) {
-        Supplier s = service.updateSupplier(id, ifMatch, request);
+        Supplier s = suppliers.get(service.updateSupplier(id, ifMatch, request).id());
         return ResponseEntity.ok().eTag(String.valueOf(s.version())).body(s);
     }
 

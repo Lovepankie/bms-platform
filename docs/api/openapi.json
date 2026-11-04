@@ -21231,11 +21231,20 @@
             "type" : "string"
           },
           "created_at" : {
+            "description" : "The date added, set by the server",
             "format" : "date-time",
             "type" : "string"
           },
+          "details" : {
+            "$ref" : "#/components/schemas/RetailSupplierDetails"
+          },
           "id" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "last_delivery_on" : {
+            "description" : "Issue #820: the day of the newest restock from this supplier that is not voided, among those the caller may list; never typed",
+            "format" : "date",
             "type" : "string"
           },
           "name" : {
@@ -21856,6 +21865,91 @@
         },
         "required" : [ "reason" ]
       },
+      "RetailSupplierDelivery" : {
+        "description" : "A restock from the supplier; it opens as the restock itself",
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "description" : "How many lines added stock at the branches the caller may read",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "purchase_no" : {
+            "type" : "string"
+          },
+          "purchased_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "RetailSupplierDeliveryPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierDelivery"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierDetails" : {
+        "properties" : {
+          "address" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "bank_account" : {
+            "description" : "Shown only to those who may edit suppliers (retail.catalogue.manage)",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "country" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "email" : {
+            "maxLength" : 254,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "notes" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_terms" : {
+            "description" : "As typed, for example 30 days",
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "supplier_type" : {
+            "description" : "A short free label, for example Wholesaler",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "website" : {
+            "description" : "A web address, with or without https://",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
       "RetailSupplierList" : {
         "properties" : {
           "items" : {
@@ -22216,11 +22310,15 @@
         "required" : [ "reason" ]
       },
       "RetailSupplierRequest" : {
+        "description" : "Every field but the name is optional (issue #820)",
         "properties" : {
           "contact" : {
             "maxLength" : 100,
             "minLength" : 0,
             "type" : "string"
+          },
+          "details" : {
+            "$ref" : "#/components/schemas/RetailSupplierDetails"
           },
           "name" : {
             "maxLength" : 200,
@@ -22312,8 +22410,19 @@
           }
         }
       },
+      "RetailSupplierTypes" : {
+        "description" : "The supplier types already used, the most used first",
+        "properties" : {
+          "items" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "RetailSupplierUpdate" : {
-        "description" : "Omitted fields are unchanged; an empty contact clears it",
+        "description" : "Omitted fields are unchanged; an empty contact or detail clears it",
         "properties" : {
           "active" : {
             "type" : "boolean"
@@ -22322,6 +22431,9 @@
             "maxLength" : 100,
             "minLength" : 0,
             "type" : "string"
+          },
+          "details" : {
+            "$ref" : "#/components/schemas/RetailSupplierDetails"
           },
           "name" : {
             "maxLength" : 200,
@@ -47695,6 +47807,14 @@
     "/api/v1/retail/suppliers" : {
       "get" : {
         "operationId" : "listRetailSuppliers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
         "responses" : {
           "200" : {
             "content" : {
@@ -47707,7 +47827,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Suppliers",
+        "summary" : "Suppliers, or those a search finds by name, type or phone (FR-RET-90)",
         "tags" : [ "retail-purchasing" ]
       },
       "post" : {
@@ -47734,11 +47854,56 @@
             "description" : "OK"
           }
         },
-        "summary" : "Add a supplier (FR-RET-06)",
+        "summary" : "Add a supplier (FR-RET-06, FR-RET-90)",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/suppliers/types" : {
+      "get" : {
+        "operationId" : "listRetailSupplierTypes",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierTypes"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The supplier types already used (FR-RET-90)",
         "tags" : [ "retail-purchasing" ]
       }
     },
     "/api/v1/retail/suppliers/{supplier_id}" : {
+      "get" : {
+        "operationId" : "getRetailSupplier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "supplier_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplier"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One supplier with its details and last delivery date (FR-RET-90)",
+        "tags" : [ "retail-purchasing" ]
+      },
       "patch" : {
         "operationId" : "updateRetailSupplier",
         "parameters" : [ {
@@ -47780,6 +47945,49 @@
           }
         },
         "summary" : "Edit or deactivate a supplier (#146); never deleted",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/suppliers/{supplier_id}/deliveries" : {
+      "get" : {
+        "operationId" : "listRetailSupplierDeliveries",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "supplier_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierDeliveryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The supplier's deliveries (restocks), the newest day first, paged (FR-RET-90)",
         "tags" : [ "retail-purchasing" ]
       }
     },

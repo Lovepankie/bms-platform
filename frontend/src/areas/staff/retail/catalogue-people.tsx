@@ -5,12 +5,10 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Customer, type Supplier } from '../../../api/retail';
-import { useStaff } from '../context';
 import { BuyerAccount } from './buyer-account';
 import { BuyerPricing } from './buyer-pricing';
 import { AddPanel } from './catalogue';
 import { ContactLinks } from './contact-links';
-import { canUse } from './permissions';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, changeFailureText, money, requireVersion, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
@@ -195,19 +193,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   );
 }
 
-export function SuppliersPage() {
-  const { me } = useStaff();
-  return (
-    <Gate screen="suppliers" title="Suppliers">
-      <PeopleList
-        noun="supplier" plural="suppliers" queryKey="suppliers"
-        list={() => retail.listSuppliers().then((items) => ({ items }))} create={(b) => retail.createSupplier(b)}
-        update={(id, v, b) => retail.updateSupplier(id, v, b)}
-        canAdd={canUse(me, 'suppliers')} canSwitch
-      />
-    </Gate>
-  );
-}
+// Suppliers have their own list and page with their details and deliveries (issue #820): suppliers.tsx.
 
 export function BuyersPage() {
   return (
@@ -223,5 +209,4 @@ export function BuyersPage() {
   );
 }
 
-export const SuppliersRoute = createLazyRoute('/staff/retail/catalogue/suppliers')({ component: SuppliersPage });
 export const BuyersRoute = createLazyRoute('/staff/retail/catalogue/buyers')({ component: BuyersPage });

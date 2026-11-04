@@ -7857,11 +7857,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Suppliers */
+        /** Suppliers, or those a search finds by name, type or phone (FR-RET-90) */
         get: operations["listRetailSuppliers"];
         put?: never;
-        /** Add a supplier (FR-RET-06) */
+        /** Add a supplier (FR-RET-06, FR-RET-90) */
         post: operations["createRetailSupplier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/suppliers/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The supplier types already used (FR-RET-90) */
+        get: operations["listRetailSupplierTypes"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7875,7 +7892,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** One supplier with its details and last delivery date (FR-RET-90) */
+        get: operations["getRetailSupplier"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7883,6 +7901,23 @@ export interface paths {
         head?: never;
         /** Edit or deactivate a supplier (#146); never deleted */
         patch: operations["updateRetailSupplier"];
+        trace?: never;
+    };
+    "/api/v1/retail/suppliers/{supplier_id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The supplier's deliveries (restocks), the newest day first, paged (FR-RET-90) */
+        get: operations["listRetailSupplierDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/retail/suppliers/{supplier_id}/open-items": {
@@ -18962,10 +18997,19 @@ export interface components {
         RetailSupplier: {
             active?: boolean;
             contact?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date added, set by the server
+             */
             created_at?: string;
+            details?: components["schemas"]["RetailSupplierDetails"];
             /** Format: uuid */
             id?: string;
+            /**
+             * Format: date
+             * @description Issue #820: the day of the newest restock from this supplier that is not voided, among those the caller may list; never typed
+             */
+            last_delivery_on?: string;
             name?: string;
             /**
              * Format: int32
@@ -19293,6 +19337,38 @@ export interface components {
         RetailSupplierCreditVoidRequest: {
             reason: string;
         };
+        /** @description A restock from the supplier; it opens as the restock itself */
+        RetailSupplierDelivery: {
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int32
+             * @description How many lines added stock at the branches the caller may read
+             */
+            lines?: number;
+            purchase_no?: string;
+            /** Format: date */
+            purchased_on?: string;
+            voided?: boolean;
+        };
+        RetailSupplierDeliveryPage: {
+            items?: components["schemas"]["RetailSupplierDelivery"][];
+            next_cursor?: string;
+        };
+        RetailSupplierDetails: {
+            address?: string;
+            /** @description Shown only to those who may edit suppliers (retail.catalogue.manage) */
+            bank_account?: string;
+            country?: string;
+            email?: string;
+            notes?: string;
+            /** @description As typed, for example 30 days */
+            payment_terms?: string;
+            /** @description A short free label, for example Wholesaler */
+            supplier_type?: string;
+            /** @description A web address, with or without https:// */
+            website?: string;
+        };
         RetailSupplierList: {
             items?: components["schemas"]["RetailSupplier"][];
         };
@@ -19472,8 +19548,10 @@ export interface components {
         RetailSupplierPaymentReverseRequest: {
             reason: string;
         };
+        /** @description Every field but the name is optional (issue #820) */
         RetailSupplierRequest: {
             contact?: string;
+            details?: components["schemas"]["RetailSupplierDetails"];
             name: string;
         };
         /** @description What happened with one supplier between from and to, with the running balance (issue #557) */
@@ -19527,10 +19605,15 @@ export interface components {
             /** Format: uuid */
             source_id?: string;
         };
-        /** @description Omitted fields are unchanged; an empty contact clears it */
+        /** @description The supplier types already used, the most used first */
+        RetailSupplierTypes: {
+            items?: string[];
+        };
+        /** @description Omitted fields are unchanged; an empty contact or detail clears it */
         RetailSupplierUpdate: {
             active?: boolean;
             contact?: string;
+            details?: components["schemas"]["RetailSupplierDetails"];
             name?: string;
         };
         /** @description Issue #395: the pack sizes and price list prices copied to new sizes, and the prices that were not */
@@ -35242,7 +35325,9 @@ export interface operations {
     };
     listRetailSuppliers: {
         parameters: {
-            query?: never;
+            query?: {
+                q?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -35284,6 +35369,48 @@ export interface operations {
             };
         };
     };
+    listRetailSupplierTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierTypes"];
+                };
+            };
+        };
+    };
+    getRetailSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
     updateRetailSupplier: {
         parameters: {
             query?: never;
@@ -35308,6 +35435,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
+    listRetailSupplierDeliveries: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierDeliveryPage"];
                 };
             };
         };
