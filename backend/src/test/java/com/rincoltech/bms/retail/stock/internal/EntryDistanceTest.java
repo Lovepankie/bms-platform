@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.within;
 import com.rincoltech.bms.retail.stock.EntryLocations.Fix;
 import org.junit.jupiter.api.Test;
 
-/** Issue #826 (ADR-122; FR-RET-86): the haversine distance, rounded as people say it, and the checks on a location. */
+/** Issue #826 (ADR-122; FR-RET-87): the haversine distance, rounded as people say it, and the checks on a location. */
 class EntryDistanceTest {
 
     static String said(double metres) {

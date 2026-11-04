@@ -27,7 +27,7 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Issue #826 (ADR-122; FR-RET-86): a sale, online or offline, and a usage or damage entry keep where the phone was when it
+ * Issue #826 (ADR-122; FR-RET-87): a sale, online or offline, and a usage or damage entry keep where the phone was when it
  * said; nothing is refused without it; the owner reads the distance from the shop in plain words, never the coordinates; a
  * seller reads nothing; one business never sees another's. Every place and figure is fabricated.
  */

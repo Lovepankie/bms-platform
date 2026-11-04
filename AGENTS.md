@@ -893,7 +893,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   fewer than two shops would be listed. My stock lists the shops on each card and in the In stock cell, "In stock here" first; the Switch to
   button of #728 is gone. Tests: `RetailAllShopsStockIT`, `RetailAllShopsStockReadsIT`, `all-shops-stock.dom.test.tsx`, `where-is-my-stock.dom.test.tsx`,
   `layout/my-stock.layout.test.ts`.
-- **Built (where each sale and usage entry is made, issue #826, ADR-122, FR-RET-86):** migration `V132`
+- **Built (where each sale and usage entry is made, issue #826, ADR-122, FR-RET-87):** migration `V132`
   (`retail_entry_locations`, `retail_shop_locations`) and the permission `retail.entry_location.read` (the administrator's).
   `POST /retail/sales` (online and from the outbox) and `POST /retail/usage` take an optional `location` (422 out of range,
   never refused without it, left out of every key and fingerprint) recorded through the `retail.stock` port `EntryLocations`.
