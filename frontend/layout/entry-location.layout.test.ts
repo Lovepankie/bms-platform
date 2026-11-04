@@ -36,6 +36,10 @@ describe('entry location at 412px (#826)', () => {
       // docs/ui-rules.md rule 12: every tap target is at least 48px high.
       expect(box!.height).toBeGreaterThanOrEqual(48);
     }
+    // Rule 12 (#833): the question's two buttons stand at least 8px apart, side by side or stacked.
+    const [allow, decline] = [await buttons[0]!.boundingBox(), await buttons[1]!.boundingBox()];
+    const apart = Math.max(decline!.x - (allow!.x + allow!.width), decline!.y - (allow!.y + allow!.height));
+    expect(apart).toBeGreaterThanOrEqual(8);
     const where = page.getByTestId('sale-where');
     expect(await where.textContent()).toBe('Where: 3.2 km from the shop, the phone sure to about 30 m');
     const box = await where.boundingBox();

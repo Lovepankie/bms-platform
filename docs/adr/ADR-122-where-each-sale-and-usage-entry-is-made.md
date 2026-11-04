@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (issue #826, asked for by the business owner in July 2026; FR-RET-86). Builds on ADR-067 (sales made offline), ADR-017
+Accepted (issue #826, asked for by the business owner in July 2026; FR-RET-87). Builds on ADR-067 (sales made offline), ADR-017
 (branch scope) and ADR-090 (removing a closed business). Migration `V132`, numbered after the open claim of `V131` (#831);
 renumbered at merge if the order changes.
 
