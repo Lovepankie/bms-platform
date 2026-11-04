@@ -41,11 +41,16 @@ final class TransferApi {
             @NotNull @Schema(description = "The destination branch; any active branch of the tenant")
             UUID toBranchId,
 
-            @Schema(description = "Defaults to today; not in the future")
+            @Schema(
+                    description = "Defaults to today; not in the future, and before today only from a holder of"
+                            + " retail.entry.backdate at the source branch, with date_reason (ADR-120)")
             LocalDate transferDate,
 
             @Size(max = 300) String note,
-            @NotEmpty @Size(max = 200) List<@Valid @NotNull TransferLineRequest> lines) {}
+            @NotEmpty @Size(max = 200) List<@Valid @NotNull TransferLineRequest> lines,
+
+            @Size(max = 300) @Schema(description = "Why the move has a date before today; needed then (ADR-120)")
+            String dateReason) {}
 
     @Schema(name = "RetailTransferLine")
     record TransferLine(
