@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/client';
 import { mockMe } from '../api/retail-mock';
 import { setAccessToken } from '../auth/session';
-import { forgetReads, othersOnPhone, summaries, useOfflineSupport, type OfflineServices } from './offline-context';
+import { ENTRY_PERMISSIONS, forgetReads, othersOnPhone, summaries, useOfflineSupport, type OfflineServices } from './offline-context';
 import { accessOf } from './read-cache';
 import { provisionalNumber, type OutboxItem } from './outbox';
 import { memoryStore, scopeOf, type OfflineStore } from './store';
@@ -170,7 +170,8 @@ describe('a shared phone', () => {
     expect(client.getQueryData(['retail', 'home', 'all'])).toBeUndefined();
     cleanup();
 
-    const watcher: Me = { ...seller, permissions: (seller.permissions ?? []).filter((p) => p !== 'retail.sale.create') };
+    // Issue #812: the daily forms kept offline give offline support too, so the watcher holds none of them either.
+    const watcher: Me = { ...seller, permissions: (seller.permissions ?? []).filter((p) => p !== 'retail.sale.create' && !ENTRY_PERMISSIONS.includes(p)) };
     await store.putReadCache(scopeOf(HOST, 'u1'), copy(accessOf(watcher)));
     const { result } = renderHook(() => useOfflineSupport(watcher, false, services(store, async () => {}), client));
     expect(result.current).toBeNull();
@@ -200,7 +201,7 @@ describe('a shared phone', () => {
     const { rerender, result } = renderHook(({ who }) => useOfflineSupport(who, false, make, client), { initialProps: { who: seller } });
     await waitFor(() => expect(result.current).not.toBeNull());
     await client.fetchQuery({ queryKey: ['retail', 'stock', 'b1'], queryFn: async () => ({ items: ['Test item of a branch taken away'] }) });
-    rerender({ who: { ...seller, permissions: (seller.permissions ?? []).filter((p) => p !== 'retail.sale.create') } });
+    rerender({ who: { ...seller, permissions: (seller.permissions ?? []).filter((p) => p !== 'retail.sale.create' && !ENTRY_PERMISSIONS.includes(p)) } });
     expect(result.current).toBeNull();
     await waitFor(() => expect(client.getQueryData(['retail', 'stock', 'b1'])).toBeUndefined());
   });

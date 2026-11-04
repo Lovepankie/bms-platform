@@ -15,6 +15,7 @@ import { showDate } from './transfers';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { KeyFigure } from '../../../app/ui/KeyFigure';
+import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Daily savings (FR-RET-18 to FR-RET-20): per shop per day. The server suggests half the day's profit; a
 // caller without retail.profit.read never sees the profit, the suggestion or any amount, and sends none:
@@ -59,7 +60,7 @@ export function showInRecords(client: QueryClient, saved: Savings) {
 export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Savings) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish, discard } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), ...EMPTY });
+  const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), ...EMPTY });
   // A draft restored with an amount shows its problem at once; a fresh form waits for blur (rule 10).
   const [touched, setTouched] = useState(() => draft.amount.trim() !== '');
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -68,24 +69,38 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   // Issue #799: a seller without the till goes through the sales staff routes while the owner's switch is on.
   const salesStaff = savesAsSalesStaff(me);
   // The sales staff route has its own cache entry, so a till answer (or a 403) cached under one is never served for the other.
-  const suggestionKey = ['retail', 'savings-suggestion', branchId, entry.day, ...(salesStaff ? [SALES_STAFF_KEY] : [])];
-  const suggestion = useQuery({ queryKey: suggestionKey, queryFn: () => retail.savingsSuggestion({ branchId, date: entry.day, salesStaff }) });
+  // Issue #812: offline, or when the network drops, the savings are kept on the phone with the suggestion's token. Offline the
+  // entry is dated today, so today's figures and token are used whatever day the draft held (review of #839).
+  const entries = useEntrySave();
+  const day = entries.offlineMode ? businessToday() : entry.day;
+  const suggestionKey = ['retail', 'savings-suggestion', branchId, day, ...(salesStaff ? [SALES_STAFF_KEY] : [])];
+  const suggestion = useQuery({ queryKey: suggestionKey, queryFn: () => retail.savingsSuggestion({ branchId, date: day, salesStaff }) });
   const s = suggestion.data;
   const profitView = seesAmounts(s);
   // ADR-115: the server says whether this caller may change the amount (the owner's setting before the day is saved, or the
   // overwrite permission); an older server without the flag leaves it to the permission.
   const canOverwrite = s?.may_change_amount ?? holds(me, SAVINGS_OVERWRITE);
   const reason = reasonText(draft.reason, draft.other ?? '');
-  const plan = s ? planSavings({ branchId, date: entry.day, sent: entry.sent, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
+  const plan = s ? planSavings({ branchId, date: day, sent: entry.sent, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => {
       if (!plan) throw new Error('The suggestion has not loaded');
-      return retail.createSavings(plan.request, key, { salesStaff });
+      return entries.save(
+        {
+          kind: 'savings', path: salesStaff ? '/api/v1/retail/savings/sales-staff' : undefined, body: plan.request, key, branchId,
+          amountMinor: plan.request.amount_minor, fix: { to: '/staff/retail/savings', draftName: name, draft },
+        },
+        () => retail.createSavings(plan.request, key, { salesStaff }),
+      );
     },
     meta: { success: (saved: Savings) => (saved?.amount_minor != null ? `Savings of ${money(saved.amount_minor)} saved` : 'Savings for the day saved') },
     onSuccess: (saved) => {
+      if (isKept(saved)) {
+        discard();
+        return;
+      }
       finish();
       showInRecords(queryClient, saved);
       // The day is saved: its suggestion goes and only the saved amount stays (issue #799), before the refetch says the same.
@@ -109,10 +124,13 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   // Validation shows on blur (docs/ui-rules.md rule 10) or when Save is pressed; the cap never waits for the server.
   const showProblem = touched && plan?.problem != null && draft.amount.trim() !== '' && !(plan.overwrite && !canOverwrite);
 
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); setTouched(true); if (!blocked) save.mutate(); }}>
+      {entries.offlineMode && <OfflineFormNote what="savings record" />}
+      {entries.offlineMode && !s && <Note>The day's figures are not saved on this phone. Open Savings once while online to save them.</Note>}
       {/* Issue #799: sales staff open days of this month only; the server refuses an earlier one too. */}
-      <DateField id="savings-date" label="Date" entry={entry} value={entry.day} reason={draft.dateReason} min={salesStaff ? `${businessToday().slice(0, 8)}01` : undefined} onChange={(date) => { update({ date, ...EMPTY }); setTouched(false); }} onReason={(dateReason) => update({ dateReason })} />
+      {!entries.offlineMode && <DateField id="savings-date" label="Date" entry={entry} value={entry.day} reason={draft.dateReason} min={salesStaff ? `${businessToday().slice(0, 8)}01` : undefined} onChange={(date) => { update({ date, ...EMPTY }); setTouched(false); }} onReason={(dateReason) => update({ dateReason })} />}
       {suggestion.isError && <Problem error={suggestion.error} />}
       {suggestion.isPending && <p className="loading">Loading</p>}
       {s && (

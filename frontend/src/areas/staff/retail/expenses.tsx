@@ -21,6 +21,8 @@ import { showDate } from './transfers';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { AddByName, EmptyChoice, showsEmptyChoice, type AddInline, type ChoiceAdd } from '../../../app/ui/EmptyChoice';
 import { addOn } from './screen-link';
+import type { Kept } from '../../../offline/entries';
+import { EditNeedsInternet, KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Company expenses (FR-RET-24): shop, date, category, then an item of that category, an optional
 // beneficiary, the amount, and an explanation when the item needs one. A receipt photo is not offered yet:
@@ -38,7 +40,7 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
 }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish } = usePersistedDraft<ExpenseDraft>(replaces ? `expense-edit:${me.user_id ?? ''}:${replaces.id ?? ''}` : `expense:${me.user_id ?? ''}:${branchId}`, replaces ? draftOfExpense(replaces) : {
+  const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<ExpenseDraft>(replaces ? `expense-edit:${me.user_id ?? ''}:${replaces.id ?? ''}` : `expense:${me.user_id ?? ''}:${branchId}`, replaces ? draftOfExpense(replaces) : {
     date: businessToday(), categoryId: '', itemId: '', partyId: '', amount: '', explanation: '',
   });
   const categories = useQuery({ queryKey: ['retail', 'expense-categories', true], queryFn: () => retail.listExpenseCategories({ activeOnly: true }) });
@@ -46,15 +48,26 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
   const list = categories.data ?? [];
   const items = itemsOf(list, draft.categoryId);
   const explain = needsExplanation(list, draft.categoryId, draft.itemId);
-  const entry = useEntryDate(branchId, draft.date, draft.dateReason);
+  // Issue #812: offline, or when the network drops, a new expense is kept on the phone; an edit stays online only. Offline the
+  // phone dates it and no date box shows, so a draft's earlier day never holds the save (second review of #839).
+  const entries = useEntrySave();
+  const entry = useEntryDate(branchId, entries.offlineMode ? businessToday() : draft.date, draft.dateReason);
   const plan = planExpense({ branchId, ...draft, entry }, list);
+  const detail = [list.find((c) => c.id === draft.categoryId)?.name, items.find((i) => i.id === draft.itemId)?.name].filter(Boolean).join(', ');
   // success-screen: the Saved panel replaces the form; one that waits for approval says so on the form instead; an edited one (issue #830) closes its form
   const save = useMutation({
     // Edit (issue #830): one call voids the old expense and saves this one naming it, in one transaction on the server, so any
     // refusal (an amount that would wait for an administrator, an item switched off) leaves the old expense as it was.
-    mutationFn: async (): Promise<Expense | ApprovalWaiting> => (replaces?.id ? retail.replaceExpense(replaces.id, plan.request, key) : retail.createExpense(plan.request, key)),
+    mutationFn: async (): Promise<Expense | ApprovalWaiting | Kept> => (replaces?.id ? retail.replaceExpense(replaces.id, plan.request, key) : entries.save(
+      { kind: 'expense', body: plan.request, key, branchId, detail, amountMinor: plan.request.amount_minor, fix: { to: '/staff/retail/expenses', draftName: name, draft } },
+      () => retail.createExpense(plan.request, key),
+    )),
     meta: { success: (saved: Expense) => (isWaiting(saved) ? null : `Expense${saved.amount_minor != null ? ` of ${money(saved.amount_minor)}` : ''} ${replaces ? 'updated' : 'saved'}`) },
     onSuccess: (saved) => {
+      if (isKept(saved)) {
+        discard();
+        return;
+      }
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       // ADR-091: an expense worth the business's amount waits for an administrator and is not in the cash book until then.
@@ -79,10 +92,13 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
     },
     onAdded: () => undefined,
   } : null;
-  const blocked = plan.problem !== null || save.isPending;
+  const editOffline = replaces !== undefined && entries.offlineMode;
+  const blocked = plan.problem !== null || save.isPending || editOffline;
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
-      <DateField id="expense-date" label="Date" entry={entry} value={entry.day} reason={draft.dateReason} onChange={(date) => update({ date })} onReason={(dateReason) => update({ dateReason })} />
+      {editOffline ? <EditNeedsInternet /> : entries.offlineMode && <OfflineFormNote what="expense" />}
+      {!entries.offlineMode && <DateField id="expense-date" label="Date" entry={entry} value={entry.day} reason={draft.dateReason} onChange={(date) => update({ date })} onReason={(dateReason) => update({ dateReason })} />}
 
       {showsEmptyChoice(categories, categories.data && activeCategories(list)) ? (
         <EmptyChoice id="expense-category" label="Category" load={categories} text="No expense categories yet." ask="Ask the owner to add expense categories first."

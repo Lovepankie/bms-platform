@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rincoltech.bms.retail.stock.EntryLocations;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -46,7 +47,18 @@ final class UsageApi {
 
             @Valid
             @Schema(description = "ADR-122: where the phone was; optional, the entry is never refused without it")
-            EntryLocations.Fix location) {}
+            EntryLocations.Fix location,
+
+            @Valid OfflineEntry offline) {
+
+        /**
+         * What the Idempotency-Key covers: the request without where the phone was (ADR-122: a retry from a phone that has
+         * moved is the same request) and without its offline block (ADR-067 decision 13).
+         */
+        UsageRequest forKey() {
+            return new UsageRequest(branchId, kind, reason, occurredOn, lines, null, null);
+        }
+    }
 
     @Schema(name = "RetailUsageLine")
     record UsageLine(

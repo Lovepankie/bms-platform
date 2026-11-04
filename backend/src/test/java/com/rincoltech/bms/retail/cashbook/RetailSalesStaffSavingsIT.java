@@ -153,6 +153,83 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
         assertThat(body.has("day_expenses_minor")).isFalse();
     }
 
+    // JUSTIFICATION-A3: the review of #839 asks for the sales staff route kept offline to be proven; one new test, its
+    // setup reused.
+    /**
+     * Issue #812 (ADR-067 decision 13): savings kept on a seller's phone offline go through the sales staff route, dated by when
+     * they were made; the date sent with them is not used, and the same key sent again records nothing more.
+     */
+    @Test
+    void savingsKeptOfflineThroughTheSalesStaffRouteAreDatedWhenMadeAndRecordedOnce() {
+        theSwitch(true);
+        JsonNode s = suggestion(seller, hq, today).getBody();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branch_id", hq);
+        // The phone's stale idea of the day, which an entry kept offline does not use.
+        body.put("business_date", today.withDayOfMonth(1).toString());
+        body.put("suggestion_token", s.get("suggestion_token").asString());
+        body.put(
+                "offline",
+                Map.of(
+                        "occurred_at",
+                        java.time.Instant.now().minusSeconds(300).toString(),
+                        "online_as_of",
+                        java.time.Instant.now().minusSeconds(900).toString()));
+        String key = UUID.randomUUID().toString();
+        ResponseEntity<JsonNode> saved =
+                api.call(HttpMethod.POST, SALES_STAFF, body, seller, Map.of("Idempotency-Key", key));
+        assertThat(saved.getStatusCode()).as("%s", saved.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(saved.getBody().get("business_date").asString()).isEqualTo(today.toString());
+        ResponseEntity<JsonNode> again =
+                api.call(HttpMethod.POST, SALES_STAFF, body, seller, Map.of("Idempotency-Key", key));
+        assertThat(RetailTestSupport.id(again)).isEqualTo(RetailTestSupport.id(saved));
+    }
+
+    /**
+     * Third review of #839: savings kept offline on a day whose till was closed (its cash banked) are the owner's; a seller
+     * on the sales staff route is refused with the words the phone shows. JUSTIFICATION-A3: the review asks for this route.
+     */
+    @Test
+    void savingsKeptOfflineOnAClosedDayAreRefusedForASeller() {
+        theSwitch(true);
+        LocalDate yesterday = today.minusDays(1);
+        Map<String, Object> banking = new LinkedHashMap<>();
+        banking.put("branch_id", hq);
+        banking.put("business_date", yesterday.toString());
+        banking.put("amount_minor", 1_000);
+        assertThat(cb.api
+                        .postKeyed(
+                                "/bankings",
+                                banking,
+                                ALL,
+                                "*",
+                                UUID.randomUUID().toString())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        java.time.Instant made =
+                yesterday.atTime(12, 0).atZone(BusinessClock.DEFAULT_ZONE).toInstant();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branch_id", hq);
+        body.put("suggestion_token", "test-token");
+        body.put(
+                "offline",
+                Map.of(
+                        "occurred_at",
+                        made.toString(),
+                        "online_as_of",
+                        made.minusSeconds(3600).toString()));
+        ResponseEntity<JsonNode> refused = api.call(
+                HttpMethod.POST,
+                SALES_STAFF,
+                body,
+                seller,
+                Map.of("Idempotency-Key", UUID.randomUUID().toString()));
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(refused.getBody().toString())
+                .contains("offline_day_closed")
+                .contains("That day's till is closed. Ask the owner to enter it.");
+    }
+
     /**
      * ADR-120 (issue #811): a seller saves today's savings only; an earlier day of the month is the owner's, a reason or not.
      * JUSTIFICATION-A3: a new test case asked for by the review of #831; no existing test covers this route's date.

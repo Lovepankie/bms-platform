@@ -47,6 +47,11 @@ asked, months ago, that the app set the date, and that only the owner may put an
    approver is not asked for the permission again, and the audit row is written when the expense is recorded.
 7. **Not changed.** Sales are dated by the server online and keep the time they were made offline (ADR-067). The receipt date
    of a goods receipt, a supplier payment's `paid_on` and imports of the old app's history are outside this decision.
+   Amended by issue #812 (ADR-067 decision 13): an expense, savings, banking, withdrawal, Buy stock, Move stock or usage or damage kept on
+   the phone offline carries `offline.occurred_at` and is dated the day it was made, as an offline sale is, without this
+   check, since the phone dated it and the person did not choose it; one made more than 7 days ago needs
+   `retail.entry.backdate` at every branch it touches, as decision 2 does, and is otherwise refused; so does a cash book
+   entry or a delivery paid in cash or by mobile money that lands on a day whose till was closed (its cash banked). A time sent with an offline banking or withdrawal is not used.
 
 ## Consequences
 

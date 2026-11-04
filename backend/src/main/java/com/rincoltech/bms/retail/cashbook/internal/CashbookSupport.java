@@ -7,7 +7,9 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
+import com.rincoltech.bms.retail.stock.ClosedTills;
 import com.rincoltech.bms.retail.stock.EntryDates;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -15,6 +17,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -31,7 +34,7 @@ import org.springframework.stereotype.Component;
  * token. No permission is checked here except the profit gate's question.
  */
 @Component
-class CashbookSupport {
+class CashbookSupport implements ClosedTills {
 
     static final String READ = "retail.cashbook.read";
     static final String SAVINGS_RECORD = "retail.savings.record";
@@ -106,8 +109,57 @@ class CashbookSupport {
         return clock.now();
     }
 
+    ZoneId zone() {
+        return tenant.profile().timezone();
+    }
+
     String currency() {
         return tenant.profile().currency();
+    }
+
+    /**
+     * The date of a new entry that may have been kept on the phone offline (ADR-067 decision 13): offline, the day it was
+     * made, judged as an offline sale is, with no backdate of ADR-120 to check, since the person did not choose it (past 7
+     * days {@link OfflineEntry} asks for the owner's backdate permission itself); otherwise
+     * {@link #entryDate(LocalDate, String, String, UUID)}.
+     */
+    Dated entryDate(LocalDate requested, String field, String reason, UUID branch, OfflineEntry offline) {
+        if (offline == null) {
+            return entryDate(requested, field, reason, branch);
+        }
+        return new Dated(offlineDay(offline, requested, field, branch), null, offline);
+    }
+
+    /**
+     * The day of a cash book entry kept on the phone offline (ADR-067 decision 13): the day it was made, judged as an offline
+     * sale is, and never a closed day for anyone but the owner (review of #839). Retail has no till-close record: "Can close
+     * the till and do the banking" closes a day by banking it, so a day before today on which the branch's cash was banked
+     * (an active banking record) is closed, and an entry landing on it needs {@code retail.entry.backdate} at the branch.
+     */
+    LocalDate offlineDay(OfflineEntry offline, LocalDate requested, String field, UUID branch) {
+        LocalDate day = businessDate(OfflineEntry.day(offline, requested, now(), zone(), List.of(branch)), field);
+        requireOpen(offline, day, today(), List.of(branch));
+        return day;
+    }
+
+    /** The branch's cash of that day was banked: an active banking record on the day. */
+    @Override
+    public boolean closed(UUID branch, LocalDate day) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM retail_cash_bankings
+                                        WHERE branch_id = ? AND business_date = ? AND voided_at IS NULL)
+                        """).params(branch, day).query(Boolean.class).single();
+    }
+
+    /**
+     * When a record happened: for one kept offline, the time it was made, judged (a time sent with it is not used: the phone
+     * dated it, review of #839); otherwise {@code at} as sent, or now.
+     */
+    Instant entryTime(Instant at, OfflineEntry offline, UUID branch) {
+        if (offline != null) {
+            return offline.judged(now(), List.of(branch));
+        }
+        return at == null ? now() : at;
     }
 
     /** The business date of a record: today when absent, never in the future (422 field problem). */
@@ -121,8 +173,15 @@ class CashbookSupport {
         return date;
     }
 
-    /** The date of an entry and, when it is before today, the owner's checked backdate (ADR-120); else none. */
-    record Dated(LocalDate date, EntryDates.Backdate backdate) {}
+    /**
+     * The date of an entry and, when it is before today, the owner's checked backdate (ADR-120); else none. {@code offline}:
+     * the entry was kept on the phone and dated by it (ADR-067 decision 13), audited as such.
+     */
+    record Dated(LocalDate date, EntryDates.Backdate backdate, OfflineEntry offline) {
+        Dated(LocalDate date, EntryDates.Backdate backdate) {
+            this(date, backdate, null);
+        }
+    }
 
     /**
      * The business date of a new entry (ADR-120): today when absent, never in the future, and before today only from a
@@ -145,6 +204,7 @@ class CashbookSupport {
     /** The {@code retail.entry.backdated} audit row of an entry dated before today; nothing otherwise. */
     void auditBackdate(Dated dated, String entityType, UUID id, UUID branch) {
         entryDates.audit(dated.backdate(), entityType, id, branch);
+        entryDates.auditOffline(dated.offline(), dated.date(), entityType, id, branch);
     }
 
     EntryDates entryDates() {

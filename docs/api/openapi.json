@@ -10578,6 +10578,9 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailOfflineEntry"
+          },
           "reference" : {
             "maxLength" : 100,
             "minLength" : 0,
@@ -13626,6 +13629,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailOfflineEntry"
+          },
           "party_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -15196,6 +15202,22 @@
             "type" : "array"
           }
         }
+      },
+      "RetailOfflineEntry" : {
+        "description" : "Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used. Made more than 2 minutes before online_as_of is refused (offline_clock_behind); made more than 7 days ago needs retail.entry.backdate at every branch it touches, else it is refused (offline_entry_too_old)",
+        "properties" : {
+          "occurred_at" : {
+            "description" : "When the entry was made on the phone",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "online_as_of" : {
+            "description" : "The server's time when the phone was last online",
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "occurred_at", "online_as_of" ]
       },
       "RetailOfflineFailure" : {
         "properties" : {
@@ -17746,6 +17768,9 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailOfflineEntry"
+          },
           "payment_method" : {
             "description" : "cash, mobile_money, bank, or credit: owed to the supplier, who is then required (issue #557)",
             "pattern" : "cash|mobile_money|bank|credit",
@@ -20021,6 +20046,9 @@
             "maxLength" : 300,
             "minLength" : 0,
             "type" : "string"
+          },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailOfflineEntry"
           },
           "overwrite_reason" : {
             "description" : "Optional, even when the amount differs from the suggestion",
@@ -22527,6 +22555,9 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailOfflineEntry"
+          },
           "to_branch_id" : {
             "description" : "The destination branch; any active branch of the tenant",
             "format" : "uuid",
@@ -22854,6 +22885,9 @@
             "description" : "Defaults to today; not in the future",
             "format" : "date",
             "type" : "string"
+          },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailOfflineEntry"
           },
           "reason" : {
             "maxLength" : 300,
@@ -23401,6 +23435,9 @@
             "maxLength" : 300,
             "minLength" : 0,
             "type" : "string"
+          },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailOfflineEntry"
           },
           "purpose" : {
             "maxLength" : 300,

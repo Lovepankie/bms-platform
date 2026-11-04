@@ -26,7 +26,9 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierReque
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.VoidPurchaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingRepository.NewLine;
+import com.rincoltech.bms.retail.stock.ClosedTills;
 import com.rincoltech.bms.retail.stock.EntryDates;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.QuickAddPurchase;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -51,6 +53,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -82,6 +85,8 @@ class PurchasingService implements QuickAddPurchase {
     private final RetailCapabilities capabilities;
     private final Validator validator;
     private final EntryDates entryDates;
+    /** Answered by the cash book, which purchasing does not depend on (ADR-067 decision 13). */
+    private final ObjectProvider<ClosedTills> closedTills;
 
     PurchasingService(
             PurchasingRepository repo,
@@ -96,8 +101,10 @@ class PurchasingService implements QuickAddPurchase {
             AuditLog audit,
             RetailCapabilities capabilities,
             Validator validator,
-            EntryDates entryDates) {
+            EntryDates entryDates,
+            ObjectProvider<ClosedTills> closedTills) {
         this.entryDates = entryDates;
+        this.closedTills = closedTills;
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -188,7 +195,25 @@ class PurchasingService implements QuickAddPurchase {
 
     @Transactional
     Outcome<Purchase> create(String idempotencyKey, PurchaseRequest r) {
-        return idempotency.once(idempotencyKey, "POST", PATH, r, Purchase.class, () -> record(r));
+        // A purchase kept on the phone offline is dated the day it was made (ADR-067 decision 13); the key covers the
+        // request without its offline block, so an online request whose answer was lost, sent again from the phone with
+        // when it was made, is still the same purchase.
+        return idempotency.once(
+                idempotencyKey,
+                "POST",
+                PATH,
+                r.forKey(),
+                Purchase.class,
+                () -> record(r.dated(OfflineEntry.day(
+                        r.offline(),
+                        r.purchasedOn(),
+                        clock.now(),
+                        tenant.profile().timezone(),
+                        // An old entry is the owner's at every branch the delivery stocks.
+                        r.lines().stream()
+                                .flatMap(l -> l.qtyByBranch().stream().map(PurchasingApi.BranchQty::branchId))
+                                .distinct()
+                                .toList()))));
     }
 
     /**
@@ -230,8 +255,8 @@ class PurchasingService implements QuickAddPurchase {
                     null,
                     null));
         }
-        PurchaseRequest r =
-                new PurchaseRequest(null, clock.today(tenant.profile().timezone()), method, "Quick add", lines, null);
+        PurchaseRequest r = new PurchaseRequest(
+                null, clock.today(tenant.profile().timezone()), method, "Quick add", lines, null, null);
         // The bounds Buy stock's route checks before record(), so nothing Buy stock refuses is taken here; named by the
         // Quick add field the value came from.
         // Review of #716: a problem on the package line is named by the package fields it came from.
@@ -284,7 +309,13 @@ class PurchasingService implements QuickAddPurchase {
         PurchaseRequest r = sent.purchasedOn() != null
                 ? sent
                 : new PurchaseRequest(
-                        sent.supplierId(), today, sent.paymentMethod(), sent.note(), sent.lines(), sent.dateReason());
+                        sent.supplierId(),
+                        today,
+                        sent.paymentMethod(),
+                        sent.note(),
+                        sent.lines(),
+                        sent.dateReason(),
+                        sent.offline());
         List<FieldProblem> problems = new ArrayList<>();
         if (r.purchasedOn().isAfter(today)) {
             problems.add(new FieldProblem("purchased_on", "invalid", "A purchase cannot be dated in the future."));
@@ -391,7 +422,20 @@ class PurchasingService implements QuickAddPurchase {
             }
         }
         // ADR-120: an earlier date needs the owner's permission at every branch the goods go into, and a reason.
-        EntryDates.Backdate backdate = entryDates.check(r.purchasedOn(), "purchased_on", r.dateReason(), into);
+        // A delivery kept offline was dated by the phone, not chosen (ADR-067 decision 13): past 7 days OfflineEntry
+        // asks for
+        // the owner.
+        EntryDates.Backdate backdate =
+                r.offline() != null ? null : entryDates.check(r.purchasedOn(), "purchased_on", r.dateReason(), into);
+        // Paid in cash or mobile money, it is money out of each branch's till: a closed day is the owner's (review of
+        // #839).
+        if (r.offline() != null
+                && (r.paymentMethod().equals("cash") || r.paymentMethod().equals("mobile_money"))) {
+            ClosedTills tills = closedTills.getIfAvailable();
+            if (tills != null) {
+                tills.requireOpen(r.offline(), r.purchasedOn(), today, into);
+            }
+        }
         products.forEach(catalogue::lock);
 
         UUID id = UUID.randomUUID();
@@ -530,6 +574,12 @@ class PurchasingService implements QuickAddPurchase {
         audit.record(AuditLog.Entry.created("retail.purchase.created", PURCHASE, id, null, after));
         entryDates.audit(
                 backdate, PURCHASE, id, into.size() == 1 ? into.iterator().next() : null);
+        entryDates.auditOffline(
+                r.offline(),
+                r.purchasedOn(),
+                PURCHASE,
+                id,
+                into.size() == 1 ? into.iterator().next() : null);
         Purchase made = repo.find(id).orElseThrow();
         if (sizesKept.isEmpty()) {
             return made;
@@ -655,7 +705,9 @@ class PurchasingService implements QuickAddPurchase {
                     note.length() > 300 ? note.substring(0, 300) : note,
                     r.lines(),
                     // ADR-120: the edited delivery is a new entry; an earlier day is the owner's, with a reason.
-                    r.dateReason()));
+                    r.dateReason(),
+                    // Edits stay online only (issue #812).
+                    null));
         });
     }
 

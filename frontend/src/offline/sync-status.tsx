@@ -3,7 +3,8 @@ import { useRef, useState } from 'react';
 import { api, problemOf } from '../api/client';
 import { BusyButton } from '../app/ui/BusyButton';
 import { money } from '../areas/staff/retail/ui';
-import { discarded, failedCount, waiting, waitingWords, type OutboxItem } from './outbox';
+import { EntryState } from './entry-state';
+import { discarded, failedCount, sentEntries, waiting, waitingWords, type OutboxItem } from './outbox';
 import { useOffline, useOnline, useOutbox } from './offline-context';
 
 // The status in the staff bar (issue #458, ADR-067 decision 10): a dot, green online, grey offline, amber while sending,
@@ -108,6 +109,7 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
   const outbox = useOutbox();
   const list = waiting(outbox.items);
   const gone = discarded(outbox.items);
+  const sent = sentEntries(outbox.items);
   if (!offline) return null;
   return (
     <div className="stack">
@@ -115,7 +117,8 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
       <p className="muted">
         {online
           ? 'Sales made on this phone are sent to the server one at a time, oldest first.'
-          : 'Sales you make now are kept on this phone. They are sent when the phone is back online.'}
+          : 'Sales you make now are kept on this phone. They are sent when the phone is back online.'}{' '}
+        So are expenses, savings, banking, withdrawals, deliveries, stock moves, usage and damage. Changing a saved entry needs the internet.
       </p>
       {offline.othersWaiting > 0 && <p className="muted">{othersWords(offline.othersWaiting)}</p>}
       {outbox.needsSignIn && (
@@ -137,10 +140,17 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
           {gone.map((item) => (
             <li key={item.id} className="sync-row sync-row-failed">
               <div>
-                <strong>{item.provisionalNo}</strong> {when(item.occurredAt)}, {item.branchName}, {METHOD_WORDS[item.method] ?? item.method} {money(item.totalMinor)}
+                <strong>{item.provisionalNo}</strong> {when(item.occurredAt)}, {item.branchName}, {METHOD_WORDS[item.method ?? ''] ?? item.method} {money(item.totalMinor)}
               </div>
               <p className="sync-reason">Discarded by a manager. It is not recorded and is not sent again.</p>
             </li>
+          ))}
+        </ul>
+      )}
+      {sent.length > 0 && (
+        <ul className="sync-list" aria-label="Sent in the last day">
+          {sent.map((item) => (
+            <SyncRow key={item.id} item={item} onAgain={() => undefined} />
           ))}
         </ul>
       )}
@@ -159,10 +169,20 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
 
 function SyncRow({ item, onAgain }: { item: OutboxItem; onAgain: () => void }) {
   const failed = item.state === 'failed';
+  if (item.entry) {
+    return (
+      <li className={failed ? 'sync-row sync-row-failed' : 'sync-row'}>
+        <div>
+          <strong>{item.entry.words}</strong> {when(item.occurredAt)}, {item.branchName}{item.totalMinor > 0 ? `, ${money(item.totalMinor)}` : ''}
+        </div>
+        <EntryState item={item} />
+      </li>
+    );
+  }
   return (
     <li className={failed ? 'sync-row sync-row-failed' : 'sync-row'}>
       <div>
-        <strong>{item.provisionalNo}</strong> {when(item.occurredAt)}, {item.branchName}, {METHOD_WORDS[item.method] ?? item.method} {money(item.totalMinor)}
+        <strong>{item.provisionalNo}</strong> {when(item.occurredAt)}, {item.branchName}, {METHOD_WORDS[item.method ?? ''] ?? item.method} {money(item.totalMinor)}
       </div>
       {failed ? (
         <>

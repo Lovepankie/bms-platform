@@ -117,21 +117,27 @@ class BankingService {
 
     @Transactional
     Outcome<Banking> createBanking(String key, BankingRequest r) {
-        return idempotency.once(key, "POST", BANKING_PATH, r, Banking.class, () -> recordBanking(r));
+        // The key covers the request without its offline block (ADR-067 decision 13).
+        return idempotency.once(key, "POST", BANKING_PATH, r.forKey(), Banking.class, () -> recordBanking(r));
     }
 
     private Banking recordBanking(BankingRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.BANKING_RECORD, r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        CashbookSupport.Dated dated = support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch);
+        CashbookSupport.Dated dated =
+                support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch, r.offline());
         LocalDate date = dated.date();
-        Instant bankedAt = r.bankedAt() == null ? support.now() : r.bankedAt();
+        Instant bankedAt = support.entryTime(r.bankedAt(), r.offline(), branch);
         if (bankedAt.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("banked_at", "future_date", "A date cannot be in the future.")));
         }
         // ADR-120: the time of the banking is the app's too; an earlier day is the owner's, with the same reason.
-        dated = support.withTime(dated, bankedAt, "banked_at", r.dateReason(), branch);
+        // An entry kept offline was timed by the phone, judged in entryTime (ADR-067 decision 13), not chosen by the
+        // person.
+        if (r.offline() == null) {
+            dated = support.withTime(dated, bankedAt, "banked_at", r.dateReason(), branch);
+        }
         long amount = r.amountMinor();
         boolean profit = mayProfit(branch);
         // The snapshot: what the screen showed, computed here and never taken from the client.
@@ -277,20 +283,26 @@ class BankingService {
 
     @Transactional
     Outcome<Withdrawal> createWithdrawal(String key, WithdrawalRequest r) {
-        return idempotency.once(key, "POST", WITHDRAWAL_PATH, r, Withdrawal.class, () -> recordWithdrawal(r));
+        // The key covers the request without its offline block (ADR-067 decision 13).
+        return idempotency.once(key, "POST", WITHDRAWAL_PATH, r.forKey(), Withdrawal.class, () -> recordWithdrawal(r));
     }
 
     private Withdrawal recordWithdrawal(WithdrawalRequest r) {
         UUID branch = withdrawalBranch(r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        CashbookSupport.Dated dated = support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch);
+        CashbookSupport.Dated dated =
+                support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch, r.offline());
         LocalDate date = dated.date();
-        Instant at = r.withdrawnAt() == null ? support.now() : r.withdrawnAt();
+        Instant at = support.entryTime(r.withdrawnAt(), r.offline(), branch);
         if (at.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("withdrawn_at", "future_date", "A date cannot be in the future.")));
         }
-        dated = support.withTime(dated, at, "withdrawn_at", r.dateReason(), branch);
+        // An entry kept offline was timed by the phone, judged in entryTime (ADR-067 decision 13), not chosen by the
+        // person.
+        if (r.offline() == null) {
+            dated = support.withTime(dated, at, "withdrawn_at", r.dateReason(), branch);
+        }
         long amount = r.amountMinor();
         List<String> warnings = new ArrayList<>();
         if (figures.bankBalance(branch, support.today()) - amount < 0) {

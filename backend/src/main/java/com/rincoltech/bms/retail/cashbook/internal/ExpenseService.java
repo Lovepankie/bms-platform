@@ -127,7 +127,8 @@ class ExpenseService {
 
     @Transactional
     Outcome<ExpenseOutcome> create(String key, ExpenseRequest r) {
-        return idempotency.once(key, "POST", PATH, r, ExpenseOutcome.class, () -> recordOrAsk(r));
+        // The key covers the request without its offline block (ADR-067 decision 13).
+        return idempotency.once(key, "POST", PATH, r.forKey(), ExpenseOutcome.class, () -> recordOrAsk(r));
     }
 
     /**
@@ -148,7 +149,11 @@ class ExpenseService {
                     r.amountMinor(),
                     r.explanation(),
                     r.receiptDocumentId(),
-                    c.backdate() == null ? null : c.backdate().reason());
+                    c.backdate() == null ? null : c.backdate().reason(),
+                    // The approval keeps the resolved date c.date() above (for an entry kept offline, the day it was
+                    // made, issue #812) and the offline block, so the approval checks the closed till again and the
+                    // expense is audited as dated by the phone when it is written.
+                    r.offline());
             UUID id = UUID.randomUUID();
             Approvals.Outcome o = approvals.request(
                     new ActionRequest(
@@ -188,9 +193,13 @@ class ExpenseService {
         EntryDates.Backdate backdate;
         if (approved) {
             date = support.businessDate(r.businessDate(), "business_date");
+            // Kept offline: a till closed since it was asked is the owner's, judged with the approver's permissions
+            // (the lead's decision on the third review of #839).
+            support.requireOpen(r.offline(), date, support.today(), List.of(branch));
             backdate = support.entryDates().approved(date, r.dateReason());
         } else {
-            CashbookSupport.Dated dated = support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch);
+            CashbookSupport.Dated dated =
+                    support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch, r.offline());
             date = dated.date();
             backdate = dated.backdate();
         }
@@ -264,6 +273,8 @@ class ExpenseService {
         after.put("amount_minor", amount);
         audit.record(AuditLog.Entry.created("retail.expense.created", "retail.expense", id, branch, after));
         support.entryDates().audit(c.backdate(), "retail.expense", id, branch);
+        // Dated by the phone (issue #812), audited once the expense exists, on approval for one that waited.
+        support.entryDates().auditOffline(r.offline(), date, "retail.expense", id, branch);
         return view(repo.expense(id, false).orElseThrow());
     }
 
@@ -351,7 +362,9 @@ class ExpenseService {
                     r.amountMinor(),
                     linked(r.explanation(), old),
                     r.receiptDocumentId(),
-                    r.dateReason());
+                    r.dateReason(),
+                    // Edits stay online only (issue #812).
+                    null);
             UUID branch = branchContext.resolve(CashbookSupport.EXPENSE_RECORD, old.branchId());
             // ADR-120: the edited expense is a new entry; an earlier day is the owner's, with a reason, audited.
             Checked c = check(branch, edited, false);

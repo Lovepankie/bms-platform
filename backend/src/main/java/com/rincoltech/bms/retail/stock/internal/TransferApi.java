@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -50,7 +51,20 @@ final class TransferApi {
             @NotEmpty @Size(max = 200) List<@Valid @NotNull TransferLineRequest> lines,
 
             @Size(max = 300) @Schema(description = "Why the move has a date before today; needed then (ADR-120)")
-            String dateReason) {}
+            String dateReason,
+
+            @Valid OfflineEntry offline) {
+
+        /** An earlier day the owner chose, with its reason, is judged as sent online (ADR-067 decision 13). */
+        TransferRequest {
+            offline = OfflineEntry.unlessChosen(offline, dateReason);
+        }
+
+        /** What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13). */
+        TransferRequest forKey() {
+            return new TransferRequest(fromBranchId, toBranchId, transferDate, note, lines, dateReason, null);
+        }
+    }
 
     @Schema(name = "RetailTransferLine")
     record TransferLine(

@@ -20,6 +20,8 @@ import { keptWords } from './orders-state';
 import { stockWarning } from './sale-state';
 import { icons } from '../../../components/icons';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { searchSaved } from '../../../offline/catalogue';
+import { useOffline, useOnline } from '../../../offline/offline-context';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
 // input, a visible focus ring, and state shown in words as well as colour.
@@ -323,6 +325,10 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
   });
   const nothing = notFound && search.term !== '' && !search.pending && products.data !== undefined && products.data.length === 0;
   const [held, setHeld] = useState(false);
+  // Issue #812: offline, the items saved on this phone are searched instead, so a form kept on the phone can still be filled.
+  const offline = useOffline();
+  const online = useOnline();
+  const saved = offline && !online && search.term !== '' ? searchSaved(offline.catalogue, branchId, search.term) : undefined;
   return (
     <>
     <ItemCombobox
@@ -330,9 +336,11 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
       label={label}
       search={search}
       // Only the answer to the term in the box: an earlier term's matches are never shown, so never picked.
-      results={search.term === '' ? undefined : products.data}
+      results={search.term === '' ? undefined : saved ?? products.data}
       // Waiting only for a term with no answer yet: a background refresh of a cached answer keeps its options in view.
-      fetching={products.isPending}
+      fetching={saved ? false : products.isPending}
+      // Offline, an empty search says why (review of #839): the items are only on the phones of people who sell.
+      emptyText={saved ? (term) => (offline?.catalogue ? `No item saved on this phone matches "${term}".` : 'Items are not saved on this phone. Search for items when you are back online.') : undefined}
       error={products.isError ? <Problem error={products.error} /> : undefined}
       optionKey={(p) => p.id ?? p.code ?? ''}
       // The time the answer was read from the server (a cached answer keeps its own), for a sale that may be kept on the phone (#769).

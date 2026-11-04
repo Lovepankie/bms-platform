@@ -17,19 +17,39 @@ export interface OutboxLine {
   totalMinor: number;
 }
 
+/** The other daily forms kept on the phone while offline (issue #812, ADR-067 decision 13). */
+export type EntryKind = 'expense' | 'savings' | 'banking' | 'withdrawal' | 'purchase' | 'transfer' | 'usage';
+
+/** An entry that is not a sale: the route it goes to, the body as the form built it, and how to show and fix it. */
+export interface OutboxEntry {
+  kind: EntryKind;
+  path: string;
+  body: Record<string, unknown>;
+  /** What it is in a few plain words, for the list and the toasts: "Expense, Transport, Fuel". */
+  words: string;
+  /** Where to fix a refused entry: the form's route, and its draft as it was saved, put back under the form's draft name. */
+  fix?: { to: string; search?: Record<string, string>; draftName: string; draft: unknown };
+  /** Sent online first and its answer lost: the server may record it under its key yet, so a first refusal is not final. */
+  lost?: boolean;
+}
+
 export interface OutboxItem {
-  /** The client sale id, made when the draft started; the server stores it on the sale. */
+  /** The client sale id, made when the draft started; the server stores it on the sale. For an entry, its Idempotency-Key. */
   id: string;
   /** The business host and the person: an item is only ever seen and sent by the person who made it, on that business. */
   scope: string;
   /** The Idempotency-Key of the request. */
   key: string;
-  request: SaleRequest;
-  /** When the sale happened on this device (ISO). */
+  /** A sale's request; absent for an entry, whose body is in {@link entry}. */
+  request?: SaleRequest;
+  /** Present for an entry that is not a sale (issue #812). */
+  entry?: OutboxEntry;
+  /** When the sale or entry was made on this device (ISO). */
   occurredAt: string;
   branchId: string;
   branchName: string;
-  method: SalePayment;
+  /** A sale's payment method; absent for an entry. */
+  method?: SalePayment;
   totalMinor: number;
   lines: OutboxLine[];
   /** OFF- and the first eight characters of the client sale id, until the server's number replaces it. */
@@ -42,6 +62,8 @@ export interface OutboxItem {
   firstServerTryAt?: number;
   /** Not sent before this time (epoch ms). */
   nextAttemptAt: number;
+  /** How many times the server refused this item under its key (issue #812: a lost entry is Fixed only after two). */
+  refusals?: number;
   /** The server's refusal of a failed item, or the last reason a try did not go through. */
   error?: { code?: string; message: string };
   /** A failed item reported to the server (POST /retail/offline-failures), and what a manager decided there. */
@@ -49,6 +71,8 @@ export interface OutboxItem {
   decision?: 'open' | 'retry' | 'discarded' | 'recorded';
   /** The server's sale, once sent. */
   sale?: { id: string; saleNo: string };
+  /** An entry the server took: its id, and whether it waits for an administrator to approve it (ADR-091). */
+  recorded?: { id: string; waiting: boolean };
   sentAt?: number;
   /** When the phone learnt that a manager discarded it (epoch ms). */
   discardedAt?: number;
@@ -118,7 +142,7 @@ export const IN_PROGRESS_CODES = ['idempotency_in_progress', 'client_sale_in_pro
 
 /** The answer to one try, as the engine reads it. */
 export type SendOutcome =
-  | { kind: 'sent'; sale: { id: string; saleNo: string } }
+  | { kind: 'sent'; sale?: { id: string; saleNo: string }; recorded?: { id: string; waiting: boolean } }
   | { kind: 'retry'; code?: string; message: string; answered?: boolean }
   | { kind: 'auth' }
   | { kind: 'refused'; code?: string; message: string };
@@ -146,11 +170,36 @@ export function classify(status: number, body: unknown): SendOutcome {
   return { kind: 'refused', code: b.code, message: [b.detail, fields].filter(Boolean).join(' ') || `Refused by the server (${status}).` };
 }
 
+/**
+ * The answer to an entry that is not a sale (issue #812): any 2xx took it, with its id, or with the approval it waits for
+ * (ADR-091: an expense worth the business's amount waits for an administrator, as it does online). Every other answer reads
+ * as a sale's does, so a refusal keeps the server's words and the same answers are tried again later.
+ */
+export function classifyEntry(status: number, body: unknown): SendOutcome {
+  const b = (body ?? {}) as { id?: string; approval_id?: string };
+  if (status >= 200 && status < 300) {
+    const waiting = typeof b.approval_id === 'string' && b.id === undefined;
+    return { kind: 'sent', recorded: { id: b.id ?? b.approval_id ?? '', waiting } };
+  }
+  const read = classify(status, body);
+  if (read.kind === 'retry' && IN_PROGRESS_CODES.includes(read.code ?? '')) return { ...read, message: 'The server is still recording this entry.' };
+  // Any other 409 of an entry is a clash the person must look at (the savings suggestion changed, the day is saved): a refusal.
+  if (status === 409) {
+    const b = (body ?? {}) as { code?: string; detail?: string };
+    return { kind: 'refused', code: b.code, message: b.detail ?? 'The server refused it: something changed since it was made.' };
+  }
+  // A field problem's own words say what is wrong ("That day's till is closed. Ask the owner to enter it."), not the
+  // general line above them.
+  const fields = ((body ?? {}) as { errors?: { message?: string }[] }).errors?.map((e) => e.message).filter(Boolean).join(' ');
+  if (read.kind === 'refused' && read.code === 'validation_failed' && fields) return { ...read, message: fields };
+  return read;
+}
+
 /** The item after one try. */
 export function applyOutcome(item: OutboxItem, outcome: SendOutcome, now: number): OutboxItem {
   switch (outcome.kind) {
     case 'sent':
-      return { ...item, state: 'sent', sale: outcome.sale, sentAt: now, error: undefined };
+      return { ...item, state: 'sent', sale: outcome.sale, recorded: outcome.recorded, sentAt: now, error: undefined };
     case 'retry': {
       const attempts = item.attempts + 1;
       if (outcome.answered) {
@@ -163,7 +212,7 @@ export function applyOutcome(item: OutboxItem, outcome: SendOutcome, now: number
             attempts,
             serverTries,
             firstServerTryAt,
-            error: { code: GAVE_UP_CODE, message: `The server did not take this sale after ${serverTries} tries: ${outcome.message}` },
+            error: { code: GAVE_UP_CODE, message: `The server did not take this ${item.entry ? 'entry' : 'sale'} after ${serverTries} tries: ${outcome.message}` },
             decision: undefined,
             failureId: undefined,
           };
@@ -176,7 +225,7 @@ export function applyOutcome(item: OutboxItem, outcome: SendOutcome, now: number
       return { ...item, state: 'queued' };
     case 'refused':
       if (outcome.code === DISCARDED_CODE) return markDiscarded(item, now, outcome.message);
-      return { ...item, state: 'failed', attempts: item.attempts + 1, error: { code: outcome.code, message: outcome.message }, decision: undefined, failureId: undefined };
+      return { ...item, state: 'failed', attempts: item.attempts + 1, refusals: (item.refusals ?? 0) + 1, error: { code: outcome.code, message: outcome.message }, decision: undefined, failureId: undefined };
   }
 }
 
@@ -194,6 +243,11 @@ export function markDiscarded(item: OutboxItem, now: number, message?: string): 
     discardedAt: now,
     error: { code: DISCARDED_CODE, message: message ?? 'A manager discarded this sale, so it is not recorded.' },
   };
+}
+
+/** Entries (not sales) sent in the last day, newest first, so the sheet can say they were sent. */
+export function sentEntries(items: OutboxItem[]): OutboxItem[] {
+  return inOrder(items).filter((i) => i.entry && i.state === 'sent').reverse();
 }
 
 /** Sent and discarded items past {@link KEEP_SENT_MS} are dropped. */

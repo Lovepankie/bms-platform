@@ -1,11 +1,14 @@
-import { applyOutcome, classify, expired, inOrder, markDiscarded, nextToSend, requeue, type OutboxItem, type SendOutcome } from './outbox';
+import { applyOutcome, classify, classifyEntry, expired, inOrder, markDiscarded, nextToSend, requeue, type OutboxItem, type SendOutcome } from './outbox';
 import type { OfflineStore } from './store';
 
 // Sends the outbox (issue #458, ADR-067 decisions 4, 5 and 8): one sale at a time, oldest first, never two requests in
 // flight; a failure of the network or the server backs off and keeps the order; an expired session is refreshed once and
 // otherwise stops the engine until the person signs in; a refusal is kept with its words and reported, so a manager can
 // have it sent again or discard it. Each send carries the item's Idempotency-Key and client sale id, so a send repeated
-// after a lost answer, a reload or a crash is the same sale on the server.
+// after a lost answer, a reload or a crash is the same sale on the server. Since issue #812 (ADR-067 decision 13) the same
+// queue carries the other daily entries (expenses, savings, banking, withdrawals, Buy stock, Move stock, usage), in the one
+// order by when each was made; an entry is sent again under its own Idempotency-Key, and a refused entry is never reported
+// to a manager: its maker fixes it in its form or discards it.
 
 /** A server answer: the HTTP status and the parsed body. A thrown error means the request never got an answer. */
 export interface Answer {
@@ -206,6 +209,18 @@ export class SyncEngine {
     await this.sync();
   }
 
+  /**
+   * A refused entry (not a sale) taken off the phone by the person who made it (issue #812): to fix it in its form, or to
+   * discard it. No manager decides an entry: the server never heard of it. Returns the item, or undefined when it is not a
+   * refused entry.
+   */
+  async takeBack(id: string): Promise<OutboxItem | undefined> {
+    const item = this.items.find((i) => i.id === id && i.entry && i.state === 'failed');
+    if (!item) return undefined;
+    await this.drop(item.id);
+    return item;
+  }
+
   private async run(): Promise<void> {
     do {
       this.again = false;
@@ -228,7 +243,8 @@ export class SyncEngine {
         }
         const next = applyOutcome(item, outcome, this.deps.now());
         await this.save(next);
-        if (next.state === 'failed') await this.reportFailure(next);
+        // A refused sale is reported for a manager; a refused entry stays with its maker, who fixes or discards it.
+        if (next.state === 'failed' && !next.entry) await this.reportFailure(next);
         // A failed item never holds up the ones behind it; one still backing off keeps the order.
         if (next.state === 'queued') break;
       }
@@ -252,7 +268,7 @@ export class SyncEngine {
   private async once(item: OutboxItem): Promise<SendOutcome> {
     try {
       const answer = await this.deps.send(item);
-      return classify(answer.status, answer.body);
+      return item.entry ? classifyEntry(answer.status, answer.body) : classify(answer.status, answer.body);
     } catch {
       return { kind: 'retry', message: 'No connection to the server.' };
     }
@@ -272,9 +288,9 @@ export class SyncEngine {
    * marks it discarded (shown for a day, never sent again), and a sale recorded meanwhile removes it.
    */
   private async followDecisions(): Promise<void> {
-    const failed = this.items.filter((i) => i.state === 'failed');
+    const failed = this.items.filter((i) => i.state === 'failed' && !i.entry);
     for (const item of failed.filter((i) => !i.failureId)) await this.reportFailure(item);
-    const reported = this.items.filter((i) => i.state === 'failed' && i.failureId);
+    const reported = this.items.filter((i) => i.state === 'failed' && !i.entry && i.failureId);
     if (reported.length === 0) return;
     let decided: Decision[];
     try {

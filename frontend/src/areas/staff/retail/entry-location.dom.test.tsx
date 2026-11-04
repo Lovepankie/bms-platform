@@ -141,8 +141,8 @@ describe('a sale kept on the phone', () => {
       location: { latitude: 0.3136, longitude: 32.6, accuracy_m: 20 },
       now: new Date('2026-11-03T08:00:00Z'),
     });
-    expect(item.request.location).toEqual({ latitude: 0.3136, longitude: 32.6, accuracy_m: 20 });
-    expect(item.request.recorded_offline).toBe(true);
+    expect(item.request?.location).toEqual({ latitude: 0.3136, longitude: 32.6, accuracy_m: 20 });
+    expect(item.request?.recorded_offline).toBe(true);
   });
 });
 

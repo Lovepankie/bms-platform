@@ -94,6 +94,24 @@ public class EntryDates {
         return new Backdate(date, today(), trimmed);
     }
 
+    /**
+     * The audit row of an entry kept on the phone offline and dated by the phone (issue #812, ADR-067 decision 13), in the
+     * transaction that wrote it: {@code retail.entry.recorded_offline} with the day, the time the phone said it was made and
+     * when it was last online, so an owner can tell a phone-dated entry from one dated by the server. Nothing when not offline.
+     */
+    public void auditOffline(OfflineEntry offline, LocalDate day, String entityType, UUID entityId, UUID branchId) {
+        if (offline == null) {
+            return;
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("entry", entityType);
+        after.put("date", day.toString());
+        after.put("occurred_at", offline.occurredAt().toString());
+        after.put("online_as_of", offline.onlineAsOf().toString());
+        after.put("entered_on", today().toString());
+        audit.record(AuditLog.Entry.created("retail.entry.recorded_offline", entityType, entityId, branchId, after));
+    }
+
     /** The audit row of a backdated entry, in the transaction that wrote it; nothing for an entry dated today. */
     public void audit(Backdate backdate, String entityType, UUID entityId, UUID branchId) {
         if (backdate == null) {

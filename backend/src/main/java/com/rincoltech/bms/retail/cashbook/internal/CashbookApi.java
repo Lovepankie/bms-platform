@@ -1,7 +1,9 @@
 package com.rincoltech.bms.retail.cashbook.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -146,7 +148,21 @@ final class CashbookApi {
             String overwriteReason,
 
             @Size(max = 300) @Schema(description = DATE_REASON)
-            String dateReason) {}
+            String dateReason,
+
+            @Valid OfflineEntry offline) {
+
+        /** An earlier day the owner chose, with its reason, is judged as sent online (ADR-067 decision 13). */
+        SavingsRequest {
+            offline = OfflineEntry.unlessChosen(offline, dateReason);
+        }
+
+        /** What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13). */
+        SavingsRequest forKey() {
+            return new SavingsRequest(
+                    branchId, businessDate, suggestionToken, amountMinor, overwriteReason, dateReason, null);
+        }
+    }
 
     @Schema(name = "RetailSavings")
     record Savings(
@@ -250,7 +266,20 @@ final class CashbookApi {
             @Size(max = 100) String reference,
 
             @Size(max = 300) @Schema(description = DATE_REASON)
-            String dateReason) {}
+            String dateReason,
+
+            @Valid OfflineEntry offline) {
+
+        /** An earlier day the owner chose, with its reason, is judged as sent online (ADR-067 decision 13). */
+        BankingRequest {
+            offline = OfflineEntry.unlessChosen(offline, dateReason);
+        }
+
+        /** What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13). */
+        BankingRequest forKey() {
+            return new BankingRequest(branchId, businessDate, amountMinor, bankedAt, reference, dateReason, null);
+        }
+    }
 
     @Schema(name = "RetailBanking")
     record Banking(
@@ -300,7 +329,20 @@ final class CashbookApi {
             @Size(max = 300) String purpose,
 
             @Size(max = 300) @Schema(description = DATE_REASON)
-            String dateReason) {}
+            String dateReason,
+
+            @Valid OfflineEntry offline) {
+
+        /** An earlier day the owner chose, with its reason, is judged as sent online (ADR-067 decision 13). */
+        WithdrawalRequest {
+            offline = OfflineEntry.unlessChosen(offline, dateReason);
+        }
+
+        /** What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13). */
+        WithdrawalRequest forKey() {
+            return new WithdrawalRequest(branchId, businessDate, amountMinor, withdrawnAt, purpose, dateReason, null);
+        }
+    }
 
     @Schema(name = "RetailWithdrawal")
     record Withdrawal(
@@ -337,7 +379,30 @@ final class CashbookApi {
             UUID receiptDocumentId,
 
             @Size(max = 300) @Schema(description = DATE_REASON)
-            String dateReason) {}
+            String dateReason,
+
+            @Valid OfflineEntry offline) {
+
+        /** An earlier day the owner chose, with its reason, is judged as sent online (ADR-067 decision 13). */
+        ExpenseRequest {
+            offline = OfflineEntry.unlessChosen(offline, dateReason);
+        }
+
+        /** What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13). */
+        ExpenseRequest forKey() {
+            return new ExpenseRequest(
+                    branchId,
+                    businessDate,
+                    categoryId,
+                    itemId,
+                    partyId,
+                    amountMinor,
+                    explanation,
+                    receiptDocumentId,
+                    dateReason,
+                    null);
+        }
+    }
 
     @Schema(name = "RetailExpense")
     record Expense(

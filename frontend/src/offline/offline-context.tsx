@@ -5,6 +5,8 @@ import { retail } from '../api/retail';
 import { getAccessToken, refreshFailedOffline, refreshSession, subscribe as onToken } from '../auth/session';
 import { REFRESH_EVERY_MS, refreshCatalogue, type CatalogueSource } from './catalogue';
 import { browserConnectivity, type Connectivity } from './connectivity';
+import { sayDone } from '../areas/staff/retail/toast';
+import { sentWords } from './entries';
 import { waiting, type OutboxItem } from './outbox';
 import { accessOf, followConnectivity, forgetInMemory, keepReads, restore, usable, type ReadKeeper } from './read-cache';
 import { deviceStore, scopeOf, type Catalogue, type OfflineStore } from './store';
@@ -21,7 +23,8 @@ export interface WaitingSummary {
 
 /** The sales other people left waiting on this phone for this business, from every item on the device. */
 export function othersOnPhone(all: OutboxItem[], host: string, scope: string): OutboxItem[] {
-  return waiting(all.filter((i) => i.scope !== scope && i.scope.startsWith(`${host}|`)));
+  // Sales only: the managers' list is of sales, by client sale id (an entry waits for its maker, issue #812).
+  return waiting(all.filter((i) => !i.entry && i.scope !== scope && i.scope.startsWith(`${host}|`)));
 }
 
 /** The short summary of each, for POST /retail/offline-waiting. */
@@ -95,6 +98,18 @@ export function sellsOffline(me: Pick<Me, 'permissions' | 'modules'>): boolean {
   return (!me.modules || me.modules.includes('retail')) && (me.permissions ?? []).includes('retail.sale.create');
 }
 
+// JUSTIFICATION-A3: issue #812 widens offline support from sellers to whoever records a daily form; one list and one check.
+/** The permissions of the daily forms kept on the phone while offline (issue #812, ADR-067 decision 13). */
+// Each saves one of the forms; retail.till.close is only a second gate on savings and banking, never enough alone.
+export const ENTRY_PERMISSIONS = ['retail.expense.record', 'retail.savings.record', 'retail.banking.record',
+  'retail.withdrawal.record', 'retail.purchase.create', 'retail.stock.transfer', 'retail.usage.report'];
+
+/** Offline support: the person sells, or records a daily form kept on the phone with no network (issue #812). */
+export function worksOffline(me: Pick<Me, 'permissions' | 'modules'>): boolean {
+  const held = me.permissions ?? [];
+  return sellsOffline(me) || ((!me.modules || me.modules.includes('retail')) && ENTRY_PERMISSIONS.some((p) => held.includes(p)));
+}
+
 /** An administrator (tenant_admin, the Owner included), who may discard their own refused sale with a second reason (ADR-067 decision 11 d). */
 export function isAdmin(me: Pick<Me, 'roles'> | undefined): boolean {
   return (me?.roles ?? []).some((r) => r.role_key === 'tenant_admin');
@@ -113,7 +128,8 @@ export interface OfflineServices {
 }
 
 function bodyOf(item: OutboxItem) {
-  return item.request;
+  // A sale always carries its request; only an entry (sent above by its own route) has none.
+  return item.request as NonNullable<OutboxItem['request']>;
 }
 
 export function browserServices(): OfflineServices {
@@ -149,6 +165,14 @@ export function browserServices(): OfflineServices {
       // Two tabs of the app never send the same outbox at once.
       exclusive: browserTabLock(`bms-offline-sync:${scope}`),
       send: async (item) => {
+        if (item.entry) {
+          // An entry goes to its own route as the form sends it, under its own key (issue #812).
+          const { data, error, response } = await api.POST(item.entry.path as '/api/v1/retail/expenses', {
+            body: item.entry.body as never,
+            params: { header: { 'Idempotency-Key': item.key } },
+          });
+          return { status: response.status, body: data ?? error };
+        }
         const { data, error, response } = await api.POST('/api/v1/retail/sales', {
           body: bodyOf(item),
           params: { header: { 'Idempotency-Key': item.key } },
@@ -161,7 +185,7 @@ export function browserServices(): OfflineServices {
             client_sale_id: item.id,
             branch_id: item.branchId,
             occurred_at: item.occurredAt,
-            payment_method: item.method,
+            payment_method: item.method ?? 'cash',
             total_minor: item.totalMinor,
             // The generated type of an open JSON object is narrower than any real body; the server takes the sale request as is.
             request: item.request as never,
@@ -187,7 +211,7 @@ export function browserServices(): OfflineServices {
  */
 export function useOfflineSupport(me: Me | undefined, signedIn: boolean, services: () => OfflineServices = browserServices, client?: QueryClient): Offline | null {
   const userId = me?.user_id;
-  const sells = me !== undefined && sellsOffline(me);
+  const sells = me !== undefined && worksOffline(me);
   const svc = useMemo(() => (sells && userId ? services() : null), [sells, userId, services]);
   const scope = svc && userId ? scopeOf(svc.host, userId) : null;
   const engine = useMemo(() => (svc && scope ? new SyncEngine(svc.engineDeps(svc.store, scope)) : null), [svc, scope]);
@@ -316,6 +340,19 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
     const s = services();
     void s.store.deleteReadCache(scopeOf(s.host, userId)).catch(() => undefined);
   }, [userId, sells, known, services]);
+
+  // Issue #812: a toast when an entry kept on the phone reaches the server (one already sent when the outbox was read says nothing).
+  useEffect(() => {
+    if (!engine) return;
+    const seen = new Map(engine.snapshot().items.map((i) => [i.id, i.state]));
+    return engine.subscribe(() => {
+      for (const i of engine.snapshot().items) {
+        const was = seen.get(i.id);
+        seen.set(i.id, i.state);
+        if (i.entry && i.state === 'sent' && was !== undefined && was !== 'sent') sayDone(sentWords(i));
+      }
+    });
+  }, [engine]);
 
   // Whenever a new access token arrives (a sign-in, a refresh by any screen), a stopped engine goes on sending.
   useEffect(() => {

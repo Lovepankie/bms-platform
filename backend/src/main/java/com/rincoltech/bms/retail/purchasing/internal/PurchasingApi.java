@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.purchasing.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -116,7 +117,27 @@ final class PurchasingApi {
             @NotEmpty @Size(max = 500) List<@Valid @NotNull PurchaseLineRequest> lines,
 
             @Size(max = 300) @Schema(description = "Why the purchase has a date before today; needed then (ADR-120)")
-            String dateReason) {}
+            String dateReason,
+
+            @Valid OfflineEntry offline) {
+
+        /** An earlier day the owner chose, with its reason, is judged as sent online (ADR-067 decision 13). */
+        PurchaseRequest {
+            offline = OfflineEntry.unlessChosen(offline, dateReason);
+        }
+
+        /** What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13). */
+        PurchaseRequest forKey() {
+            return new PurchaseRequest(supplierId, purchasedOn, paymentMethod, note, lines, dateReason, null);
+        }
+
+        /** The same purchase dated {@code on}: an entry kept offline takes the day it was made (ADR-067 decision 13). */
+        PurchaseRequest dated(LocalDate on) {
+            return java.util.Objects.equals(on, purchasedOn)
+                    ? this
+                    : new PurchaseRequest(supplierId, on, paymentMethod, note, lines, dateReason, offline);
+        }
+    }
 
     @Schema(name = "RetailPurchaseLineBranch")
     record LineBranch(
