@@ -11358,7 +11358,7 @@
             "type" : "integer"
           },
           "metric" : {
-            "description" : "voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for",
+            "description" : "voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts, below_cost, restock_voids, quantity_corrections or usage_undos; the key to ask groups and records for",
             "type" : "string"
           },
           "previous_count" : {
@@ -20770,6 +20770,11 @@
           "description" : {
             "type" : "string"
           },
+          "entry_lines" : {
+            "description" : "On a usage or damage movement (issue #818): how many lines its entry has, all of which an undo puts back, whatever the list's filter or page",
+            "format" : "int32",
+            "type" : "integer"
+          },
           "historical" : {
             "type" : "boolean"
           },
@@ -20811,6 +20816,9 @@
           "source_type" : {
             "type" : "string"
           },
+          "undone" : {
+            "$ref" : "#/components/schemas/RetailStockMovementUndone"
+          },
           "unit" : {
             "type" : "string"
           },
@@ -20844,6 +20852,25 @@
             "type" : "array"
           },
           "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailStockMovementUndone" : {
+        "description" : "Present on a usage or damage movement whose entry was undone (issue #818): who, when, why",
+        "properties" : {
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "reason" : {
             "type" : "string"
           }
         }
@@ -22935,6 +22962,53 @@
             "description" : "Records of stock used in the shop",
             "format" : "int64",
             "type" : "integer"
+          }
+        }
+      },
+      "RetailUsageUndoRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "RetailUsageUndone" : {
+        "description" : "An entry undone (issue #818): the stock is back, the entry kept",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "items_back" : {
+            "description" : "How many items of the entry went back into stock, every line of it",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "report_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "undone_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "undone_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "undone_on" : {
+            "description" : "The business day the stock went back and the reversal is dated",
+            "format" : "date",
+            "type" : "string"
           }
         }
       },
@@ -48289,6 +48363,44 @@
           }
         },
         "summary" : "Past usage and damage grouped by shop, month, category and item with totals (issue #816)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/usage/{report_id}/undo" : {
+      "post" : {
+        "operationId" : "undoRetailUsage",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "report_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailUsageUndoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailUsageUndone"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Undo a usage or damage entry with a reason: the stock goes back, the entry is kept and marked undone, once (FR-RET-88)",
         "tags" : [ "retail-stock" ]
       }
     },

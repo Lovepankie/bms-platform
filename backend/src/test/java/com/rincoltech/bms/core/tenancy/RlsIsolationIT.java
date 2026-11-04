@@ -318,6 +318,11 @@ public class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), usage, retailProduct)
                 .update();
+        // A usage entry undone (migration V133, issue #818).
+        owner.sql("""
+                        INSERT INTO retail_usage_undos (id, tenant_id, report_id, undone_on, reason, undone_by)
+                        VALUES (?, ?, ?, DATE '2026-01-16', 'Test undo', ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), usage, user).update();
         // SMS delivery log and opt-out (migration V50, ADR-036).
         owner.sql("""
                         INSERT INTO sms_deliveries (id, tenant_id, outbox_id, template_key, category, recipient_masked,

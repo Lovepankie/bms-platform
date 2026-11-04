@@ -777,6 +777,10 @@ Notes:
   never in the audit log (a shop location change records `has_location` only), never in an idempotency or client sale id
   hash, never in a refused offline sale's stored request, and deleted when a closed business is removed (ADR-090). The phone
   asks once with a plain reason; the staff note is the help article `where-a-sale-is-made`.
+- `retail.sale.void` also undoes a usage or damage entry (issue #818, ADR-123, migration V133, no permission added): whoever
+  may take back a sale at a branch may take back a wrong "used in the shop" or damage entry there, with a reason, once, and
+  nobody else; a storekeeper who reports usage cannot undo it. The undo is audited (`retail.usage.undone`) and shown on
+  Controls; no approval is asked, since no money changes hands.
 - `retail.controls.read` (issue #357, ADR-047, migration V66) opens the read-only Controls page: voids, returns, credit write-offs (ADR-087, valued at the amount owed, never the loss), changed prices,
   discounts, sales below cost and sales cancelled at once, by shop, by named person, by day and by reason. It names staff and compares
   them by a rate (a cancelled sale is credited to the person whose sale it was, the approver is shown apart and never ranked), so it is the tenant administrator's alone by default and a business gives it to an owner's or an auditor's custom

@@ -159,7 +159,9 @@ class ReportsRepository {
 
                             UNION ALL
                             SELECT branch_id, occurred_on, 0, 0, cost_total_minor FROM retail_usage_reports
-                             WHERE occurred_on BETWEEN :from AND :to""" + usageFilter + """
+                             WHERE occurred_on BETWEEN :from AND :to
+                               AND NOT EXISTS (SELECT 1 FROM retail_usage_undos d
+                                                WHERE d.report_id = retail_usage_reports.id)""" + usageFilter + """
 
                             UNION ALL
                             SELECT r.branch_id, r.returned_on,""" + returnSales + returnCost + """

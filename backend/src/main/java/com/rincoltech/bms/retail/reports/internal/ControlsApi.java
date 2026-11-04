@@ -25,9 +25,9 @@ final class ControlsApi {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Card(
             @Schema(
-                    description =
-                            "voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts,"
-                                    + " below_cost, restock_voids or quantity_corrections; the key to ask groups and records for")
+                    description = "voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts,"
+                            + " below_cost, restock_voids, quantity_corrections or usage_undos; the key to ask groups"
+                            + " and records for")
             String metric,
 
             @Schema(

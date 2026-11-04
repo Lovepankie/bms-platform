@@ -202,6 +202,7 @@ export type PurchasePage = S['RetailPurchasePage'];
 export type PurchaseLine = S['RetailPurchaseLine'];
 export type UsageRequest = S['RetailUsageRequest'];
 export type Usage = S['RetailUsageReport'];
+export type UsageUndone = S['RetailUsageUndone'];
 export type StocktakeRequest = S['RetailStocktakeRequest'];
 export type Stocktake = S['RetailStocktake'];
 export type OpenStocktake = S['RetailOpenStocktake'];
@@ -497,6 +498,8 @@ export interface RetailApi {
   stockHistory(q: { productId: string; branchId: string; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   /** Stock used and damaged, newest first, in the days given and the caller's branch scope (#145); a blank branch or item means all. */
   usageHistory(q: { from: string; to: string; branchId?: string; productId?: string; cursor?: string; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
+  /** Undo a usage or damage entry with a reason (issue #818): the stock goes back, the entry is kept and marked undone. */
+  undoUsage(reportId: string, reason: string): Promise<UsageUndone>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeInactive?: boolean; signal?: AbortSignal }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
@@ -997,6 +1000,10 @@ const realRetail: RetailApi = {
       }),
     );
     return { items: page.items ?? [], ...(page.next_cursor ? { next_cursor: page.next_cursor } : {}) };
+  },
+
+  async undoUsage(reportId, reason) {
+    return unwrap(await api.POST('/api/v1/retail/usage/{report_id}/undo', { params: { path: { report_id: reportId } }, body: { reason } }));
   },
 
   async listStock({ branchId, query, categoryId, negativeOnly, level, includeInactive, signal }) {

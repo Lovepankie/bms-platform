@@ -1305,6 +1305,8 @@ export function createMockRetail(): RetailApi {
           // The business day, as the server's from and to (StockService.movements, the tenant's time zone), never the UTC day.
           .filter((m) => (m.kind === 'usage' || m.kind === 'damage') && businessToday(new Date(m.at ?? '')) >= from && businessToday(new Date(m.at ?? '')) <= to
             && (!branchId || m.branch_id === branchId) && (!productId || m.product_id === productId))
+          // Issue #818: the entry's whole line count, as the server counts it, whatever the filter.
+          .map((m) => (m.source_type === 'retail.usage' ? { ...m, entry_lines: stockLog.filter((x) => x.source_type === 'retail.usage' && x.source_id === m.source_id).length } : m))
           .reverse(),
       })),
 
@@ -1393,17 +1395,33 @@ export function createMockRetail(): RetailApi {
       const branchId = body.branch_id ?? BRANCH_A;
       body.lines.forEach((l) => guard(branchId, l.product_id, toMilli(l.qty)));
       let costTotal = 0;
+      const reportId = nextId('7');
       const lines = body.lines.map((l, n) => {
         const p = find(l.product_id);
         const lineCost = lineTotal(p.costMinor, toMilli(l.qty));
         move(branchId, p.id, -toMilli(l.qty));
-        logMove(cost({ branch_id: branchId, product_id: p.id, code: p.code, description: p.description, unit: p.unit, kind: body.kind === 'used' ? 'usage' : 'damage', qty: `-${l.qty}`, source_type: 'retail.usage', note: body.reason }, { unit_cost_minor: p.costMinor, line_cost_minor: lineCost }));
+        logMove(cost({ branch_id: branchId, product_id: p.id, code: p.code, description: p.description, unit: p.unit, kind: body.kind === 'used' ? 'usage' : 'damage', qty: `-${l.qty}`, source_type: 'retail.usage', source_id: reportId, note: body.reason }, { unit_cost_minor: p.costMinor, line_cost_minor: lineCost }));
         costTotal += lineCost;
         return cost({ line_no: n + 1, product_id: p.id, code: p.code, description: p.description, qty: l.qty }, { unit_cost_minor: p.costMinor, line_cost_minor: lineCost });
       });
       usageCostByDay.set(today(), (usageCostByDay.get(today()) ?? 0) + costTotal);
-      return cost({ id: nextId('7'), branch_id: branchId, kind: body.kind, reason: body.reason, occurred_on: body.occurred_on ?? today(), currency: 'UGX', lines }, { cost_total_minor: costTotal });
+      return cost({ id: reportId, branch_id: branchId, kind: body.kind, reason: body.reason, occurred_on: body.occurred_on ?? today(), currency: 'UGX', lines }, { cost_total_minor: costTotal });
       })),
+
+    // Issue #818: every line of the entry goes back and is marked undone, once; the entry is kept.
+    undoUsage: (reportId, reason) =>
+      run(() => {
+        const moved = stockLog.filter((m) => m.source_type === 'retail.usage' && m.source_id === reportId);
+        if (moved.length === 0) refuse(404, 'not_found', 'That could not be found.');
+        if (moved.some((m) => m.undone)) refuse(409, 'usage_undone', 'This entry has been undone already.');
+        const undone = { at: new Date().toISOString(), by: mockMe('admin').user_id, by_name: 'Test Admin', reason: reason.trim() };
+        moved.forEach((m) => {
+          move(m.branch_id ?? BRANCH_A, m.product_id ?? '', toMilli((m.qty ?? '0').replace(/^-/, '')));
+          m.undone = undone;
+        });
+        const first = moved[0];
+        return { report_id: reportId, branch_id: first?.branch_id, kind: first?.kind === 'damage' ? 'damaged' : 'used', items_back: moved.length, undone_on: today(), undone_at: undone.at, undone_by: undone.by, reason: undone.reason };
+      }),
 
     createStocktake: (body) => {
       const branchId = body.branch_id ?? BRANCH_A;

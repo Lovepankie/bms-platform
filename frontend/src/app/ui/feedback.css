@@ -79,8 +79,9 @@
   color: var(--color-danger);
 }
 
-/* Issue #815: Out of stock or Only N left on the sale screen, the icon at the size of the words. */
-.stock-warning svg {
+/* Issue #815: Out of stock or Only N left on the sale screen, the icon at the size of the words; issue #818: Undone too. */
+.stock-warning svg,
+.usage-undone svg {
   display: block;
   width: 16px;
   height: 16px;

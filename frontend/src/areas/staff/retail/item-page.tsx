@@ -26,6 +26,7 @@ export function movementWords(m: Pick<StockMovement, 'kind' | 'source_type' | 'r
   if (m.source_type === 'retail.sale_void') return 'Sale cancelled';
   if (m.source_type === 'retail.purchase_void' || m.source_type === 'retail.goods_receipt_void') return 'Delivery cancelled';
   if (m.source_type === 'retail.sale_return_void') return 'Customer return cancelled';
+  if (m.source_type === 'retail.usage_undo') return 'Usage or damage undone';
   if (m.reverses_movement_id) return 'Cancelled';
   switch (m.kind) {
     case 'opening': return 'Opening stock';

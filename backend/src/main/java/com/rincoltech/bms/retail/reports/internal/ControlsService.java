@@ -61,7 +61,7 @@ class ControlsService {
      * approver.
      */
     static final List<String> HAS_APPROVER =
-            List.of("voided_sales", "quick_cancels", "returns", "credit_writeoffs", "restock_voids");
+            List.of("voided_sales", "quick_cancels", "returns", "credit_writeoffs", "restock_voids", "usage_undos");
 
     /** The one label for a person the users table does not know, on the server and in the screen. */
     static final String UNKNOWN_PERSON = "Unknown person";
@@ -78,7 +78,8 @@ class ControlsService {
             "price_overrides",
             "discounts",
             "restock_voids",
-            "quantity_corrections");
+            "quantity_corrections",
+            "usage_undos");
 
     private final ControlsRepository repo;
     private final CurrentTenant tenant;
@@ -162,12 +163,11 @@ class ControlsService {
         requireMetric(metric, principal, filter);
         List<String> chain = chain(groupBy);
         if (chain.contains("approver") && !HAS_APPROVER.contains(metric)) {
-            throw ApiException.validation(
-                    List.of(
-                            new FieldProblem(
-                                    "group_by",
-                                    "invalid",
-                                    "approver is a level of voided_sales, quick_cancels, returns, credit_writeoffs and restock_voids.")));
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "group_by",
+                    "invalid",
+                    "approver is a level of voided_sales, quick_cancels, returns, credit_writeoffs,"
+                            + " restock_voids and usage_undos.")));
         }
         String at = level == null ? chain.getFirst() : level;
         if (!chain.contains(at)) {
@@ -451,7 +451,7 @@ class ControlsService {
                     "metric",
                     "invalid",
                     "metric is voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides,"
-                            + " discounts, below_cost, restock_voids or quantity_corrections.")));
+                            + " discounts, below_cost, restock_voids, quantity_corrections or usage_undos.")));
         }
         if (metric.equals("below_cost") && !AnalyticsSupport.profitVisible(principal, filter)) {
             throw new ApiException(

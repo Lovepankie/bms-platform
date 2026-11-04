@@ -25,8 +25,8 @@ export const LEVEL_PLURALS: Record<ControlsLevel, string> = { branch: 'shops', u
 const LINE_METRICS: readonly string[] = ['price_overrides', 'discounts', 'below_cost'];
 export const isLineMetric = (metric: string): boolean => LINE_METRICS.includes(metric);
 
-/** A restock voided or a quantity corrected: about the stock, not about sales, so counted with no rate and no sale to open. */
-const STOCK_METRICS: readonly string[] = ['restock_voids', 'quantity_corrections'];
+/** A restock voided, a quantity corrected or a usage entry undone: about the stock, not sales, so no rate and no sale to open. */
+const STOCK_METRICS: readonly string[] = ['restock_voids', 'quantity_corrections', 'usage_undos'];
 export const isStockMetric = (metric: string): boolean => STOCK_METRICS.includes(metric);
 
 /** The chain as it is asked of the server for a kind of thing: no Approver level for the lines of a sale; never empty. */
@@ -82,6 +82,7 @@ export const METRICS: MetricWords[] = [
   { metric: 'discounts', title: 'Discounts given', noun: 'lines', what: () => 'Sale lines sold for less than the price the system chose. The money is what was given up.' },
   { metric: 'restock_voids', title: 'Purchases cancelled', noun: 'purchases', what: () => 'Purchases of stock entered wrongly and voided, one line for each shop the purchase stocked. The stock, the books and the prices went back. The value is the quantity at the selling price now. No rate: it is not about sales.' },
   { metric: 'quantity_corrections', title: 'Quantities corrected', noun: 'corrections', what: () => 'Stock quantities changed on the stock list as an entry mistake or a miscount. The value is the change at the selling price now. No rate: it is not about sales.' },
+  { metric: 'usage_undos', title: 'Usage or damage undone', noun: 'entries', what: () => 'Entries of stock used in the shop or damaged that were wrong and undone, with the reason. The stock went back. The value is the quantity at the selling price now. No rate: it is not about sales.' },
   { metric: 'below_cost', title: 'Sold below cost', noun: 'lines', what: () => 'Sale lines priced under what the item cost. Shown only to people who may read profit.' },
 ];
 
@@ -161,7 +162,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 export function groupLine(g: ControlsGroup, metric: string, level: ControlsLevel, money: (minor: number) => string): string {
   const count = g.count ?? 0;
   const sales = g.sales_affected ?? 0;
-  if (isStockMetric(metric)) return `${metric === 'restock_voids' ? plural(count, 'restock', 'restocks') : plural(count, 'correction', 'corrections')}, ${money(g.value_minor ?? 0)}`;
+  if (isStockMetric(metric)) return `${metric === 'restock_voids' ? plural(count, 'restock', 'restocks') : metric === 'usage_undos' ? plural(count, 'entry', 'entries') : plural(count, 'correction', 'corrections')}, ${money(g.value_minor ?? 0)}`;
   const head = isLineMetric(metric)
     ? `${plural(count, 'line', 'lines')} in ${plural(sales, 'sale', 'sales')}`
     : metric === 'returns' ? plural(count, 'return', 'returns') : plural(count, 'sale', 'sales');
@@ -184,7 +185,7 @@ export const whoWords = (r: Pick<ControlsRecord, 'user_name' | 'user_status'>): 
 };
 
 /** The word before an approver's name; a sale is otherwise cancelled. */
-const APPROVED: Record<string, string> = { returns: 'Taken back', credit_writeoffs: 'Written off', restock_voids: 'Voided' };
+const APPROVED: Record<string, string> = { returns: 'Taken back', credit_writeoffs: 'Written off', restock_voids: 'Voided', usage_undos: 'Undone' };
 
 /** "Cancelled by Test Admin One", "Taken back by ...", "Written off by ..." or "Voided by ..."; empty for a price, a cost or a correction, which have no approver. */
 export function approverWords(r: Pick<ControlsRecord, 'approver_id' | 'approver_name' | 'approver_status'>, metric: string): string {
@@ -259,8 +260,8 @@ export function groupsCsv(level: ControlsLevel, groups: ControlsGroup[], metric 
 
 /** The records on screen as a CSV. */
 export function recordsCsv(records: ControlsRecord[], metric: string): string {
-  const who = metric === 'restock_voids' ? 'Entered by' : metric === 'quantity_corrections' ? 'Corrected by' : 'Person (whose sale)';
-  const number = metric === 'restock_voids' ? 'Purchase' : metric === 'quantity_corrections' ? 'Record' : 'Sale';
+  const who = metric === 'restock_voids' || metric === 'usage_undos' ? 'Entered by' : metric === 'quantity_corrections' ? 'Corrected by' : 'Person (whose sale)';
+  const number = metric === 'restock_voids' ? 'Purchase' : metric === 'quantity_corrections' || metric === 'usage_undos' ? 'Record' : 'Sale';
   if (isStockMetric(metric)) {
     // No credit note to give.
     return csvOf([

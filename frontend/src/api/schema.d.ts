@@ -8108,6 +8108,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/usage/{report_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo a usage or damage entry with a reason: the stock goes back, the entry is kept and marked undone, once (FR-RET-88) */
+        post: operations["undoRetailUsage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/withdrawals": {
         parameters: {
             query?: never;
@@ -13666,7 +13683,7 @@ export interface components {
         RetailControlsCard: {
             /** Format: int64 */
             count?: number;
-            /** @description voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for */
+            /** @description voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts, below_cost, restock_voids, quantity_corrections or usage_undos; the key to ask groups and records for */
             metric?: string;
             /** Format: int64 */
             previous_count?: number;
@@ -18713,6 +18730,11 @@ export interface components {
             code?: string;
             correction?: components["schemas"]["RetailStockMovementCorrection"];
             description?: string;
+            /**
+             * Format: int32
+             * @description On a usage or damage movement (issue #818): how many lines its entry has, all of which an undo puts back, whatever the list's filter or page
+             */
+            entry_lines?: number;
             historical?: boolean;
             /** Format: uuid */
             id?: string;
@@ -18736,6 +18758,7 @@ export interface components {
             /** Format: uuid */
             source_id?: string;
             source_type?: string;
+            undone?: components["schemas"]["RetailStockMovementUndone"];
             unit?: string;
             /**
              * Format: int64
@@ -18752,6 +18775,15 @@ export interface components {
         RetailStockMovementPage: {
             items?: components["schemas"]["RetailStockMovement"][];
             next_cursor?: string;
+        };
+        /** @description Present on a usage or damage movement whose entry was undone (issue #818): who, when, why */
+        RetailStockMovementUndone: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            reason?: string;
         };
         RetailStockPage: {
             /** Format: uuid */
@@ -19834,6 +19866,32 @@ export interface components {
              * @description Records of stock used in the shop
              */
             used_count?: number;
+        };
+        RetailUsageUndoRequest: {
+            reason: string;
+        };
+        /** @description An entry undone (issue #818): the stock is back, the entry kept */
+        RetailUsageUndone: {
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: int32
+             * @description How many items of the entry went back into stock, every line of it
+             */
+            items_back?: number;
+            kind?: string;
+            reason?: string;
+            /** Format: uuid */
+            report_id?: string;
+            /** Format: date-time */
+            undone_at?: string;
+            /** Format: uuid */
+            undone_by?: string;
+            /**
+             * Format: date
+             * @description The business day the stock went back and the reversal is dated
+             */
+            undone_on?: string;
         };
         /** @description The usual size of a pack in a smaller unit, and what it is for */
         RetailUsualPack: {
@@ -35607,6 +35665,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailUsageSummary"];
+                };
+            };
+        };
+    };
+    undoRetailUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUsageUndoRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUsageUndone"];
                 };
             };
         };

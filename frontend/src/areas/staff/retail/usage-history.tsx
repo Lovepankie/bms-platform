@@ -13,6 +13,7 @@ import { EmptyState } from '../../../app/ui/EmptyState';
 import { useStaff } from '../context';
 import { ENTRY_LOCATION, canUse, holds } from './permissions';
 import { useEntryDistances, whereWords } from './entry-location';
+import { UndoUsageAction, UndoneMark, undoneWords } from './usage-undo';
 import { showDate, showQty } from './maths';
 import { Gate, Money, Problem, useBranchName, useBranchView } from './ui';
 
@@ -37,20 +38,40 @@ export function costOf(m: StockMovement): number | null {
   return m.line_cost_minor ?? null;
 }
 
-function UsageRow({ m, branch, where }: { m: StockMovement; branch?: string; where?: EntryDistance }) {
+/**
+ * Issue #818: the movements that are the first line of their entry in the list, worked out once per list, so Undo this entry
+ * and the Undone words show once per entry. How many lines an entry has is the server's to say, never counted here.
+ */
+export function firstLines(items: StockMovement[]): Set<string> {
+  const seen = new Set<string>();
+  const first = new Set<string>();
+  for (const m of items) {
+    const entry = m.source_id ? `${m.source_type ?? ''}|${m.source_id}` : `line|${m.id ?? ''}`;
+    if (!seen.has(entry)) {
+      seen.add(entry);
+      first.add(m.id ?? '');
+    }
+  }
+  return first;
+}
+
+function UsageRow({ m, branch, where, first }: { m: StockMovement; branch?: string; where?: EntryDistance; first: boolean }) {
   const cost = costOf(m);
   return (
     <li className="rt-card" data-testid="usage-row">
       <p>
         <strong>{m.description}</strong> {m.code && <span className="hint">({m.code})</span>}{' '}
         <span className={m.kind === 'damage' ? 'badge badge-warning' : 'badge badge-info'}>{m.kind === 'damage' ? 'Damaged' : 'Used'}</span>
+        {m.undone && <>{' '}<UndoneMark /></>}
       </p>
       <p>
         <span className="num">{takenOut(m)}</span> taken out on {showDate(dayOf(m))}{branch ? ` at ${branch}` : ''}.
         {cost !== null && <> Worth <Money minor={cost} /> at buying price.</>}
       </p>
       {m.note && <p className="hint">Reason: {m.note}</p>}
+      {m.undone && first && <p className="hint" data-testid="usage-undone-words">{undoneWords(m)}. The stock went back.</p>}
       {where && <p className="hint" data-testid="usage-where">Where: {whereWords(where)}</p>}
+      {first && <UndoUsageAction m={m} />}
     </li>
   );
 }
@@ -94,12 +115,13 @@ function UsageRows({ sel, all, nameOf }: { sel: ListSelection; all: boolean; nam
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
+  const first = firstLines(items);
   return (
     <>
       {page.isPending && <p className="loading">Loading</p>}
       <Problem error={page.error} />
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        {items.map((m) => <UsageRow key={m.id} m={m} branch={all && !sel.branchId ? nameOf(m.branch_id) : undefined} />)}
+        {items.map((m) => <UsageRow key={m.id} m={m} branch={all && !sel.branchId ? nameOf(m.branch_id) : undefined} first={first.has(m.id ?? '')} />)}
       </ul>
       {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older records'}</button>}
     </>
@@ -131,12 +153,13 @@ export function UsageHistoryPage() {
     enabled: ready && !grouped,
   });
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
+  const first = firstLines(items);
   // ADR-122: how far from the shop each entry was made, for the owner only (asked for the entries, not the lines).
   const usage = (m: StockMovement) => (m.source_type === 'retail.usage' ? (m.source_id ?? '') : '');
   const where = useEntryDistances('usage', items.map(usage), holds(me, ENTRY_LOCATION));
   return (
     <Gate screen="stock" title="Past usage and damage">
-      <Hint>Every item taken out of stock as used in the shop or damaged. Choose the days, the branch at the top of the page, or one item.</Hint>
+      <Hint>Every item taken out of stock as used in the shop or damaged. Choose the days, the branch at the top of the page, or one item. An entry undone stays here marked Undone and counts in no total.</Hint>
       <div data-tour="usage-history-filters">
         <PeriodPicker from={from} to={to} onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
         <SearchBox id="usage-history-item-search" label="Item (type part of its name or code)" search={itemBox} fetching={products.isPlaceholderData || products.isFetching} count={itemSearch !== '' && products.data ? products.data.length : undefined} />
@@ -170,7 +193,7 @@ export function UsageHistoryPage() {
         />
       )}
       <ul style={{ listStyle: 'none', padding: 0 }} data-tour="usage-history-list">
-        {items.map((m) => <UsageRow key={m.id} m={m} branch={all ? nameOf(m.branch_id) : undefined} where={where.get(usage(m))} />)}
+        {items.map((m) => <UsageRow key={m.id} m={m} branch={all ? nameOf(m.branch_id) : undefined} where={where.get(usage(m))} first={first.has(m.id ?? '')} />)}
       </ul>
       {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older records'}</button>}
       </>}

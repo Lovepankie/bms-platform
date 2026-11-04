@@ -104,6 +104,15 @@ describe('a group of a table', () => {
     expect(approverWords({ approver_id: 'u9', approver_name: 'Test Admin One' }, 'restock_voids')).toBe('Voided by Test Admin One');
   });
 
+  it('counts a usage or damage entry undone like a voided restock: no rate, with who undid it (#818)', () => {
+    const money = (m: number) => `UGX ${m}`;
+    expect(isStockMetric('usage_undos')).toBe(true);
+    expect(groupLine(user({ count: 2, rate_per_100: undefined }), 'usage_undos', 'user', money)).toBe('2 entries, UGX 1500');
+    expect(chainFor('usage_undos', ['branch', 'approver'])).toEqual(['branch', 'approver']);
+    expect(approverWords({ approver_id: 'u9', approver_name: 'Test Admin One' }, 'usage_undos')).toBe('Undone by Test Admin One');
+    expect(recordsCsv([], 'usage_undos').split('\r\n')[0]).toBe('Record,Time,Shop,Entered by,Approver,Reason,Item,Value');
+  });
+
   it('names who cancelled or took the goods back, and nobody for a price', () => {
     const r = { approver_id: 'u9', approver_name: 'Test Admin One', approver_status: 'active' };
     expect(approverWords(r, 'voided_sales')).toBe('Cancelled by Test Admin One');

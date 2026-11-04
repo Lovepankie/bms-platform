@@ -32,13 +32,14 @@ class ControlsRepository {
             "discounts",
             "below_cost",
             "restock_voids",
-            "quantity_corrections");
+            "quantity_corrections",
+            "usage_undos");
 
     /**
-     * The metrics that are not about sales: a restock voided and a quantity corrected. There are no sales of a person or a
-     * shop to set them against, so they have counts and values and no rate, and no pattern.
+     * The metrics that are not about sales: a restock voided, a quantity corrected and a usage or damage entry undone. There
+     * are no sales of a person or a shop to set them against, so they have counts and values and no rate, and no pattern.
      */
-    static final List<String> STOCK_METRICS = List.of("restock_voids", "quantity_corrections");
+    static final List<String> STOCK_METRICS = List.of("restock_voids", "quantity_corrections", "usage_undos");
 
     /** The levels of the grouping chain. */
     static final List<String> LEVELS = List.of("branch", "user", "day", "reason", "approver");
@@ -214,6 +215,30 @@ class ControlsRepository {
                                 "CAST(NULL AS uuid)")
                         + " FROM retail_stock_corrections c JOIN retail_products p ON p.tenant_id = c.tenant_id"
                         + " AND p.id = c.product_id WHERE c.created_at >= :fromAt AND c.created_at < :toAt";
+            // JUSTIFICATION-A3: one more metric is one more events statement in the same column shape (issue #818).
+            // A usage or damage entry undone (issue #818, ADR-123), shown like a voided sale: the person is who entered
+            // it, the approver who undid it, on the business day of the undo; sale_id carries the entry's id. The value
+            // is what went back at the items' SELLING prices now (never the cost the entry was valued at).
+            case "usage_undos" ->
+                "SELECT 'usage_undos'"
+                        + COLUMNS.formatted(
+                                "r.id",
+                                "CAST(NULL AS text)",
+                                "CAST(NULL AS text)",
+                                "r.branch_id",
+                                "r.created_by",
+                                "d.undone_on",
+                                "d.created_at",
+                                "d.reason",
+                                "mv.value_minor",
+                                "CASE r.kind WHEN 'used' THEN 'Used in the shop' ELSE 'Damaged' END",
+                                "d.undone_by")
+                        + " FROM retail_usage_undos d JOIN retail_usage_reports r ON r.tenant_id = d.tenant_id AND r.id ="
+                        + " d.report_id JOIN LATERAL (SELECT coalesce(round(sum(abs(m.qty) * pr.sell_minor)), 0)::bigint"
+                        + " AS value_minor FROM retail_stock_movements m JOIN retail_products pr ON pr.tenant_id ="
+                        + " m.tenant_id AND pr.id = m.product_id WHERE m.tenant_id = r.tenant_id AND m.source_type ="
+                        + " 'retail.usage' AND m.source_id = r.id) mv ON true"
+                        + " WHERE d.undone_on >= :from AND d.undone_on <= :to";
             default -> throw new IllegalArgumentException("metric " + metric);
         };
     }

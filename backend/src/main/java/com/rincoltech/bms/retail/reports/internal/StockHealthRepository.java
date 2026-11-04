@@ -372,6 +372,9 @@ class StockHealthRepository {
         params.put("to", Date.valueOf(to));
         return jdbc.sql("SELECT branch_id, kind, count(*) AS reports, sum(cost_total_minor) AS cost"
                         + " FROM retail_usage_reports WHERE occurred_on BETWEEN :from AND :to"
+                        // An entry undone (issue #818) counts in no total, as a voided sale.
+                        + " AND NOT EXISTS (SELECT 1 FROM retail_usage_undos d WHERE d.report_id ="
+                        + " retail_usage_reports.id)"
                         + in(branchIds, "branch_id")
                         + " GROUP BY branch_id, kind")
                 .params(params)

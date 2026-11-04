@@ -7,6 +7,7 @@ import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Correction;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementCorrection;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementRow;
+import com.rincoltech.bms.retail.stock.internal.StockApi.MovementUndone;
 import com.rincoltech.bms.retail.stock.internal.StockApi.OpenStocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StandardPack;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
@@ -397,11 +398,23 @@ class StockRepository {
                        (SELECT p.code FROM retail_products p WHERE p.id = retail_stock_movements.product_id) AS product_code,
                        (SELECT p.description FROM retail_products p WHERE p.id = retail_stock_movements.product_id) AS product_description,
                        (SELECT u.name FROM retail_products p JOIN retail_units u ON u.id = p.unit_id
-                         WHERE p.id = retail_stock_movements.product_id) AS product_unit
+                         WHERE p.id = retail_stock_movements.product_id) AS product_unit,
+                       undo.undone_at, undo.undone_by, undo.undo_reason, undo.undone_by_name, entry.entry_lines
                 """)
                 .append(extra)
                 .append(" FROM ")
                 .append(source)
+                // Issue #818: an entry undone, read once per row; the lateral names only its own columns.
+                .append(" LEFT JOIN LATERAL (SELECT d.created_at AS undone_at, d.undone_by, d.reason AS undo_reason,"
+                        + " uu.full_name AS undone_by_name FROM retail_usage_undos d LEFT JOIN users uu ON uu.id ="
+                        + " d.undone_by WHERE retail_stock_movements.source_type = 'retail.usage'"
+                        + " AND d.tenant_id = retail_stock_movements.tenant_id"
+                        + " AND d.report_id = retail_stock_movements.source_id) undo ON true")
+                // The lines of the entry, counted on the server: the list may be filtered to one item or paged.
+                .append(" LEFT JOIN LATERAL (SELECT count(*) AS entry_lines FROM retail_stock_movements e"
+                        + " WHERE retail_stock_movements.source_type = 'retail.usage'"
+                        + " AND e.tenant_id = retail_stock_movements.tenant_id AND e.source_type = 'retail.usage'"
+                        + " AND e.source_id = retail_stock_movements.source_id) entry ON true")
                 .append(" WHERE true");
         Map<String, Object> params = new LinkedHashMap<>();
         if (branchIds != null) {
@@ -473,7 +486,15 @@ class StockRepository {
                         rs.getBigDecimal("balance_after") == null
                                 ? null
                                 : Quantities.format(rs.getBigDecimal("balance_after")),
-                        rs.getObject("profit_minor", Long.class)))
+                        rs.getObject("profit_minor", Long.class),
+                        rs.getTimestamp("undone_at") == null
+                                ? null
+                                : new MovementUndone(
+                                        rs.getTimestamp("undone_at").toInstant(),
+                                        rs.getObject("undone_by", UUID.class),
+                                        rs.getString("undone_by_name"),
+                                        rs.getString("undo_reason")),
+                        rs.getInt("entry_lines") > 0 ? rs.getInt("entry_lines") : null))
                 .list();
     }
 

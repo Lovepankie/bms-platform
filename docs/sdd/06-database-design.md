@@ -2574,6 +2574,15 @@ UPDATE and DELETE. A missing row means the shop has no location. `V132` also add
 `retail.entry_location.read`, granted to `tenant_admin`. Expand only. The coordinates are never logged, audited or returned
 by the API; the distance is computed on read with the haversine formula.
 
+### 6.11.3b An entry of usage or damage undone (ADR-123)
+
+Built (issue #818, migration `V133`). `retail_usage_undos`: one row per usage or damage entry undone, at most one
+(`UNIQUE (tenant_id, report_id)`, also the guard against two undos at once); `id`, `tenant_id`, `created_at` (when),
+`report_id` (composite foreign key to `retail_usage_reports`), `undone_on` (the business day of the undo), `reason`
+`varchar(300)` not blank, `undone_by`; forced RLS; append-only (SELECT and INSERT). The entry itself stays as it was. The stock
+goes back with `return` movements of source type `retail.usage_undo` naming the movements they reverse, at their unit cost; the
+shrinkage reversal is found by `journal_entries.reverses_entry_id`. Expand only: one new, empty table.
+
 ### 6.11.3a Trade capabilities (ADR-033)
 
 Built: `retail_branch_roles` (issue #191, migration V37). One row per branch at most:

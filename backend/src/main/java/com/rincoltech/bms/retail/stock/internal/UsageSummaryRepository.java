@@ -67,6 +67,9 @@ class UsageSummaryRepository {
             sql.append(" JOIN retail_products pr ON pr.tenant_id = m.tenant_id AND pr.id = m.product_id");
         }
         sql.append(" WHERE m.kind IN ('usage', 'damage')");
+        // An entry undone (issue #818) stays in the list marked Undone and, like a voided sale, counts in no total.
+        sql.append(" AND NOT EXISTS (SELECT 1 FROM retail_stock_movements r WHERE r.tenant_id = m.tenant_id"
+                + " AND r.reverses_movement_id = m.id)");
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("zone", spec.zone());
         if (spec.branchIds() != null) {
