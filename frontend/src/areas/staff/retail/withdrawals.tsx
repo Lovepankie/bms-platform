@@ -3,8 +3,8 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, retail, type Withdrawal } from '../../../api/retail';
 import { useStaff } from '../context';
-import { amountOrNull, warningWords } from './cash-state';
-import { DateField, RecordsByShop, Saved, Warnings, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
+import { amountOrNull, dateFields, warningWords } from './cash-state';
+import { DateField, RecordsByShop, Saved, Warnings, WindowFields, useEntryDate, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, holds, needsOf } from './permissions';
 import { ScreenLink } from './screen-link';
@@ -17,16 +17,17 @@ import { ActionBar } from '../../../app/ui/ActionBar';
 // Cash withdrawn from the bank into a shop's till (FR-RET-25). A withdrawal above the bank balance on
 // record is saved and comes back with a warning, never a refusal.
 
-interface WithdrawalDraft { date: string; amount: string; purpose: string }
+interface WithdrawalDraft { date: string; dateReason?: string; amount: string; purpose: string }
 
 export function WithdrawalForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Withdrawal) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const { key, draft, setDraft, finish } = usePersistedDraft<WithdrawalDraft>(`withdrawal:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: '', purpose: '' });
   const minor = amountOrNull(draft.amount);
+  const entry = useEntryDate(branchId, draft.date, draft.dateReason);
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
-    mutationFn: () => retail.createWithdrawal({ branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.purpose.trim() ? { purpose: draft.purpose.trim() } : {}) }, key),
+    mutationFn: () => retail.createWithdrawal({ branch_id: branchId, ...dateFields(entry), amount_minor: minor ?? 0, ...(draft.purpose.trim() ? { purpose: draft.purpose.trim() } : {}) }, key),
     meta: { success: 'Withdrawal saved' },
     onSuccess: (saved) => {
       finish();
@@ -34,10 +35,10 @@ export function WithdrawalForm({ branchId, onSaved }: { branchId: string; onSave
       onSaved?.(saved);
     },
   });
-  const blocked = minor === null || save.isPending;
+  const blocked = minor === null || entry.reasonMissing || save.isPending;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
-      <DateField id="withdrawal-date" label="Date" value={draft.date} onChange={(date) => setDraft((d) => ({ ...d, date }))} />
+      <DateField id="withdrawal-date" label="Date" entry={entry} value={entry.day} reason={draft.dateReason} onChange={(date) => setDraft((d) => ({ ...d, date }))} onReason={(dateReason) => setDraft((d) => ({ ...d, dateReason }))} />
       <label htmlFor="withdrawal-amount">Amount withdrawn</label>
       <input id="withdrawal-amount" inputMode="numeric" value={draft.amount} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} aria-invalid={draft.amount.trim() !== '' && minor === null} />
       {draft.amount.trim() !== '' && minor === null && <p role="alert" className="rt-flag">Enter the amount in whole shillings.</p>}

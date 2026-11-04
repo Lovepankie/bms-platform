@@ -43,6 +43,8 @@ export function lineMilli(line: TransferLineDraft): number | null {
 export interface TransferDraft {
   toBranchId: string;
   transferDate: string;
+  /** Why the owner chose an earlier day (ADR-120). */
+  dateReason?: string;
   note: string;
   lines: TransferLineDraft[];
 }

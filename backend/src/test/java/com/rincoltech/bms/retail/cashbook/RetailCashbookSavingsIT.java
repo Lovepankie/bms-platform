@@ -1,8 +1,6 @@
 package com.rincoltech.bms.retail.cashbook;
 
 import static com.rincoltech.bms.retail.cashbook.CashbookTestSupport.ALL;
-import static com.rincoltech.bms.retail.cashbook.CashbookTestSupport.CASHBOOK_SALES;
-import static com.rincoltech.bms.retail.cashbook.CashbookTestSupport.CASHIER;
 import static com.rincoltech.bms.retail.cashbook.CashbookTestSupport.daysAgo;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,6 +29,14 @@ import tools.jackson.databind.JsonNode;
 class RetailCashbookSavingsIT extends IntegrationTest {
 
     /** A caller who may see profit and record savings, but not overwrite the suggestion. */
+    /**
+     * These tests save a past day's savings, so their till people also hold the owner's earlier date (ADR-120); without it
+     * an earlier date is refused, which RetailEntryDatesIT proves.
+     */
+    static final String CASHBOOK_SALES = CashbookTestSupport.CASHBOOK_SALES + ",retail.entry.backdate";
+
+    static final String CASHIER = CashbookTestSupport.CASHIER + ",retail.entry.backdate";
+
     static final String PROFIT_RECORDER = CASHBOOK_SALES + ",retail.profit.read";
 
     /** The audit reader of ADR-022 decision 12: reads the audit log, never profit. */

@@ -232,7 +232,6 @@ describe('the savings screen for a salesperson', () => {
 describe('the savings screen for sales staff', () => {
   const sales = mockMe('sales');
   const shown: SavingsSuggestion = { branch_id: branch, business_date: today, total_sold_minor: 50000, suggestion_token: 'tok-1', suggested_minor: 4000, may_change_amount: true };
-  const monthStart = `${today.slice(0, 8)}01`;
 
   // The owner's request on PR #800: a saved day shows only what was saved, for the seller and for the owner, never its suggestion.
   it.each([
@@ -288,7 +287,10 @@ describe('the savings screen for sales staff', () => {
 
     await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
     expect(savingsSuggestion).toHaveBeenCalledWith(expect.objectContaining({ salesStaff: true }));
-    expect((screen.getByLabelText('Date') as HTMLInputElement).min).toBe(monthStart);
+    // ADR-120: the app dates the seller's savings today, so there is no date box.
+    expect(screen.queryByLabelText('Date')).toBeNull();
+    expect(savingsSuggestion).toHaveBeenCalledWith(expect.objectContaining({ date: today }));
+    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day/);
     const records = await screen.findByRole('region', { name: 'Savings records' });
     await waitFor(() => expect(records.textContent).toContain('Saved in all shops UGX 3,500'));
     // The month headings carry their totals, last month's included, and each person their own.

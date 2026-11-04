@@ -132,9 +132,6 @@ export function PeriodPicker({ from, to, onChange, label = 'Days to show', maxDa
         title="Choose the days"
         actions={
           <>
-            <button type="button" className="btn-primary" onClick={show}>
-              Show these days
-            </button>
             {openStart && (
               <button
                 type="button"
@@ -146,6 +143,9 @@ export function PeriodPicker({ from, to, onChange, label = 'Days to show', maxDa
                 Show every day
               </button>
             )}
+            <button type="button" className="btn-primary" onClick={show}>
+              Show these days
+            </button>
           </>
         }
       >

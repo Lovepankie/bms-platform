@@ -25,6 +25,7 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.SavingsRow;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookSupport.SalespeopleSavings;
 import com.rincoltech.bms.retail.reports.DailyProfits;
+import com.rincoltech.bms.retail.stock.EntryDates;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import java.math.BigDecimal;
@@ -227,6 +228,8 @@ class SavingsService {
         UUID branch = resolveBranch(caller, setting, r.branchId());
         branchContext.requireSells(branch, "branch_id");
         LocalDate date = businessDate(caller, r.businessDate(), "business_date");
+        // ADR-120: an earlier day is the owner's, with a reason, on the till's route and on the sales staff's alike.
+        EntryDates.Backdate backdate = support.entryDates().check(date, "business_date", r.dateReason(), branch);
         boolean profit = mayProfit(branch);
         boolean salesperson = !profit && setting.on();
         if (r.suggestionToken() == null || r.suggestionToken().isBlank()) {
@@ -325,6 +328,7 @@ class SavingsService {
             after.put("salespeople_setting", true);
         }
         audit.record(AuditLog.Entry.created("retail.savings.created", "retail.savings", id, branch, after));
+        support.entryDates().audit(backdate, "retail.savings", id, branch);
         return view(repo.savings(id, false).orElseThrow(), setting);
     }
 

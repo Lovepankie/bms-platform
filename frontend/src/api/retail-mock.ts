@@ -53,7 +53,7 @@ const ADMIN_PERMISSIONS = [
   'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.write_off', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return', 'retail.controls.read', 'retail.sale.all_sellers', 'core.billing.read', 'retail.entry_location.read',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void', 'retail.payable.manage',
-  'retail.till.close',
+  'retail.till.close', 'retail.entry.backdate',
 ];
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */
@@ -1259,10 +1259,10 @@ export function createMockRetail(): RetailApi {
         total += lineTotal(l.cost_minor, qtyTotal);
         return { id: nextId('p'), line_no: n + 1, product_id: p.id, code: p.code, description: p.description, cost_minor: l.cost_minor, sell_minor: p.sellMinor, qty_total: fromMilli(qtyTotal), qty_by_branch: l.qty_by_branch, line_total_minor: lineTotal(l.cost_minor, qtyTotal), base_unit: p.unit };
       });
-      const made: Purchase = { id: nextId('6'), purchase_no: `P-${String(seq).padStart(6, '0')}`, ...(body.supplier_id ? { supplier_id: body.supplier_id } : {}), purchased_on: body.purchased_on, payment_method: body.payment_method, currency: 'UGX', lines, total_minor: total, status: 'posted', ...(body.note ? { note: body.note } : {}) };
+      const made: Purchase = { id: nextId('6'), purchase_no: `P-${String(seq).padStart(6, '0')}`, ...(body.supplier_id ? { supplier_id: body.supplier_id } : {}), purchased_on: body.purchased_on ?? today(), payment_method: body.payment_method, currency: 'UGX', lines, total_minor: total, status: 'posted', ...(body.note ? { note: body.note } : {}) };
       purchases.push({ ...made, before });
       if (body.payment_method === 'credit' && body.supplier_id) {
-        purchasingApi.recordCreditRestock({ id: made.id ?? '', purchase_no: made.purchase_no ?? '', supplier_id: body.supplier_id, date: body.purchased_on, total_minor: total });
+        purchasingApi.recordCreditRestock({ id: made.id ?? '', purchase_no: made.purchase_no ?? '', supplier_id: body.supplier_id, date: made.purchased_on ?? today(), total_minor: total });
       }
       return made;
       })),

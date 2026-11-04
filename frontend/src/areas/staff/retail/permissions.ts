@@ -93,6 +93,8 @@ export const TILL = 'retail.till.close';
 export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
 export const CASHBOOK_READ = 'retail.cashbook.read';
 export const CASHBOOK_VOID = 'retail.cashbook.void';
+/** ADR-120 (issue #811): date an entry earlier than today, with a reason; the owner's. Without it the app dates it today. */
+export const BACKDATE = 'retail.entry.backdate';
 export const EXPENSE_MANAGE = 'retail.expense.manage';
 export const EXPENSE_RECORD = 'retail.expense.record';
 

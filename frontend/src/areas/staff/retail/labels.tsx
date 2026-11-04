@@ -80,13 +80,14 @@ export function LabelsPage() {
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={safe} onChange={(e) => setSafe(e.target.checked)} />
         My printer cannot print to the edge: keep 4 mm clear inside each label
       </label>
+      {/* The main action last, so on a laptop it stands at the right of the bar with the page order kept (#825). */}
       <ActionBar>
-        <BusyButton type="button" className="rt-primary" data-tour="labels-make" busy={make.isPending} notReady={rows.length === 0} onClick={() => make.mutate()}>
-          Make the labels
-        </BusyButton>
         <button type="button" data-tour="labels-print" disabled={sheet.length === 0} onClick={() => window.print()}>
           Print
         </button>
+        <BusyButton type="button" className="rt-primary" data-tour="labels-make" busy={make.isPending} notReady={rows.length === 0} onClick={() => make.mutate()}>
+          Make the labels
+        </BusyButton>
       </ActionBar>
       {sheet.length > 0 && (
         <div className={safe ? 'label-sheet label-safe' : 'label-sheet'} data-testid="label-sheet" aria-label="Label sheet">

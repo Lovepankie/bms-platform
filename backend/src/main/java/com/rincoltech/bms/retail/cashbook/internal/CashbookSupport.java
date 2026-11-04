@@ -7,6 +7,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
+import com.rincoltech.bms.retail.stock.EntryDates;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -57,16 +58,19 @@ class CashbookSupport {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final JdbcClient jdbc;
+    private final EntryDates entryDates;
     private final byte[] tokenKey;
 
     CashbookSupport(
             CurrentTenant tenant,
             BusinessClock clock,
             JdbcClient jdbc,
+            EntryDates entryDates,
             @Value("${bms.auth.data-key:}") String dataKey) {
         this.tenant = tenant;
         this.clock = clock;
         this.jdbc = jdbc;
+        this.entryDates = entryDates;
         byte[] key;
         if (dataKey == null || dataKey.isBlank()) {
             // The dev and test profiles may leave the data key blank; a token then lives until a restart.
@@ -115,6 +119,36 @@ class CashbookSupport {
                     List.of(new FieldProblem(field, "future_date", "A date cannot be in the future.")));
         }
         return date;
+    }
+
+    /** The date of an entry and, when it is before today, the owner's checked backdate (ADR-120); else none. */
+    record Dated(LocalDate date, EntryDates.Backdate backdate) {}
+
+    /**
+     * The business date of a new entry (ADR-120): today when absent, never in the future, and before today only from a
+     * holder of {@code retail.entry.backdate} at the branch, with a reason.
+     */
+    Dated entryDate(LocalDate requested, String field, String reason, UUID branch) {
+        LocalDate date = businessDate(requested, field);
+        return new Dated(date, entryDates.check(date, field, reason, branch));
+    }
+
+    /**
+     * ADR-120: the time of a banking or a withdrawal is part of its date. A time on an earlier day is gated like the date,
+     * and audited when the business date itself is today (review of #831), so either earlier day leaves its audit row.
+     */
+    Dated withTime(Dated dated, Instant at, String field, String reason, UUID branch) {
+        EntryDates.Backdate time = entryDates.check(dayOf(at), field, reason, branch);
+        return dated.backdate() != null || time == null ? dated : new Dated(dated.date(), time);
+    }
+
+    /** The {@code retail.entry.backdated} audit row of an entry dated before today; nothing otherwise. */
+    void auditBackdate(Dated dated, String entityType, UUID id, UUID branch) {
+        entryDates.audit(dated.backdate(), entityType, id, branch);
+    }
+
+    EntryDates entryDates() {
+        return entryDates;
     }
 
     /** The first and last day of a report: the last 30 days by default, at most 366. */

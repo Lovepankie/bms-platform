@@ -458,7 +458,7 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
 
   // Item 6: the main action is brand filled and never looks off; on a phone it sticks full width at the bottom.
   it('keeps the main action of the forms of the audit in the sticky ActionBar, and never greys one whose fields are not ready', () => {
-    for (const screen of ['banking', 'expenses', 'savings', 'withdrawals', 'usage', 'transfer', 'catalogue-import', 'labels', 'sale']) {
+    for (const screen of ['banking', 'expenses', 'savings', 'withdrawals', 'usage', 'transfer', 'catalogue-import', 'labels', 'sale', 'restock', 'shop-setup']) {
       expect(code(`areas/staff/retail/${screen}.tsx`), screen).toMatch(/<ActionBar\b|<SaleBar\b/);
     }
     const phone = code('app/ui/kit.css').match(/@media \(max-width: 719px\) \{\s*\.action-bar \{([^}]*)\}/)?.[1] ?? '';
@@ -672,5 +672,229 @@ describe('design guard, no bare Price or Cost label on a retail screen (issue #6
 
   it.each([...files(join(SRC, 'areas/staff/retail'), /\.tsx$/), ...files(join(SRC, 'offline'), /\.tsx$/)].map((f) => relative(SRC, f)))('%s has no bare Price or Cost label', (file) => {
     expect(code(file).match(BARE_PRICE_LABEL)?.[0] ?? null).toBeNull();
+  });
+});
+
+// Issue #825: every button is a 48 by 48px target on a phone and as wide as its label on a laptop (buttons.css), which
+// layout/buttons.layout.test.ts measures on the daily screens. A class named as a tap target (.btn, .btn-*, .chip, .pill and
+// *-btn, *-button, *-chip, *-pill, *-clear, *-close, *-toggle) is listed here once it has been checked against those sizes, so a
+// new one fails until it is; and no rule of a listed class may make its target smaller than --tap. JUSTIFICATION-A3: the issue
+// asks for this design-guard rule.
+const BUTTON_CLASS = /\.((?:btn(?:-[a-z0-9]+)*)|chip|pill|(?:[a-z0-9-]+-(?:btn|button|chip|pill|clear|close|toggle)))(?![\w-])/g;
+// Named like a target but drawn as a picture inside one, never tapped on its own: listed with why, and not held to --tap.
+const NOT_TARGETS: Record<string, string> = {
+  'icon-chip': 'the icon tile inside a Tile or a landing card, whose whole card is the target',
+  'swatch-chip': 'a colour sample on the style page',
+};
+const BUTTON_CLASSES: Record<string, string> = {
+  'find-chip': 'a category filter of My stock and Items, --tap tall',
+  'rc-chip': 'a range of the shop charts, --tap tall since #825',
+  'sb-clear': 'the Clear of a SearchBox, 48 by 48px since #825',
+  'sheet-close': 'the Close of a Sheet, 48px square',
+  'side-menu-close': 'the Close of the phone menu, a plain button',
+  'tour-close': 'the Close of a tour step, 48px wide',
+  btn: 'a link drawn as a button; the base rule of buttons.css',
+  'btn-block': 'full width on a phone, its label wide on a laptop',
+  'btn-brand': 'the primary fill in the tenant colour',
+  'btn-danger': 'destroys or refuses',
+  'btn-ghost': 'a quiet action, still a 48px target',
+  'btn-icon': 'sizes the icon inside, never the target',
+  'btn-lg': 'taller than --tap',
+  'btn-primary': 'the one main action',
+  'btn-sm': 'smaller text and padding, still 48 by 48px',
+  'busy-button': 'keeps its width while busy',
+  'help-tip-button': 'a 48px question mark',
+  'iv-drill-btn': 'an insights drill down, --tap tall',
+  'iv-tip-btn': 'an insights tip, 48 by 48px',
+  'iv-value-btn': 'an insights figure that opens its rows, --tap tall',
+  'menu-button': 'the phone menu, 48px wide',
+  'refresh-button': 'the staff bar Refresh, a plain button',
+  'sync-button': 'the staff bar sync indicator, 48 by 48px',
+  'top-menu-button': 'the staff bar account menu, 48px wide',
+};
+// A size of a target (width, height, inline-size, block-size, with or without min- or max-) and its value.
+// JUSTIFICATION-A3: review of #833 found the one regex missed max-*, logical sizes, var() and calc(); this replaces it.
+const SIZE_DECL = /^\s*(?:(?:min|max)-)?(?:height|width|inline-size|block-size)\s*:\s*(.+?)\s*(?:!important)?\s*$/;
+// Every token of theme.css (its first value), so a var() is read as the size it stands for, through other tokens and rem.
+const TOKENS = new Map<string, string>();
+for (const [, name, value] of code('app/theme.css').matchAll(/(--[\w-]+):\s*([^;]+);/g)) if (!TOKENS.has(name as string)) TOKENS.set(name as string, (value as string).trim());
+// The classes of targets that are not named as buttons: the staff top bar's Search and Ask, the Hint's info button, the rows
+// and headers that open something, the category picker, the theme menu. A rule ending on one is held to --tap as well.
+const TARGET_CLASSES = ['find-open', 'ask-open', 'hint-more', 'list-row', 'link-row', 'cat-head', 'cp-trigger', 'theme-menu-item'];
+
+/** The px a size stands for (px, rem or em at 16px, zero, a token), 'part' for a percentage, or null when the guard cannot tell. */
+function pxOf(value: string, depth = 0): number | 'part' | null {
+  const v = value.trim();
+  if (/^\d*\.?\d+%$/.test(v)) return 'part';
+  if (v === '0') return 0;
+  const px = /^(\d*\.?\d+)px$/.exec(v)?.[1];
+  if (px !== undefined) return Number(px);
+  const em = /^(\d*\.?\d+)r?em$/.exec(v)?.[1];
+  if (em !== undefined) return Number(em) * 16;
+  const token = /^var\((--[\w-]+)\)$/.exec(v)?.[1];
+  if (token && depth < 8) {
+    const held = TOKENS.get(token);
+    if (held === undefined) return null;
+    // A token made from --tap and more (the tab bar's height) is at least the target.
+    if (/^calc\(/.test(held) && /var\(--tap\)\s*\+/.test(held)) return 48;
+    return pxOf(held, depth + 1);
+  }
+  return null;
+}
+
+/** The arguments of a CSS function call, split at its own commas. */
+const argsOf = (call: string) => call.slice(call.indexOf('(') + 1, call.lastIndexOf(')')).split(/,(?![^(]*\))/).map((a) => a.trim());
+
+/**
+ * True when a size value can be under the 48px target: a length or token under 48px; a min() with any argument under 48px or
+ * one the guard cannot read; a max() with no argument of 48px or more; a clamp() whose floor is under 48px; a calc() without
+ * --tap. A min() or max() against 100% reads its other arguments. Words such as auto, none, fit-content or 100% pass.
+ */
+function underTap(value: string): boolean {
+  const v = value.trim();
+  if (/^min\(/.test(v)) return argsOf(v).map((a) => pxOf(a)).some((n) => n === null || (typeof n === 'number' && n < 48));
+  if (/^max\(/.test(v)) return !argsOf(v).map((a) => pxOf(a)).some((n) => n === 'part' || (typeof n === 'number' && n >= 48));
+  if (/^clamp\(/.test(v)) { const floor = pxOf(argsOf(v)[0] ?? ''); return !(typeof floor === 'number' && floor >= 48); }
+  if (/^calc\(/.test(v)) return !/var\(--tap\)/.test(v);
+  const n = pxOf(v);
+  if (n === 'part') return false;
+  if (n === null) return /^var\(/.test(v);
+  return n < 48;
+}
+
+/** True when the last part of a selector is a target: a listed button class, a target class, or a button element. */
+function namesTarget(selector: string): boolean {
+  const last = selector.split(/\s+|>|\+|~/).filter(Boolean).pop() ?? '';
+  if (/::/.test(last)) return false;
+  return [...last.matchAll(BUTTON_CLASS)].some(([, c]) => (c as string) in BUTTON_CLASSES)
+    || TARGET_CLASSES.some((c) => new RegExp(`\\.${c}(?![\\w-])`).test(last))
+    || /^button(?![\w-])/.test(last);
+}
+
+/** The button classes a stylesheet's selectors name. */
+const buttonClassesIn = (css: string) => new Set([...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)].flatMap(([, sel]) => [...(sel as string).matchAll(BUTTON_CLASS)].map(([, c]) => c as string)));
+
+// JUSTIFICATION-A3: the third review of #833 asks for a guard over the order of every sheet's actions; no reader of JSX props exists.
+const PRIMARY_CLASS = /\b(?:rt-primary|btn-primary|btn-brand|btn-danger)\b/;
+
+/**
+ * What is wrong with the order of each sheet's actions in `source`: the `actions={...}` of every `<Sheet>` (up to its `</Sheet>`
+ * or the end of a self-closed tag), its button tags in order (button, BusyButton, a Link drawn as a button), and of two or more
+ * the one with a primary class must be the last. A sheet of one button may have any.
+ */
+function sheetActionProblems(source: string): string[] {
+  return [...source.matchAll(/<Sheet\b/g)].flatMap((m) => {
+    const rest = source.slice(m.index);
+    const start = rest.indexOf('actions={');
+    const end = rest.indexOf('</Sheet>');
+    if (start < 0 || (end >= 0 && start > end)) return [];
+    let depth = 0;
+    let i = start + 'actions='.length;
+    for (; i < rest.length; i++) {
+      if (rest[i] === '{') depth++;
+      else if (rest[i] === '}' && --depth === 0) break;
+    }
+    const actions = rest.slice(start, i);
+    // Each button tag's attributes run to the first > outside braces, so an onClick={() => ...} does not end them.
+    const tags = [...actions.matchAll(/<(?:button|BusyButton|Link)\b/g)].map((t) => {
+      let braces = 0;
+      let j = (t.index ?? 0) + t[0].length;
+      for (; j < actions.length && !(actions[j] === '>' && braces === 0); j++) braces += actions[j] === '{' ? 1 : actions[j] === '}' ? -1 : 0;
+      return actions.slice(t.index, j).match(PRIMARY_CLASS)?.[0] ?? 'plain';
+    });
+    if (tags.length < 2) return [];
+    const primaries = tags.filter((t) => t !== 'plain').length;
+    if (primaries === 0) return [`no primary among ${tags.length} buttons`];
+    return primaries === 1 && tags.at(-1) !== 'plain' ? [] : [`the primary is not last: ${tags.join(', ')}`];
+  });
+}
+
+/** The rules of `css` whose selector ends on a target (the target itself, not an icon inside it) and can shrink it. */
+function shrinkingButtons(css: string): string[] {
+  return rulesOf(css).flatMap(({ selectors, body }) => {
+    const targets = selectors.filter(namesTarget);
+    return targets.length > 0 && body.split(';').some((decl) => underTap(SIZE_DECL.exec(decl)?.[1] ?? 'auto')) ? targets : [];
+  });
+}
+
+describe('design guard, every button class keeps the 48px target (issue #825)', () => {
+  it('finds a button class and a size under the target, and passes the target and an icon inside', () => {
+    expect([...buttonClassesIn('.btn-tiny:hover { color: red; } .save-btn, .x-button > svg { width: 20px; }')].sort()).toEqual(['btn-tiny', 'save-btn', 'x-button']);
+    expect(shrinkingButtons('.btn-sm { min-height: 36px; }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.btn-sm { height: 2rem; }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.bar .btn-ghost { min-width: 0; }')).toEqual(['.bar .btn-ghost']);
+    expect(shrinkingButtons('.btn-sm { min-height: var(--tap); padding: 6px 12px; }')).toEqual([]);
+    expect(shrinkingButtons('.btn-icon svg { width: 20px; height: 20px; }')).toEqual([]);
+    expect(shrinkingButtons('.btn-lg { min-height: 52px; }')).toEqual([]);
+    // The bypasses the review of #833 found: a maximum, a logical size, a small token and a sum the guard cannot work out.
+    expect(shrinkingButtons('.btn-sm { max-height: 36px; }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.btn-sm { block-size: 40px; }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.btn-sm { min-inline-size: 2em; }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.btn-sm { min-height: var(--space-6); }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.btn-sm { height: calc(2rem + 4px); }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.rc-chip { min-height: 40px; }')).toEqual(['.rc-chip']);
+    expect(shrinkingButtons('.btn-sm { height: calc(var(--tap) + 4px); max-width: min(100%, var(--button-max)); }')).toEqual([]);
+    // The second review of #833: a token through another token, a rem token, a min() against 100%, an element and the top bar.
+    expect(shrinkingButtons('.btn-sm { min-height: var(--tap-gap); }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.btn-sm { min-height: var(--text-xl); }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.btn-sm { min-height: min(100%, 20px); }')).toEqual(['.btn-sm']);
+    expect(shrinkingButtons('.foo button { height: 32px; }')).toEqual(['.foo button']);
+    expect(shrinkingButtons('.staff-bar-top .find-open, .ask-open:hover { min-width: 40px; }')).toEqual(['.staff-bar-top .find-open', '.ask-open:hover']);
+    expect(shrinkingButtons('.btn-sm { min-width: min(100%, var(--button-min-wide)); } .foo button svg { width: 20px; }')).toEqual([]);
+    expect([...buttonClassesIn('.chip, .x-pill, .y-clear, .z-close, .w-toggle { color: red; }')].sort()).toEqual(['chip', 'w-toggle', 'x-pill', 'y-clear', 'z-close']);
+  });
+
+  it('lists every button class a stylesheet names, with what it is', () => {
+    const named = new Set(allStylesheets.flatMap((f) => [...buttonClassesIn(readFileSync(f, 'utf8'))]));
+    const unlisted = [...named].filter((c) => !(c in BUTTON_CLASSES) && !(c in NOT_TARGETS));
+    expect(unlisted, 'a new button class: check it is 48 by 48px on a phone and as wide as its label on a laptop, then list it').toEqual([]);
+    expect([...Object.keys(BUTTON_CLASSES), ...Object.keys(NOT_TARGETS)].filter((c) => !named.has(c)), 'a listed class no stylesheet names any more').toEqual([]);
+  });
+
+  // Review of #833: the ActionBar and the sheet's buttons are seen in the order of the page, so the Tab order matches (WCAG 2.4.3).
+  // What is seen matches the Tab order (WCAG 2.4.3): no stylesheet moves a box away from its place in the page, and no component
+  // does so in an inline style. A grid placement is allowed in general layout, but never on the ActionBar, a sheet's foot or a
+  // button in them.
+  it.each(allStylesheets.map((f) => relative(SRC, f)))('%s never reorders what it draws', (file) => {
+    const css = code(file);
+    expect(css.match(/row-reverse|column-reverse|(?<![\w-])order\s*:|direction\s*:\s*rtl|grid-auto-flow\s*:[^;]*dense|(?<![\w-])float\s*:\s*(?:left|right|inline-start|inline-end)/)?.[0] ?? null).toBeNull();
+    const bars = rulesOf(css).filter(({ selectors }) => selectors.some((s) => /\.(?:action-bar|sheet-actions)(?![\w-])/.test(s)));
+    expect(bars.filter(({ body }) => /grid-(?:column|row|area)\s*:/.test(body)).map(({ selectors }) => selectors.join(', '))).toEqual([]);
+  });
+
+  it.each(components.map((f) => relative(SRC, f)))('%s never reorders what it draws in an inline style', (file) => {
+    expect(code(file).match(/flexDirection:\s*['"`](?:row|column)-reverse|(?<![\w-])order:\s*[-\d'"`]|direction:\s*['"`]rtl|float:\s*['"`]/)?.[0] ?? null).toBeNull();
+  });
+
+  // The Sheet contract (issue #825): of the buttons in a sheet's actions, one is the primary, named by its class, and it is the last.
+  it('finds the buttons of a sheet in order, and a primary that is not last', () => {
+    expect(sheetActionProblems('<Sheet open actions={<><button className="btn-primary">Save</button><button>Cancel</button></>}>')).toEqual(['the primary is not last: btn-primary, plain']);
+    expect(sheetActionProblems('<Sheet open actions={<><button>A</button><button>B</button></>}>')).toEqual(['no primary among 2 buttons']);
+    expect(sheetActionProblems('<Sheet open actions={<>{x && <BusyButton type="button">Remove</BusyButton>}<BusyButton className="rt-primary">Save</BusyButton></>}>')).toEqual([]);
+    expect(sheetActionProblems('<Sheet open actions={<button className="rt-primary">Done</button>}>')).toEqual([]);
+    // A class after an arrow function handler is still read (the fourth review of #833).
+    expect(sheetActionProblems('<Sheet open actions={<><button onClick={() => go()} className="btn-primary">Go</button><button onClick={() => x > 1}>No</button></>}>')).toEqual(['the primary is not last: btn-primary, plain']);
+    expect(sheetActionProblems('<Sheet open actions={<><button onClick={() => no()}>No</button><BusyButton onClick={() => go()} className="rt-primary">Go</BusyButton></>}>')).toEqual([]);
+  });
+
+  it.each(components.filter((f) => /<Sheet\b/.test(readFileSync(f, 'utf8'))).map((f) => relative(SRC, f)))('%s puts the primary button of every sheet last', (file) => {
+    expect(sheetActionProblems(code(file))).toEqual([]);
+  });
+
+  it.each(allStylesheets.map((f) => relative(SRC, f)))('%s never makes a button smaller than the target', (file) => {
+    expect(shrinkingButtons(code(file))).toEqual([]);
+  });
+
+  it('keeps the sizes on the tokens: 48px, 8px apart, at most --button-max wide from 1024px', () => {
+    const theme = code('app/theme.css');
+    expect(theme).toMatch(/--tap:\s*48px/);
+    expect(theme).toMatch(/--tap-gap:\s*var\(--space-2\)/);
+    expect(theme).toMatch(/--button-max:\s*[\d.]+rem/);
+    const base = rulesOf(code('app/ui/buttons.css')).find(({ selectors }) => selectors.includes('button') && selectors.includes('.btn'));
+    expect(base?.body).toMatch(/min-width:\s*var\(--tap\)/);
+    expect(base?.body).toMatch(/min-height:\s*var\(--tap\)/);
+    for (const file of ['app/ui/buttons.css', 'app/ui/forms.css', 'app/ui/retail.css']) {
+      expect(code(file), file).toMatch(/@media \(min-width: 1024px\)[\s\S]*?max-width:\s*min\(100%,\s*var\(--button-max\)\)/);
+    }
   });
 });

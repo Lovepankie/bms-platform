@@ -1897,6 +1897,24 @@ spreadsheet catalogue showed it, without the Switch button that moved them to th
 - The search, the filters, the category chips and their counts are those of the shop in use. The list comes in the same request
   as before, page by page, and is kept for reading offline with the rest of My stock.
 
+## Out of stock and Only N left on Record sale (issue #815)
+
+The owner's old app warned in red and orange when an item was running out; BMS showed the bare number. Record sale now says it
+in words, as the old app did.
+
+- **In the item picker** each match whose stock here is zero or below says **Out of stock**, and one at or below its low stock
+  level says **Only N left** (for example "Only 4 left"); an item above its level says nothing more. The level is the one the
+  Low tab of My stock uses: the shop's own minimum, else the item's, else the low stock threshold of ADR-029 (10 since issue #830, pull request #832). Like the Low tab, it
+  judges the whole balance here, stock kept for customer orders included.
+- **On the sale line** the same words sit beside the item's name, from the stock read when the item was picked or scanned.
+  They describe the shop's stock, not the quantity typed on the line: 8 of an item with 4 left still says Only 4 left.
+- **How it looks:** a tinted badge with an icon and the words (the circle with an exclamation mark for Out of stock on the
+  danger tint, the triangle for Only N left on the warning tint). Never colour alone, no stripe, no gradient.
+- **Selling past the stock is not changed:** the words only inform; the sale goes on as before and the server decides as before.
+- **Offline** the words come from the copy of the items saved on the phone, which carries the level with the stock
+  (`low_stock_level` on `GET /retail/products` with `branch_id`, and on the barcode lookup). A copy saved before the level was
+  sent still says Out of stock at zero.
+
 ## Where is my stock (issue #728)
 
 A shop owner added his items with Quick add at his store, looked at My stock in his main shop, saw 0 and thought his numbers

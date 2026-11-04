@@ -3,9 +3,10 @@ import { useId, useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, daysBefore } from '../../../api/retail';
 import { useStaff } from '../context';
-import { enteredBy, groupByShopMonth, savedFor, voidOffered } from './cash-state';
+import { Hint } from '../../../app/ui/Hint';
+import { MIN_DATE_REASON, entryDate, enteredBy, groupByShopMonth, savedFor, voidOffered, type EntryDate } from './cash-state';
 import { newIdempotencyKey } from './idempotency';
-import { CASHBOOK_VOID, branchesWhere, holds } from './permissions';
+import { BACKDATE, CASHBOOK_VOID, branchesWhere, holds, holdsAt } from './permissions';
 import { Problem, useBranchName, useBranchView } from './ui';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
@@ -13,12 +14,29 @@ import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 // date window of a list or report, the success message, the Void action and the records grouped by
 // shop, year and month.
 
-/** A date in the business zone, never after today (the server refuses a future date). */
-export function DateField({ id, label, value, onChange, min }: { id: string; label: string; value: string; onChange: (value: string) => void; min?: string }) {
+/** ADR-120 (issue #811): the date of a new entry at a branch, from the person's permission and what they chose. */
+export function useEntryDate(branchId: string | null | undefined, chosen: string | undefined, reason: string | undefined): EntryDate {
+  const { me } = useStaff();
+  return entryDate(holdsAt(me, BACKDATE, branchId), chosen, reason, businessToday());
+}
+
+/**
+ * The date of a new entry, never after today, shown only to the owner (ADR-120): the app dates it today for everyone else,
+ * so nobody else sees a box. An earlier day asks why; the reason is kept in the audit log.
+ */
+export function DateField({ id, label, entry, value, reason, onChange, onReason, min }: { id: string; label: string; entry: EntryDate; value: string; reason: string | undefined; onChange: (value: string) => void; onReason: (value: string) => void; min?: string }) {
+  if (!entry.mayChoose) return null;
   return (
     <>
       <label htmlFor={id}>{label}</label>
       <input id={id} type="date" value={value} min={min} max={businessToday()} onChange={(e) => onChange(e.target.value)} />
+      {entry.earlier && (
+        <>
+          <label htmlFor={`${id}-reason`}>Why an earlier date</label>
+          <input id={`${id}-reason`} maxLength={300} value={reason ?? ''} onChange={(e) => onReason(e.target.value)} aria-invalid={entry.reasonMissing} />
+          <Hint>Say why in at least {MIN_DATE_REASON} characters. It is kept in the audit log.</Hint>
+        </>
+      )}
     </>
   );
 }

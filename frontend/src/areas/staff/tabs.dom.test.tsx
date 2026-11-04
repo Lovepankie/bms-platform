@@ -455,7 +455,9 @@ describe('the tab bar styles', () => {
     expect(rule('.tab-bar')).toMatch(/position: fixed/);
     expect(rule('.tab-bar')).toMatch(/env\(safe-area-inset-bottom\)/);
     expect(rule('.tab-bar')).toMatch(/env\(safe-area-inset-left\)/);
-    expect(rule('.tab')).toMatch(/min-height: var\(--tab-height\)/);
+    // Issue #825: the bar keeps --tap-gap above the tabs, so a tab is that much shorter, still taller than 48px, the bar as tall.
+    expect(rule('.tab-bar')).toMatch(/padding: var\(--tap-gap\) /);
+    expect(rule('.tab')).toMatch(/min-height: calc\(var\(--tab-height\) - var\(--tap-gap\)\)/);
     expect(rule('.tab')).toMatch(/min-width: var\(--tap\)/);
     expect(rule('.has-tab-bar')).toMatch(/--tab-bar: calc\(var\(--tab-height\) \+ 1px \+ env\(safe-area-inset-bottom\)\)/);
   });

@@ -22,6 +22,7 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.CategoryRo
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.ExpenseRow;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.ItemRow;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.PartyRow;
+import com.rincoltech.bms.retail.stock.EntryDates;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import java.time.Instant;
@@ -116,7 +117,13 @@ class ExpenseService {
 
     /** An expense checked and ready to write, under the branch-day lock. */
     private record Checked(
-            UUID branch, LocalDate date, CategoryRow category, ItemRow item, PartyRow party, String explanation) {}
+            UUID branch,
+            LocalDate date,
+            EntryDates.Backdate backdate,
+            CategoryRow category,
+            ItemRow item,
+            PartyRow party,
+            String explanation) {}
 
     @Transactional
     Outcome<ExpenseOutcome> create(String key, ExpenseRequest r) {
@@ -129,7 +136,7 @@ class ExpenseService {
      */
     private ExpenseOutcome recordOrAsk(ExpenseRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.EXPENSE_RECORD, r.branchId());
-        Checked c = check(branch, r);
+        Checked c = check(branch, r, false);
         Approvals.Rule rule = approvals.rule(ExpenseAction.TYPE);
         if (rule.asks(r.amountMinor())) {
             ExpenseRequest fixed = new ExpenseRequest(
@@ -140,7 +147,8 @@ class ExpenseService {
                     r.partyId(),
                     r.amountMinor(),
                     r.explanation(),
-                    r.receiptDocumentId());
+                    r.receiptDocumentId(),
+                    c.backdate() == null ? null : c.backdate().reason());
             UUID id = UUID.randomUUID();
             Approvals.Outcome o = approvals.request(
                     new ActionRequest(
@@ -168,11 +176,24 @@ class ExpenseService {
     void recordApproved(UUID id, Map<String, Object> payload, UUID makerId) {
         ExpenseRequest r = mapper.convertValue(payload, ExpenseRequest.class);
         // A refusal here makes the request stale with its reason: the approvals module's one stale policy (ADR-091).
-        write(id, check(r.branchId(), r), r, makerId);
+        write(id, check(r.branchId(), r, true), r, makerId);
     }
 
-    private Checked check(UUID branch, ExpenseRequest r) {
-        LocalDate date = support.businessDate(r.businessDate(), "business_date");
+    /**
+     * ADR-120: the maker's date is gated when they ask; on approval the date fixed then is kept (it may be before the day
+     * of the approval) and its reason, if any, is audited with the expense.
+     */
+    private Checked check(UUID branch, ExpenseRequest r, boolean approved) {
+        LocalDate date;
+        EntryDates.Backdate backdate;
+        if (approved) {
+            date = support.businessDate(r.businessDate(), "business_date");
+            backdate = support.entryDates().approved(date, r.dateReason());
+        } else {
+            CashbookSupport.Dated dated = support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch);
+            date = dated.date();
+            backdate = dated.backdate();
+        }
         // The savings cap reads the day's expenses under the same lock (ADR-080 decision 3).
         repo.lockBranchDay(branch, date);
         CategoryRow category = repo.category(r.categoryId(), false)
@@ -206,7 +227,7 @@ class ExpenseService {
             throw ApiException.validation(
                     List.of(new FieldProblem("receipt_document_id", "unknown_document", "No such uploaded receipt.")));
         }
-        return new Checked(branch, date, category, item, party, explanation);
+        return new Checked(branch, date, backdate, category, item, party, explanation);
     }
 
     private Expense write(UUID id, Checked c, ExpenseRequest r, UUID by) {
@@ -242,6 +263,7 @@ class ExpenseService {
         after.put("item", item.name());
         after.put("amount_minor", amount);
         audit.record(AuditLog.Entry.created("retail.expense.created", "retail.expense", id, branch, after));
+        support.entryDates().audit(c.backdate(), "retail.expense", id, branch);
         return view(repo.expense(id, false).orElseThrow());
     }
 
@@ -328,9 +350,11 @@ class ExpenseService {
                     r.partyId(),
                     r.amountMinor(),
                     linked(r.explanation(), old),
-                    r.receiptDocumentId());
+                    r.receiptDocumentId(),
+                    r.dateReason());
             UUID branch = branchContext.resolve(CashbookSupport.EXPENSE_RECORD, old.branchId());
-            Checked c = check(branch, edited);
+            // ADR-120: the edited expense is a new entry; an earlier day is the owner's, with a reason, audited.
+            Checked c = check(branch, edited, false);
             if (approvals.rule(ExpenseAction.TYPE).asks(edited.amountMinor())) {
                 throw ApiException.rule(
                         "edit_needs_approval",
