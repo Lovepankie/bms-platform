@@ -60,7 +60,7 @@ describe.each([1, 1.5])('Call, Text and WhatsApp at 412px, font scale %s (#817)'
         expect(b.height, who).toBeGreaterThanOrEqual(TAP);
         expect(b.width, who).toBeGreaterThanOrEqual(TAP);
       }
-      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(apart(boxes[i], boxes[j]), who).toBeGreaterThanOrEqual(GAP - 0.5);
+      boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b) => expect(apart(a, b), who).toBeGreaterThanOrEqual(GAP - 0.5)));
     }
     expect(scrollWidth, 'page width').toBeLessThanOrEqual(412);
   });
@@ -75,8 +75,8 @@ describe('Call, Text and WhatsApp at 1366px (#817)', () => {
         expect(b.height, who).toBeGreaterThanOrEqual(TAP);
       }
       expect(new Set(boxes.map((b) => Math.round(b.y))).size, `${who} one row`).toBe(1);
-      for (let i = 0; i + 1 < boxes.length; i++) {
-        const gap = boxes[i + 1].x - (boxes[i].x + boxes[i].width);
+      for (const [a, b] of boxes.slice(1).map((next, i) => [boxes[i]!, next] as const)) {
+        const gap = b.x - (a.x + a.width);
         expect(gap, who).toBeGreaterThanOrEqual(GAP - 0.5);
         expect(gap, who).toBeLessThanOrEqual(GAP + 0.5);
       }

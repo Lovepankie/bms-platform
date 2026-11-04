@@ -1942,3 +1942,19 @@ were lost; he also left two counts at Review the difference, because the last st
 - **Plain words.** The last step of a count, on Count stock and on Sell's count of a new item, is **Save the count**, with a help
   tip: "Your stock changes only when you save the count." Review the difference stays the step before. The tour
   `page-stocktake` is version 8.
+
+## Call, Text and WhatsApp (issue #817)
+
+Chasing a debt or ordering stock is one tap, as in the owner's old app. Wherever a phone number shows, three links stand under
+it: **Call** (`tel:+256...`), **Text** (`sms:+256...`) and **WhatsApp** (`https://wa.me/256...`). They open the phone's own
+dialler, messages or WhatsApp; the app sends nothing.
+
+- **Where.** A sale (Sales and Credit sales), a credit buyer and a supplier (Credit buyers, Suppliers), a customer who owes
+  (Customer accounts), a buyer's account page (its number is read from the customer list by the buyer's name, since the
+  account carries none), an advance and each party on Who owes (the number saved on the party).
+- **The number.** It is read with the receipt sender's normaliser (`normalisePhone`): Uganda by default (`07...`, `7...`,
+  `256...`, `+256...`), another country with its `+` and code. No number draws no links; a contact it cannot read (a
+  landline, an email, a number with digits missing) stays text only, as it was.
+- **Sizes.** `ContactLinks` (`contact-links.tsx`): 48 by 48px targets, `--tap-gap` (8px) apart, each as wide as its word on every
+  screen, never stretched on a laptop; icons from the app's set (a round bubble for WhatsApp, no brand logo). The layout suite
+  `layout/contact-links.layout.test.ts` measures them at 412 and 1366.
