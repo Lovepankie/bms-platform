@@ -52,7 +52,7 @@ export function CloseScreen() {
 
   // success-screen: the Closing asked for screen replaces the form
   const ask = useMutation({
-    meta: { success: 'Closing the business asked for' },
+    meta: { success: 'Request to close the business sent' },
     mutationFn: () => requestClosure(mfaEnabled ? { totp_code: typed.trim() } : { password: typed }),
     onSuccess: async (saved) => {
       setTyped('');

@@ -94,7 +94,7 @@ function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; bra
       }
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: (r: Awaited<ReturnType<typeof retail.correctStock>>) => (!r ? `Stock of ${row.description} corrected` : isWaiting(r) ? null : `Stock of ${row.description} corrected to ${showQty(r.new_qty ?? '0')} ${row.unit ?? ''}`.trim()) },
+    meta: { success: (r: Awaited<ReturnType<typeof retail.correctStock>>) => (!r ? `Stock of ${row.description ?? 'the item'} corrected` : isWaiting(r) ? null : `Stock of ${row.description ?? 'the item'} corrected to ${showQty(r.new_qty ?? '0')} ${row.unit ?? ''}`.trim()) },
   });
   const difference = differenceWords(draft.qty, shown, row.unit);
   const press = () => {

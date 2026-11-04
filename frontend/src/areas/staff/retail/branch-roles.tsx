@@ -18,6 +18,10 @@ const ROLES: { value: Role; label: string }[] = [
   { value: 'both', label: 'Both: keeps stock and sells' },
 ];
 
+// What a toast says a branch now does (#836), one entry for each role this screen can set. A Store is never set here: it is the
+// branch's sells_goods flag on Branches (ADR-104), so it has no words that say it sells.
+const ROLE_DONE: Record<Role, string> = { shop: 'sells to customers', both: 'keeps stock and sells' };
+
 export function RoleRow({ row, busy, onChange, extra }: { row: BranchRole; busy?: boolean; onChange: (role: Role) => void; extra?: ReactNode }) {
   const id = `role-${row.branch_id}`;
   if (row.role === 'store') {
@@ -48,7 +52,12 @@ export function BranchRoles() {
   const set = useMutation({
     mutationFn: (v: { branchId: string; role: Role }) => retail.setBranchRole(v.branchId, v.role),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'branch-roles'] }),
-    meta: { success: (_: unknown, v: { branchId: string; role: Role }) => `${(roles.data ?? []).find((r) => r.branch_id === v.branchId)?.name ?? 'The branch'} now ${v.role === 'shop' ? 'sells to customers' : 'keeps stock and sells'}` },
+    meta: {
+      success: (_: unknown, v: { branchId: string; role: Role }) => {
+        const row = (roles.data ?? []).find((r) => r.branch_id === v.branchId);
+        return `${row?.name ?? row?.code ?? 'This branch'} now ${ROLE_DONE[v.role]}`;
+      },
+    },
   });
   return (
     <Gate screen="branchRoles" title="Branch roles">

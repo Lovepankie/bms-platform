@@ -301,11 +301,14 @@ const SAYS_DONE =
 // An interpolation counts as one word. Like the rest it reads text: words built in a variable are read where they are written,
 // when that is a toast call.
 // JUSTIFICATION-A3: #836 asks for this rule in the toast guard; restOfSend reads a statement, not one argument, so it needs its own scanner.
-const TOAST_CALL = /\b(?:show|sayDone|screenToast|already|said|saved|done|onDone|onVoided|onThrown)\??\.?\(/g;
+// Any call named like a toast (`toast(`, `showToast(`, `doneToast(`), as SAYS_DONE reads them, and `change(` of Expense lists,
+// which hands its words to the screen's toast (review of #840).
+const TOAST_CALL = /\b(?:show|sayDone|\w*[Tt]oast\w*|already|said|saved|done|onDone|onVoided|onThrown|change)\??\.?\(/g;
 const META_SUCCESS = /\bmeta:\s*\{[^}]*?\bsuccess\s*:/g;
-// A whole string: after an opening, a ternary's `?` or `:`, a comma or an arrow, and before a closing, a `:` or a comma, so a
-// fallback (`?? 'the item'`), a piece joined with `+` or a value compared with `===` is not read as the words of a toast.
-const WHOLE_STRING = /(?<=(?:^|[(:,[]|(?<!\?)\?|=>)\s*)(['"`])((?:\\.|(?!\1)[^\\])*)\1(?=\s*(?:$|[):,}\]]))/g;
+// A whole string: after an opening, a ternary's `?` or `:`, a comma, an arrow, `&&`, `||` or `??`, and before a closing, a `:`
+// or a comma, so a piece joined with `+` or a value compared with `===` is not read as the words of a toast. A fallback
+// (`x ?? 'Saved'`, `onSaved && 'Done'`) can be what the toast says, so it is read (review of #840).
+const WHOLE_STRING = /(?<=(?:^|[(:,[]|\?|=>|&&|\|\|)\s*)(['"`])((?:\\.|(?!\1)[^\\])*)\1(?=\s*(?:$|[):,}\]]))/g;
 const BARE_WORDS = /^(?:saved|done|success|ok)$/i;
 
 /** The code with each `${...}` of a template literal as the one word X, its line breaks kept, so its inner strings are not read. */
@@ -324,7 +327,7 @@ function interpolationsAsWords(code: string): string {
 }
 
 /** The code from `from` to the first comma or closing bracket at its own depth, strings skipped. */
-function oneValue(code: string, from: number): string {
+function oneValue(code: string, from: number, allArguments = false): string {
   let depth = 0;
   let quote = '';
   for (let i = from; i < code.length; i += 1) {
@@ -335,7 +338,7 @@ function oneValue(code: string, from: number): string {
     } else if (c === "'" || c === '"' || c === '`') quote = c;
     else if ('([{'.includes(c)) depth += 1;
     else if (')]}'.includes(c) && (depth -= 1) < 0) return code.slice(from, i);
-    else if (c === ',' && depth === 0) return code.slice(from, i);
+    else if (c === ',' && depth === 0 && !allArguments) return code.slice(from, i);
   }
   return code.slice(from);
 }
@@ -349,11 +352,14 @@ function tooBare(words: string): boolean {
 /** The toast words of one file that say only one word, or only Saved, Done, Success or OK (#836). */
 function bareToasts(text: string): string[] {
   const code = interpolationsAsWords(text);
-  const starts = [...code.matchAll(TOAST_CALL)].map((m) => m.index + m[0].length).concat([...code.matchAll(META_SUCCESS)].map((m) => m.index + m[0].length));
-  return starts.flatMap((from) => {
-    const value = oneValue(code, from);
+  // Expense lists' change(run, words) takes its words second, so every argument of it is read.
+  const starts = [...code.matchAll(TOAST_CALL)].map((m) => ({ from: m.index + m[0].length, all: m[0].startsWith('change') }))
+    .concat([...code.matchAll(META_SUCCESS)].map((m) => ({ from: m.index + m[0].length, all: false })));
+  return starts.flatMap(({ from, all }) => {
+    const value = oneValue(code, from, all);
     const line = code.slice(0, from).split('\n').length;
-    return [...value.matchAll(WHOLE_STRING)].filter((s) => tooBare(s[2] ?? '')).map((s) => `${line} ${s[0]}`);
+    // An empty string is an id's fallback in a call inside the toast call (`retail.save(item.id ?? '')`), never its words.
+    return [...value.matchAll(WHOLE_STRING)].filter((s) => s[2] !== '' && tooBare(s[2] ?? '')).map((s) => `${line} ${s[0]}`);
   });
 }
 
@@ -585,6 +591,11 @@ describe('success toast guard on fixtures', () => {
     expect(bareToasts("const save = useMutation({ meta: { success: (r: R) => (r.executed ? 'Reversed' : null) } });")).toHaveLength(1);
     expect(bareToasts("const save = useMutation({ meta: { success: { on: 'Switched on', off: 'Off' }[change] } });")).toHaveLength(1);
     expect(bareToasts('sayDone(`${name}`)')).toHaveLength(1);
+    // Review of #840: any toast-named call, Expense lists' change, and a fallback after &&, || or ??.
+    for (const bare of ["toast('Saved')", "showToast('Done', 'success')", "doneToast?.('OK')", "change(() => send(), 'Saved')", "show(onSaved && 'Saved', 'success')", "sayDone(x || 'Done')", "show(x ?? 'Saved', 'success')"]) {
+      expect(bareToasts(bare), bare).toHaveLength(1);
+    }
+    expect(bareToasts("change(() => retail.save(item.id ?? ''), `Category ${name} added`)")).toEqual([]);
     expect(bareToasts("show(`Category ${name} added`, 'success')")).toEqual([]);
     expect(bareToasts("show(`Item ${item.name} switched ${on ? 'on' : 'off'}`, 'success')")).toEqual([]);
     expect(bareToasts("const save = useMutation({ meta: { success: (_: unknown, kind: K) => (kind === 'deposit' ? 'Deposit recorded' : `Expense of ${money(a)} saved`) } });")).toEqual([]);

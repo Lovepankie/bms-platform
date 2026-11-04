@@ -105,7 +105,7 @@ export function RepaymentForm({ branchId, onSaved }: { branchId: string; onSaved
   const problem = repaymentProblem(advance, draft.amount);
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
-    meta: { success: (saved: Repayment) => `Repayment of ${money(saved?.amount_minor ?? 0)}${advance?.party_name ? ` from ${advance.party_name}` : ''} saved` },
+    meta: { success: (saved: Repayment) => `Repayment of ${money(saved?.amount_minor ?? amountOrNull(draft.amount) ?? 0)}${advance?.party_name ? ` from ${advance.party_name}` : ''} saved` },
     mutationFn: () => retail.createRepayment(draft.advanceId, { branch_id: branchId, amount_minor: amountOrNull(draft.amount) ?? 0, method: draft.method, paid_on: draft.date }, key),
     onSuccess: (saved) => {
       finish();

@@ -92,7 +92,7 @@ function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string })
       void queryClient.invalidateQueries({ queryKey: ['retail', 'stock'] });
       refresh();
     },
-    meta: { success: (r: Converted) => `${r.sale_no ? `Sale ${r.sale_no}` : 'Sale'} made from quotation ${q.number ?? ''}`.trim() },
+    meta: { success: (r: Converted) => `${r.sale_no ? `Sale ${r.sale_no}` : 'Sale'} made from ${q.number ? `quotation ${q.number}` : 'the quotation'}` },
   });
   const cancel = useMutation({
     mutationFn: () => retail.cancelQuotation(q.id ?? '', reason),

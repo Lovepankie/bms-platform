@@ -242,7 +242,7 @@ export function InstructionForm({ inv }: { inv: Investment }) {
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const [choice, setChoice] = useState<string>(inv.maturity_instruction ?? 'payout');
-  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh, meta: { success: () => `At maturity: ${instructionWords(choice)}` } });
+  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh, meta: { success: () => `${inv.account_no ? `Investment ${inv.account_no}` : 'The investment'} at maturity: ${instructionWords(choice).toLowerCase()}` } });
   return (
     <form aria-label="Maturity instruction" onSubmit={(e) => { e.preventDefault(); if (!save.isPending) save.mutate(); }}>
       <fieldset>
@@ -270,7 +270,7 @@ export function ReverseForm({ inv, txn }: { inv: Investment; txn: InvestmentTran
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(`invest-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`, '');
   // success-screen: the Reversed screen replaces the form; one sent for approval raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${money(txn.amount_minor, inv.currency)} reversed on investment ${inv.account_no ?? ''}`.trim() : null) },
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${money(txn.amount_minor, inv.currency)} reversed on ${inv.account_no ? `investment ${inv.account_no}` : 'the investment'}` : null) },
     mutationFn: () => investments.reverse(id, txn.id ?? '', draft.trim(), key),
     onSuccess: () => {
       finish();

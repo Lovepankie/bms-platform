@@ -225,7 +225,7 @@ export function PriceLists() {
     onError: (error) => setFailure(changeFailureText(error, queryClient)),
     meta: {
       success: (_: unknown, v: { list: PriceList; body: { active?: boolean } }) =>
-        `Price list ${v.list.name ?? ''} ${v.body.active === false ? 'switched off' : v.body.active === true ? 'switched on' : 'saved'}`,
+        `${v.list.name ? `Price list ${v.list.name}` : 'Price list'} ${v.body.active === false ? 'switched off' : v.body.active === true ? 'switched on' : 'saved'}`,
       // A switch on or off can be taken back from the toast (#682): the same change the other way, on the version it made.
       undo: (r: PriceList, v: { body: { active?: boolean } }) =>
         v.body.active === undefined ? null : () => retail.updatePriceList(r.id ?? '', requireVersion(r.version), { active: !v.body.active }),

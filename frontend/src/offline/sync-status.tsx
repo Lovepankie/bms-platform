@@ -252,7 +252,14 @@ function ManagerQueue() {
       setSelfReason('');
       void queryClient.invalidateQueries({ queryKey: ['retail', 'offline-failures'] });
     },
-    meta: { success: (_: unknown, sent: { action: 'retry' | 'discard' }) => (sent?.action === 'retry' ? 'Sale sent again' : 'Sale discarded, never recorded') },
+    meta: {
+      // Every row of this list is a sale another phone could not record (the offline failures route holds only sales).
+      success: (_: unknown, sent: { id: string; action: 'retry' | 'discard' }) => {
+        const f = (failures.data ?? []).find((r) => r.id === sent?.id);
+        const sale = f?.total_minor !== undefined ? `Sale of ${money(f.total_minor)}${f.made_by_name ? ` by ${f.made_by_name}` : ''}` : 'Sale';
+        return `${sale} ${sent?.action === 'retry' ? 'sent again' : 'discarded, never recorded'}`;
+      },
+    },
   });
   const resolve = useMutation({
     mutationFn: async (id: string) => {

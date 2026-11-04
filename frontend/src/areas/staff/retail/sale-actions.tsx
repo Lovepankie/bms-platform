@@ -92,7 +92,7 @@ function PayPanel({ sale, today, full, onDone }: { sale: Sale; today: string; fu
       success: (result: { sale_balance_minor?: number; payment?: { amount_minor?: number } }) =>
         (result.sale_balance_minor ?? 0) <= 0
           ? `${sale.sale_no ? `Sale ${sale.sale_no}` : 'Sale'} paid in full`
-          : `Payment of ${money(result.payment?.amount_minor ?? 0)} recorded${sale.sale_no ? ` on sale ${sale.sale_no}` : ''}`,
+          : `${result.payment?.amount_minor !== undefined ? `Payment of ${money(result.payment.amount_minor)}` : 'Payment'} recorded${sale.sale_no ? ` on sale ${sale.sale_no}` : ''}`,
     },
   });
   // The balance changed under the form (someone else took a payment): a typed amount above the new balance goes back to the balance.
