@@ -1,6 +1,6 @@
 import { useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
-import { restoreDraft } from '../areas/staff/retail/idempotency';
+import { draftInProgress, restoreDraft } from '../areas/staff/retail/idempotency';
 import { useOffline } from './offline-context';
 import type { OutboxItem } from './outbox';
 
@@ -23,17 +23,25 @@ export function EntryState({ item }: { item: OutboxItem }) {
   const offline = useOffline();
   const router = useRouter({ warn: false });
   const [asking, setAsking] = useState(false);
+  const [formInUse, setFormInUse] = useState(false);
   if (item.state !== 'failed') return <p className="muted">{entryStateWords(item)}</p>;
   const fix = item.entry?.fix;
   const fixIt = async () => {
+    if (!fix) return;
+    // The form already holds other work (review of #839): nothing is written over it and the entry stays here.
+    if (draftInProgress(fix.draftName)) {
+      setFormInUse(true);
+      return;
+    }
     const back = await offline?.engine.takeBack(item.id);
-    if (!back || !fix) return;
+    if (!back) return;
     restoreDraft(fix.draftName, fix.draft);
     void router?.navigate({ to: fix.to });
   };
   return (
     <>
       <p className="sync-reason">{entryStateWords(item)}</p>
+      {formInUse && <p role="alert">That form has other work in it. Save or clear it first, then tap Fix again.</p>}
       {asking ? (
         <div className="stack">
           <p>Discard this entry? It is not recorded and is not sent again.</p>

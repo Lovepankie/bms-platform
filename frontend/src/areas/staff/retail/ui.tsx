@@ -339,6 +339,8 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
       results={search.term === '' ? undefined : saved ?? products.data}
       // Waiting only for a term with no answer yet: a background refresh of a cached answer keeps its options in view.
       fetching={saved ? false : products.isPending}
+      // Offline, an empty search says why (review of #839): the items are only on the phones of people who sell.
+      emptyText={saved ? (term) => (offline?.catalogue ? `No item saved on this phone matches "${term}".` : 'Items are not saved on this phone. Search for items when you are back online.') : undefined}
       error={products.isError ? <Problem error={products.error} /> : undefined}
       optionKey={(p) => p.id ?? p.code ?? ''}
       // The time the answer was read from the server (a cached answer keeps its own), for a sale that may be kept on the phone (#769).

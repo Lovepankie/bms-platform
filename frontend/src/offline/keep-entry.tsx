@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { droppedConnection } from '../api/client';
 import { money, useBranchName } from '../areas/staff/retail/ui';
-import { NoAnswer, SALE_ANSWER_MS, answerWithin } from './connectivity';
+import { ENTRY_ANSWER_MS, NoAnswer, answerWithin, lastOnline } from './connectivity';
 import { isKept, offlineEntry, type EntrySpec, type Kept } from './entries';
 import { EntryState } from './entry-state';
 import { useOffline, useOnline, useOutbox } from './offline-context';
@@ -34,7 +34,7 @@ export function useEntrySave(): EntrySave {
       const keep = async (lost: boolean): Promise<Kept> => {
         if (!offline) throw new Error('This phone cannot keep entries.');
         const item = offlineEntry({
-          ...spec, branchName: branchName(spec.branchId), scope: offline.scope, now: new Date(), onlineAsOf: offline.catalogue?.pricesAsOf, lost,
+          ...spec, branchName: branchName(spec.branchId), scope: offline.scope, now: new Date(), onlineAsOf: lastOnline(offline.catalogue?.pricesAsOf), lost,
         });
         await offline.engine.queue(item);
         if (offline.connectivity.online()) void offline.engine.sync();
@@ -43,9 +43,10 @@ export function useEntrySave(): EntrySave {
       };
       if (offline && !offline.connectivity.online()) return keep(false);
       try {
-        // A save never waits longer than SALE_ANSWER_MS (3 seconds on a slow 3G phone, issue #812): with no answer by then
-        // the entry is kept on the phone under the same key and body, and the late answer and the outbox's send are one record.
-        return await (offline ? answerWithin(send(), SALE_ANSWER_MS) : send());
+        // A save never waits longer than ENTRY_ANSWER_MS (2 seconds, so under 3 in all on a slow 3G phone, issue #812): with no
+        // answer by then the entry is kept on the phone under the same key and body, and the late answer and the outbox's send are
+        // one record.
+        return await (offline ? answerWithin(send(), ENTRY_ANSWER_MS) : send());
       } catch (e) {
         if (offline && (droppedConnection(e) || e instanceof NoAnswer)) return keep(true);
         throw e;

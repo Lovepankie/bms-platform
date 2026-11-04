@@ -1,4 +1,6 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
+import { lastOnline, rememberOnline } from './connectivity';
 import { ENTRY_PATHS, isKept, offlineBody, offlineEntry, sentWords } from './entries';
 import { classifyEntry, failedCount, provisionalNumber, sentEntries, waiting, waitingWords, type OutboxItem } from './outbox';
 import { memoryStore } from './store';
@@ -98,6 +100,17 @@ describe('an entry kept on the phone', () => {
     const [item] = engine.snapshot().items;
     expect(item?.recorded).toEqual({ id: 'a1', waiting: true });
     expect(item && sentWords(item)).toBe('Expense sent. It waits for an administrator to approve it.');
+  });
+
+  it('sends the later of the last answered ping and the catalogue time as online_as_of, for sellers and others (review of #839)', () => {
+    localStorage.clear();
+    expect(lastOnline()).toBeUndefined();
+    rememberOnline('Tue, 03 Nov 2026 09:00:00 GMT');
+    expect(lastOnline()).toBe('2026-11-03T09:00:00.000Z');
+    expect(lastOnline('2026-11-03T08:00:00.000Z')).toBe('2026-11-03T09:00:00.000Z');
+    expect(lastOnline('2026-11-03T10:00:00.000Z')).toBe('2026-11-03T10:00:00.000Z');
+    rememberOnline('not a date');
+    expect(lastOnline()).toBe('2026-11-03T09:00:00.000Z');
   });
 
   it('refuses a clash (409) instead of trying it again, and tries a key still in progress again', () => {

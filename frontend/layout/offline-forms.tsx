@@ -16,7 +16,7 @@ import '../src/app/theme.css';
 import '../src/app/ui/index.css';
 import { layoutRouter } from './router';
 
-// The page offline-forms.layout.test.ts and save-on-3g.layout.test.ts open in a real browser (issue #812): the expense form of
+// The page offline-forms.layout.test.ts opens in a real browser (issue #812): the expense form of
 // an administrator, `?mode=offline` with the phone offline (the offline note, then Saved on this phone), `?mode=online` with the
 // real API client posting to /api (the test answers it through a throttled network), and `?mode=sheet` with the sync sheet
 // holding a refused expense and one waiting. The lists are in the query cache. Every name and amount is invented.

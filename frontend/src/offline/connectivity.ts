@@ -18,12 +18,48 @@ export const PING_EVERY_MS = 30_000;
 export const PING_TIMEOUT_MS = 3_000;
 
 /**
- * A sale (issue #769) or a daily entry (issue #812) sent online with no answer within this goes to the outbox. 2 seconds since
- * issue #812 (8 before): on a cheap phone (CPU four times slower) the tap takes about half a second before the request leaves
- * and Saved on this phone is drawn, so no save takes over 3 seconds (measured in layout/offline-forms.layout.test.ts on the
- * DevTools 3G and Slow 3G profiles: about 1 second on 3G, under 3 on Slow 3G, answered or kept).
+ * A daily entry (issue #812) sent online with no answer within this goes to the outbox under the same key. On a cheap phone (CPU
+ * four times slower) the tap takes about half a second before the request leaves and Saved on this phone is drawn, so no entry's
+ * save takes over 3 seconds (measured in layout/offline-forms.layout.test.ts: about 1 second answered on DevTools 3G; on Slow 3G,
+ * whose 2 second latency alone reaches this, the entry is kept on the phone in about 2.5).
  */
-export const SALE_ANSWER_MS = 2_000;
+export const ENTRY_ANSWER_MS = 2_000;
+
+/**
+ * A sale sent online with no answer within this goes to the outbox (issue #769). It stays 8 seconds (review of #839): at 2 a
+ * slow server or Slow 3G latency alone would turn every sale into a provisional receipt; a sale's own wait is said on its
+ * screen, and the daily entries use {@link ENTRY_ANSWER_MS}.
+ */
+export const SALE_ANSWER_MS = 8_000;
+
+// JUSTIFICATION-A3: review of #839, finding 8: nothing keeps the server's time for a person who does not sell; one pair of helpers.
+const ONLINE_AS_OF = 'bms-online-as-of';
+
+/**
+ * The server's time at the last answered ping (its Date header), kept on this phone for every person, seller or not (review of
+ * #839): an entry made offline sends it as `online_as_of`, so the server can tell a phone clock that is behind.
+ */
+export function rememberOnline(serverDate: string | null): void {
+  const at = serverDate ? Date.parse(serverDate) : Number.NaN;
+  if (Number.isNaN(at)) return;
+  try {
+    localStorage.setItem(ONLINE_AS_OF, new Date(at).toISOString());
+  } catch {
+    // Blocked storage: the catalogue's time is used where there is one.
+  }
+}
+
+/** The later of the last answered ping and `other` (the catalogue's prices-as-of time), or undefined when neither is known. */
+export function lastOnline(other?: string): string | undefined {
+  let kept: string | null = null;
+  try {
+    kept = localStorage.getItem(ONLINE_AS_OF);
+  } catch {
+    kept = null;
+  }
+  const times = [kept, other].filter((t): t is string => typeof t === 'string' && !Number.isNaN(Date.parse(t)));
+  return times.sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+}
 
 /** No answer within `ms` (issue #769): the request may still arrive, so what it did is not known. */
 export class NoAnswer extends Error {}
@@ -94,6 +130,8 @@ export function browserConnectivity(): Connectivity {
       const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(PING_TIMEOUT_MS) : undefined;
       try {
         const response = await fetch('/healthz', { cache: 'no-store', signal });
+        // Reading the server's time never turns an answered ping into a failed one.
+        if (response.ok) rememberOnline(response.headers?.get?.('Date') ?? null);
         return response.ok;
       } catch (e) {
         // The fetch cut off by its own 3 s limit is a slow ping, not a failed one, so it is pinged again (issue #769).

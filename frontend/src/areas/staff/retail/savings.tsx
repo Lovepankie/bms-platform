@@ -67,18 +67,20 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   // Issue #799: a seller without the till goes through the sales staff routes while the owner's switch is on.
   const salesStaff = savesAsSalesStaff(me);
   // The sales staff route has its own cache entry, so a till answer (or a 403) cached under one is never served for the other.
-  const suggestionKey = ['retail', 'savings-suggestion', branchId, draft.date, ...(salesStaff ? [SALES_STAFF_KEY] : [])];
-  const suggestion = useQuery({ queryKey: suggestionKey, queryFn: () => retail.savingsSuggestion({ branchId, date: draft.date, salesStaff }) });
+  // Issue #812: offline, or when the network drops, the savings are kept on the phone with the suggestion's token. Offline the
+  // entry is dated today, so today's figures and token are used whatever day the draft held (review of #839).
+  const entries = useEntrySave();
+  const day = entries.offlineMode ? businessToday() : draft.date;
+  const suggestionKey = ['retail', 'savings-suggestion', branchId, day, ...(salesStaff ? [SALES_STAFF_KEY] : [])];
+  const suggestion = useQuery({ queryKey: suggestionKey, queryFn: () => retail.savingsSuggestion({ branchId, date: day, salesStaff }) });
   const s = suggestion.data;
   const profitView = seesAmounts(s);
   // ADR-115: the server says whether this caller may change the amount (the owner's setting before the day is saved, or the
   // overwrite permission); an older server without the flag leaves it to the permission.
   const canOverwrite = s?.may_change_amount ?? holds(me, SAVINGS_OVERWRITE);
   const reason = reasonText(draft.reason, draft.other ?? '');
-  const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
+  const plan = s ? planSavings({ branchId, date: day, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
-  // Issue #812: offline, or when the network drops, the savings are kept on the phone with the suggestion's token.
-  const entries = useEntrySave();
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => {

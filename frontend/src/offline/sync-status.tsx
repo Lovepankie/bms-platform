@@ -148,7 +148,7 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
         </ul>
       )}
       {sent.length > 0 && (
-        <ul className="sync-list" aria-label="Sent today">
+        <ul className="sync-list" aria-label="Sent in the last day">
           {sent.map((item) => (
             <SyncRow key={item.id} item={item} onAgain={() => undefined} />
           ))}

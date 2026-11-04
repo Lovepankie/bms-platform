@@ -190,6 +190,36 @@ describe('a daily form with no network', () => {
     expect(online).not.toHaveBeenCalled();
   });
 
+  // JUSTIFICATION-A3: the review of #839 asks that Fix never writes over a form with work in it; one test of both outcomes.
+  it('opens a refused entry in its form with Fix, but never over a form that has work in it', async () => {
+    const { EntryState } = await import('./entry-state');
+    const { offlineEntry } = await import('./entries');
+    const offline = testOffline(admin, { online: true });
+    const name = `withdrawal:${uid}:${branch}`;
+    const refused = {
+      ...offlineEntry({ kind: 'withdrawal', key: 'k-fix', scope: offline?.scope ?? '', branchId: branch, branchName: 'Test Shop A', body: {}, now: new Date(), fix: { to: '/staff/retail/withdrawals', draftName: name, draft: { date: today, amount: '700', purpose: 'Test fix' } } }),
+      state: 'failed' as const,
+      error: { message: 'Check the amount.' },
+    };
+    await offline?.engine.queue(refused);
+    // Another withdrawal is half typed in this tab.
+    sessionStorage.setItem(`retail-draft:${name}`, JSON.stringify({ key: 'k-other', draft: { date: today, amount: '5', purpose: '' } }));
+    sessionStorage.setItem(`retail-draft-busy:${name}`, '1');
+    mount(<EntryState item={refused} />, offline);
+    fireEvent.click(screen.getByRole('button', { name: 'Fix' }));
+    await screen.findByText('That form has other work in it. Save or clear it first, then tap Fix again.');
+    expect(offline?.engine.snapshot().items.map((i) => i.id)).toEqual(['k-fix']);
+    expect(JSON.parse(sessionStorage.getItem(`retail-draft:${name}`) ?? '{}').key).toBe('k-other');
+    // Cleared: Fix takes it off the phone and puts its draft back under a new key.
+    sessionStorage.removeItem(`retail-draft:${name}`);
+    sessionStorage.removeItem(`retail-draft-busy:${name}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Fix' }));
+    await waitFor(() => expect(offline?.engine.snapshot().items).toEqual([]));
+    const back = JSON.parse(sessionStorage.getItem(`retail-draft:${name}`) ?? '{}');
+    expect(back.draft.purpose).toBe('Test fix');
+    expect(back.key).not.toBe('k-fix');
+  });
+
   it('keeps an entry whose answer was lost online under the same key and body, so the server records it once', async () => {
     seed(`withdrawal:${uid}:${branch}`, 'k-lost', { date: today, amount: '10000', purpose: 'Test float' });
     const api = server();

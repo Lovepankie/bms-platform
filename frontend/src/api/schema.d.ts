@@ -15716,7 +15716,7 @@ export interface components {
             /** @description At most 5 items, those holding the typed name first, then those a few letters apart */
             did_you_mean?: components["schemas"]["RetailNameHint"][];
         };
-        /** @description Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used */
+        /** @description Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used; one made more than 7 days ago is refused (422 offline_entry_too_old) */
         RetailOfflineEntry: {
             /**
              * Format: date-time

@@ -61,14 +61,37 @@ export const DRAFT_RESTORED = 'retail-draft-restored';
  * Puts a draft back under `name` with a fresh key, for a refused entry kept on the phone that its maker fixes (issue #812):
  * the form opens on it, or, already open, reads it again. The new key makes the fixed entry a new request.
  */
-export function restoreDraft<T>(name: string, draft: T, store: DraftStore | null = tabStore()): void {
+export function restoreDraft<T>(name: string, draft: T, store: DraftStore | null = tabStore()): boolean {
+  // A form with work in it is never written over (review of #839): the person finishes or clears it first.
+  if (draftInProgress(name, store)) return false;
   saveDraft(store, name, { key: newIdempotencyKey(), draft });
+  markInProgress(store, name, true);
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(DRAFT_RESTORED, { detail: name }));
+  return true;
+}
+
+/** The form under `name` holds a draft with changes in this tab (kept beside the draft, whose shape stays as it was). */
+export function draftInProgress(name: string, store: DraftStore | null = tabStore()): boolean {
+  try {
+    return store?.getItem(`retail-draft-busy:${name}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markInProgress(store: DraftStore | null, name: string, busy: boolean): void {
+  try {
+    if (busy) store?.setItem(`retail-draft-busy:${name}`, '1');
+    else store?.removeItem(`retail-draft-busy:${name}`);
+  } catch {
+    // Blocked storage: Fix then cannot tell, and the form keeps its own draft in memory.
+  }
 }
 
 export function dropDraft(store: DraftStore | null, name: string): void {
   try {
     store?.removeItem(`retail-draft:${name}`);
+    store?.removeItem(`retail-draft-busy:${name}`);
   } catch {
     // Nothing to do.
   }
@@ -121,7 +144,8 @@ export function usePersistedDraft<T>(
   useUnsavedWork(changed && !finished);
   useEffect(() => {
     if (!done.current) saveDraft(store, name, saved);
-  }, [store, name, saved]);
+    markInProgress(store, name, changed && !done.current);
+  }, [store, name, saved, changed]);
   // A refused entry kept on the phone, put back for fixing while this form is open (issue #812): read it again.
   useEffect(() => {
     if (typeof window === 'undefined') return;

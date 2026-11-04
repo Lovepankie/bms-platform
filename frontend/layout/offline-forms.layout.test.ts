@@ -117,8 +117,10 @@ describe('the time to save on a cheap phone on 3G (#812)', () => {
     expect(ms).toBeLessThan(3000);
   });
 
-  it('saves an expense on Slow 3G in under 3 seconds, answered or kept on the phone', async () => {
-    const { ms } = await timeToSave('Slow 3G', 50);
+  // Slow 3G's 2 second latency alone reaches the 2 second cap, so this measures the entry kept on the phone, not a server answer.
+  it('keeps an expense on the phone on Slow 3G in under 3 seconds', async () => {
+    const { ms, kept } = await timeToSave('Slow 3G', 50);
+    expect(kept).toBe(true);
     expect(ms).toBeLessThan(3000);
   });
 
