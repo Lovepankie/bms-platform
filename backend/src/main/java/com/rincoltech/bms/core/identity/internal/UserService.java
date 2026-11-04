@@ -21,6 +21,7 @@ import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
+import com.rincoltech.bms.kernel.EmailAddresses;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Versions;
@@ -958,7 +959,7 @@ class UserService implements TenantAdmins {
     }
 
     private static String normaliseEmail(String email) {
-        return email.trim().toLowerCase();
+        return EmailAddresses.normalise(email);
     }
 
     private static String normalisePhone(String raw) {

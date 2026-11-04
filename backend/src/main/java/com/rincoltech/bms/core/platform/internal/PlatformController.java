@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.platform.internal;
 
 import com.rincoltech.bms.core.identity.OperatorSecurity;
 import com.rincoltech.bms.core.identity.TenantAdmins;
+import com.rincoltech.bms.kernel.EmailAddresses;
 import com.rincoltech.bms.kernel.NoStore;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -123,7 +124,13 @@ class PlatformController {
     record FirstAdminRequest(
             @NotBlank @Size(max = 200) String fullName,
             @Email @Size(max = 320) String email,
-            @Size(max = 20) String phone) {}
+            @Size(max = 20) String phone) {
+
+        /** Spaces typed inside an email are removed before it is checked and saved (issue #823). */
+        FirstAdminRequest {
+            email = EmailAddresses.normalise(email);
+        }
+    }
 
     @Schema(name = "CreateTenantRequest")
     record CreateTenantRequest(

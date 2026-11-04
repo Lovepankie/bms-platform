@@ -1,6 +1,6 @@
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
-import { requestPasswordReset } from '../../api/sign-in-reset';
+import { requestPasswordReset, signInLogin } from '../../api/sign-in-reset';
 import { BusyButton } from '../../app/ui/BusyButton';
 import { illustrations } from '../../components/illustrations';
 import { StatusPanel } from '../../components/states';
@@ -23,7 +23,7 @@ export function ForgotPassword({ initial = 'form' }: { initial?: 'form' | 'sent'
     if (busy) return;
     setBusy(true);
     setMessage(null);
-    requestPasswordReset(login.trim())
+    requestPasswordReset(signInLogin(login))
       .then((words) => setSent(words))
       .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'The request could not be sent. Try again.'))
       .finally(() => setBusy(false));

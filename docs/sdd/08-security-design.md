@@ -54,8 +54,9 @@ controls.
   writes in another, so the flood cannot take the connection pool from other tenants either.
 - **Sign-in limits** (ADR-059, issue #426, revised after the review of #433).
   - **The lock is the limit.** Five wrong passwords in a row lock a sign-in address for 15 minutes (FR-IAM-05). An
-    account keeps its count and lock in its own row; any other address typed (the email in lower case or the phone in
-    E.164, within one tenant and one kind of account) keeps them in `sign_in_address_failures` (V78), keyed by the
+    account keeps its count and lock in its own row; any other address typed (the email in lower case with every
+    whitespace character removed, inside it too, issue #823, or the phone in E.164, within one tenant and one kind of
+    account) keeps them in `sign_in_address_failures` (V78), keyed by the
     SHA-256 of the address, with the same statement. **What is true:** after five failures an address of nobody answers
     exactly as an account (the same 423 `account_locked` and words, for the same time, before any hash), across
     restarts and floods; both paths do the same database work. **What is not hidden:** an address of nobody forgets its
@@ -75,6 +76,13 @@ controls.
     passwords every 15 minutes. It is accepted because without it the same person could guess the password; the owner
     gets back in through the reset, an admin or the operator (ADR-059, Consequences).
   Member sign-in (FR-IAM-09, P2) is not built; it will use the same lock and per-IP budget.
+- **One form of a staff email** (issue #823). Before any lookup (staff and operator sign-in, forgot password) and any save
+  (invitation, edit, the first administrator), the server removes every whitespace character from a typed email, at the
+  ends and inside (spaces, tabs, line breaks, the non-breaking space and the other Unicode spaces, and the zero width
+  characters a copy and paste carries), and lower cases it (`kernel.EmailAddresses`); the screen does the same, but the
+  server is the guard. The per-address limit and the lock key use the same form, so typing spaces into an address does
+  not give a guesser fresh buckets or a fresh lock: the limits and the lockout behave as before. A login without `@` is
+  read as a phone by its own check (`kernel.PhoneNumbers`), whose meaning spaces do not change.
 - One-time codes, invitation and setup tokens, recovery codes and refresh tokens are stored as
   SHA-256 hashes only.
 - TOTP secrets are encrypted at rest with the application data key (8.7). TOTP is RFC 6238

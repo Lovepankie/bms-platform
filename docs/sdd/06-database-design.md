@@ -636,6 +636,11 @@ WHERE kind = 'staff' AND phone_e164 IS NOT NULL AND status IN ('invited', 'activ
 invitations at once cannot make two staff users with one phone; V98 stops, changing nothing, when a business already has
 such a pair, `docs/runbooks/staff-duplicate-phones.md`).
 `CHECK (email IS NOT NULL OR phone_e164 IS NOT NULL)`.
+A staff email is stored with no whitespace anywhere and in lower case: the application cleans every typed email with
+`kernel.EmailAddresses` before it saves it or looks it up (issue #823). `V135` cleans the stored staff emails that hold
+whitespace (a non-breaking space passed the old check), with a system `core.user.email_cleaned` audit row each (the email
+before and after), and leaves exactly as it was a row whose cleaned email another staff user of the business already has (a
+WARNING in the migration log names the businesses, never the email).
 `is_owner boolean NOT NULL DEFAULT false` (`V79`, ADR-062, FR-IAM-18): the Owner of the business. `contact_changed_at
 timestamptz` (`V79`): when the email or phone last changed; `second_factor_changed_at timestamptz` (`V79`): when two-step
 sign-in was last set up or reset; the Owner's own transfer waits 24 hours after either (or after

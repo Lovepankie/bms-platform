@@ -222,6 +222,16 @@ class AuthThrottleTest {
         assertThat(AuthThrottle.address(staff, "+256700000001")).isEqualTo(phone);
         assertThat(AuthThrottle.address(staff, " Test.Cashier@Example.TEST "))
                 .isEqualTo(AuthThrottle.address(staff, "test.cashier@example.test"));
+        // Issue #823: spaces inside an email, a tab and a non-breaking space count against the same address.
+        for (String spaced : List.of(
+                "test.ca shier@example.test",
+                "test.cashier @example.test",
+                "test.cashier@\texample.test",
+                "test.cashier" + Character.toString(0x00A0) + "@example.test")) {
+            assertThat(AuthThrottle.address(staff, spaced))
+                    .as(spaced)
+                    .isEqualTo(AuthThrottle.address(staff, "test.cashier@example.test"));
+        }
         assertThat(AuthThrottle.address(accounts("staff", UUID.randomUUID()), "0700000001"))
                 .isNotEqualTo(phone);
         assertThat(AuthThrottle.address(accounts("platform", null), "0700000001"))

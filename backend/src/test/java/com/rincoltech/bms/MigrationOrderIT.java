@@ -2989,6 +2989,65 @@ class MigrationOrderIT {
     }
 
     /**
+     * V135 (issue #823) removes whitespace from a stored staff email (a non-breaking space passed the old check), audited,
+     * and leaves a row whose cleaned email another staff user of the business already has exactly as it was. A clean email
+     * is not touched. JUSTIFICATION-A3: a new test case; no existing case covers the staff email clean up.
+     */
+    @Test
+    void staffEmailSpacesMigrationCleansWithoutDuplicates() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("135") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v135-spaces', 'Test Tenant V135',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            String nbsp = Character.toString(0x00A0);
+            UUID spaced = UUID.randomUUID();
+            UUID inside = UUID.randomUUID();
+            UUID twin = UUID.randomUUID();
+            UUID twinSpaced = UUID.randomUUID();
+            UUID plain = UUID.randomUUID();
+            Map<UUID, String> emails = Map.of(
+                    spaced, "test.owner" + nbsp + "@example.test",
+                    inside, "Test.Cl erk@example.test",
+                    twin, "test.twin@example.test",
+                    twinSpaced, "test.twin" + nbsp + "@example.test",
+                    plain, "test.plain@example.test");
+            emails.forEach((id, email) -> owner.sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                            + " VALUES (?, ?, 'staff', 'Test Staff V135', ?, 'active')")
+                    .params(id, tenant, email)
+                    .update());
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            String read = "SELECT email || '|' || version FROM users WHERE id = ?";
+            assertThat(owner.sql(read).param(spaced).query(String.class).single())
+                    .isEqualTo("test.owner@example.test|2");
+            assertThat(owner.sql(read).param(inside).query(String.class).single())
+                    .isEqualTo("test.clerk@example.test|2");
+            assertThat(owner.sql(read).param(twinSpaced).query(String.class).single())
+                    .as("left as it was: the cleaned email is another staff user's")
+                    .isEqualTo("test.twin" + nbsp + "@example.test|1");
+            assertThat(owner.sql(read).param(twin).query(String.class).single()).isEqualTo("test.twin@example.test|1");
+            assertThat(owner.sql(read).param(plain).query(String.class).single())
+                    .isEqualTo("test.plain@example.test|1");
+            assertThat(owner.sql("SELECT entity_id FROM audit_log WHERE tenant_id = ? AND action ="
+                                    + " 'core.user.email_cleaned' AND actor_kind = 'system'")
+                            .param(tenant)
+                            .query(UUID.class)
+                            .list())
+                    .containsExactlyInAnyOrder(spaced, inside);
+        }
+    }
+
+    /**
      * V134 (issue #820, ADR-125) is expand only: eight nullable columns on retail_suppliers, so a supplier from before keeps
      * its name, contact, date added and version with every new detail empty, and one index on retail_purchases.
      * JUSTIFICATION-A3: a new test case; no existing case covers the supplier details.

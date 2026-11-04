@@ -63,6 +63,44 @@ describe('the staff sign-in button (#456)', () => {
   });
 });
 
+// JUSTIFICATION-A3: issue #823 asks for a DOM test of the sign-in field; these are new test cases, not new mechanism.
+// Issue #823: an email typed or pasted with spaces inside, before or after it, or with a non-breaking space, is sent without them;
+// a phone keeps its spaces, because the server reads a phone by its own format check. The box still shows what was typed.
+describe('spaces typed in the email or phone box (#823)', () => {
+  const NBSP = String.fromCharCode(0xa0);
+  const sentLogin = async () => {
+    await waitFor(() => expect(fetchImpl.seen).toHaveLength(1));
+    const body = (await fetchImpl.seen[0]!.clone().json()) as { login: string };
+    return body.login;
+  };
+
+  it.each([
+    ['inside', 'staff 01@exam ple.test'],
+    ['before and after', '   staff01@example.test  '],
+    ['a non-breaking space', `staff01${NBSP}@example.test${NBSP}`],
+    ['capitals and a tab', 'Staff01@Example.TEST\t'],
+  ])('sends the email without spaces when they are %s', async (_name, typed) => {
+    fetchImpl.seen = [];
+    fetchImpl.next = () => new Promise<Response>(() => undefined);
+    shell();
+    fireEvent.change(screen.getByLabelText('Email or phone'), { target: { value: typed } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-password-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await sentLogin()).toBe('staff01@example.test');
+    expect((screen.getByLabelText('Email or phone') as HTMLInputElement).value).toBe(typed);
+  });
+
+  it('sends a phone with its spaces, only trimmed', async () => {
+    fetchImpl.seen = [];
+    fetchImpl.next = () => new Promise<Response>(() => undefined);
+    shell();
+    fireEvent.change(screen.getByLabelText('Email or phone'), { target: { value: ' 0700 000 001 ' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-password-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await sentLogin()).toBe('0700 000 001');
+  });
+});
+
 // Issue #496: while a deploy switches the server over, the proxy answers 502 or the connection drops. The page says the app
 // is updating instead of 'Something went wrong', and what was typed stays in the form for the next try.
 describe('signing in while the app is updating (#496)', () => {

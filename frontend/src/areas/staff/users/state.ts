@@ -1,5 +1,6 @@
 import type { Me } from '../../../api/client';
 import { businessZone } from '../../../api/retail';
+import { cleanEmail } from '../../../api/sign-in-reset';
 import type { InviteUserBody, RoleAssignmentRequest, StaffBranch, StaffRole, StaffUser } from '../../../api/users';
 import { foldText } from '../../../app/ui/fold';
 import { normaliseUganda, phoneProblem, showPhone } from '../lending/member-state';
@@ -161,8 +162,9 @@ export const needsBranches = (roleKey: string, branchIds: string[]): boolean =>
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Spaces typed or pasted inside an email are removed, as the server removes them (issue #823). */
 export function emailProblem(raw: string): string | null {
-  const text = raw.trim();
+  const text = cleanEmail(raw);
   if (text === '') return null;
   return EMAIL.test(text) ? null : 'Check the email address: it looks like name@example.com.';
 }
@@ -175,7 +177,7 @@ export function inviteProblems(draft: InviteDraft): InviteProblems {
   const email = emailProblem(draft.email);
   if (phone) out.phone = phone;
   if (email) out.email = email;
-  if (draft.phone.trim() === '' && draft.email.trim() === '') out.contact = 'Give a phone number or an email address, so the person can be reached.';
+  if (draft.phone.trim() === '' && cleanEmail(draft.email) === '') out.contact = 'Give a phone number or an email address, so the person can be reached.';
   if (draft.roleKey === '') out.roleKey = 'Choose what this person will do.';
   if (needsBranches(draft.roleKey, draft.branchIds)) out.branches = 'Tick where this person works, or every one.';
   return out;
@@ -209,7 +211,7 @@ export function inviteBody(draft: InviteDraft): InviteUserBody {
   if (draft.till && draft.roleKey !== TENANT_ADMIN && draft.roleKey !== TILL) roles.push(...assignmentsFor(TILL, draft.branchIds));
   const body: InviteUserBody = { full_name: draft.fullName.trim(), roles };
   if (draft.phone.trim() !== '') body.phone = normaliseUganda(draft.phone) ?? draft.phone.trim();
-  if (draft.email.trim() !== '') body.email = draft.email.trim();
+  if (cleanEmail(draft.email) !== '') body.email = cleanEmail(draft.email);
   return body;
 }
 

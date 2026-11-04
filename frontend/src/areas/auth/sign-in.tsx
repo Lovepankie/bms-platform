@@ -1,6 +1,7 @@
 import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../api/client';
+import { signInLogin } from '../../api/sign-in-reset';
 import { BusyButton } from '../../app/ui/BusyButton';
 import { normaliseSecondFactor, plainProblem } from '../../auth/codes';
 import { cancelPendingLogout, endPendingLogout, logoutPending, setAccessToken } from '../../auth/session';
@@ -93,7 +94,7 @@ export function SignIn() {
     if (ending) return;
     cancelPendingLogout();
     void run(async () => {
-      const { data, error } = await api.POST('/api/v1/auth/staff/login', { body: { login, password } });
+      const { data, error } = await api.POST('/api/v1/auth/staff/login', { body: { login: signInLogin(login), password } });
       if (error || !data) throw error;
       setPassword('');
       await afterSignIn(data);

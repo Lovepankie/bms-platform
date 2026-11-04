@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.core.tenancy.TwoStepPolicy;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.kernel.EmailAddresses;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.TenantContext;
 import java.sql.ResultSet;
@@ -90,7 +91,7 @@ class StaffAccounts implements Accounts {
         List<Account> found;
         if (login.contains("@")) {
             found = jdbc.sql(SELECT + " AND lower(u.email) = lower(?)")
-                    .param(login.trim())
+                    .param(EmailAddresses.normalise(login))
                     .query(StaffAccounts::map)
                     .list();
         } else {

@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.identity.internal;
 
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.kernel.EmailAddresses;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -136,13 +137,14 @@ class AuthThrottle {
     }
 
     /**
-     * The key of a sign-in address within one tenant and one kind of account: an email in lower case, a phone in E.164
+     * The key of a sign-in address within one tenant and one kind of account: an email as it is looked up (no spaces
+     * anywhere, lower case, issue #823), so spaces typed inside it count against the same address; a phone in E.164
      * when it reads as one, anything else as typed in lower case.
      */
     static String address(Accounts accounts, String login) {
         String typed = login == null ? "" : login.strip().toLowerCase(Locale.ROOT);
         String normal = typed.contains("@")
-                ? typed
+                ? EmailAddresses.normalise(typed)
                 : PhoneNumbers.normaliseUganda(typed).orElse(typed);
         return accounts.kind() + ":" + accounts.tenantId() + ":" + normal;
     }

@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.identity.internal;
 
 import com.rincoltech.bms.core.audit.PlatformAuditLog;
+import com.rincoltech.bms.kernel.EmailAddresses;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -68,7 +69,7 @@ class PlatformAccounts implements Accounts {
             return Optional.empty();
         }
         return jdbc.sql(SELECT + " WHERE lower(email) = lower(?) AND password_hash IS NOT NULL")
-                .param(login.trim())
+                .param(EmailAddresses.normalise(login))
                 .query(PlatformAccounts::map)
                 .optional();
     }

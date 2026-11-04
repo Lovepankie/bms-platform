@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.identity.internal;
 
+import com.rincoltech.bms.kernel.EmailAddresses;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -24,7 +25,13 @@ final class UserApi {
             @NotBlank @Size(max = 200) String fullName,
             @Email @Size(max = 320) String email,
             @Size(max = 20) String phone,
-            @NotEmpty @Size(max = 20) List<@Valid RoleAssignmentRequest> roles) {}
+            @NotEmpty @Size(max = 20) List<@Valid RoleAssignmentRequest> roles) {
+
+        /** Spaces typed inside an email are removed before it is checked and saved (issue #823). */
+        InviteUserRequest {
+            email = EmailAddresses.normalise(email);
+        }
+    }
 
     @Schema(name = "UpdateUserRequest", description = "Omitted fields are unchanged")
     record UpdateUserRequest(
@@ -42,7 +49,13 @@ final class UserApi {
             @Schema(
                     description =
                             "Only for the Owner changing their own email or phone (ADR-062), when they have no two-step sign-in: their own password")
-            String password) {}
+            String password) {
+
+        /** Spaces typed inside an email are removed before it is checked and saved (issue #823). */
+        UpdateUserRequest {
+            email = EmailAddresses.normalise(email);
+        }
+    }
 
     @Schema(name = "RoleAssignment")
     record RoleAssignment(String roleKey, String roleName, UUID branchId) {}

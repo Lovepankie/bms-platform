@@ -42,6 +42,10 @@ describe('the invite form', () => {
   it('checks an email', () => {
     expect(inviteProblems({ ...good, email: 'not-an-email' }).email).toBeTruthy();
     expect(inviteProblems({ ...good, email: 'test.cashier01@example.com' }).email).toBeUndefined();
+    // Issue #823: spaces inside, a non-breaking space and capitals are cleaned away, as the server cleans them.
+    const spaced = ` Test.Cash ier01${String.fromCharCode(0xa0)}@Example.com `;
+    expect(inviteProblems({ ...good, email: spaced }).email).toBeUndefined();
+    expect(inviteBody({ ...good, phone: '', email: spaced }).email).toBe('test.cashier01@example.com');
   });
 
   it('sends the phone as the server stores it, and leaves out what was not typed', () => {
