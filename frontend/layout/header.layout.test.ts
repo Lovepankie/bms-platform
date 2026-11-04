@@ -137,6 +137,20 @@ describe.each([360, 390, 412])('the top bar at %ipx wide', (width) => {
         expect(c.box.x + c.box.width, `${c.cls} ends on screen`).toBeLessThanOrEqual(width + 0.5);
         for (const other of shown.slice(i + 1)) expect(overlap(c.box, other.box), `${c.cls} over ${other.cls}`).toBe(false);
       }
+      // Issue #825: every two targets of the bar stand at least 8px apart, across and down (below 412px it takes two lines).
+      const targets = await page.locator('.staff-bar-top :is(button, a.btn)').evaluateAll((els) =>
+        els.map((el) => ({ name: el.className, r: el.getBoundingClientRect() })).filter((t) => t.r.width > 0).map((t) => ({ name: t.name, x: t.r.x, y: t.r.y, right: t.r.right, bottom: t.r.bottom })),
+      );
+      expect(targets.length).toBeGreaterThanOrEqual(5);
+      for (const [i, a] of targets.entries()) {
+        for (const b of targets.slice(i + 1)) {
+          const gap = Math.max(b.x - a.right, a.x - b.right, b.y - a.bottom, a.y - b.bottom);
+          expect(gap, `${a.name} to ${b.name}`).toBeGreaterThanOrEqual(7.5);
+        }
+      }
+      // What is seen matches the Tab order: line by line, left to right, in the order of the page.
+      const seen = [...targets].sort((a, b) => (Math.abs(a.y - b.y) > 4 ? a.y - b.y : a.x - b.x));
+      expect(seen.map((t) => t.name)).toEqual(targets.map((t) => t.name));
       for (const target of ['.menu-button', '.sync-button', '.find-open', '.refresh-button', '.ask-open', '.top-menu-button']) {
         const box = (await page.locator(`.staff-bar-top ${target}`).first().boundingBox()) as Box;
         expect(box.width, `${target} width`).toBeGreaterThanOrEqual(48);

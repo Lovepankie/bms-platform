@@ -48,7 +48,7 @@ describe('Move stock while the app is updating (#496)', () => {
     const from = me.branches?.[0]?.id ?? '';
     const to = me.branches?.[1]?.id ?? '';
     const product = { id: 'p1', code: 'P003', description: 'LED bulb 9W screw', unit: 'piece', sell_minor: 6000, active: true, qty: '12.000' };
-    const draft = { toBranchId: to, transferDate: '2026-10-23', note: 'Test move 01', lines: [{ product, qty: '2' }] };
+    const draft = { toBranchId: to, transferDate: '', note: 'Test move 01', lines: [{ product, qty: '2' }] };
     sessionStorage.setItem(`retail-draft:transfer:${me.user_id}:${from}`, JSON.stringify({ key: 'test-key-496', draft }));
     const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff'] }) });
     render(

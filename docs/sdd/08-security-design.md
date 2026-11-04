@@ -415,6 +415,7 @@ platform API and holds no tenant permissions.
 | `retail.advance.create` | Y | | | | | | | | | | | |
 | `retail.advance.repay` | Y | | | | | | | | | | | |
 | `retail.cashbook.void` | Y | | | | | | | | | | | |
+| `retail.entry.backdate` | Y | | | | | | | | | | | |
 | `retail.branch_role.manage` | Y | | | | | | | | | | | |
 | `retail.pricelist.manage` | Y | | | | | | | | | | | |
 | `retail.pricelist.use` | Y | | | | | | | | | | | |
@@ -577,6 +578,14 @@ Notes:
   summed in the browser from the rows the list already returned under `retail.cashbook.read`, so they show no amount the rows do not:
   a row without an amount (a seller's savings record without the Owner's switch) leaves its group without a total. The restock cards under a group are the existing restocks list, which already shows each line's cost and the total to a holder of `retail.purchase.create`; the summaries add no new exposure there, and their cost figures follow the stricter `retail.profit.read` rule only because they are sums across restocks. Probing the list with `product_id` or `category_id` finds only restocks that put that product into a branch the caller may read.
   The sales role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+- The date of an entry (issue #811, ADR-120, migration `V131`): `retail.entry.backdate` ("date an entry earlier than today, with
+  a reason") is the tenant admin's only, scoped by branch like every retail permission and given to no other seeded role. The
+  server dates expenses, savings, banking, withdrawals, advances, repayments, Buy stock and Move stock today on the business
+  clock; anyone else who sends an earlier date, a banking or withdrawal time included, is refused with 403 `date_not_today`,
+  and the PWA shows them no date box. A holder must give a reason, which is written with the date and the day it was entered
+  in the audit row `retail.entry.backdated`, so a late entry that changes a closed day's cash book is always traceable to a
+  person and a reason. Sales are unchanged: online they are dated by the server, offline they keep the time they were made
+  (ADR-067).
 - Storekeeper and Purchasing (issue #399, ADR-055, migration `V73`). The storekeeper (`retail_storekeeper`) holds
   `retail.stock.read`, `retail.stock.transfer`, `retail.stocktake.commit` and `retail.usage.report`: it sends stock from the
   stores and shops it works in, receives what arrives there (with the `transfer_receipt` capability), counts stock and

@@ -53,6 +53,8 @@ export function savedWords(saved: { amount_minor?: number; business_date?: strin
 export interface SavingsInput {
   branchId: string;
   date: string;
+  /** The owner's earlier day and its reason (ADR-120); absent for today. */
+  sent?: { date: string; reason: string } | null;
   suggestion: SavingsSuggestion;
   /** What the person typed; blank takes the suggestion. */
   amount: string;
@@ -78,7 +80,9 @@ export interface SavingsPlan {
 /** What to send, and what (if anything) blocks it. The token is always echoed. */
 export function planSavings(input: SavingsInput): SavingsPlan {
   const { suggestion } = input;
-  const request: SavingsRequest = { branch_id: input.branchId, business_date: input.date, suggestion_token: suggestion.suggestion_token };
+  // ADR-120: only the owner's earlier day is sent, with its reason; otherwise the server dates the savings today.
+  const sent = input.sent ? { business_date: input.sent.date, date_reason: input.sent.reason } : {};
+  const request: SavingsRequest = { branch_id: input.branchId, ...sent, suggestion_token: suggestion.suggestion_token };
   if (!seesAmounts(suggestion)) return { problem: null, overwrite: false, request };
   if (input.amount.trim() === '') return { problem: null, overwrite: false, request };
   const typed = input.amount.trim() === '0' ? 0 : amountOrNull(input.amount);

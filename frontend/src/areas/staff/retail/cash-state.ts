@@ -10,6 +10,28 @@ export function amountOrNull(text: string): number | null {
   return minor !== null && minor > 0 ? minor : null;
 }
 
+/** The shortest reason the server takes for an entry dated before today (ADR-120). */
+export const MIN_DATE_REASON = 3;
+
+/**
+ * The date of a new entry (ADR-120, issue #811): `mayChoose` (the owner's permission at the branch) shows the box; `day` is
+ * today unless the owner chose an earlier one, which needs a reason; `sent` is what to send, nothing for today, so the server
+ * dates the entry itself.
+ * JUSTIFICATION-A3: one rule shared by seven forms; no existing helper decides an entry's date.
+ */
+export interface EntryDate { mayChoose: boolean; day: string; earlier: boolean; reasonMissing: boolean; sent: { date: string; reason: string } | null }
+
+export function entryDate(mayChoose: boolean, chosen: string | undefined, reason: string | undefined, today: string): EntryDate {
+  const day = mayChoose && chosen && chosen <= today ? chosen : today;
+  const earlier = day < today;
+  const why = (reason ?? '').trim();
+  return { mayChoose, day, earlier, reasonMissing: earlier && why.length < MIN_DATE_REASON, sent: earlier ? { date: day, reason: why } : null };
+}
+
+/** The request fields of an entry's date: the owner's earlier day under `field` with `date_reason`, else none. */
+export const dateFields = (entry: EntryDate, field = 'business_date'): Record<string, string> =>
+  entry.sent ? { [field]: entry.sent.date, date_reason: entry.sent.reason } : {};
+
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 /** "October 2026" from "2026-10-06" (or "2026-10"); the input unchanged when it is neither. */

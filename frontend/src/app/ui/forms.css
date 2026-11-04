@@ -1,6 +1,6 @@
 /*
  * Form controls. Labels sit above their input (a label may wrap its input, as the sign-in forms
- * do, or point at it with htmlFor, as the retail forms do). Inputs are 44px tall with 16px text
+ * do, or point at it with htmlFor, as the retail forms do). Inputs are 48px tall (--tap) with 16px text
  * so a phone does not zoom. A radio or checkbox inside a label becomes a full-width choice row.
  */
 
@@ -197,6 +197,23 @@ legend {
   display: grid;
   gap: var(--space-3);
   margin-top: var(--space-5);
+}
+
+/* A laptop (issue #825, buttons.css): the form's buttons and links drawn as buttons take the width of their label; a main action
+   stands at its right, any other at its start. */
+@media (min-width: 1024px) {
+  .form-stack > :is(button, .btn),
+  .form-actions > :is(button, .btn) {
+    width: fit-content;
+    min-width: min(100%, var(--button-min-wide));
+    max-width: min(100%, var(--button-max));
+    margin-inline-end: auto;
+  }
+
+  .form-stack > :is(.btn-primary, .btn-brand, .btn-danger, .rt-primary),
+  .form-actions > :is(.btn-primary, .btn-brand, .btn-danger, .rt-primary) {
+    margin-inline: auto 0;
+  }
 }
 
 .field-hint {

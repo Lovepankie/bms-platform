@@ -28,7 +28,8 @@ describe('savings form', () => {
     expect(out).not.toContain('UGX 20,000');
     expect(out).not.toContain('UGX 40,000');
     expect(out).not.toContain('savings-amount');
-    expect(out).toContain('for="savings-date"');
+    // ADR-120: the app dates the savings today; only the owner sees the date.
+    expect(out).not.toContain('savings-date');
   });
 
   it('shows a caller with profit read the suggestion and the profit and lets them type an amount', () => {
@@ -134,13 +135,19 @@ describe('savings rules', () => {
   const input = { branchId: branch, date: today, suggestion: withAmounts, amount: '', reason: '', canOverwrite: true };
 
   it('sends only the token when nothing is typed, and echoes the token always', () => {
-    expect(planSavings(input).request).toEqual({ branch_id: branch, business_date: today, suggestion_token: 'tok-1' });
+    expect(planSavings(input).request).toEqual({ branch_id: branch, suggestion_token: 'tok-1' });
+  });
+
+  it('sends a date only for the owner\'s earlier day, with its reason (ADR-120)', () => {
+    const earlier = daysBefore(today, 2);
+    expect(planSavings({ ...input, date: earlier, sent: { date: earlier, reason: 'Found the slip' } }).request)
+      .toEqual({ branch_id: branch, business_date: earlier, date_reason: 'Found the slip', suggestion_token: 'tok-1' });
   });
 
   it('sends no amount and no reason to a caller without profit read, whatever was typed', () => {
     const plan = planSavings({ ...input, suggestion: withoutAmounts, amount: '99999', reason: 'because I can' });
     expect(plan.problem).toBeNull();
-    expect(plan.request).toEqual({ branch_id: branch, business_date: today, suggestion_token: 'tok-1' });
+    expect(plan.request).toEqual({ branch_id: branch, suggestion_token: 'tok-1' });
     expect('amount_minor' in plan.request).toBe(false);
     expect('overwrite_reason' in plan.request).toBe(false);
   });

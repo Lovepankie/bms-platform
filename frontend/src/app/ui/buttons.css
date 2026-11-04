@@ -2,7 +2,12 @@
  * Buttons. A bare <button> is the secondary style, so every existing button is already a proper
  * control; .btn-primary (and the retail .rt-primary and #87's .btn-brand) is the one main action
  * of a view, .btn-danger destroys or refuses, .btn-ghost is a quiet action. .btn turns a link into
- * a button. Every button is at least 44px tall.
+ * a button. Every button is a target of at least 48 by 48px (--tap), whatever its size class.
+ *
+ * Sizes per screen (issue #825): in the phone layout (under 720px, which holds the issue's phone up to 600px) two targets stand
+ * --tap-gap (8px) apart and the screen's main action is full width in the sticky ActionBar (kit.css). On a laptop (from 1024px) a button is as wide as its label and
+ * never wider than --button-max, so nothing stretches across the page; the main action of a form (.rt-primary, a full width
+ * .btn-block, the button of a .form-stack or .form-actions) is at least --button-min-wide and sits at the right of its form.
  */
 
 button,
@@ -11,6 +16,7 @@ button,
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  min-width: var(--tap);
   min-height: var(--tap);
   padding: 10px 18px;
   border: 1px solid var(--color-border-strong);
@@ -121,6 +127,39 @@ button[aria-disabled='true'],
   width: 20px;
   height: 20px;
   flex: none;
+}
+
+/*
+ * A laptop (issue #825): the buttons that are full width on a phone take the width of their label instead, between
+ * --button-min-wide and --button-max (never more than their form). A main action (.btn-primary, .btn-brand, .btn-danger,
+ * .rt-primary) stands at the right of its form, and a secondary action right under it (retail.css: .rt-primary ~ button, Buy
+ * stock's Clear this purchase) under it at the right; any other block button at the start, where the eye reads on. The More page's search
+ * button is drawn as a search field, so it keeps the width of the page. The height stays --tap for a touch laptop. The same
+ * rule is in forms.css for .form-stack and .form-actions and in retail.css for .rt-primary, which load after this file.
+ */
+@media (min-width: 1024px) {
+  .btn-block:not(.find-open-more) {
+    display: flex;
+    width: fit-content;
+    min-width: min(100%, var(--button-min-wide));
+    max-width: min(100%, var(--button-max));
+    margin-inline-end: auto;
+  }
+
+  .btn-block:is(.btn-primary, .btn-brand, .btn-danger, .rt-primary) {
+    margin-inline: auto 0;
+  }
+
+  /* A .stack (layout.css) is a grid that stretches what it holds: a button in it keeps the width of its label, at the start,
+     and a main action at the end. */
+  .stack > :is(button, .btn) {
+    justify-self: start;
+    max-width: min(100%, var(--button-max));
+  }
+
+  .stack > :is(.btn-primary, .btn-brand, .btn-danger, .rt-primary) {
+    justify-self: end;
+  }
 }
 
 /*

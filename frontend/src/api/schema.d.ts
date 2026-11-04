@@ -12942,6 +12942,8 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            /** @description Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today */
+            date_reason?: string;
             /** Format: uuid */
             party_id: string;
             /** Format: int64 */
@@ -13226,6 +13228,8 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            /** @description Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today */
+            date_reason?: string;
             reference?: string;
         };
         /** @description Issue #345: one barcode of a product, for its base unit or one pack size */
@@ -14895,6 +14899,8 @@ export interface components {
             business_date?: string;
             /** Format: uuid */
             category_id: string;
+            /** @description Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today */
+            date_reason?: string;
             explanation?: string;
             /** Format: uuid */
             item_id: string;
@@ -17009,15 +17015,17 @@ export interface components {
             next_cursor?: string;
         };
         RetailPurchaseRequest: {
+            /** @description Why the purchase has a date before today; needed then (ADR-120) */
+            date_reason?: string;
             lines: components["schemas"]["RetailPurchaseLineRequest"][];
             note?: string;
             /** @description cash, mobile_money, bank, or credit: owed to the supplier, who is then required (issue #557) */
             payment_method: string;
             /**
              * Format: date
-             * @description Not in the future
+             * @description Defaults to today; not in the future, and before today only from a holder of retail.entry.backdate at every branch of the lines, with date_reason (ADR-120)
              */
-            purchased_on: string;
+            purchased_on?: string;
             /**
              * Format: uuid
              * @description Required for a credit purchase
@@ -17460,6 +17468,8 @@ export interface components {
              * @description The branch that receives the money; defaults to the advance's branch
              */
             branch_id?: string;
+            /** @description Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today */
+            date_reason?: string;
             /** @enum {string} */
             method: "cash" | "mobile_money" | "bank";
             /** Format: date */
@@ -18221,6 +18231,8 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            /** @description Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today */
+            date_reason?: string;
             /** @description Optional, even when the amount differs from the suggestion */
             overwrite_reason?: string;
             suggestion_token: string;
@@ -19466,6 +19478,8 @@ export interface components {
             note?: string;
         };
         RetailTransferRequest: {
+            /** @description Why the move has a date before today; needed then (ADR-120) */
+            date_reason?: string;
             /**
              * Format: uuid
              * @description The source branch; defaults to the caller's one branch
@@ -19480,7 +19494,7 @@ export interface components {
             to_branch_id: string;
             /**
              * Format: date
-             * @description Defaults to today; not in the future
+             * @description Defaults to today; not in the future, and before today only from a holder of retail.entry.backdate at the source branch, with date_reason (ADR-120)
              */
             transfer_date?: string;
         };
@@ -19938,6 +19952,8 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            /** @description Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today */
+            date_reason?: string;
             purpose?: string;
             /** Format: date-time */
             withdrawn_at?: string;

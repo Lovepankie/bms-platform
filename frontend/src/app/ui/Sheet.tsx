@@ -22,7 +22,10 @@ export function Sheet({ open, onClose, title, children, actions, tall = false }:
   onClose: () => void;
   title: string;
   children: ReactNode;
-  /** The buttons at the foot, the primary one first. */
+  /**
+   * The buttons at the foot, the primary one last (issue #825): on a phone they stand one under the other, the primary nearest
+   * the thumb; on a laptop they stand together at the right, the primary at the far right, in the order of the page.
+   */
   actions?: ReactNode;
   /** Opens at full height on a phone whatever its content, as a picker whose list a search narrows (#578). */
   tall?: boolean;

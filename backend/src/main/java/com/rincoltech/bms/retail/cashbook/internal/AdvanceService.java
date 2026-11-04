@@ -76,7 +76,8 @@ class AdvanceService {
 
     private Advance record(AdvanceRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.ADVANCE_CREATE, r.branchId());
-        LocalDate date = support.businessDate(r.businessDate(), "business_date");
+        CashbookSupport.Dated dated = support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch);
+        LocalDate date = dated.date();
         PartyRow party = repo.party(r.partyId())
                 .filter(PartyRow::active)
                 .orElseThrow(() -> ApiException.validation(
@@ -121,6 +122,7 @@ class AdvanceService {
                 id,
                 branch,
                 Map.of("advance_no", no, "business_date", date.toString(), "principal_minor", principal)));
+        support.auditBackdate(dated, "retail.advance", id, branch);
         return view(repo.advance(id, false).orElseThrow(), null);
     }
 
@@ -240,7 +242,8 @@ class AdvanceService {
         if (advance.voided().voided()) {
             throw CashbookSupport.alreadyVoided();
         }
-        LocalDate paidOn = support.businessDate(r.paidOn(), "paid_on");
+        CashbookSupport.Dated dated = support.entryDate(r.paidOn(), "paid_on", r.dateReason(), branch);
+        LocalDate paidOn = dated.date();
         if (paidOn.isBefore(advance.businessDate())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("paid_on", "invalid", "A repayment cannot be dated before the advance.")));
@@ -271,6 +274,7 @@ class AdvanceService {
                         "method", r.method(),
                         "paid_on", paidOn.toString(),
                         "amount_minor", amount)));
+        support.auditBackdate(dated, "retail.advance_repayment", id, branch);
         return view(repo.repayment(id, false).orElseThrow(), balance - amount);
     }
 
