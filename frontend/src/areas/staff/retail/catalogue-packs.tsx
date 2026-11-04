@@ -132,12 +132,12 @@ function PackSheet({ product, pack, mayPrice, onClose, fixed }: {
       title={`${unitWord(pack.unit)} of ${product.description}`}
       actions={
         <>
-          <BusyButton busy={change.isPending && change.variables?.active === undefined} type="button" className="rt-primary" disabled={problem !== null || change.isPending || Object.keys(body).length === 0} onClick={() => change.mutate(body)}>
-            Save
-          </BusyButton>
           {/* Switching on again confirms the number: the item's unit may have changed while the pack was off. */}
           <BusyButton busy={change.isPending && change.variables?.active !== undefined} type="button" aria-label={`${pack.active === false ? 'Switch on' : 'Switch off'} the ${unitWord(pack.unit)} pack`} disabled={change.isPending || (pack.active === false && problem !== null)} onClick={() => change.mutate(pack.active === false ? { active: true, factor: factor.trim() } : { active: false })}>
             {pack.active === false ? 'Switch on' : 'Switch off'}
+          </BusyButton>
+          <BusyButton busy={change.isPending && change.variables?.active === undefined} type="button" className="rt-primary" disabled={problem !== null || change.isPending || Object.keys(body).length === 0} onClick={() => change.mutate(body)}>
+            Save
           </BusyButton>
         </>
       }

@@ -16,6 +16,7 @@ import { TRANSFER, UNITS, canUse, capabilityOn, holdsAt } from './permissions';
 import { NextSteps } from './next-steps';
 import { usualBuyingPack } from './ladder-state';
 import { OWN_PRICE_KEEPS_SIZE, baseCostMinor, baseQtyMilli, buyingPacks, chosenPack, deliveredFactor, mayKeepSize, packPriceMinor, quantityIn, sameFactor, unitWord, unitWords } from './units-state';
+import { ActionBar } from '../../../app/ui/ActionBar';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Field, FieldsNeededNote } from '../../../app/ui/Field';
 import { WORDS, howManyInEach, useFromNowOn } from '../../../app/glossary';
@@ -422,7 +423,9 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
 
       <p className="rt-total" aria-live="polite" data-testid="restock-total">Total cost <Money minor={restockTotal(lines)} /></p>
       <Problem error={save.error} />
-      <BusyButton type="submit" className="rt-primary" data-tour="restock-save" busy={save.isPending} notReady={blocked}>{replaces ? 'Save changes' : 'Save the purchase'}</BusyButton>
+      <ActionBar>
+        <BusyButton type="submit" className="rt-primary" data-tour="restock-save" busy={save.isPending} notReady={blocked}>{replaces ? 'Save changes' : 'Save the purchase'}</BusyButton>
+      </ActionBar>
 
       {lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this purchase</button>

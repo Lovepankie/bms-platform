@@ -30,17 +30,36 @@
   min-height: 56px;
 }
 
-/* Below 430px the bar's controls sit closer, so the branch name keeps its room (issue #605); each is still a 48px target. With
-   Refresh in the bar again (issue #631) they touch: an icon in a 48px target already has its own space around it, and Ask and
-   the sync indicator are exactly 48px wide. */
+/* Below 430px the bar's controls sit closer, so the branch name keeps its room (issue #605); each is still a 48px target, Ask
+   and the sync indicator exactly 48px wide, and two targets stand --tap-gap apart (issue #825). */
+/* The phone layout (issue #825): the bar floats over the page as it scrolls, so its targets stand 8px inside its top and bottom. */
+@media (max-width: 719px) {
+  .staff-bar-top {
+    padding-block: var(--tap-gap);
+  }
+}
+
 @media (max-width: 429px) {
   .staff-bar-top {
-    gap: 0;
+    gap: var(--tap-gap);
   }
 
   .staff-bar-top .ask-open,
   .staff-bar-top .sync-button {
     padding-inline: 0;
+  }
+}
+
+/* Below 412px six targets 8px apart leave the names too little room (issue #825), so the bar takes two lines in the order of the
+   page: the menu and the names on the first, the sync, Refresh, Search, Ask and account buttons at the right of the second. */
+@media (max-width: 411px) {
+  .staff-bar-top {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .staff-bar-top > .top-title {
+    flex-basis: calc(100% - var(--tap) - var(--tap-gap));
   }
 }
 
@@ -1080,7 +1099,8 @@ img.menu-shop-logo {
   right: 0;
   bottom: 0;
   z-index: var(--z-nav);
-  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* The page scrolls under the bar, so the tabs stand --tap-gap inside its top edge (issue #825), the bar no taller for it. */
+  padding: var(--tap-gap) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
@@ -1103,7 +1123,7 @@ img.menu-shop-logo {
   align-items: center;
   justify-content: center;
   gap: var(--tab-gap);
-  min-height: var(--tab-height);
+  min-height: calc(var(--tab-height) - var(--tap-gap));
   min-width: var(--tap);
   padding: var(--space-1) var(--tab-gap);
   color: var(--color-text-muted);
