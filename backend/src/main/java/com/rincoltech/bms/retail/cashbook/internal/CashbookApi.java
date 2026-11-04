@@ -24,6 +24,9 @@ import java.util.UUID;
 final class CashbookApi {
 
     static final String PROFIT_ONLY = "Present only with retail.profit.read in the record's branch";
+    /** Issue #814: the day's savings on the expected-to-bank answer. */
+    static final String SAVINGS_LINE = "Present with retail.profit.read in the branch, or while the owner's setting"
+            + " salespeople_see_savings_amount is on (issue #814, ADR-115 decision 11)";
     /** Issue #799: a saved day's suggestion is sent to no one; only a voided record keeps it, for profit read. */
     static final String SAVED_DAY_SUGGESTION =
             "Present only with retail.profit.read in the record's branch and only on a voided record: an active record"
@@ -237,10 +240,10 @@ final class CashbookApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
             Long cashPurchasesMinor,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = SAVINGS_LINE)
             Long savingsMinor,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = SAVINGS_LINE)
             Long savingsVoidsMinor,
 
             long expensesMinor,
@@ -254,6 +257,14 @@ final class CashbookApi {
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
             Long expectedMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #814, ADR-115 decision 11: cash expected less the day's savings (plus their voids),"
+                                    + " never less the cash purchases; present only without retail.profit.read, while the owner's"
+                                    + " setting salespeople_see_savings_amount is on")
+            Long expectedAfterSavingsMinor,
 
             long bankedSoFarMinor) {}
 

@@ -42,7 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 4 and 10). The expected amount is always computed here from the day's cash takings; a client may
  * display it but never supplies it. Banking is never refused for exceeding the cash on hand: it is
  * flagged. Everything net of savings and cash purchases is profit-derived and shown only with
- * {@code retail.profit.read}.
+ * {@code retail.profit.read}, except that with the owner's savings switch on the day's savings and the cash expected
+ * less them reach whoever may bank (issue #814, ADR-115 decision 11).
  */
 @Service
 class BankingService {
@@ -94,6 +95,10 @@ class BankingService {
         LocalDate on = support.businessDate(date, "date");
         Day d = figures.day(branch, on);
         boolean profit = mayProfit(branch);
+        // Issue #814, ADR-115 decision 11: with the owner's savings switch on, whoever may bank sees the day's savings
+        // and the cash expected less them; the cash purchases and the net of them stay with retail.profit.read.
+        boolean savingsLine = !profit && support.salespeopleSavings().on();
+        boolean savings = profit || savingsLine;
         return new BankingExpected(
                 branch,
                 on,
@@ -103,13 +108,14 @@ class BankingService {
                 d.advanceVoids(),
                 d.repaymentVoids(),
                 profit ? d.cashPurchases() : null,
-                profit ? d.savings() : null,
-                profit ? d.savingsVoids() : null,
+                savings ? d.savings() : null,
+                savings ? d.savingsVoids() : null,
                 d.expenses(),
                 d.advancesOut(),
                 d.repaymentsIn(),
                 d.cashExpected(),
                 profit ? d.expectedToBank() : null,
+                savingsLine ? d.cashExpected() - d.savings() + d.savingsVoids() : null,
                 repo.bankedSoFar(branch, on));
     }
 

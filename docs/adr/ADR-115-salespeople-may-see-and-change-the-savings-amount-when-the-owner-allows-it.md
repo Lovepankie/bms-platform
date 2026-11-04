@@ -11,6 +11,9 @@ Amended by issue #827 (3 Nov 2026), as the owner's old app did: every month's re
 amounts to whoever may record savings or sell at the branch, and sellers see them grouped by shop, year, month and person with
 the sum at each level (decisions 3 and 8 changed, decision 10 added). No migration.
 Amended by ADR-120 (issue #811): sales staff save today's savings; an earlier day of the month is the owner's, with a reason.
+Amended by issue #814 (4 Nov 2026), as the owner's old app did: while the setting is on, whoever may bank sees on Banking the
+day's savings and the cash expected less them, and the amount is filled with it; cash purchases stay hidden (decision 5
+changed, decision 11 added; FR-RET-21). No migration.
 
 ## Context
 
@@ -63,8 +66,9 @@ want the person closing the till to set the savings aside by hand and to check t
    routes (decision 8); whichever route is used, changing the suggestion before the day is saved needs no more than that
    right, and replacing a saved amount needs `retail.savings.overwrite`.
 5. **Still hidden**, setting on or off: the record's `suggested_minor` and every other profit-gated figure of ADR-022 decision 13
-   (the savings report, the expected-to-bank answer, `savings_minor`, cash purchases). The screen shows no profit, no expenses
-   and no cap to that caller.
+   (the savings report, the net `expected_minor` of the expected-to-bank answer, cash purchases). The screen shows no profit, no
+   expenses and no cap to that caller. Since issue #814 the expected-to-bank answer carries the day's savings while the setting
+   is on (decision 11).
 6. **The audit.** The create's audit row keeps the flags of ADR-022 decision 12 (`overwritten`, `default_applied`, the reason if
    given) and adds `salespeople_setting: true` when the record was made while the setting was on; the actor is on the row. No
    amount is written, so a reader of the audit log learns no more than before.
@@ -106,6 +110,18 @@ want the person closing the till to set the savings aside by hand and to check t
     [{user_id, name, total_minor, records: [{id, business_date, amount_minor}]}]}]}]}]}`, newest day first, with optional
     `branch_id`, `from` and `to`. It carries amounts saved only: no profit, no suggestion, no sales, no voided record. The
     Savings screen shows a seller that view below the form, the newest year open. Off, the route is 403 `permission_denied`.
+11. **Banking shows the savings line (issue #814, as the owner's old app did).** The old app's Banked form showed every seller
+    the day's sales less the savings. While the setting is on, `GET /retail/bankings/expected` sends a caller without
+    `retail.profit.read` who may bank at the branch (`retail.banking.record`, the Till role) `savings_minor` and
+    `savings_voids_minor`, and `expected_after_savings_minor`: `cash_expected_minor` less the savings plus their voids. It is
+    deliberately not net of cash purchases, so `cash_purchases_minor` and the net `expected_minor` stay with `retail.profit.read`
+    (ADR-022 decision 13), as do the stored `expected_minor`, `difference_minor`, `flag` and `warnings` of a save and every
+    figure of the banking report. A caller with `retail.profit.read` is not sent `expected_after_savings_minor`; their figure is
+    `expected_minor`. `BankingService.expected` decides it on the server, reading the setting once per request; the Banking form
+    shows "Savings set aside" and "Expected to bank" when the answer carries them and prefills the amount banked with
+    `expected_after_savings_minor` less what is already banked that day. The answer is the read kept on the phone for offline
+    use (ADR-116), so the form shows the same lines offline. With the setting off the answer is as before. The savings were
+    already visible to these people on Savings while the setting is on, so this shows nothing the owner has not already allowed.
 
 ## Consequences
 
@@ -128,5 +144,5 @@ showed it; the help text says so.
 
 **Watch for:** an owner who turns it on and later off: the amounts disappear again from the screens, but what a salesperson saw
 while it was on cannot be taken back. Turning it on again shows every month's records again (issue #827). A request to show
-the savings report or the expected-to-bank figures to salespeople is a further relaxation of ADR-022 decision 13 and needs its
-own decision.
+the savings report, the cash purchases or the net expected-to-bank figure to salespeople is a further relaxation of ADR-022
+decision 13 and needs its own decision; the savings line on Banking is decision 11.

@@ -13254,6 +13254,11 @@ export interface components {
             cash_takings_minor?: number;
             /**
              * Format: int64
+             * @description Issue #814, ADR-115 decision 11: cash expected less the day's savings (plus their voids), never less the cash purchases; present only without retail.profit.read, while the owner's setting salespeople_see_savings_amount is on
+             */
+            expected_after_savings_minor?: number;
+            /**
+             * Format: int64
              * @description Present only with retail.profit.read in the record's branch
              */
             expected_minor?: number;
@@ -13267,12 +13272,12 @@ export interface components {
             repayments_in_minor?: number;
             /**
              * Format: int64
-             * @description Present only with retail.profit.read in the record's branch
+             * @description Present with retail.profit.read in the branch, or while the owner's setting salespeople_see_savings_amount is on (issue #814, ADR-115 decision 11)
              */
             savings_minor?: number;
             /**
              * Format: int64
-             * @description Present only with retail.profit.read in the record's branch
+             * @description Present with retail.profit.read in the branch, or while the owner's setting salespeople_see_savings_amount is on (issue #814, ADR-115 decision 11)
              */
             savings_voids_minor?: number;
         };

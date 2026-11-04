@@ -20,7 +20,9 @@ import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../off
 // Cash banked (FR-RET-21 to FR-RET-23). The server works out what to expect: every caller sees "Cash
 // expected" (takings less what was paid out of the till). Only a caller with retail.profit.read also gets
 // the cash restock cost, the savings and the net amount to bank, and only then the flag, the difference and
-// the warning after a save. Several deposits on one day are allowed.
+// the warning after a save. While the owner's savings switch is on, the server also sends anyone else the
+// savings set aside and the cash expected less them (issue #814), never the cash restock cost. Several deposits
+// on one day are allowed.
 
 interface BankingDraft { date: string; dateReason?: string; amount: string | null; reference: string }
 
@@ -35,6 +37,12 @@ export function ExpectedFigures({ expected, date }: { expected: BankingExpected;
       {expected.cash_purchases_minor !== undefined && <p className="rt-row"><span>Stock bought with cash, at cost</span><strong>{money(expected.cash_purchases_minor)}</strong></p>}
       {expected.savings_minor !== undefined && <p className="rt-row"><span>Savings set aside</span><strong>{money(expected.savings_minor)}</strong></p>}
       {expected.expected_minor !== undefined && <p className="rt-row"><span>Expected to bank</span><strong>{money(expected.expected_minor)}</strong></p>}
+      {expected.expected_minor === undefined && expected.expected_after_savings_minor !== undefined && (
+        <>
+          <p className="rt-row"><span>Expected to bank</span><strong>{money(expected.expected_after_savings_minor)}</strong></p>
+          <Hint>Cash expected less the savings set aside.</Hint>
+        </>
+      )}
       <p className="rt-row"><span>{alreadyBankedLabel(date ?? expected.business_date, businessToday())}</span><strong>{money(expected.banked_so_far_minor ?? 0)}</strong></p>
     </div>
   );

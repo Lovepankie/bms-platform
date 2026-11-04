@@ -458,6 +458,11 @@ widths: see its README), and the script is not committed. Notes:
 - A caller without `retail.profit.read` sees the day's total sold and "Cash expected" only: no savings amount,
   suggestion, profit, cash purchases, net expected amount, difference or running unbanked total, and the savings
   form sends no amount.
+- Banking with the Owner's savings switch on (issue #814, ADR-115 decision 11): a person who banks without
+  `retail.profit.read` (the Till role) sees "Cash expected", "Savings set aside" and "Expected to bank" with the
+  hint "Cash expected less the savings set aside.", and the amount banked is filled with Expected to bank less
+  what is already banked that day. Stock bought with cash, the difference and the flag stay hidden. The server
+  sends these lines; the form only shows what the answer carries, online and from the read kept on the phone.
 - The bottom bar now carries Retail plus up to five shortcuts in the pilot's order (Sale, Banked, Savings,
   Expenses, Advances), so an administrator's bar no longer shows Stock and Restock; both stay on the Retail home.
   Six items still fit at 360px.
