@@ -1386,6 +1386,22 @@ th[scope='rowgroup'] .cat-head {
   font-variant-numeric: tabular-nums;
 }
 
+/* Buy stock's total for the owner (issue #821): the cost, what it should sell for and the expected profit in the total's box. */
+.rt-total-figures {
+  display: block;
+  font-size: var(--text-base);
+  font-weight: var(--weight-regular);
+}
+
+.rt-total-figures .rt-figures {
+  margin: 0;
+}
+
+/* An amount in a list of figures never breaks in the middle of its digits (issue #821, on a phone 412 wide). */
+.rt-figures dd .num {
+  white-space: nowrap;
+}
+
 /* An entry warning (issue #353): a tinted note next to the field it is about, its words in the text colour for reading, the
    icon in the warning colour, and Confirm and Change as two ordinary 48px buttons. No stripe, no shadow of its own. */
 .entry-warning p {

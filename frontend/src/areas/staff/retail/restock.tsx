@@ -12,7 +12,7 @@ import { Gate, Money, Note, Problem, ProductPicker, money, useProfitAccess } fro
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
 import { ScreenToast, sayDone, useItemAdded } from './toast';
-import { BACKDATE, TRANSFER, UNITS, canUse, capabilityOn, holdsAt } from './permissions';
+import { BACKDATE, PROFIT, TRANSFER, UNITS, canUse, capabilityOn, holdsAt } from './permissions';
 import { entryDate } from './cash-state';
 import { DateField } from './cash-ui';
 import { NextSteps } from './next-steps';
@@ -96,6 +96,43 @@ export function restockTotal(lines: RestockLine[]): number {
     const cost = parseMinor(l.cost, RETAIL_CURRENCY) ?? 0;
     return sum + Object.values(l.qtyByBranch).reduce((s, q) => s + lineTotalMinor(cost, branchQty(q) ?? 0), 0);
   }, 0);
+}
+
+// JUSTIFICATION-A3: issue #821 adds the delivery's worth and the block that shows it on Buy stock and Past purchases.
+/**
+ * Issue #821 (ADR-126): what the goods on the form should sell for, as the server reckons a saved delivery: each line's quantity
+ * in the item's own unit times the selling price on the line, else the item's current price. A line not yet right counts what
+ * can be read of it. Null when an item has no selling price yet (review of #850): the worth is then not known.
+ */
+export function restockWorth(lines: RestockLine[]): number | null {
+  if (lines.some((l) => (parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor ?? 0) <= 0)) return null;
+  return lines.reduce((sum, l) => {
+    const sell = parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor ?? 0;
+    const factor = lineFactor(l);
+    const milli = Object.values(l.qtyByBranch).reduce((s, q) => {
+      const entered = branchQty(q) ?? 0;
+      return s + (factor === undefined ? entered : (baseQtyMilli(entered, factor ?? undefined) ?? 0));
+    }, 0);
+    return sum + lineTotalMinor(sell, milli);
+  }, 0);
+}
+
+/**
+ * Issue #821: the delivery's cost, what it should sell for and the expected profit (a loss said as one), one line each. With an
+ * item that has no selling price yet (a null worth), the cost and that sentence instead of the other two.
+ */
+export function DeliveryWorth({ paid, worth, label }: { paid: number; worth: number | null; label: string }) {
+  const profit = worth === null ? 0 : worth - paid;
+  return (
+    <>
+      <dl className="rt-figures" aria-label={label} data-testid="delivery-worth">
+        <div><dt>Total cost</dt><dd><Money minor={paid} /></dd></div>
+        {worth !== null && <div><dt>Should sell for</dt><dd><Money minor={worth} /></dd></div>}
+        {worth !== null && <div><dt>{profit < 0 ? 'Expected loss' : 'Expected profit'}</dt><dd><strong><Money minor={Math.abs(profit)} /></strong></dd></div>}
+      </dl>
+      {worth === null && <p className="hint" data-testid="unpriced-note">Some items have no selling price yet.</p>}
+    </>
+  );
 }
 
 export function buildPurchase(input: { supplierId: string; purchasedOn?: string; dateReason?: string; method: PurchasePayment; lines: RestockLine[] }): PurchaseRequest {
@@ -468,7 +505,12 @@ export function RestockForm({ onSaved, draftName, fixSearch, fromEdit = false, i
       </fieldset>
       {supplierProblem && <p role="alert" className="rt-flag" data-testid="credit-needs-supplier">{supplierProblem}</p>}
 
-      <p className="rt-total" aria-live="polite" data-testid="restock-total">Total cost <Money minor={restockTotal(lines)} /></p>
+      {/* Issue #821: who reads profit at every branch on the form sees what the delivery should sell for; anyone else, the total cost as before. */}
+      {canProfit && into.every((b) => holdsAt(me, PROFIT, b)) ? (
+        <div className="rt-total rt-total-figures" aria-live="polite" data-testid="restock-total"><DeliveryWorth paid={restockTotal(lines)} worth={restockWorth(lines)} label="This delivery" /></div>
+      ) : (
+        <p className="rt-total" aria-live="polite" data-testid="restock-total">Total cost <Money minor={restockTotal(lines)} /></p>
+      )}
       <ReceiptPhotoChoice id="restock-receipt" file={receipt} onChange={setReceipt} />
       <Problem error={save.error} />
       <ActionBar>

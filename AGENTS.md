@@ -944,6 +944,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   Call, Text, WhatsApp, Email and Website and its deliveries, each opening the purchase on its own page
   (`/staff/retail/restocks/$purchaseId`); tours `page-suppliers` v3, `page-supplier` v1, `page-purchase` v1. Tests:
   `RetailSupplierDetailsIT`, `MigrationOrderIT`, `suppliers.dom.test.tsx`, `layout/suppliers.layout.test.ts`.
+- **Built (what a delivery should sell for, issue #821, ADR-126, FR-RET-91):** no migration and no permission. Every restock
+  response carries `sell_worth_minor` (each line's base quantity times the line's own selling price, else the item's current
+  one) and `expected_profit_minor` (that less `total_minor`) only for a caller with `retail.profit.read` at every branch they
+  see it stock (`PurchasingService.shown`, after the idempotency store so a replay never leaks them). Buy stock draws Total
+  cost, Should sell for and Expected profit (or loss) in the total's box, live (`restockWorth`, `DeliveryWorth`), and each
+  Past purchases row the three the server sent; anyone else sees Total cost as before. Past purchases is a kept read
+  (ADR-116). Tests: `RetailDeliveryWorthIT`, `delivery-worth.dom.test.tsx`, `layout/delivery-worth.layout.test.ts`.
 - **Built (Past usage and damage, issue #145, AppSheet "Damaged or used stock not sold"):** no migration and no permission.
   `GET /retail/stock/movements` takes a repeatable `kind` filter (422 for an unknown or blank kind) and each row carries the
   item's `code`, `description` and `unit`, and for a profit reader `line_cost_minor`, the value the screen shows as is. The page `/staff/retail/usage-history` (`usage-history.tsx`, `retail.stock.read`), linked

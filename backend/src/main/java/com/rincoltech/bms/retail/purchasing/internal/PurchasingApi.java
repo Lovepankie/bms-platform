@@ -323,7 +323,28 @@ final class PurchasingApi {
             Boolean partial,
 
             @Schema(description = "Issue #819, ADR-124: a photo of the paper receipt is on the delivery")
-            boolean hasReceiptPhoto) {
+            boolean hasReceiptPhoto,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #821 (ADR-126): what the goods should sell for, each line's quantity in base units"
+                                    + " times the selling price the line set, else the item's current selling price. Present only"
+                                    + " to a holder of retail.profit.read")
+            Long sellWorthMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description = "Issue #821 (ADR-126): sell_worth_minor less total_minor. Present only to a holder of"
+                            + " retail.profit.read")
+            Long expectedProfitMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description = "Issue #821 (ADR-126): true, for a holder of retail.profit.read, when an item"
+                            + " on a line has no selling price yet; sell_worth_minor and expected_profit_minor are"
+                            + " then absent")
+            Boolean hasUnpricedItems) {
 
         // JUSTIFICATION-A3: a restock gained the void fields of issue #351; the short constructor keeps the three
         // existing callers as they are.
@@ -358,7 +379,10 @@ final class PurchasingApi {
                     null,
                     null,
                     null,
-                    false);
+                    false,
+                    null,
+                    null,
+                    null);
         }
 
         // JUSTIFICATION-A3: the lead's decision on #846 reads the photo through a port; the restock is marked after.
@@ -382,7 +406,40 @@ final class PurchasingApi {
                     voidedOn,
                     voidReason,
                     partial,
-                    has);
+                    has,
+                    sellWorthMinor,
+                    expectedProfitMinor,
+                    hasUnpricedItems);
+        }
+
+        // JUSTIFICATION-A3: a record copy names every component; the worth is two new ones (issue #821).
+        /**
+         * This restock with what its goods should sell for and the expected profit (issue #821, ADR-126); a null worth says an
+         * item on a line has no selling price yet, and leaves both out.
+         */
+        Purchase withWorth(Long sellWorth) {
+            return new Purchase(
+                    id,
+                    purchaseNo,
+                    supplierId,
+                    purchasedOn,
+                    paymentMethod,
+                    currency,
+                    totalMinor,
+                    note,
+                    lines,
+                    createdAt,
+                    createdBy,
+                    status,
+                    voidedAt,
+                    voidedBy,
+                    voidedOn,
+                    voidReason,
+                    partial,
+                    hasReceiptPhoto,
+                    sellWorth,
+                    sellWorth == null ? null : Math.subtractExact(sellWorth, totalMinor),
+                    sellWorth == null ? Boolean.TRUE : null);
         }
 
         Purchase withLinesAndTotal(List<PurchaseLine> newLines, long newTotal, boolean hidden) {
@@ -404,7 +461,10 @@ final class PurchasingApi {
                     voidedOn,
                     voidReason,
                     hidden ? Boolean.TRUE : null,
-                    hasReceiptPhoto);
+                    hasReceiptPhoto,
+                    sellWorthMinor,
+                    expectedProfitMinor,
+                    hasUnpricedItems);
         }
     }
 

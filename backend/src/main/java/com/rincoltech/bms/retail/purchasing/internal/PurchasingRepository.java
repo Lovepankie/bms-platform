@@ -491,6 +491,9 @@ class PurchasingRepository {
                 rs.getString("void_reason"),
                 null,
                 // Issue #819: marked by PurchasingService through the receipt photo port, not read here.
-                false);
+                false,
+                null,
+                null,
+                null);
     }
 }

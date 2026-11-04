@@ -55,6 +55,7 @@ const RETAIL_READS = new Set([
   'expense-categories', // the expense form's categories and items
   'cash-parties', // the beneficiary picker
   'suppliers', // Buy stock's supplier picker
+  'restocks', // Past purchases, with what each delivery should sell for for an owner (issue #821, ADR-126)
   'savings-suggestion', // the savings form's suggestion and its token
   'banking-expected', // the banking form's cash expected
 ]);
