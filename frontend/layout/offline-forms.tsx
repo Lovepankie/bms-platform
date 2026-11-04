@@ -3,7 +3,7 @@ import { RouterContextProvider } from '@tanstack/react-router';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Me } from '../src/api/client';
-import type { ExpenseCategory } from '../src/api/retail';
+import { businessToday, type ExpenseCategory } from '../src/api/retail';
 import { mockMe } from '../src/api/retail-mock';
 import { setAccessToken } from '../src/auth/session';
 import { StaffContext } from '../src/areas/staff/context';
@@ -33,7 +33,8 @@ client.setQueryData(['retail', 'cash-parties'], []);
 setAccessToken('layout-token');
 sessionStorage.setItem(`retail-draft:expense:${me.user_id ?? ''}:${branch}`, JSON.stringify({
   key: '00000000-0000-4000-8000-000000000812',
-  draft: { date: '2026-11-03', categoryId: 'c1', itemId: 'i1', partyId: '', amount: '20000', explanation: '' },
+  // Today's date: an earlier day would ask the owner why (ADR-120) and hold the save.
+  draft: { date: businessToday(), categoryId: 'c1', itemId: 'i1', partyId: '', amount: '20000', explanation: '' },
 }));
 
 const offline = testOffline(me, {
