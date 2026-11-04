@@ -259,7 +259,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
 
   // success-screen: the form turns into its added screen (qa-done) with Sell it and Add another
   const add = useMutation({
-    meta: { success: ({ added }: { added: { item_made?: boolean } }) => (added?.item_made ? 'Item added' : 'Stock added') },
+    meta: { success: ({ added }: { added: { item_made?: boolean; description?: string } }) => `${added?.item_made ? 'Item' : 'Stock of'} ${added?.description || name.trim() || 'the item'} added` },
     mutationFn: async (extra: { productId?: string; duplicateReason?: string }) => {
       const body: QuickAddRequest = unsure.current ?? {
           ...(extra.productId

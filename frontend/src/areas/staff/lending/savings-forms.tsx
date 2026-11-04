@@ -91,7 +91,7 @@ export function MoneyForm({ account, kind, onDone }: { account: SavingsAccount; 
   const body = () => ({ amount_minor: amountMinor ?? 0, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined });
   // success-screen: the receipt with the new balance replaces the form; one sent for approval raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (!r?.executed ? null : kind === 'deposit' ? 'Deposit recorded' : 'Withdrawal paid out') },
+    meta: { success: (r: { executed?: boolean }) => (!r?.executed ? null : `${kind === 'deposit' ? 'Deposit' : 'Withdrawal'}${amountMinor != null ? ` of ${money(amountMinor, account.currency)}` : ''} ${kind === 'deposit' ? 'recorded on' : 'paid out from'} ${account.account_no ? `account ${account.account_no}` : 'the account'}`) },
     mutationFn: async () => {
       if (kind === 'deposit') {
         const r = await savings.deposit(accountId, body(), key);
@@ -180,7 +180,7 @@ export function CloseForm({ account }: { account: SavingsAccount }) {
   const [confirming, setConfirming] = useState(false);
   // success-screen: the Account closed screen with the voucher replaces the form; one sent for approval raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Account closed' : null) },
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${account.account_no ? `Account ${account.account_no}` : 'Savings account'} closed` : null) },
     mutationFn: () => savings.close(accountId, { payment_method_key: draft.method, reason: draft.reason.trim() || undefined }, key),
     onSuccess: () => {
       finish();
@@ -243,7 +243,7 @@ export function StatusForm({ account, change }: { account: SavingsAccount; chang
   const save = useMutation({
     mutationFn: () => savings.setStatus(accountId, change, reason.trim()),
     onSuccess: refresh,
-    meta: { success: { freeze: 'Account frozen', unfreeze: 'Account unfrozen', reactivate: 'Account reactivated' }[change] },
+    meta: { success: `${account.account_no ? `Account ${account.account_no}` : 'Savings account'} ${{ freeze: 'frozen', unfreeze: 'unfrozen', reactivate: 'reactivated' }[change]}` },
   });
   if (save.data) return null;
   return (

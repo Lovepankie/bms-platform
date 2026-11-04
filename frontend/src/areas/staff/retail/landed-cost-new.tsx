@@ -246,7 +246,7 @@ export function LandedCostNewPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/landed-costs/$landedCostId', params: { landedCostId: made.id ?? '' } });
     },
-    meta: { success: 'Landed cost saved' },
+    meta: { success: (made: { landed_no?: string }) => (made?.landed_no ? `Landed cost ${made.landed_no} saved` : 'Landed cost saved') },
   });
   const picker = <GoodsPicker chosen={draft.receipts.map((r) => r.id)} onAdd={(receipt) => setDraft((d) => addReceipt(d, receipt))} />;
   return (

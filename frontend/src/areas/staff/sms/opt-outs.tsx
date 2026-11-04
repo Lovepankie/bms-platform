@@ -98,7 +98,7 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
   const add = useMutation({
     mutationFn: () => sms.addOptOut(phone, scope, reason.trim() === '' ? undefined : reason.trim()),
     onSuccess: () => { setPhone(''); setReason(''); onAdded(); },
-    meta: { success: 'Number added' },
+    meta: { success: () => `${phone.trim()} added to the numbers that get no texts` },
   });
   const error = add.error instanceof SmsError ? add.error : null;
   return (
@@ -211,7 +211,7 @@ export function OptOutsScreen() {
       return refresh();
     },
     onError: refresh,
-    meta: { success: 'Number taken off the list' },
+    meta: { success: (_: unknown, v: { item: SmsOptOut }) => `${v.item.recipient_masked ?? 'The number'} taken off the list and gets texts again` },
   });
   if (!allowed) return <NoAccess what="the opt-out list" />;
   const canManage = mayManageSettings(me);

@@ -94,7 +94,7 @@ function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; bra
       }
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: (r: Awaited<ReturnType<typeof retail.correctStock>>) => (!r ? 'Stock corrected' : isWaiting(r) ? null : `Corrected to ${showQty(r.new_qty ?? '0')} ${row.unit ?? ''}`.trim()) },
+    meta: { success: (r: Awaited<ReturnType<typeof retail.correctStock>>) => (!r ? `Stock of ${row.description ?? 'the item'} corrected` : isWaiting(r) ? null : `Stock of ${row.description ?? 'the item'} corrected to ${showQty(r.new_qty ?? '0')} ${row.unit ?? ''}`.trim()) },
   });
   const difference = differenceWords(draft.qty, shown, row.unit);
   const press = () => {
@@ -146,7 +146,7 @@ function CategoryForm({ row, onDone }: { row: StockRow; onDone: () => void }) {
       onDone();
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: (saved: Product) => (saved?.category ? `Moved to ${saved.category}` : 'Category changed') },
+    meta: { success: (saved: Product) => (saved?.category ? `${saved.description ?? 'Item'} moved to category ${saved.category}` : `Category of ${saved?.description ?? 'the item'} changed`) },
   });
   if (product.isPending || categories.isPending) return <p className="loading">Loading</p>;
   if (!product.data) return <Problem error={product.error} />;

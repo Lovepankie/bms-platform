@@ -50,7 +50,10 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => retail.createBanking({ branch_id: branchId, ...dateFields(entry), amount_minor: minor ?? 0, ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) }, key),
-    meta: { success: 'Banking saved' },
+    meta: { success: (saved: Banking) => {
+      const amount = saved?.amount_minor ?? minor;
+      return amount != null ? `Banking of ${money(amount)} saved` : 'Banking for the day saved';
+    } },
     onSuccess: (saved) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });

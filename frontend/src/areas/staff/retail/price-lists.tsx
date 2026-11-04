@@ -216,7 +216,7 @@ export function PriceLists() {
       // Opened from an empty list on a form (issue #619): what was added takes the person back to that form.
       back?.();
     },
-    meta: { success: 'Price list added' },
+    meta: { success: (l: PriceList) => `Price list ${l?.name ?? name.trim()} added` },
   });
   const change = useMutation({
     mutationFn: (v: { list: PriceList; body: { name?: string; strict?: boolean; active?: boolean } }) => retail.updatePriceList(v.list.id ?? '', requireVersion(v.list.version), v.body),
@@ -224,7 +224,8 @@ export function PriceLists() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
     onError: (error) => setFailure(changeFailureText(error, queryClient)),
     meta: {
-      success: (_: unknown, v: { body: { active?: boolean } }) => (v.body.active === false ? 'Price list switched off' : v.body.active === true ? 'Price list switched on' : 'Changes saved'),
+      success: (_: unknown, v: { list: PriceList; body: { active?: boolean } }) =>
+        `${v.list.name ? `Price list ${v.list.name}` : 'Price list'} ${v.body.active === false ? 'switched off' : v.body.active === true ? 'switched on' : 'saved'}`,
       // A switch on or off can be taken back from the toast (#682): the same change the other way, on the version it made.
       undo: (r: PriceList, v: { body: { active?: boolean } }) =>
         v.body.active === undefined ? null : () => retail.updatePriceList(r.id ?? '', requireVersion(r.version), { active: !v.body.active }),

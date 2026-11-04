@@ -170,13 +170,13 @@ export function TemplateEditor({ template, canManage, onNotice, tour = false }: 
     mutationFn: () => sms.saveTemplate(template.event_key, version, text),
     onSuccess: () => { onNotice(null); return refresh(); },
     onError: (error) => { if (error instanceof SmsError && error.code === 'version_conflict') onNotice(error.message); return refresh(); },
-    meta: { success: 'Wording saved' },
+    meta: { success: `Wording of ${template.title ?? 'the message'} saved` },
   });
   const revert = useMutation({
     mutationFn: () => sms.revertTemplate(template.event_key, version),
     onSuccess: () => { onNotice(null); return refresh(); },
     onError: (error) => { if (error instanceof SmsError && error.code === 'version_conflict') onNotice(error.message); return refresh(); },
-    meta: { success: 'Default wording restored' },
+    meta: { success: `Default wording of ${template.title ?? 'the message'} restored` },
   });
   const saveError = save.error instanceof SmsError ? save.error : null;
   const dirty = text !== saved;

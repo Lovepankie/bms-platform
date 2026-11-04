@@ -247,7 +247,7 @@ export function TransferDocument({ transferId, branchId, status }: { transferId:
   const { me } = useStaff();
   const allowed = canIssueDocuments(me) && holdsAt(me, DOCUMENT_ISSUE, branchId) && status !== 'voided' && status !== 'cancelled';
   const [made, setMade] = useState<RetailDocument | null>(null);
-  const issue = useMutation({ mutationFn: () => retail.issueTransferDocument(transferId, newIdempotencyKey()), onSuccess: setMade, meta: { success: 'Delivery note made' } });
+  const issue = useMutation({ mutationFn: () => retail.issueTransferDocument(transferId, newIdempotencyKey()), onSuccess: setMade, meta: { success: (d: RetailDocument) => (d?.number ? `Delivery note ${d.number} made` : 'Delivery note made') } });
   if (!allowed) return null;
   return (
     <section aria-label="Delivery note of this move" data-tour="transfer-document">

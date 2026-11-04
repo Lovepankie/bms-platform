@@ -252,7 +252,14 @@ function ManagerQueue() {
       setSelfReason('');
       void queryClient.invalidateQueries({ queryKey: ['retail', 'offline-failures'] });
     },
-    meta: { success: (_: unknown, sent: { action: 'retry' | 'discard' }) => (sent?.action === 'retry' ? 'Sent again' : 'Discarded') },
+    meta: {
+      // Every row of this list is a sale another phone could not record (the offline failures route holds only sales).
+      success: (_: unknown, sent: { id: string; action: 'retry' | 'discard' }) => {
+        const f = (failures.data ?? []).find((r) => r.id === sent?.id);
+        const sale = f?.total_minor !== undefined ? `Sale of ${money(f.total_minor)}${f.made_by_name ? ` by ${f.made_by_name}` : ''}` : 'Sale';
+        return `${sale} ${sent?.action === 'retry' ? 'sent again' : 'discarded, never recorded'}`;
+      },
+    },
   });
   const resolve = useMutation({
     mutationFn: async (id: string) => {
@@ -260,7 +267,7 @@ function ManagerQueue() {
       if (error) throw new Error(problemOf(error).detail ?? 'Could not resolve the clash');
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'sale-clashes'] }),
-    meta: { success: 'Clash resolved' },
+    meta: { success: 'Sale clash resolved' },
   });
   const rows = failures.data ?? [];
   const open = clashes.data ?? [];

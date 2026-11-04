@@ -175,7 +175,7 @@ describe('recording a payment', () => {
     expect(body).toEqual({ amount_minor: 4000, method: 'mobile_money', paid_on: today });
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
     finish({ payment: { amount_minor: 4000 }, sale_paid_minor: 6000, sale_balance_minor: 6000 });
-    await waitFor(() => expect(toastText()).toBe('Payment recorded'));
+    await waitFor(() => expect(toastText()).toBe('Payment of UGX 4,000 recorded on sale S-000001'));
     expect(screen.queryByText('Recorded UGX 4,000. Still owes UGX 6,000.')).toBeNull();
     expect(screen.queryByLabelText('Amount received')).toBeNull();
   });
@@ -212,7 +212,7 @@ describe('recording a payment', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     await waitFor(() => expect(paySale).toHaveBeenCalledTimes(1));
     expect(paySale.mock.calls[0]?.[1]).toEqual({ amount_minor: 12000, method: 'bank', paid_on: today });
-    await waitFor(() => expect(toastText()).toBe('Sale paid in full'));
+    await waitFor(() => expect(toastText()).toBe('Sale S-000001 paid in full'));
     expect(screen.queryByText('Recorded UGX 12,000. This sale is now paid in full.')).toBeNull();
   });
 
@@ -225,7 +225,7 @@ describe('recording a payment', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     await waitFor(() => expect(paySale).toHaveBeenCalledTimes(1));
     expect(paySale.mock.calls[0]?.[1]).toEqual({ amount_minor: 12000, method: 'cash', paid_on: today });
-    await waitFor(() => expect(toastText()).toBe('Sale paid in full'));
+    await waitFor(() => expect(toastText()).toBe('Sale S-000001 paid in full'));
   });
 
   it('says each refusal in plain words and repeats the key on a retry', async () => {
@@ -384,7 +384,7 @@ describe('voiding a sale', () => {
     expect(voidSale).toHaveBeenCalledWith('s1', 'Rung up twice');
     finish({ ...cash, status: 'voided' });
     await waitFor(() => expect(screen.queryByLabelText(/Why\? \(optional\)/)).toBeNull());
-    await waitFor(() => expect(toastText()).toBe('Sale deleted. The stock went back.'));
+    await waitFor(() => expect(toastText()).toBe('Sale S-000001 deleted, stock put back'));
   });
 
   it('needs no reason: a blank one sends the plain default, which the void keeps', async () => {

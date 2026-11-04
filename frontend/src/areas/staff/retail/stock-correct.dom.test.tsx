@@ -150,7 +150,7 @@ describe('the right quantity', () => {
     expect(correctStock.mock.calls[0]?.[0]).toEqual({ branch_id: branch, product_id: 'p1', new_qty: '6.000', expected_qty: '10.000', reason_code: 'entry_mistake', note: 'Typed ten, really six' });
     expect(typeof correctStock.mock.calls[0]?.[1]).toBe('string');
     finish({ id: 'c1', old_qty: '10.000', new_qty: '6.000', reason_code: 'entry_mistake' });
-    await waitFor(() => expect(toasts()).toEqual(['Corrected to 6 roll']));
+    await waitFor(() => expect(toasts()).toEqual(['Stock of Cable 2.5mm corrected to 6 roll']));
     // The one signal is the toast: no note beside it says it again.
     expect(screen.queryByText(/is now 6/)).toBeNull();
   });
@@ -379,7 +379,7 @@ describe('the category', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'Change the category' }));
     await waitFor(() => expect(updateProduct).toHaveBeenCalledTimes(1));
     expect(updateProduct).toHaveBeenCalledWith('p1', 4, { category_id: 'c2' });
-    await waitFor(() => expect(toasts()).toEqual(['Moved to Fittings']));
+    await waitFor(() => expect(toasts()).toEqual(['Cable 2.5mm moved to category Fittings']));
     expect(screen.queryByText(/is now in Fittings/)).toBeNull();
   });
 });

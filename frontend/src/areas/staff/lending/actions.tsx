@@ -125,7 +125,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
   const valid = amountMinor !== null && isIsoDate(draft.valueDate);
   // success-screen: the loan page shows the repayment receipt card instead of the form through onDone
   const save = useMutation({
-    meta: { success: 'Repayment recorded' },
+    meta: { success: () => `Repayment${amountMinor != null ? ` of ${money(amountMinor, loan.currency)}` : ''} recorded on ${loan.loan_no ? `loan ${loan.loan_no}` : 'the loan'}` },
     mutationFn: () => {
       sending();
       return lending.repay(
@@ -182,7 +182,7 @@ export function DisburseForm({ loan }: { loan: Loan }) {
   const update = (patch: Partial<DisburseDraft>) => setDraft((d) => ({ ...d, ...patch }));
   // success-screen: the Disbursed screen replaces the form; one sent for approval says so there and raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Loan disbursed' : null) },
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${loan.loan_no ? `Loan ${loan.loan_no}` : 'Loan'} disbursed` : null) },
     mutationFn: () => {
       sending();
       return lending.disburse(loanId, { disbursement_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key);
@@ -255,15 +255,17 @@ export function PayoffQuotePanel({ loan }: { loan: Loan }) {
 }
 
 /** A reason form for an action that a checker approves: a reversal or a write-off. */
-function ReasonForm({ id, label, submit, draftName, send }: {
+function ReasonForm({ id, label, submit, toastWords, draftName, send }: {
   id: string;
   label: string;
   submit: string;
+  /** What the toast says when it went through (#836), such as 'Payment R-000001 reversed'. */
+  toastWords: string;
   draftName: string;
   send: (reason: string, key: string) => Promise<{ executed: boolean }>;
 }) {
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(draftName, '');
-  const save = useMutation({ mutationFn: () => send(draft.trim(), key), onSuccess: finish, meta: { success: (r: { executed: boolean }) => (r.executed ? 'Change saved' : null) } });
+  const save = useMutation({ mutationFn: () => send(draft.trim(), key), onSuccess: finish, meta: { success: (r: { executed: boolean }) => (r.executed ? toastWords : null) } });
   if (save.data) {
     return save.data.executed ? null : (
       <p role="status" className="alert alert-info">Sent for approval. It is waiting for a checker in the approvals inbox.</p>
@@ -289,6 +291,7 @@ export function ReverseForm({ loanId, txn }: { loanId: string; txn: LoanTransact
       id={`reverse-${txn.id ?? ''}`}
       label={`Why reverse ${txn.receipt_no ?? 'this payment'}?`}
       submit="Request reversal"
+      toastWords={`${txn.receipt_no ? `Payment ${txn.receipt_no}` : 'Payment'}${txn.amount_minor != null ? ` of ${money(txn.amount_minor, txn.currency)}` : ''} reversed`}
       draftName={`lending-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`}
       send={async (reason, key) => {
         const r = await lending.reverse(loanId, txn.id ?? '', reason, key);
@@ -308,6 +311,7 @@ export function WriteOffForm({ loan }: { loan: Loan }) {
       id="write-off-reason"
       label="Why write this loan off?"
       submit="Request write-off"
+      toastWords={`${loan.loan_no ? `Loan ${loan.loan_no}` : 'Loan'} written off`}
       draftName={`lending-write-off:${me.user_id ?? ''}:${loanId}`}
       send={async (reason, key) => {
         const r = await lending.writeOff(loanId, reason, key);

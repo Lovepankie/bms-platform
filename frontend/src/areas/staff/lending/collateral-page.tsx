@@ -114,8 +114,9 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
     setBusy(true);
     setFailure(null);
     try {
-      await api.addValuation(id, valuationBody(d, unit));
-      sayDone('Valuation saved');
+      const sent = valuationBody(d, unit);
+      await api.addValuation(id, sent);
+      sayDone(`Valuation of ${money(sent.market_value_minor, currency)} saved`);
       void queryClient.invalidateQueries({ queryKey: ['collateral'] });
       setOpen(false);
       setD(blankValuation(today));
@@ -181,7 +182,7 @@ function CustodyChange({ id, version, custody, onDone }: { id: string; version: 
     setFailure(null);
     try {
       await api.recordEvent(id, version, eventBody(type, location, counterparty, note));
-      sayDone('Change recorded');
+      sayDone({ received_into_custody: 'Collateral now held by the business', moved: 'Collateral moved to another place', seized: 'Collateral taken over by the business', disposed: 'Collateral sold or disposed of', note: 'Note added to the collateral' }[type]);
       void queryClient.invalidateQueries({ queryKey: ['collateral'] });
       onDone();
     } catch (raw) {

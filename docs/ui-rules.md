@@ -106,6 +106,9 @@ back to what opened it.
     waits for approval raises no success toast. The success toast guard in `busy-guard.test.ts` fails a write that says
     nothing, unless `// toast-exempt: <kind>: <reason>` sits above it, the kind one of `saves nothing`, `waits for
     approval`, `said elsewhere` or `success note`, and never takes a success screen as that reason.
+    The words say what happened and to what, from what the screen already has, money through the money formatter
+    (issue #836): 'Category Transport added', 'Expense of UGX 20,000 saved', 'Sale deleted, stock put back'. The same guard
+    refuses a toast of one word, or only Saved, Done, Success or OK.
     A press shows at once: every button, tile, link card and row sinks to `--press-scale` and dims to `--press-opacity`,
     by transform and opacity only, in `--motion-fast` (100 to 160ms); under reduced motion it only dims. A busy button
     is the `BusyButton` (rule 6 of the design system) and a disabled one is flat grey, never only faded.

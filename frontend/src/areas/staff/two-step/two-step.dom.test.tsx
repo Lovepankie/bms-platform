@@ -106,7 +106,7 @@ describe('the policy screen', () => {
     expect(twoStepApi.save.mock.calls[0]?.[0]).toBe(4);
     expect(twoStepApi.save.mock.calls[0]?.[1]).toEqual({ policy: 'everyone', roles: [], graceDays: 14 });
     expect(twoStepApi.save.mock.calls[0]?.[2]).toEqual({ policy: 'off', roles: [], graceDays: 14 });
-    expect(await screen.findByText('Saved, due by 3 Nov 2026')).toBeTruthy();
+    expect(await screen.findByText('Two-step sign-in is due by 3 Nov 2026')).toBeTruthy();
   });
 
   it('lets the grace period be none, and says so', async () => {
@@ -120,7 +120,7 @@ describe('the policy screen', () => {
     fireEvent.click(button('Yes, save this'));
     await waitFor(() => expect(twoStepApi.save).toHaveBeenCalledTimes(1));
     expect(twoStepApi.save.mock.calls[0]?.[1]).toMatchObject({ graceDays: 0 });
-    expect(await screen.findByText('Saved, asked at sign in')).toBeTruthy();
+    expect(await screen.findByText('Two-step sign-in is now asked at sign in')).toBeTruthy();
   });
 
   it('needs at least one role when roles are chosen, and sends the ones ticked', async () => {
@@ -170,7 +170,7 @@ describe('the policy screen', () => {
     await waitFor(() => expect(twoStepApi.save).toHaveBeenCalledTimes(1));
     expect(twoStepApi.save.mock.calls[0]?.[1]).toMatchObject({ policy: 'off' });
     expect(twoStepApi.save.mock.calls[0]?.[3]).toEqual({ password: 'Test-Password-1' });
-    expect(await screen.findByText('Saved, now optional')).toBeTruthy();
+    expect(await screen.findByText('Two-step sign-in is now optional')).toBeTruthy();
   });
 
   it('narrowing keeps the deadline: the review says the date does not change, and no grace period is sent', async () => {

@@ -118,7 +118,7 @@ describe('a toast after every save on the daily shop screens (#824)', () => {
     fireEvent.change(screen.getByLabelText(/Right quantity/), { target: { value: '4' } });
     fireEvent.change(screen.getByLabelText('Why is it being corrected?'), { target: { value: 'entry_mistake' } });
     fireEvent.click(screen.getByRole('button', { name: /Save the right quantity/ }));
-    await toastSays('Corrected to 4 piece');
+    await toastSays('Stock of Test Soap corrected to 4 piece');
   });
 
   it('Buy stock says the purchase is saved, beside the purchase saved screen', async () => {
@@ -169,7 +169,7 @@ describe('a toast after every save on the daily shop screens (#824)', () => {
     api.createExpense.mockResolvedValue({ id: 'e1', amount_minor: 5000, category_name: 'Transport', item_name: 'Fuel' });
     const saved = vi.fn();
     expenseForm(saved, () => undefined);
-    await toastSays('Expense saved');
+    await toastSays('Expense of UGX 5,000 saved');
     expect(saved).toHaveBeenCalledTimes(1);
   });
 
@@ -194,7 +194,7 @@ describe('a toast after every save on the daily shop screens (#824)', () => {
     screenOf(<SavingsScreen />);
     await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
     fireEvent.click(screen.getByRole('button', { name: 'Save savings' }));
-    await toastSays('Savings saved');
+    await toastSays('Savings of UGX 4,000 saved');
     expect(screen.getByRole('region', { name: 'Savings recorded' })).toBeTruthy();
   });
 
@@ -206,7 +206,7 @@ describe('a toast after every save on the daily shop screens (#824)', () => {
     await waitFor(() => expect(screen.queryByText('Loading')).toBeNull());
     fireEvent.change(screen.getByLabelText('Amount banked'), { target: { value: '30000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save banking' }));
-    await toastSays('Banking saved');
+    await toastSays('Banking of UGX 30,000 saved');
     expect(saved).toHaveBeenCalledTimes(1);
     // It closes by itself after about four seconds.
     await waitFor(() => expect(document.querySelector('.toast')).toBeNull(), { timeout: TOAST_MS + 2000 });
@@ -218,7 +218,7 @@ describe('a toast after every save on the daily shop screens (#824)', () => {
     screenOf(<WithdrawalForm branchId={branch} onSaved={() => undefined} />);
     fireEvent.change(screen.getByLabelText('Amount withdrawn'), { target: { value: '20000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save withdrawal' }));
-    await toastSays('Withdrawal saved');
+    await toastSays('Withdrawal of UGX 20,000 saved');
   });
 
   it('Advances says the advance is saved', async () => {
@@ -229,6 +229,6 @@ describe('a toast after every save on the daily shop screens (#824)', () => {
     fireEvent.change(screen.getByLabelText('Who is the advance for?'), { target: { value: 'cp1' } });
     fireEvent.change(screen.getByLabelText('Amount advanced'), { target: { value: '15000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save advance' }));
-    await toastSays('Advance saved');
+    await toastSays('Advance of UGX 15,000 saved');
   });
 });

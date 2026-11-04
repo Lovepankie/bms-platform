@@ -205,10 +205,10 @@ export function RetailSettings() {
       <Problem error={read.error} />
       {read.data && <ReturnsThresholdWarning capabilities={read.data.capabilities} />}
       {/* Keyed by the version, so a fresh read after someone else's change starts from what is saved. */}
-      {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => show('Saved', 'success')} />}
-      {read.data && <CreditRecognitionSetting key={`credit-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
-      {read.data && <SlowMoverSetting key={`slow-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
-      {read.data && <OtherShopsSetting key={`shops-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
+      {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => show('Kind of business and features saved', 'success')} />}
+      {read.data && <CreditRecognitionSetting key={`credit-${read.data.version}`} read={read.data} onSaved={() => show('Credit sales setting saved', 'success')} />}
+      {read.data && <SlowMoverSetting key={`slow-${read.data.version}`} read={read.data} onSaved={() => show('Slow movers setting saved', 'success')} />}
+      {read.data && <OtherShopsSetting key={`shops-${read.data.version}`} read={read.data} onSaved={() => show('Stock in other shops setting saved', 'success')} />}
       <PurchasingSettings />
     </Gate>
   );

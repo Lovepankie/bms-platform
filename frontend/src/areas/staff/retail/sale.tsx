@@ -288,7 +288,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   // receipt shows. The answer that comes later is ignored here; the server finds the sale by its client sale id, or answers
   // from the key, whose hash leaves the delivery fields out, so the sale is recorded once (ADR-067 decision 5).
   const save = useMutation({
-    meta: { success: (r: { sale: Sale } | { kept: OutboxItem }) => (r && 'kept' in r ? 'Sale saved on this phone' : 'Sale saved') },
+    meta: { success: (r: { sale: Sale } | { kept: OutboxItem }) => (r && 'kept' in r ? 'Sale saved on this phone' : r?.sale?.total_minor !== undefined ? `Sale of ${money(r.sale.total_minor)} saved` : 'Sale saved') },
     mutationFn: async ({ body, at, pricesAt }: { body: SaleRequest; at: string; pricesAt?: string }): Promise<{ sale: Sale } | { kept: OutboxItem }> => {
       const asked = retail.createSale(body, key);
       if (!offline || !mayKeepOnPhone({ body })) return { sale: await asked };
@@ -340,7 +340,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       setDraft((d) => ({ ...d, customerId: c.id ?? '', newBuyerName: '', newBuyerContact: '' }));
       setAddingBuyer(false);
     },
-    meta: { success: 'Customer added' },
+    meta: { success: (c: { name?: string }) => (c?.name ? `Customer ${c.name} added` : 'Customer added') },
   });
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const setLine = (i: number, patch: { qty?: string; price?: string; typed?: boolean; reason?: string }) =>

@@ -80,11 +80,11 @@ function moneyForm(kind: 'deposit' | 'withdraw', amount: string) {
 }
 
 describe('the lending money forms say it in a toast only when it went through (#824)', () => {
-  it('Record funding that went through says Investment funded', async () => {
+  it('Record funding that went through says which investment was funded and with how much', async () => {
     calls.fund.mockResolvedValue({ executed: true, outcome: { executed: true } });
     screenOf(<FundForm inv={inv} />);
     fireEvent.click(screen.getByRole('button', { name: 'Record funding' }));
-    await waitFor(() => expect(successToasts()).toEqual(['Investment funded']));
+    await waitFor(() => expect(successToasts()).toEqual(['Investment IV-000001 funded with UGX 500,000']));
   });
 
   it('Record funding that waits for a checker says so on screen, with no success toast', async () => {
@@ -94,17 +94,17 @@ describe('the lending money forms say it in a toast only when it went through (#
     await noSuccessToast(/Sent for approval/);
   });
 
-  it('Pay now says Return paid, a payment having no approval step', async () => {
+  it('Pay now says the return paid and on which investment, a payment having no approval step', async () => {
     calls.payReturn.mockResolvedValue({ investment: inv, transaction: { amount_minor: 20_000, receipt_no: 'PV-000001' } });
     screenOf(<PayForm inv={inv} kind="pay_return" />);
     fireEvent.click(screen.getByRole('button', { name: 'Pay now' }));
-    await waitFor(() => expect(successToasts()).toEqual(['Return paid']));
+    await waitFor(() => expect(successToasts()).toEqual(['Return of UGX 20,000 paid on investment IV-000001']));
   });
 
-  it('a savings deposit says Deposit recorded beside its receipt', async () => {
+  it('a savings deposit says its amount and account beside its receipt', async () => {
     calls.deposit.mockResolvedValue({ transaction: { amount_minor: 30_000, receipt_no: 'RC-000001' }, account: { ...account, balance_minor: 110_000 } });
     moneyForm('deposit', '30000');
-    await waitFor(() => expect(successToasts()).toEqual(['Deposit recorded']));
+    await waitFor(() => expect(successToasts()).toEqual(['Deposit of UGX 30,000 recorded on account SV-000001']));
     expect(screen.getByRole('status', { name: 'Recorded' })).toBeTruthy();
   });
 
@@ -114,11 +114,11 @@ describe('the lending money forms say it in a toast only when it went through (#
     await noSuccessToast(/Sent for approval/);
   });
 
-  it('Disburse that went through says Loan disbursed, and one that waits says nothing in a toast', async () => {
+  it('Disburse that went through says which loan was disbursed, and one that waits says nothing in a toast', async () => {
     calls.disburse.mockResolvedValueOnce({ executed: true, outcome: { executed: true } });
     screenOf(<DisburseForm loan={loan} />);
     fireEvent.click(screen.getByRole('button', { name: 'Disburse' }));
-    await waitFor(() => expect(successToasts()).toEqual(['Loan disbursed']));
+    await waitFor(() => expect(successToasts()).toEqual(['Loan LN-000001 disbursed']));
     cleanup();
     sessionStorage.clear();
     calls.disburse.mockResolvedValueOnce({ executed: false, outcome: { executed: false, approval_request_id: 'ap-3' } });

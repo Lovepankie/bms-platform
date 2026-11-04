@@ -288,7 +288,7 @@ export function ItemLadder({ product, packs, mayManage, mayPrice = true }: {
       setPending(null);
       refresh();
     },
-    meta: { success: (_r: unknown, p: Pending) => `Saved. 1 ${one(p.rung.unit)} now holds ${p.value.trim()} ${many(p.rung.holdsUnit)}` },
+    meta: { success: (_r: unknown, p: Pending) => `1 ${one(p.rung.unit)} of ${product.description ?? 'the item'} now holds ${p.value.trim()} ${many(p.rung.holdsUnit)}` },
   });
   const remove = useMutation({
     mutationFn: (r: Rung) => retail.updatePack(id, r.unitId, r.pack?.version ?? 1, { active: false }),

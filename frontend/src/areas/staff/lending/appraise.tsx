@@ -51,7 +51,7 @@ export function AppraiseForm({ loan }: { loan: Loan }) {
     setFailure(null);
     try {
       await api.appraise(loan.id ?? '', loan.version ?? 0, appraisalBody(draft, currency));
-      sayDone('Appraisal saved');
+      sayDone(`Appraisal of ${loan.loan_no ? `loan ${loan.loan_no}` : 'the loan'} saved`);
       void queryClient.invalidateQueries({ queryKey: ['lending'] });
       void navigate({ to: '/staff/lending/loans/$loanId', params: { loanId: loan.id ?? '' } });
     } catch (raw) {

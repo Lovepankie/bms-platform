@@ -119,7 +119,7 @@ describe('Edit an expense (issue #830)', () => {
     expect(replaceSpy.mock.calls[0]?.[1]).toMatchObject({ amount_minor: 6500, item_id: row.item_id });
     expect(voidSpy).not.toHaveBeenCalled();
     expect(createSpy).not.toHaveBeenCalled();
-    await waitFor(() => expect(toastText()).toBe('Expense updated'));
+    await waitFor(() => expect(toastText()).toBe('Expense of UGX 6,500 updated'));
     const rows = await all();
     expect(rows.find((e) => e.id === row.id)?.voided).toBe(true);
     const fresh = rows.filter((e) => !e.voided && /^Replaces the .* entry of .*, edited\.$/.test(e.explanation ?? ''));

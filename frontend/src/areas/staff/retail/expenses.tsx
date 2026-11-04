@@ -51,7 +51,7 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
     // Edit (issue #830): one call voids the old expense and saves this one naming it, in one transaction on the server, so any
     // refusal (an amount that would wait for an administrator, an item switched off) leaves the old expense as it was.
     mutationFn: async (): Promise<Expense | ApprovalWaiting> => (replaces?.id ? retail.replaceExpense(replaces.id, plan.request, key) : retail.createExpense(plan.request, key)),
-    meta: { success: (saved: Expense) => (isWaiting(saved) ? null : replaces ? 'Expense updated' : 'Expense saved') },
+    meta: { success: (saved: Expense) => (isWaiting(saved) ? null : `Expense${saved.amount_minor != null ? ` of ${money(saved.amount_minor)}` : ''} ${replaces ? 'updated' : 'saved'}`) },
     onSuccess: (saved) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });

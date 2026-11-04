@@ -59,7 +59,7 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
 
   const sender = (id: string): Sender<unknown> => (p, o) => api.uploadDocument(id, p.blob, p.fileName, o);
   const done = (c: CollateralItem) => {
-    sayDone(item ? 'Collateral saved' : 'Collateral registered');
+    sayDone(`${c.description ? `Collateral ${c.description}` : 'Collateral'} ${item ? 'saved' : 'registered'}`);
     void queryClient.invalidateQueries({ queryKey: ['collateral'] });
     void navigate({ to: '/staff/lending/collateral/$collateralId', params: { collateralId: c.id ?? '' } });
   };

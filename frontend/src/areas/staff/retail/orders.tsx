@@ -44,7 +44,7 @@ export function DeliverPanel({ order, onDone }: { order: Order; onDone: (d: Deli
   // success-screen: OrderActions puts its Delivered, Sale made words in place of the order buttons through onDone
   const deliver = useMutation({
     mutationFn: () => retailOrders.deliver(order.id ?? '', buildDeliverRequest(order, form), key),
-    meta: { success: 'Order delivered, sale made' },
+    meta: { success: `${order.order_no ? `Order ${order.order_no}` : 'Order'} delivered, sale made` },
     onSuccess: (d) => {
       setKey(newIdempotencyKey());
       invalidate(client);
@@ -111,9 +111,10 @@ export function OrderActions({ order, onDelivered }: { order: Order; onDelivered
     setPanel(null);
     invalidate(client);
   };
-  const pack = useMutation({ mutationFn: () => retailOrders.pack(order.id ?? ''), onSuccess: after, meta: { success: 'Order packed' } });
-  const send = useMutation({ mutationFn: () => retailOrders.send(order.id ?? '', rider.trim()), onSuccess: after, meta: { success: 'Order out for delivery' } });
-  const cancel = useMutation({ mutationFn: () => retailOrders.cancel(order.id ?? '', reason.trim()), onSuccess: after, meta: { success: 'Order cancelled' } });
+  const which = order.order_no ? `Order ${order.order_no}` : 'Order';
+  const pack = useMutation({ mutationFn: () => retailOrders.pack(order.id ?? ''), onSuccess: after, meta: { success: `${which} packed` } });
+  const send = useMutation({ mutationFn: () => retailOrders.send(order.id ?? '', rider.trim()), onSuccess: after, meta: { success: `${which} out for delivery${rider.trim() ? ` with ${rider.trim()}` : ''}` } });
+  const cancel = useMutation({ mutationFn: () => retailOrders.cancel(order.id ?? '', reason.trim()), onSuccess: after, meta: { success: `${which} cancelled` } });
   const steps = nextSteps(order);
   // Delivering records a sale, so it is offered to whoever may sell at the order's shop.
   const maySell = holdsAt(me, 'retail.sale.create', order.branch_id);

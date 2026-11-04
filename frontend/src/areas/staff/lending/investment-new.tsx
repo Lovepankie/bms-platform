@@ -86,7 +86,10 @@ export function SubscribeForm({ member, products }: { member: { id: string; labe
         maturity_instruction: instruction || undefined,
       }),
     onSuccess: (inv) => void navigate({ to: '/staff/lending/investments/$investmentId', params: { investmentId: inv.id ?? '' } }),
-    meta: { success: 'Investment opened' },
+    meta: { success: (inv: { account_no?: string; principal_minor?: number }) => {
+      const amount = inv?.principal_minor ?? amountMinor;
+      return `${inv?.account_no ? `Investment ${inv.account_no}` : 'Investment'}${amount != null ? ` of ${money(amount, product?.currency)}` : ''} opened`;
+    } },
   });
   if (active.length === 0) {
     return (

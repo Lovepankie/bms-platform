@@ -173,7 +173,7 @@ export function DoneToast() {
         // Inside a promise, so an Undo that throws at once still ends on its error words, never stuck on Working.
         new Promise((resolve) => resolve(undo()))
           .then(
-            () => show('Undone', 'success'),
+            () => show(`Undone: ${message}`, 'success'),
             () => show('Could not undo. Try again from the screen.', 'error'),
           )
           .finally(() => void client.invalidateQueries());

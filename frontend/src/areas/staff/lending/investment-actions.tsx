@@ -63,7 +63,7 @@ export function FundForm({ inv }: { inv: Investment }) {
   const update = (patch: Partial<FundDraft>) => setDraft((d) => ({ ...d, ...patch }));
   // success-screen: the Funded screen replaces the form; one sent for approval says so there and raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Investment funded' : null) },
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${inv.account_no ? `Investment ${inv.account_no}` : 'Investment'} funded with ${money(inv.principal_minor, inv.currency)}` : null) },
     mutationFn: () => {
       sending();
       return investments.fund(id, { value_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key);
@@ -110,7 +110,7 @@ export function PayForm({ inv, kind }: { inv: Investment; kind: 'pay_return' | '
       : (inv.principal_held_minor ?? 0) + (inv.return_accrued_minor ?? 0) - (inv.return_paid_minor ?? 0);
   // success-screen: the Paid screen with the voucher replaces the form; a payment is never sent for approval
   const save = useMutation<TransactionResult>({
-    meta: { success: kind === 'pay_return' ? 'Return paid' : 'Investment paid out' },
+    meta: { success: (r: TransactionResult) => `${kind === 'pay_return' ? 'Return of' : 'Payout of'} ${money(r?.transaction?.amount_minor ?? amount, inv.currency)} paid${inv.account_no ? ` on investment ${inv.account_no}` : ''}` },
     mutationFn: () => {
       const body = { payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined };
       return kind === 'pay_return' ? investments.payReturn(id, body, key) : investments.payout(id, body, key);
@@ -160,7 +160,7 @@ export function RolloverForm({ inv, onDone }: { inv: Investment; onDone: (nextId
       refresh();
       if (r.next?.id) onDone(r.next.id);
     },
-    meta: { success: 'Investment rolled over' },
+    meta: { success: `${inv.account_no ? `Investment ${inv.account_no}` : 'Investment'} rolled over` },
   });
   return (
     <form aria-label="Roll over" onSubmit={(e) => { e.preventDefault(); if (!save.isPending) save.mutate(); }}>
@@ -194,7 +194,7 @@ export function EarlyWithdrawalForm({ inv }: { inv: Investment }) {
   const { key, draft, setDraft, finish } = usePersistedDraft<EarlyDraft>(`invest-early:${me.user_id ?? ''}:${id}`, { method: 'cash', reason: '' });
   // success-screen: the Withdrawn screen replaces the form; one sent for approval raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Investment withdrawn' : null) },
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${inv.account_no ? `Investment ${inv.account_no}` : 'Investment'} withdrawn early` : null) },
     mutationFn: () => investments.earlyWithdraw(id, { payment_method_key: draft.method, reason: draft.reason.trim() }, key),
     onSuccess: () => {
       finish();
@@ -237,12 +237,18 @@ export function EarlyWithdrawalForm({ inv }: { inv: Investment }) {
 }
 
 const INSTRUCTIONS = ['payout', 'rollover_principal', 'rollover_all'] as const;
+// What the toast says the investment will do (#836), after its number and "will".
+const MATURITY_DONE: Record<string, string> = {
+  payout: 'pay out at maturity',
+  rollover_principal: 'roll over the principal and pay the return at maturity',
+  rollover_all: 'roll over principal and return at maturity',
+};
 
 export function InstructionForm({ inv }: { inv: Investment }) {
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const [choice, setChoice] = useState<string>(inv.maturity_instruction ?? 'payout');
-  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh, meta: { success: 'Choice saved' } });
+  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh, meta: { success: () => `${inv.account_no ? `Investment ${inv.account_no}` : 'The investment'} will ${MATURITY_DONE[choice] ?? instructionWords(choice).toLowerCase()}` } });
   return (
     <form aria-label="Maturity instruction" onSubmit={(e) => { e.preventDefault(); if (!save.isPending) save.mutate(); }}>
       <fieldset>
@@ -270,7 +276,7 @@ export function ReverseForm({ inv, txn }: { inv: Investment; txn: InvestmentTran
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(`invest-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`, '');
   // success-screen: the Reversed screen replaces the form; one sent for approval raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Reversed' : null) },
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${money(txn.amount_minor, inv.currency)} reversed on ${inv.account_no ? `investment ${inv.account_no}` : 'the investment'}` : null) },
     mutationFn: () => investments.reverse(id, txn.id ?? '', draft.trim(), key),
     onSuccess: () => {
       finish();

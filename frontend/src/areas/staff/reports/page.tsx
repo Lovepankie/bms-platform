@@ -229,7 +229,7 @@ export function PackCard({ entry, branchIds, onQueued }: { entry: ReportCatalogu
       return reports.request(entry.key, params, PACK_FORMAT);
     },
     onSuccess: onQueued,
-    meta: { success: 'Report pack requested' },
+    meta: { success: `Report pack ${entry.title} requested` },
   });
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -299,7 +299,7 @@ function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; 
       return reports.request(entry.key, params, format);
     },
     onSuccess: onQueued,
-    meta: { success: 'Report requested' },
+    meta: { success: `Report ${entry.title} requested` },
   });
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -403,12 +403,12 @@ export function RunsTable({
 }) {
   const [problem, setProblem] = useState<unknown>(null);
   const [show, setShow] = useState<Show>('all');
-  const cancel = useMutation({ mutationFn: (id: string) => reports.cancel(id), onSuccess: onChange, onError: setProblem, meta: { success: 'Report cancelled' } });
+  const cancel = useMutation({ mutationFn: (id: string) => reports.cancel(id), onSuccess: onChange, onError: setProblem, meta: { success: 'Report run cancelled' } });
   const again = useMutation({
     mutationFn: (r: ReportRun) => reports.request(r.report_key, r.params, r.format),
     onSuccess: onChange,
     onError: setProblem,
-    meta: { success: 'Report requested' },
+    meta: { success: 'Report requested again' },
   });
   async function download(file: ReportRunFile) {
     setProblem(null);

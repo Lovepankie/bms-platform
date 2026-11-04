@@ -37,10 +37,11 @@ function ReceiveForm({ transfer }: { transfer: InFlightTransfer }) {
   const [arrived, setArrived] = useState<Arrived>(() => everythingArrived(lines));
   const problem = receiveProblem(lines, arrived);
   const idempotencyKey = useRef(newIdempotencyKey());
+  const label = useBranchLabel();
   const save = useMutation({
     mutationFn: () => retail.receiveTransfer(transfer.id ?? '', buildReceive(lines, arrived), idempotencyKey.current),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
-    meta: { success: 'Stock received' },
+    meta: { success: `Stock from ${label(transfer.from_branch_id)} received at ${label(transfer.to_branch_id)}, ${lines.length} ${lines.length === 1 ? 'item' : 'items'}` },
   });
   const id = transfer.id ?? '';
   return (
@@ -73,10 +74,12 @@ function TakeBackForm({ transfer }: { transfer: InFlightTransfer }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
   const idempotencyKey = useRef(newIdempotencyKey());
+  const label = useBranchLabel();
+  const n = (transfer.lines ?? []).length;
   const take = useMutation({
     mutationFn: () => retail.cancelTransfer(transfer.id ?? '', reason.trim(), idempotencyKey.current),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
-    meta: { success: 'Stock taken back' },
+    meta: { success: `Stock on its way to ${label(transfer.to_branch_id)} taken back to ${label(transfer.from_branch_id)}, ${n} ${n === 1 ? 'item' : 'items'}` },
   });
   const id = transfer.id ?? '';
   return (

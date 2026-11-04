@@ -211,7 +211,7 @@ function WaitingRow({ loan, api }: { loan: ExistingLoanSummary; api: ExistingLoa
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ['lending', 'existing-loans'] });
-  const cancel = useMutation({ mutationFn: () => api.cancel(loan.loan_id ?? '', reason.trim()), onSuccess: refresh, meta: { success: 'Loan withdrawn' } });
+  const cancel = useMutation({ mutationFn: () => api.cancel(loan.loan_id ?? '', reason.trim()), onSuccess: refresh, meta: { success: `${loan.loan_no ? `Existing loan ${loan.loan_no}` : 'Existing loan'} withdrawn` } });
   // toast-exempt: waits for approval: it only sends the loan for approval again, and the row then says it waits in the approvals inbox
   const again = useMutation({ mutationFn: () => api.askAgain(loan.loan_id ?? ''), onSuccess: refresh });
   return (

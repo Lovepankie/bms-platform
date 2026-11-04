@@ -18,6 +18,10 @@ const ROLES: { value: Role; label: string }[] = [
   { value: 'both', label: 'Both: keeps stock and sells' },
 ];
 
+// What a toast says a branch now does (#836), one entry for every role this screen can set, so tsc refuses a role without words.
+// A Store is never set here: it is the sells_goods mark on Branches (ADR-104), and RoleRow shows a Store row read only.
+const ROLE_DONE: Record<Role, string> = { shop: 'sells to customers', both: 'keeps stock and sells' };
+
 export function RoleRow({ row, busy, onChange, extra }: { row: BranchRole; busy?: boolean; onChange: (role: Role) => void; extra?: ReactNode }) {
   const id = `role-${row.branch_id}`;
   if (row.role === 'store') {
@@ -46,9 +50,12 @@ export function BranchRoles() {
   const queryClient = useQueryClient();
   const roles = useQuery({ queryKey: ['retail', 'branch-roles'], queryFn: () => retail.branchRoles() });
   const set = useMutation({
-    mutationFn: (v: { branchId: string; role: Role }) => retail.setBranchRole(v.branchId, v.role),
+    mutationFn: (v: { branchId: string; role: Role; name: string }) => retail.setBranchRole(v.branchId, v.role),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'branch-roles'] }),
-    meta: { success: 'Role saved' },
+    meta: {
+      // The branch is named from the request, the row the role was changed on, so the words never wait for the list.
+      success: (_: unknown, v: { role: Role; name: string }) => `${v.name} now ${ROLE_DONE[v.role]}`,
+    },
   });
   return (
     <Gate screen="branchRoles" title="Branch roles">
@@ -57,7 +64,7 @@ export function BranchRoles() {
       <Problem error={roles.error ?? (set.error && new Error(changeFailureText(set.error, queryClient)))} />
       <ul className="stack" data-tour="retail-roles">
         {(roles.data ?? []).map((r) => (
-          <RoleRow key={r.branch_id} row={r} busy={set.isPending} extra={<p><ScreenLink screen="stockByLocation" to="/staff/retail/stock-by-location" label={`See the stock of ${r.name ?? r.code}`}>Stock</ScreenLink></p>} onChange={(role) => set.mutate({ branchId: r.branch_id ?? '', role })} />
+          <RoleRow key={r.branch_id} row={r} busy={set.isPending} extra={<p><ScreenLink screen="stockByLocation" to="/staff/retail/stock-by-location" label={`See the stock of ${r.name ?? r.code}`}>Stock</ScreenLink></p>} onChange={(role) => set.mutate({ branchId: r.branch_id ?? '', role, name: r.name || r.code || 'This branch' })} />
         ))}
       </ul>
     </Gate>

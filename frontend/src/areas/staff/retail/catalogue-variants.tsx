@@ -219,7 +219,12 @@ export function NewFamilyPage() {
       void navigate({ to: familyPath(family.id ?? '') as never });
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: 'Item added' },
+    meta: {
+      success: (family: { name?: string; variants?: unknown[] }) => {
+        const n = family?.variants?.length ?? preview.rows.length;
+        return `Item ${family?.name ?? name.trim()} added with ${n} ${n === 1 ? 'size or colour' : 'sizes and colours'}`;
+      },
+    },
   });
   const submit = () => {
     if (!complete || save.isPending || sending.current) return;
@@ -292,7 +297,7 @@ export function MakeFamilyPanel({ product }: { product: Product }) {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: familyPath(family.id ?? '') as never });
     },
-    meta: { success: 'Sizes and colours added' },
+    meta: { success: `Sizes and colours added to ${product.description ?? 'the item'}` },
   });
   if (!canManage || product.variant) return null;
   if (!open) return <p><button type="button" onClick={() => setOpen(true)}>Give this item sizes and colours</button></p>;
@@ -428,7 +433,7 @@ export function JoinPage() {
               : !target && name.trim() === '' ? 'Say what customers call the item.' : null;
   // success-screen: the saved sizes and colours replace the form
   const save = useMutation({
-    meta: { success: 'Sizes and colours saved' },
+    meta: { success: (family: { name?: string }) => `${rows.length} ${rows.length === 1 ? 'item' : 'items'} saved as sizes and colours of ${family?.name ?? target?.name ?? name.trim()}` },
     mutationFn: (duplicateReason?: string) => retail.joinFamily(target?.id ?? null, {
       // An item that exists keeps its name and category: only the items go with it.
       ...(target ? {} : { name: name.trim() }),

@@ -149,7 +149,7 @@ export function SupplierPaymentNewPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/supplier-payments/$paymentId', params: { paymentId: payment.id ?? '' } });
     },
-    meta: { success: 'Payment recorded' },
+    meta: { success: (payment: { payment_no?: string; amount_minor?: number }) => `${payment?.payment_no ? `Supplier payment ${payment.payment_no}` : 'Supplier payment'}${payment?.amount_minor !== undefined ? ` of ${money(payment.amount_minor)}` : ''} recorded` },
   });
   return (
     <Gate screen="supplierPayments" title={WORDS.payASupplier}>

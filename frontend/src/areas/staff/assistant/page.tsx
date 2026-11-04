@@ -140,7 +140,7 @@ export function AssistantSettingsPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail', 'advisor', 'brief'] });
     },
     onError: () => void queryClient.invalidateQueries({ queryKey: side?.key ?? ['advisor', 'settings'] }),
-    meta: { success: 'Settings saved' },
+    meta: { success: 'Assistant settings saved' },
   });
   if (side === null) {
     return (

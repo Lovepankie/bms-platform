@@ -101,7 +101,7 @@ function Devices() {
       void queryClient.invalidateQueries({ queryKey: ['push-state'] });
     },
     onError: (e) => setError(messageOf(e)),
-    meta: { success: 'Device removed' },
+    meta: { success: (_: unknown, device: PushDevice) => `${device.label ?? 'The device'} no longer gets notifications` },
   });
   const devices = list.data ?? [];
   return (

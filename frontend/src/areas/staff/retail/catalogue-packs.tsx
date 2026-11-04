@@ -112,7 +112,7 @@ function PackSheet({ product, pack, mayPrice, onClose, fixed }: {
       onClose();
     },
     meta: {
-      success: (_r: unknown, v: Parameters<typeof retail.updatePack>[3]) => (v?.active === false ? 'Pack switched off' : v?.active === true ? 'Pack switched on' : 'Pack saved'),
+      success: (_r: unknown, v: Parameters<typeof retail.updatePack>[3]) => `${unitWord(pack.unit)} of ${product.description ?? 'the item'} ${v?.active === false ? 'switched off' : v?.active === true ? 'switched on' : 'saved'}`,
       // A switch on or off can be taken back from the toast (#682): the same change the other way, on the version it made.
       undo: (r: Awaited<ReturnType<typeof retail.updatePack>>, v: Parameters<typeof retail.updatePack>[3]) =>
         v?.active === undefined || typeof r?.version !== 'number' ? null : () => retail.updatePack(product.id ?? '', pack.unit_id ?? '', r.version ?? 1, { active: !v.active }),
@@ -243,7 +243,12 @@ export function PackEditor({ product }: { product: Product }) {
       setFilled({ factor: '', purpose: 'both' });
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
-    meta: { success: 'Pack added' },
+    meta: {
+      success: () => {
+        const unit = unitWord((units.data ?? []).find((u) => u.id === unitId)?.name);
+        return unit ? `${unit} added as a pack of ${product.description ?? 'the item'}` : `Pack added to ${product.description ?? 'the item'}`;
+      },
+    },
   });
   if (!allowed) return null;
   const rows = packs.data ?? [];
@@ -407,7 +412,7 @@ export function PacksTurnOn() {
       queryClient.setQueriesData<Me>({ queryKey: ['me'] }, (was) => (was ? withPacksOn(was) : was));
       void queryClient.invalidateQueries({ queryKey: ['me'] });
     },
-    meta: { success: 'Packs switched on' },
+    meta: { success: 'Packs switched on for the business' },
   });
   if (!holds(me, 'retail.catalogue.manage')) return null;
   if (capabilityOn(me, 'retail', UNITS)) return null;

@@ -88,7 +88,12 @@ function PayPanel({ sale, today, full, onDone }: { sale: Sale; today: string; fu
       if (keyReused(error)) discard();
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: (result: { sale_balance_minor?: number }) => ((result.sale_balance_minor ?? 0) <= 0 ? 'Sale paid in full' : 'Payment recorded') },
+    meta: {
+      success: (result: { sale_balance_minor?: number; payment?: { amount_minor?: number } }) =>
+        (result.sale_balance_minor ?? 0) <= 0
+          ? `${sale.sale_no ? `Sale ${sale.sale_no}` : 'Sale'} paid in full`
+          : `${result.payment?.amount_minor !== undefined ? `Payment of ${money(result.payment.amount_minor)}` : 'Payment'} recorded${sale.sale_no ? ` on sale ${sale.sale_no}` : ''}`,
+    },
   });
   // The balance changed under the form (someone else took a payment): a typed amount above the new balance goes back to the balance.
   const owed = owedMinor(sale);
@@ -215,7 +220,7 @@ export function VoidSaleAction({ sale, branchName }: { sale: Sale; branchName?: 
       if (error instanceof RetailError && ['sale_voided', 'sale_has_payments', 'sale_has_returns'].includes(error.code ?? '')) void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: (outcome: object) => (isWaiting(outcome) ? null : 'Sale deleted. The stock went back.') },
+    meta: { success: (outcome: object) => (isWaiting(outcome) ? null : `${sale.sale_no ? `Sale ${sale.sale_no}` : 'Sale'} deleted, stock put back`) },
   });
   if (waiting) return <WaitingForApproval what="Deleting this sale waits for an administrator." />;
   if (sale.status !== 'completed' || voided || !holdsAt(me, SALE_VOID, sale.branch_id)) return null;

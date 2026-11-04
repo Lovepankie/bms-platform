@@ -33,7 +33,7 @@ export function UploadStatement({ onUploaded }: { onUploaded: (s: PaymentStateme
       return statements.upload(file, file.name, from && to ? { from, to } : undefined);
     },
     onSuccess: (r) => onUploaded(r.detail, r.replayed),
-    meta: { success: 'Statement uploaded' },
+    meta: { success: () => (file?.name ? `Statement ${file.name} uploaded` : 'Statement uploaded') },
   });
   const problem = file ? fileProblem(file) : null;
   const lines = upload.error instanceof FormError ? Object.entries(upload.error.fields ?? {}) : [];
@@ -195,7 +195,7 @@ export function ReconciliationPage() {
   const run = useMutation({
     mutationFn: reconciliation.run,
     onSuccess: (r) => queryClient.setQueryData(['payments', 'reconciliation'], r),
-    meta: { success: 'Reconciliation run' },
+    meta: { success: 'Payment reconciliation run' },
   });
   if (!allowed) {
     return (

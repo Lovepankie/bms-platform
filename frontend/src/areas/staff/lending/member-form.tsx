@@ -147,7 +147,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
 
   const back = useComeBack();
   const finish = (m: MemberRecord) => {
-    sayDone(editing ? 'Member saved' : 'Member added');
+    sayDone(`${m.full_name ? `Member ${m.full_name}` : 'Member'} ${editing ? 'saved' : 'added'}`);
     void queryClient.invalidateQueries({ queryKey: ['members'] });
     if (onSaved) onSaved(m);
     // Opened from a member search that found nobody (issue #619): the new member takes the person back to the form that needed one.
