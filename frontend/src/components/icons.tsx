@@ -571,6 +571,12 @@ export const icons = {
       <path d="M11 18.5h2" />
     </Svg>
   ),
+  // A round speech bubble: a WhatsApp chat with a buyer, supplier or advance party (issue #817), told apart from Text's square one.
+  chatRound: (
+    <Svg>
+      <path d="M20 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-4.2A8 8 0 1 1 20 11.5z" />
+    </Svg>
+  ),
   check: (
     <Svg>
       <path d="M5 12.5l4.5 4.5L19 7.5" />

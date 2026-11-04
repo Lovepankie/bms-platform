@@ -14,6 +14,7 @@ import {
 import { usePersistedDraft, newIdempotencyKey } from './idempotency';
 import { CREDIT_MANAGE, DOCUMENT_ISSUE, SALE_VOID, branchesWhere, canIssueDocuments, canOpenAccount, holds, holdsAt, sellingBranches } from './permissions';
 import { openMadePdf } from './documents-ui';
+import { ContactLinks } from './contact-links';
 import { Problem, changeFailureText, money, requireVersion, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { showDate } from './maths';
@@ -291,8 +292,16 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   const payments = useQuery({ queryKey: ['retail', 'account-payments', customerId], queryFn: () => retail.listAccountPayments(customerId), enabled: allowed });
   const ranged = from !== '' && to !== '' && from <= to;
   const statement = useQuery({ queryKey: ['retail', 'account-statement', customerId, from, to], queryFn: () => retail.customerStatement(customerId, { from, to }), enabled: allowed && ranged });
+  // The buyer's phone (issue #817): the account carries no contact, so it is read from the customer list searched by the name.
+  const buyerName = account.data?.name ?? '';
+  const buyer = useQuery({
+    queryKey: ['retail', 'account-contact', customerId, buyerName],
+    queryFn: ({ signal }) => retail.listCustomerPage({ query: buyerName, signal }),
+    enabled: allowed && buyerName !== '',
+    select: (page) => (page.items ?? []).find((c) => c.id === customerId)?.contact,
+  });
   useCrumbLabel(account.data?.name);
-  const done = (text: string) => { show(text, 'success'); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
+  const done =(text: string) => { show(text, 'success'); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
   const save = useMutation({
     mutationFn: (form: AccountForm) => retail.setCustomerAccount(customerId, requireVersion(account.data?.version), accountRequest(form)),
     onSuccess: () => done('Credit limit and terms saved'),
@@ -320,6 +329,8 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   return (
     <main className="rt rt-wide">
       <h1>{account.data?.name ?? 'Customer account'}</h1>
+      {buyer.data && <p className="hint">{buyer.data}</p>}
+      <ContactLinks contact={buyer.data} name={account.data?.name} />
       {account.isPending && <SkeletonList label="Loading the account" />}
       <Problem error={account.error} />
       {account.data && (

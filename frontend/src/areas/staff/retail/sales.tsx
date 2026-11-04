@@ -21,6 +21,7 @@ import { GroupBy } from './sales-group-by';
 import { useSalesVariantLevel } from './catalogue-variants';
 import { PaySaleAction, VoidSaleAction, WriteOffSaleAction } from './sale-actions';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
+import { ContactLinks } from './contact-links';
 
 // Credit sales and All sales (#145): the lists the pilot's app has, 'Credit sales' and the sales
 // history, read from the sales list API in the branch chosen at the top of the page (every branch the
@@ -123,6 +124,7 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
           {facts.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}
         </tbody>
       </table></div>
+      <ContactLinks contact={sale.buyer_contact} name={sale.buyer_name} />
       <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>

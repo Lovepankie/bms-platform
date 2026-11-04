@@ -1793,3 +1793,11 @@ td.num.qty-packs {
     flex: 1;
   }
 }
+
+/* Call, Text and WhatsApp next to a phone number (issue #817): 48px targets --tap-gap apart, each as wide as its word on every screen. */
+.contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tap-gap);
+}
