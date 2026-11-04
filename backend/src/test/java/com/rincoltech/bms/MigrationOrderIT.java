@@ -1878,7 +1878,9 @@ class MigrationOrderIT {
                                         + " 'lending.charges.waive_fee_interest', 'core.payments.allocate_approve',"
                                         + " 'core.payments.manage',"
                                         // V131 (the owner's earlier date, #811).
-                                        + " 'retail.entry.backdate')")
+                                        + " 'retail.entry.backdate',"
+                                        // V132 (where an entry is made, #826): the owner's read of the distances.
+                                        + " 'retail.entry_location.read')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")

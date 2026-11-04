@@ -29,6 +29,9 @@ export type AllBranchesRow = S['RetailAllBranchesRow'];
 export type StockBranch = S['RetailStockBranch'];
 export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[]; closed_branches?: number };
 export type BranchRole = S['RetailBranchRole'];
+export type EntryDistance = S['RetailEntryDistance'];
+export type ShopLocation = S['RetailShopLocation'];
+export type DeviceLocation = S['RetailDeviceLocation'];
 export type RetailCapabilities = S['RetailCapabilities'];
 export type CapabilityChange = S['UpdateRetailCapabilitiesRequest'];
 /** The capabilities with the settings version they were read at, the If-Match of the next change. */
@@ -650,6 +653,14 @@ export interface RetailApi {
   branchRoles(): Promise<BranchRole[]>;
   /** A selling branch's role; a store is marked with sells_goods on Branches, never here (ADR-104). */
   setBranchRole(branchId: string, role: 'shop' | 'both'): Promise<BranchRole>;
+  /** ADR-122: how far from the shop these sales or usage entries were made, in words (retail.entry_location.read); never coordinates. */
+  entryDistances(source: 'sale' | 'usage', ids: string[]): Promise<EntryDistance[]>;
+  /** ADR-122: the branches with whether each has a location set (core.settings.manage); never coordinates. */
+  shopLocations(): Promise<ShopLocation[]>;
+  /** ADR-122: sets a shop's location to where this phone is now. */
+  setShopLocation(branchId: string, where: DeviceLocation): Promise<ShopLocation>;
+  /** ADR-122: clears a shop's location. */
+  clearShopLocation(branchId: string): Promise<void>;
   /** The tenant's capabilities and profile (administrators only, ADR-033 section 1). */
   capabilities(): Promise<CapabilitiesRead>;
   /** Switches the profile or flags under If-Match; the server audits the old and new values. */
@@ -1495,6 +1506,25 @@ const realRetail: RetailApi = {
 
   async setBranchRole(branchId, role) {
     return unwrap(await api.PUT('/api/v1/retail/branch-roles/{branch_id}', { params: { path: { branch_id: branchId } }, body: { role } }));
+  },
+
+  async entryDistances(source, ids) {
+    if (ids.length === 0) return [];
+    return unwrap(await api.GET('/api/v1/retail/entry-locations', { params: { query: { source, id: ids } } })).items ?? [];
+  },
+
+  async shopLocations() {
+    return unwrap(await api.GET('/api/v1/retail/shop-locations')).items ?? [];
+  },
+
+  async setShopLocation(branchId, where) {
+    return unwrap(await api.PUT('/api/v1/retail/shop-locations/{branch_id}', { params: { path: { branch_id: branchId } }, body: where }));
+  },
+
+  async clearShopLocation(branchId) {
+    const result = await api.DELETE('/api/v1/retail/shop-locations/{branch_id}', { params: { path: { branch_id: branchId } } });
+    // 204 has no body, so unwrap is only for the refusal.
+    if (!result.response.ok) unwrap(result);
   },
 
   async capabilities() {

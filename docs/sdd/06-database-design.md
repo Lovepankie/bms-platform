@@ -2560,6 +2560,20 @@ lines, never the sale header, review F10), less `retail_usage_reports.cost_total
 
 No table: `retail.reports` reads `retail_sales` (voids: `voided_at`, `voided_by`, `void_reason`; sales entered: `sale_date`, `created_by`, `historical`), `retail_sale_returns` (`returned_on`, `created_by`, `note`, `status`), `retail_sale_writeoffs` (`written_off_on`, `unpaid_minor`, `reason`, `created_by`; ADR-087, served by `retail_sale_writeoffs_by_day (tenant_id, branch_id, written_off_on)` of V64) and `retail_sale_lines` (`price_source`, `resolved_unit_price_minor`, `price_override_reason`, `line_total_minor`, `line_cost_minor`), and the `users` and `branches` names. Migration `V66` adds the permission `retail.controls.read`, granted to `tenant_admin` (a global role row, so every existing tenant has it). No index is added by V66: the voids of a window are found by `retail_sales_voided (tenant_id, branch_id, voided_at) WHERE voided_at IS NOT NULL` (V34, section 6.11) and every other metric by the sale date (`retail_sales_by_date`). Expand only. `V101` (issue #357, ADR-087) adds two partial indexes for the sale line metrics, `retail_sale_lines_price_changed (tenant_id, sale_id) WHERE price_source = 'override'` and `retail_sale_lines_below_cost (tenant_id, sale_id) WHERE line_total_minor < line_cost_minor`, so changed prices, discounts and lines below cost no longer read the tenant's whole line history; indexes only, each built under a SHARE lock on `retail_sale_lines` in the migration's transaction with a five second `lock_timeout`. The plans on a tenant of a million sales are in `docs/specs/controls-query-plans-357.md`.
 
+### 6.11.3b Where an entry is made (ADR-122)
+
+Built (issue #826, migration `V132`). `retail_entry_locations`: one row per sale or usage or damage entry the phone gave a
+location for; `tenant_id`, `source` in (`retail.sale`, `retail.usage`), `source_id` (the entry's id, written in the same
+transaction, no foreign key since it names one of two tables), `branch_id` (composite foreign key to `branches`), `latitude`
+`numeric(8,6)` from -90 to 90, `longitude` `numeric(9,6)` from -180 to 180, `accuracy_m` `numeric(9,1)` at least 0,
+`recorded_at`; primary key `(tenant_id, source, source_id)`; forced RLS; the application role may SELECT, INSERT and DELETE
+(deletes only when a closed business is removed, ADR-090), never UPDATE. An entry without a location has no row.
+`retail_shop_locations`: one row per branch at most; `tenant_id`, `branch_id` (composite foreign key), `latitude`,
+`longitude`, `accuracy_m` as above, `set_by`, `set_at`; primary key `(tenant_id, branch_id)`; forced RLS; SELECT, INSERT,
+UPDATE and DELETE. A missing row means the shop has no location. `V132` also adds the permission
+`retail.entry_location.read`, granted to `tenant_admin`. Expand only. The coordinates are never logged, audited or returned
+by the API; the distance is computed on read with the haversine formula.
+
 ### 6.11.3a Trade capabilities (ADR-033)
 
 Built: `retail_branch_roles` (issue #191, migration V37). One row per branch at most:

@@ -12928,6 +12928,35 @@
           }
         }
       },
+      "RetailDeviceLocation" : {
+        "description" : "ADR-122: where the phone was when the entry was made, as the phone reported it. Optional; never returned, only the distance from the shop to holders of retail.entry_location.read",
+        "properties" : {
+          "accuracy_m" : {
+            "description" : "Metres, as the phone reports it",
+            "example" : 15,
+            "format" : "double",
+            "maximum" : 1000000,
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "latitude" : {
+            "description" : "Degrees north",
+            "example" : 0.3136,
+            "format" : "double",
+            "maximum" : 90,
+            "minimum" : -90,
+            "type" : "number"
+          },
+          "longitude" : {
+            "description" : "Degrees east",
+            "example" : 32.5811,
+            "format" : "double",
+            "maximum" : 180,
+            "minimum" : -180,
+            "type" : "number"
+          }
+        }
+      },
       "RetailDocument" : {
         "properties" : {
           "branch_id" : {
@@ -13146,6 +13175,42 @@
           }
         },
         "required" : [ "kind", "product_id", "screen" ]
+      },
+      "RetailEntryDistance" : {
+        "properties" : {
+          "accuracy_m" : {
+            "description" : "How sure the phone was, in metres; absent with no location",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "distance_m" : {
+            "description" : "Metres from the shop, rounded as the words say; only when located",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "state" : {
+            "description" : "located, no_location or shop_not_set",
+            "type" : "string"
+          },
+          "words" : {
+            "description" : "40 m from the shop, 3.2 km from the shop, no location or shop location not set",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailEntryDistanceList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailEntryDistance"
+            },
+            "type" : "array"
+          }
+        }
       },
       "RetailEntryNorms" : {
         "description" : "Issue #353, ADR-093: the item's recent history the entry screens warn against: Buy stock, Sell, Move stock and Count stock call this once per item. The thresholds are sent so the screens use the server's",
@@ -19240,6 +19305,9 @@
             "minItems" : 0,
             "type" : "array"
           },
+          "location" : {
+            "$ref" : "#/components/schemas/RetailDeviceLocation"
+          },
           "occurred_at" : {
             "description" : "ADR-067: when the sale happened on the device; the sale is dated that day in the business's time zone. Up to five minutes ahead is recorded as now; further ahead is 422 occurred_at_in_future, or for a sale recorded offline now with a clock_ahead clash",
             "format" : "date-time",
@@ -20070,6 +20138,41 @@
           "suggested_qty" : {
             "description" : "Whole units to move: what that branch sells in cover_days, less its stock, at most what this branch holds above slow_months of its own sales",
             "type" : "string"
+          }
+        }
+      },
+      "RetailShopLocation" : {
+        "properties" : {
+          "accuracy_m" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "has_location" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "set_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailShopLocationList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailShopLocation"
+            },
+            "type" : "array"
           }
         }
       },
@@ -22716,6 +22819,9 @@
             "maxItems" : 200,
             "minItems" : 0,
             "type" : "array"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/RetailDeviceLocation"
           },
           "occurred_on" : {
             "description" : "Defaults to today; not in the future",
@@ -39353,6 +39459,46 @@
         "tags" : [ "retail-documents" ]
       }
     },
+    "/api/v1/retail/entry-locations" : {
+      "get" : {
+        "operationId" : "listRetailEntryDistances",
+        "parameters" : [ {
+          "description" : "sale or usage",
+          "in" : "query",
+          "name" : "source",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The entries' ids, at most 100",
+          "in" : "query",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailEntryDistanceList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How far from the shop each of these sales or usage and damage entries was made, in plain words; never the coordinates. An entry with a location at a branch outside the caller's scope is left out",
+        "tags" : [ "retail-stock" ]
+      }
+    },
     "/api/v1/retail/entry-warnings/confirmations" : {
       "post" : {
         "operationId" : "confirmRetailEntryWarning",
@@ -45980,6 +46126,82 @@
           }
         },
         "summary" : "Switch retail capabilities or choose the kind of business; audited with old and new values",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/shop-locations" : {
+      "get" : {
+        "operationId" : "listRetailShopLocations",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailShopLocationList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The active branches with whether each has a location set; never the coordinates",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/shop-locations/{branch_id}" : {
+      "delete" : {
+        "operationId" : "clearRetailShopLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Clear a shop's location; audited",
+        "tags" : [ "retail-stock" ]
+      },
+      "put" : {
+        "operationId" : "setRetailShopLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailDeviceLocation"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailShopLocation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a shop's location to where the owner's phone is now (Use where I am now); audited without the coordinates; 422 invalid_location out of range",
         "tags" : [ "retail-stock" ]
       }
     },

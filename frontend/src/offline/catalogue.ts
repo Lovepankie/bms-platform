@@ -128,6 +128,8 @@ export function offlineSale(args: {
   buyerContact?: string;
   /** An online request whose answer was lost: it goes as it was sent, dated when it was sent (ADR-067 decision 5). */
   sent?: { body: SaleRequest; at: string };
+  /** ADR-122: where the phone was, sent with the sale; a request already sent keeps its own. */
+  location?: SaleRequest['location'];
   now: Date;
 }): OutboxItem {
   const { draft, clientSaleId, key, scope, branchName, pricesAsOf, now, sent } = args;
@@ -161,6 +163,7 @@ export function offlineSale(args: {
     lines: lines.map((l) => l.request),
     client_sale_id: clientSaleId,
     ...delivery,
+    ...(args.location ? { location: args.location } : {}),
   };
   return {
     id: clientSaleId,

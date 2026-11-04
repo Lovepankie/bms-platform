@@ -8,7 +8,8 @@ import { receiptNote } from './price-state';
 import { enteredPriceMinor, enteredQty } from './units-state';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
-import { SALE_RETURN, canRankSellers, canUse, holdsAt } from './permissions';
+import { ENTRY_LOCATION, SALE_RETURN, canRankSellers, canUse, holdsAt } from './permissions';
+import { useEntryDistances, whereWords } from './entry-location';
 import { settledWords } from './returns-state';
 import { showDate } from './transfers';
 import { Gate, ItemPageLink, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
@@ -102,6 +103,9 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
   const state = saleState(sale, today);
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
+  // ADR-122: how far from the shop the sale was made, for the owner only; a seller never asks.
+  const { me } = useStaff();
+  const where = useEntryDistances('sale', [sale.id ?? ''], holdsAt(me, ENTRY_LOCATION, sale.branch_id)).get(sale.id ?? '');
   const facts: [string, string][] = [
     ['Date', showDate(sale.sale_date)],
     ...(branchName ? [['Branch', branchName] as [string, string]] : []),
@@ -123,6 +127,7 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
           {facts.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}
         </tbody>
       </table></div>
+      {where && <p data-testid="sale-where">Where: {whereWords(where)}</p>}
       <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>

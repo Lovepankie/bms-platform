@@ -15,6 +15,7 @@ import { ShortLinkCard } from './short-link';
 import { Hint } from '../../app/ui/Hint';
 import { useHashSection } from '../../app/ui/useHashSection';
 import { sayDone } from './retail/toast';
+import { ShopLocationsCard } from './retail/entry-location';
 
 // Business set-up (FR-TEN-08): name, logo, theme colour and receipt footer, with a checklist a new
 // tenant admin lands on until it is dismissed. The logo is checked and re-encoded by the API; the
@@ -425,6 +426,8 @@ export function Setup() {
             </p>
           </fieldset>
         )}
+
+        {hasRetail(me.modules) && permissions.includes('core.settings.manage') && <ShopLocationsCard />}
 
         {permissions.includes('core.data_export.run') && <DataExportCard modules={me.modules} zone={me.tenant_timezone} />}
 

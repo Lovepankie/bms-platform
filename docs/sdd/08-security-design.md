@@ -428,6 +428,7 @@ platform API and holds no tenant permissions.
 | `retail.purchase.approve` | Y | | | | | | | | | | | |
 | `retail.document.issue` | Y | | | | | | | | | | | |
 | `retail.controls.read` | Y | | | | | | | | | | | |
+| `retail.entry_location.read` | Y | | | | | | | | | | | |
 | `retail.order.manage` | Y | | | | | | | Y | | | | |
 | `retail.advisor.use` | Y | | | | | | | | | | | |
 | `retail.advisor.configure` | Y | | | | | | | | | | | |
@@ -765,6 +766,14 @@ Notes:
   reads quantities only, and a seller who sees only their own figures gets the last price of their own sales. `GET /retail/products/name-hints` needs `retail.catalogue.manage`, the permission that adds items. A confirmation
   only writes an audit row on an item of the caller's business, with the warning's kind and its numbers and no text from the
   client; its branch is kept only when the caller works there.
+- `retail.entry_location.read` (issue #826, ADR-122, migration V132) reads how far from the shop each sale and each usage
+  or damage entry was made, in words, through `GET /retail/entry-locations`, scoped by branch. It tells where a named person
+  was, so it is the tenant administrator's alone by default; a business gives it to an owner's custom role only on purpose.
+  Nobody reads the coordinates through the API, the owner included; sellers see no location or distance, their own
+  included. Setting a shop's location is `core.settings.manage`. The coordinates are personal data: never logged (rule 9),
+  never in the audit log (a shop location change records `has_location` only), never in an idempotency or client sale id
+  hash, never in a refused offline sale's stored request, and deleted when a closed business is removed (ADR-090). The phone
+  asks once with a plain reason; the staff note is the help article `where-a-sale-is-made`.
 - `retail.controls.read` (issue #357, ADR-047, migration V66) opens the read-only Controls page: voids, returns, credit write-offs (ADR-087, valued at the amount owed, never the loss), changed prices,
   discounts, sales below cost and sales cancelled at once, by shop, by named person, by day and by reason. It names staff and compares
   them by a rate (a cancelled sale is credited to the person whose sale it was, the approver is shown apart and never ranked), so it is the tenant administrator's alone by default and a business gives it to an owner's or an auditor's custom

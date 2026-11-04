@@ -668,6 +668,15 @@ public class RlsIsolationIT {
         owner.sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'shop')")
                 .params(t.tenantId(), t.secondBranch())
                 .update();
+        // Where an entry was made and a shop's location (ADR-122, #826); fabricated positions.
+        owner.sql("INSERT INTO retail_entry_locations (tenant_id, source, source_id, branch_id, latitude, longitude,"
+                        + " accuracy_m) VALUES (?, 'retail.usage', ?, ?, 0.3136, 32.5811, 10)")
+                .params(t.tenantId(), UUID.randomUUID(), t.secondBranch())
+                .update();
+        owner.sql("INSERT INTO retail_shop_locations (tenant_id, branch_id, latitude, longitude, accuracy_m, set_by)"
+                        + " VALUES (?, ?, 0.3136, 32.5811, 10, ?)")
+                .params(t.tenantId(), t.secondBranch(), UUID.randomUUID())
+                .update();
         // Retail optional documents (ADR-033, #197): a prefix, a counter, a quotation with a line and its document.
         // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
         owner.sql(

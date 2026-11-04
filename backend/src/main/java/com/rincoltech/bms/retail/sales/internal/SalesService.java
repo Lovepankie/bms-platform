@@ -49,6 +49,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesRepository.Header;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.LinePricing;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
 import com.rincoltech.bms.retail.stock.CreditPeriods;
+import com.rincoltech.bms.retail.stock.EntryLocations;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -111,6 +112,7 @@ class SalesService {
     private final ApplicationEventPublisher events;
     // Lazy: the approvals module holds the void action, which calls back into this service on approval.
     private final Approvals approvals;
+    private final EntryLocations locations;
 
     SalesService(
             SalesRepository repo,
@@ -129,7 +131,9 @@ class SalesService {
             AccountsService accounts,
             ReturnsRepository returns,
             ApplicationEventPublisher events,
-            @Lazy Approvals approvals) {
+            @Lazy Approvals approvals,
+            EntryLocations locations) {
+        this.locations = locations;
         this.approvals = approvals;
         this.events = events;
         this.repo = repo;
@@ -196,11 +200,12 @@ class SalesService {
         return earlier[0] ? new Outcome<>(outcome.body(), true) : outcome;
     }
 
-    /** What the Idempotency-Key covers: a request with a client sale id without its delivery fields (issue #769). */
+    /**
+     * What the Idempotency-Key covers: a request with a client sale id without its delivery fields (issue #769), and never
+     * where the phone was (ADR-122), so a retry from a phone that has moved is the same request.
+     */
     static SaleRequest keyed(SaleRequest r) {
-        if (r.clientSaleId() == null) {
-            return r;
-        }
+        boolean device = r.clientSaleId() != null;
         return new SaleRequest(
                 r.branchId(),
                 r.saleDate(),
@@ -213,8 +218,9 @@ class SalesService {
                 r.creditOverrideReason(),
                 r.lines(),
                 r.clientSaleId(),
-                null,
-                null,
+                device ? null : r.occurredAt(),
+                device ? null : r.recordedOffline(),
+                device ? null : r.pricesAsOf(),
                 null);
     }
 
@@ -444,6 +450,8 @@ class SalesService {
                     "This sale is being recorded by another request; try again shortly.");
         }
         lines.forEach(l -> repo.insertLine(id, l));
+        // ADR-122: where the phone was, online or offline, when it said; never in the audit entry or the request hash.
+        locations.record(EntryLocations.SALE, id, branch, r.location());
         List<Movement> movements = lines.stream()
                 .map(l -> new Movement(
                         branch,

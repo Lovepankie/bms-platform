@@ -11,6 +11,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
+import com.rincoltech.bms.retail.stock.EntryLocations;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -53,6 +54,7 @@ class UsageService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final EntryLocations locations;
 
     UsageService(
             JdbcClient jdbc,
@@ -63,7 +65,9 @@ class UsageService {
             RetailBranchContext branches,
             CurrentTenant tenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            EntryLocations locations) {
+        this.locations = locations;
         this.jdbc = jdbc;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -77,7 +81,10 @@ class UsageService {
 
     @Transactional
     Outcome<UsageReport> report(String idempotencyKey, UsageRequest r) {
-        return idempotency.once(idempotencyKey, "POST", PATH, r, UsageReport.class, () -> record(r));
+        // ADR-122: the key never covers where the phone was, so a retry from a phone that has moved is the same
+        // request.
+        UsageRequest keyed = new UsageRequest(r.branchId(), r.kind(), r.reason(), r.occurredOn(), r.lines(), null);
+        return idempotency.once(idempotencyKey, "POST", PATH, keyed, UsageReport.class, () -> record(r));
     }
 
     private UsageReport record(UsageRequest r) {
@@ -182,6 +189,8 @@ class UsageService {
                             l.lineCostMinor())
                     .update();
         }
+        // ADR-122: where the phone was, when it said; never in the audit entry.
+        locations.record(EntryLocations.USAGE, id, branch, r.location());
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("kind", r.kind());
         after.put("reason", reason);

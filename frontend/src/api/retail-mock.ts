@@ -50,7 +50,7 @@ const TILL_PERMISSIONS = ['retail.savings.record', 'retail.banking.record', 'ret
 const CASHIER_PERMISSIONS = [...SALES_PERMISSIONS, ...TILL_PERMISSIONS];
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.write_off', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return', 'retail.controls.read', 'retail.sale.all_sellers', 'core.billing.read',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.write_off', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return', 'retail.controls.read', 'retail.sale.all_sellers', 'core.billing.read', 'retail.entry_location.read',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void', 'retail.payable.manage',
   'retail.till.close', 'retail.entry.backdate',
@@ -281,6 +281,7 @@ export function createMockRetail(): RetailApi {
   // Branch roles and capabilities of this mock instance (ADR-033): every branch both, every capability off. A store is read
   // from the branch's flag (setMockStores, ADR-104) and is never stored as a role.
   const roles = new Map<string, 'shop' | 'both'>();
+  const located = new Set<string>();
   const roleOf = (branch: string): 'store' | 'shop' | 'both' => (storeBranches.includes(branch) ? 'store' : roles.get(branch) ?? 'both');
   let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shops', slow_mover_months: 4, slow_mover_min_sold: 0, other_shops_stock: true }, version: 1 };
   const twoStep = () => transferReceipt || caps.value['transfer_receipt'] === true;
@@ -1536,6 +1537,19 @@ export function createMockRetail(): RetailApi {
       if (storeBranches.includes(branchId)) refuse(422, 'branch_is_store', 'This branch is a store. Mark it as selling again on Branches first.');
       roles.set(branchId, role);
       return delay({ branch_id: branchId, code: b?.code, name: b?.name, role, can_sell: true });
+    },
+
+    // ADR-122: the mock keeps whether a shop has a location, never where; every entry reads no location.
+    entryDistances: (_source, ids) => delay(ids.map((id) => ({ id, state: 'no_location', words: 'no location' }))),
+    shopLocations: () => delay(MOCK_BRANCHES.map((b) => ({ branch_id: b.id, code: b.code, name: b.name, has_location: located.has(b.id) }))),
+    setShopLocation: (branchId) => {
+      const b = MOCK_BRANCHES.find((x) => x.id === branchId);
+      located.add(branchId);
+      return delay({ branch_id: branchId, code: b?.code, name: b?.name, has_location: true, set_at: new Date().toISOString() });
+    },
+    clearShopLocation: (branchId) => {
+      located.delete(branchId);
+      return delay(undefined);
     },
 
     capabilities: () => delay(read()),

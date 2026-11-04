@@ -5195,6 +5195,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/entry-locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How far from the shop each of these sales or usage and damage entries was made, in plain words; never the coordinates. An entry with a location at a branch outside the caller's scope is left out */
+        get: operations["listRetailEntryDistances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/entry-warnings/confirmations": {
         parameters: {
             query?: never;
@@ -7416,6 +7433,41 @@ export interface paths {
         put: operations["updateRetailCapabilities"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/shop-locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The active branches with whether each has a location set; never the coordinates */
+        get: operations["listRetailShopLocations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/shop-locations/{branch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a shop's location to where the owner's phone is now (Use where I am now); audited without the coordinates; 422 invalid_location out of range */
+        put: operations["setRetailShopLocation"];
+        post?: never;
+        /** Clear a shop's location; audited */
+        delete: operations["clearRetailShopLocation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -14560,6 +14612,27 @@ export interface components {
             sale_id?: string;
             sale_no?: string;
         };
+        /** @description ADR-122: where the phone was when the entry was made, as the phone reported it. Optional; never returned, only the distance from the shop to holders of retail.entry_location.read */
+        RetailDeviceLocation: {
+            /**
+             * Format: double
+             * @description Metres, as the phone reports it
+             * @example 15
+             */
+            accuracy_m?: number;
+            /**
+             * Format: double
+             * @description Degrees north
+             * @example 0.3136
+             */
+            latitude?: number;
+            /**
+             * Format: double
+             * @description Degrees east
+             * @example 32.5811
+             */
+            longitude?: number;
+        };
         RetailDocument: {
             /** Format: uuid */
             branch_id?: string;
@@ -14663,6 +14736,27 @@ export interface components {
             /** Format: uuid */
             product_id: string;
             screen: string;
+        };
+        RetailEntryDistance: {
+            /**
+             * Format: int64
+             * @description How sure the phone was, in metres; absent with no location
+             */
+            accuracy_m?: number;
+            /**
+             * Format: int64
+             * @description Metres from the shop, rounded as the words say; only when located
+             */
+            distance_m?: number;
+            /** Format: uuid */
+            id?: string;
+            /** @description located, no_location or shop_not_set */
+            state?: string;
+            /** @description 40 m from the shop, 3.2 km from the shop, no location or shop location not set */
+            words?: string;
+        };
+        RetailEntryDistanceList: {
+            items?: components["schemas"]["RetailEntryDistance"][];
         };
         /** @description Issue #353, ADR-093: the item's recent history the entry screens warn against: Buy stock, Sell, Move stock and Count stock call this once per item. The thresholds are sent so the screens use the server's */
         RetailEntryNorms: {
@@ -17817,6 +17911,7 @@ export interface components {
              */
             due_date?: string;
             lines: components["schemas"]["RetailSaleLineRequest"][];
+            location?: components["schemas"]["RetailDeviceLocation"];
             /**
              * Format: date-time
              * @description ADR-067: when the sale happened on the device; the sale is dated that day in the business's time zone. Up to five minutes ahead is recorded as now; further ahead is 422 occurred_at_in_future, or for a sale recorded offline now with a clock_ahead clash
@@ -18281,6 +18376,20 @@ export interface components {
             sold_last90?: string;
             /** @description Whole units to move: what that branch sells in cover_days, less its stock, at most what this branch holds above slow_months of its own sales */
             suggested_qty?: string;
+        };
+        RetailShopLocation: {
+            /** Format: int64 */
+            accuracy_m?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            code?: string;
+            has_location?: boolean;
+            name?: string;
+            /** Format: date-time */
+            set_at?: string;
+        };
+        RetailShopLocationList: {
+            items?: components["schemas"]["RetailShopLocation"][];
         };
         /** @description Issue #807: how many of an item one shop holds, nothing else of it */
         RetailShopQty: {
@@ -19636,6 +19745,7 @@ export interface components {
             branch_id?: string;
             kind: string;
             lines: components["schemas"]["RetailUsageLineRequest"][];
+            location?: components["schemas"]["RetailDeviceLocation"];
             /**
              * Format: date
              * @description Defaults to today; not in the future
@@ -30235,6 +30345,31 @@ export interface operations {
             };
         };
     };
+    listRetailEntryDistances: {
+        parameters: {
+            query: {
+                /** @description sale or usage */
+                source: string;
+                /** @description The entries' ids, at most 100 */
+                id: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailEntryDistanceList"];
+                };
+            };
+        };
+    };
     confirmRetailEntryWarning: {
         parameters: {
             query?: never;
@@ -34210,6 +34345,72 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RetailCapabilities"];
                 };
+            };
+        };
+    };
+    listRetailShopLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailShopLocationList"];
+                };
+            };
+        };
+    };
+    setRetailShopLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailDeviceLocation"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailShopLocation"];
+                };
+            };
+        };
+    };
+    clearRetailShopLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

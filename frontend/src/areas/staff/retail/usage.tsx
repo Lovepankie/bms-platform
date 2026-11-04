@@ -7,6 +7,7 @@ import { usePersistedDraft } from './idempotency';
 import { parseQty, qtyString } from './maths';
 import { BranchRequired, Gate, Problem, ProductPicker, useStockingBranch } from './ui';
 import { canUse, needsOf } from './permissions';
+import { LocationAsk, useWhereNow } from './entry-location';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { RowChevron } from '../../../app/ui/ListRow';
@@ -36,9 +37,11 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
   const setKind = (k: 'used' | 'damaged') => setDraft((d) => ({ ...d, kind: k }));
   const setReason = (r: string) => setDraft((d) => ({ ...d, reason: r }));
   const setLines = (f: (ls: Line[]) => Line[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
+  // ADR-122: where the phone is goes with the entry when it says; nothing waits for it.
+  const where = useWhereNow();
   // success-screen: with onSaved the Usage and damage page opens its Saved screen, and the toast says it too (#824)
   const save = useMutation({
-    mutationFn: () => retail.createUsage(buildUsage({ branchId, kind, reason, lines }), key),
+    mutationFn: () => retail.createUsage({ ...buildUsage({ branchId, kind, reason, lines }), ...where.now() }, key),
     onSuccess: (u) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
@@ -50,6 +53,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
+      <LocationAsk where={where} />
       <fieldset data-tour="usage-kind">
         <legend>What happened?</legend>
         {(['used', 'damaged'] as const).map((k) => (
