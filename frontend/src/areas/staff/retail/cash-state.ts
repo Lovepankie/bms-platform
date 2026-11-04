@@ -65,6 +65,107 @@ export function groupByShopMonth<T extends { branch_id?: string; business_date?:
     .map((s) => ({ ...s, months: s.months.sort((a, b) => `${b.year}-${b.month}`.localeCompare(`${a.year}-${a.month}`)) }));
 }
 
+// JUSTIFICATION-A3: issue #816 asks for a total at every level of the cash book lists; groupByShopMonth has no totals and fixed levels.
+/** A cash book record as the grouped list needs it. */
+export interface CashRowLike { branch_id?: string; business_date?: string; voided?: boolean; historical?: boolean }
+
+/** What a list sums (issue #816): the amount of a record, the part still owed, and the category of an expense. */
+export interface CashFigures<T> {
+  amount?: (row: T) => number | undefined;
+  owed?: (row: T) => number | undefined;
+  category?: (row: T) => { id?: string; name?: string };
+}
+
+/** One group of a cash book list with its totals: the records that were not voided, summed from the rows the list shows. */
+export interface CashGroup {
+  key: string;
+  label: string;
+  from?: string;
+  to?: string;
+  /** Records counted: every record that was not voided, imported ones included. */
+  count: number;
+  voided: number;
+  imported: number;
+  /** Absent when the list carries no amount, or a counted record came without one (the reader may not see it). */
+  totalMinor?: number;
+  owedMinor?: number;
+}
+
+/** What was opened above a level (shop, days, category), as list-chain-state's ListSelection. */
+export interface CashSelection { branchId?: string; from?: string; to?: string; categoryId?: string }
+
+const lastDay = (year: number, month: number) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+/** The rows of a selection: the shop, the days and the category opened above. */
+export function rowsIn<T extends CashRowLike>(rows: T[], sel: CashSelection, figures: CashFigures<T> = {}): T[] {
+  return rows.filter((r) => {
+    const day = r.business_date ?? '';
+    return (sel.branchId === undefined || r.branch_id === sel.branchId)
+      && (sel.from === undefined || day >= sel.from)
+      && (sel.to === undefined || day <= sel.to)
+      && (sel.categoryId === undefined || (figures.category?.(r).id ?? '') === sel.categoryId);
+  });
+}
+
+/** A sum of the counted rows, or undefined when one of them has no figure. */
+function sumOf<T>(rows: T[], of: ((row: T) => number | undefined) | undefined): number | undefined {
+  if (!of) return undefined;
+  let total = 0;
+  for (const r of rows) {
+    const v = of(r);
+    if (v === undefined) return undefined;
+    total += v;
+  }
+  return total;
+}
+
+/**
+ * The groups of one level of a cash book list under a selection, with the count and the totals of each (issue #816): shops by
+ * name, years, months and days newest first, categories by name. Voided records are counted apart and left out of the totals.
+ */
+export function cashGroups<T extends CashRowLike>(rows: T[], level: string, sel: CashSelection, figures: CashFigures<T>, shopName: (id: string | undefined) => string): CashGroup[] {
+  const groups = new Map<string, { key: string; label: string; from?: string; to?: string; rows: T[] }>();
+  for (const row of rowsIn(rows, sel, figures)) {
+    const date = row.business_date ?? '';
+    const y = date.slice(0, 4);
+    const m = date.slice(5, 7);
+    let g: { key: string; label: string; from?: string; to?: string };
+    switch (level) {
+      case 'branch': g = { key: row.branch_id ?? '', label: shopName(row.branch_id) }; break;
+      case 'category': {
+        const c = figures.category?.(row) ?? {};
+        g = { key: c.id ?? '', label: c.name ?? 'No category' };
+        break;
+      }
+      case 'year': g = { key: y, label: y, from: `${y}-01-01`, to: `${y}-12-31` }; break;
+      case 'month': g = { key: `${y}-${m}`, label: monthLabel(date), from: `${y}-${m}-01`, to: `${y}-${m}-${String(lastDay(Number(y), Number(m))).padStart(2, '0')}` }; break;
+      default: g = { key: date, label: date, from: date, to: date };
+    }
+    const at = groups.get(g.key) ?? { ...g, rows: [] };
+    at.rows.push(row);
+    groups.set(g.key, at);
+  }
+  const time = level === 'year' || level === 'month' || level === 'day';
+  return [...groups.values()]
+    .sort((a, b) => (time ? b.key.localeCompare(a.key) : a.label.localeCompare(b.label)))
+    .map(({ rows: in_, ...g }) => {
+      const counted = in_.filter((r) => !r.voided);
+      const totalMinor = sumOf(counted, figures.amount);
+      const owedMinor = sumOf(counted, figures.owed);
+      return {
+        ...g,
+        count: counted.length,
+        voided: in_.length - counted.length,
+        imported: counted.filter((r) => r.historical).length,
+        ...(totalMinor !== undefined ? { totalMinor } : {}),
+        ...(owedMinor !== undefined ? { owedMinor } : {}),
+      };
+    });
+}
+
+/** "3 expenses" or "1 expense", from the singular the list uses ("expense", "banking record"). */
+export const recordsWord = (n: number, what: string) => (n === 1 ? `1 ${what}` : `${n} ${what}s`);
+
 /** The time of day of an instant in the business zone, "14:05"; empty for anything that is not an instant. */
 export function clockTime(instant: string | undefined, zone: string = businessZone()): string {
   const t = instant ? Date.parse(instant) : Number.NaN;

@@ -1,4 +1,4 @@
-import { NO_SUPPLIER, type Purchase, type PurchaseLevel, type PurchasesSummary, type PurchasesSummaryGroup, type PurchasesSummaryQuery, type StockSummary, type StockSummaryGroup, type StockSummaryQuery } from './retail';
+import { NO_SUPPLIER, type Purchase, type PurchaseLevel, type PurchasesSummary, type PurchasesSummaryGroup, type PurchasesSummaryQuery, type StockMovement, type StockSummary, type StockSummaryGroup, type StockSummaryQuery, type UsageSummary, type UsageSummaryGroup, type UsageSummaryQuery } from './retail';
 
 // The mock of GET /retail/purchases/summary and GET /retail/stock/summary (issue #350, docs/sdd/07-api-design.md section 7.11.20):
 // the same rules as the server. A voided restock is only counted apart, what was bought at cost exists only for a session holding
@@ -88,6 +88,55 @@ export function summarisePurchases(purchases: Purchase[], q: PurchasesSummaryQue
   const nextTo = more && time && oldest ? new Date(Date.parse(`${oldest}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10) : undefined;
   return {
     group_by: q.level, levels: q.chain, ...(next ? { next_level: next } : {}), available_levels: ['branch', 'year', 'month', 'supplier', 'day', 'category', 'item', ...(ctx.variants ? ['variant'] : [])],
+    currency: 'UGX', items: page, has_more: more, ...(nextTo ? { next_to: nextTo } : {}), ...(more && !time ? { next_offset: offset + size } : {}),
+  };
+}
+
+// JUSTIFICATION-A3: the mock of the new GET /retail/usage/summary route (issue #816), the shape of its two neighbours here.
+/** What the mock knows around a usage or damage movement (issue #816). */
+export interface UsageContext {
+  cost: boolean;
+  branchName: (id: string | undefined) => string;
+  product: (id: string | undefined) => { name: string; categoryId: string; categoryName: string; unit: string } | undefined;
+  /** The business day of a movement, as the list's from and to read it. */
+  day: (m: StockMovement) => string;
+}
+
+/** The mock of GET /retail/usage/summary (issue #816): the movements of the list grouped, each record's cost summed as it shows. */
+export function summariseUsage(movements: StockMovement[], q: UsageSummaryQuery, ctx: UsageContext): UsageSummary {
+  const next = q.chain[q.chain.indexOf(q.level) + 1];
+  const rows = movements.filter((m) => {
+    const day = ctx.day(m);
+    return (m.kind === 'usage' || m.kind === 'damage') && (!q.branchId || m.branch_id === q.branchId) && (!q.from || day >= q.from) && (!q.to || day <= q.to)
+      && (!q.itemId || m.product_id === q.itemId) && (!q.categoryId || ctx.product(m.product_id)?.categoryId === q.categoryId);
+  });
+  const groups = new Map<string, UsageSummaryGroup & { qty: number }>();
+  for (const m of rows) {
+    const day = ctx.day(m);
+    const p = ctx.product(m.product_id);
+    const month = day.slice(0, 7);
+    const k = q.level === 'branch' ? { key: m.branch_id ?? '', label: ctx.branchName(m.branch_id) }
+      : q.level === 'category' ? { key: p?.categoryId ?? 'unknown', label: p?.categoryName ?? 'Unknown' }
+        : q.level === 'item' ? { key: m.product_id ?? '', label: p?.name ?? 'Unknown', unit: p?.unit ?? '' }
+          : { key: month, label: month, from: `${month}-01`, to: `${month}-${new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()}` };
+    const g = groups.get(k.key) ?? { ...k, records_count: 0, used_count: 0, damaged_count: 0, ...(ctx.cost ? { cost_minor: 0 } : {}), qty: 0 };
+    g.records_count = (g.records_count ?? 0) + 1;
+    if (m.kind === 'usage') g.used_count = (g.used_count ?? 0) + 1;
+    else g.damaged_count = (g.damaged_count ?? 0) + 1;
+    if (ctx.cost) g.cost_minor = (g.cost_minor ?? 0) + (m.line_cost_minor ?? 0);
+    g.qty += Math.abs(milli(m.qty));
+    groups.set(k.key, g);
+  }
+  const time = q.level === 'month';
+  const all = [...groups.values()].sort((a, b) => (time ? (b.key ?? '').localeCompare(a.key ?? '') : (a.label ?? '').localeCompare(b.label ?? '')));
+  const size = time ? 12 : 100;
+  const offset = time ? 0 : (q.offset ?? 0);
+  const page = all.slice(offset, offset + size).map(({ qty, unit, ...g }) => (q.level === 'item' ? { ...g, quantity: String(qty / 1000), unit } : g));
+  const more = all.length > offset + size;
+  const oldest = page.at(-1)?.from;
+  const nextTo = more && time && oldest ? new Date(Date.parse(`${oldest}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10) : undefined;
+  return {
+    group_by: q.level, levels: q.chain, ...(next ? { next_level: next } : {}), available_levels: ['branch', 'month', 'category', 'item'],
     currency: 'UGX', items: page, has_more: more, ...(nextTo ? { next_to: nextTo } : {}), ...(more && !time ? { next_offset: offset + size } : {}),
   };
 }

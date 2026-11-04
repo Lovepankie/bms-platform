@@ -7,7 +7,7 @@ import type {
 import type { SalesQuery } from './retail';
 import { NO_SUPPLIER, RetailError, businessToday, daysBefore } from './retail';
 import { summariseChain } from './retail-chain-mock';
-import { summarisePurchases, summariseStock } from './retail-grouping-mock';
+import { summarisePurchases, summariseStock, summariseUsage } from './retail-grouping-mock';
 import { retailMessage } from './retail-errors';
 import { foldText } from '../app/ui/fold';
 import type { Me } from './client';
@@ -1287,6 +1287,17 @@ export function createMockRetail(): RetailApi {
 
     stockHistory: ({ productId, branchId }) =>
       run(() => ({ items: stockLog.filter((m) => m.product_id === productId && m.branch_id === branchId).reverse() })),
+
+    usageSummary: (q) =>
+      run(() => summariseUsage(stockLog, q, {
+        cost: profitAccess,
+        branchName: (id) => MOCK_BRANCHES.find((b) => b.id === id)?.name ?? 'Branch',
+        product: (id) => {
+          const p = id ? products.get(id) : undefined;
+          return p ? { name: p.description, categoryId: categoryId(p.category), categoryName: p.category, unit: p.unit } : undefined;
+        },
+        day: (m) => businessToday(new Date(m.at ?? '')),
+      })),
 
     usageHistory: ({ from, to, branchId, productId }) =>
       run(() => ({

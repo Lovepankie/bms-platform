@@ -913,6 +913,16 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   filter by; an empty list offers Record usage or damage (or Show the last year without the usage permission). The known kinds
   are `JdbcStockLedger.KINDS`, pinned to the table's check by `RetailPaymentsAndUsageIT`. Tests: `RetailPaymentsAndUsageIT`,
   `usage-history.dom.test.tsx`, `tours-retail-reports.test.tsx`, `layout/usage-history.layout.test.ts`.
+- **Built (totals in the record lists, issue #816, as the owner's old app did):** no migration and no permission. The cash book
+  record lists (expenses, banking, savings, withdrawals, advances; `RecordsByShop` in `cash-ui.tsx`) are drawn in the group tree
+  of the sales, stock and restocks lists (`ListChain`), with a total at every level: shop, year and month, and for expenses the
+  category and the day. Those lists are not paged, so `TreeKind.local` sums the groups from the rows already held
+  (`cashGroups` in `cash-state.ts`) instead of a request; the newest records open on arrival, voided ones are counted apart,
+  and a row without an amount leaves its group without a total. Past usage and damage gains Flat list or Grouped (shop, month,
+  category, item) from the new `GET /retail/usage/summary` (`retail.stock.read`, `UsageSummaryService`), which sums the same
+  movements the paged list shows; `cost_minor` only with `retail.profit.read` in every branch covered, counts and the
+  quantity at item level for everyone. Tests: `RetailUsageSummaryIT`, `cash-totals.dom.test.tsx`, `usage-grouped.dom.test.tsx`,
+  `layout/cash-totals.layout.test.ts`, `layout/usage-history.layout.test.ts`.
 
 ## Reading order
 

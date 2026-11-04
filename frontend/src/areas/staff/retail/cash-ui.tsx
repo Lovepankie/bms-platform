@@ -4,10 +4,13 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, daysBefore } from '../../../api/retail';
 import { useStaff } from '../context';
 import { Hint } from '../../../app/ui/Hint';
-import { MIN_DATE_REASON, entryDate, enteredBy, groupByShopMonth, savedFor, voidOffered, type EntryDate } from './cash-state';
+import { MIN_DATE_REASON, cashGroups, entryDate, enteredBy, recordsWord, rowsIn, savedFor, voidOffered, type CashFigures, type CashGroup, type EntryDate } from './cash-state';
 import { newIdempotencyKey } from './idempotency';
+import { ListChain, useListView, type TreeKind } from './list-chain';
+import { CASH_ORDER, CASH_PLURALS, listUser, pathOf, selectIn, type CashLevel, type CashList, type ListSelection } from './list-chain-state';
 import { BACKDATE, CASHBOOK_VOID, branchesWhere, holds, holdsAt } from './permissions';
-import { Problem, useBranchName, useBranchView } from './ui';
+import { periodTitle } from './sales-grouped-state';
+import { Money, Problem, useBranchName, useBranchView } from './ui';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // Pieces shared by the cash book screens (ADR-022): a date field that cannot be in the future, the
@@ -171,12 +174,49 @@ export function useMayVoid(): (branchId: string | undefined) => boolean {
 
 interface RecordLike { id?: string; branch_id?: string; business_date?: string; voided?: boolean; void_reason?: string; historical?: boolean; by_name?: string; at?: string }
 
+/** A group's name: the period in words for a year, month or day, the shop or category name otherwise. */
+const cashTitle = (level: CashLevel, g: CashGroup) => (level === 'year' || level === 'month' || level === 'day' ? periodTitle(level, g.key) : g.label);
+
+/** The newest records open on arrival: the first group at every level, as the list showed them before it was grouped. */
+function startOpen<T extends RecordLike>(rows: T[], chain: CashLevel[], figures: CashFigures<T>, shopName: (id: string | undefined) => string): Map<string, string> {
+  const open = new Map<string, string>();
+  let sel: ListSelection = {};
+  let parent = '';
+  for (const level of chain) {
+    const g = cashGroups(rows, level, sel, figures, shopName)[0];
+    if (!g) break;
+    const path = pathOf(parent, level, g.key);
+    open.set(path, cashTitle(level, g));
+    sel = selectIn(sel, level, g);
+    parent = path;
+  }
+  return open;
+}
+
+/** A group header's figures: the total of the records counted, how many there are, and what was left out. */
+function CashFiguresLine({ g, what, totalWord }: { g: CashGroup; what: string; totalWord?: string }) {
+  const total = g.count > 0 ? g.totalMinor : undefined;
+  return (
+    <>
+      {total !== undefined && <><span className="rt-group-total"><Money minor={total} /></span>{' '}</>}
+      <span className="rt-group-meta">
+        {g.count === 0 ? 'Nothing counted' : <>{total !== undefined && totalWord ? `${totalWord} in ` : ''}{recordsWord(g.count, what)}</>}
+        {g.owedMinor !== undefined && g.owedMinor > 0 && <>, <Money minor={g.owedMinor} /> still owed</>}
+        {g.imported > 0 && <>, {g.imported} imported from the old app</>}
+        {g.voided > 0 && <>, {g.voided} voided (not counted)</>}
+      </span>
+    </>
+  );
+}
+
 /**
- * Records grouped by shop, year and month (FR-RET-31). Each row is drawn by `renderRow`; below it come
- * who entered it, an imported or voided label and, for a holder of retail.cashbook.void in that shop,
- * the Void action when `voidWith` is given.
+ * Records grouped by shop, year and month (FR-RET-31), and for expenses the category and the day too, with a total at every
+ * level (issue #816, as the owner's old app did), in the group tree of the sales, stock and restocks lists. The totals are
+ * summed from the very rows the list holds (the cash book lists are not paged); voided records are counted apart. Each row is
+ * drawn by `renderRow`; below it come who entered it, an imported or voided label and, for a holder of retail.cashbook.void in
+ * that shop, the Void action when `voidWith` is given.
  */
-export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderRow, voidWith, onVoided, actions }: {
+export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderRow, voidWith, onVoided, actions, list, levels = CASH_ORDER, figures = {}, totalWord }: {
   rows: T[];
   empty: string;
   what: string;
@@ -185,39 +225,58 @@ export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderR
   onVoided?: () => void;
   /** The row's own buttons in place of Void (issue #830: Edit and Delete on an expense), given whether the row may be voided here. */
   actions?: (row: T, mayVoid: boolean) => ReactNode;
+  /** Which list this is, so each keeps what was open apart. */
+  list: CashList;
+  levels?: readonly CashLevel[];
+  /** What is summed: the amount the reader is shown on each row; no amount on a row, no total over it. */
+  figures?: CashFigures<T>;
+  /** What the total is, after the amount: "spent", "banked". */
+  totalWord?: string;
 }) {
   const shopName = useBranchName();
-  const mayVoidIn = useMayVoid();
   if (rows.length === 0) return <p className="empty-state">{empty}</p>;
+  // Its own component keyed by the newest records' path, so a list that first gets records, gets a newer month or a new period
+  // opens its newest groups again instead of keeping the paths of rows no longer there.
+  const newest = [...startOpen(rows, [...levels], figures, shopName).keys()].at(-1);
+  return <RecordsTree key={newest} rows={rows} empty={empty} what={what} renderRow={renderRow} voidWith={voidWith} onVoided={onVoided} actions={actions} list={list} levels={levels} figures={figures} totalWord={totalWord} />;
+}
+
+function RecordsTree<T extends RecordLike>({ rows, empty, what, renderRow, voidWith, onVoided, actions, list, levels, figures, totalWord }: Parameters<typeof RecordsByShop<T>>[0] & { levels: readonly CashLevel[]; figures: CashFigures<T> }) {
+  const { me } = useStaff();
+  const shopName = useBranchName();
+  const mayVoidIn = useMayVoid();
+  const view = useListView<CashLevel>(listUser(me), list, levels, levels, () => startOpen(rows, [...levels], figures, shopName));
   const mayVoid = (row: T) => mayVoidIn(row.branch_id);
+  const kind: TreeKind<CashLevel, CashGroup> = {
+    name: `cash-${list}`,
+    plurals: CASH_PLURALS,
+    fetch: () => Promise.resolve({ items: [] }),
+    local: (level, sel) => cashGroups(rows, level, sel, figures, shopName),
+    title: cashTitle,
+    figures: (_level, g) => <CashFiguresLine g={g} what={what} totalWord={totalWord} />,
+    nothing: empty,
+  };
   return (
-    <>
-      {groupByShopMonth(rows, shopName).map((shop) => (
-        <section key={shop.branchId} aria-label={shop.shop}>
-          <h3>{shop.shop}</h3>
-          {shop.months.map((month) => (
-            <div key={`${month.year}-${month.month}`}>
-              <h4>{month.label}</h4>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {month.rows.map((row) => (
-                  <li key={row.id} className="rt-card">
-                    {renderRow(row)}
-                    <p className="hint">
-                      {enteredBy(row.by_name, row.at)}
-                      {row.historical && <> <ImportedBadge /></>}
-                      {row.voided && <> <span className="badge badge-warning">Voided</span>{row.void_reason ? ` because: ${row.void_reason}` : ''}</>}
-                    </p>
-                    {voidWith && voidOffered(row, mayVoid(row)) && (
-                      <VoidAction what={what} run={(reason, key) => voidWith(row, reason, key)} onVoided={onVoided} />
-                    )}
-                    {actions?.(row, voidOffered(row, mayVoid(row)))}
-                  </li>
-                ))}
-              </ul>
-            </div>
+    <ListChain<CashLevel, CashGroup>
+      kind={kind} filterKey={list} chain={[...levels]} enabled view={view} rootLabel="All records" range={{}}
+      renderRows={(sel) => (
+        <ul style={{ listStyle: 'none', padding: 0 }}>
+          {rowsIn(rows, sel, figures).map((row) => (
+            <li key={row.id} className="rt-card">
+              {renderRow(row)}
+              <p className="hint">
+                {enteredBy(row.by_name, row.at)}
+                {row.historical && <> <ImportedBadge /></>}
+                {row.voided && <> <span className="badge badge-warning">Voided</span>{row.void_reason ? ` because: ${row.void_reason}` : ''}</>}
+              </p>
+              {voidWith && voidOffered(row, mayVoid(row)) && (
+                <VoidAction what={what} run={(reason, key) => voidWith(row, reason, key)} onVoided={onVoided} />
+              )}
+              {actions?.(row, voidOffered(row, mayVoid(row)))}
+            </li>
           ))}
-        </section>
-      ))}
-    </>
+        </ul>
+      )}
+    />
   );
 }

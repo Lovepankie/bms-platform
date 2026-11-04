@@ -115,6 +115,9 @@ export function BankingRecords({ onVoided }: { onVoided?: (message: string) => v
           rows={rows.data}
           empty="Nothing banked in this period."
           what="banking record"
+          list="bankings"
+          figures={{ amount: (r) => r.amount_minor }}
+          totalWord="Banked"
           voidWith={(row, reason, key) => retail.voidBanking(row.id ?? '', reason, key)}
           onVoided={() => onVoided?.('Banking record voided.')}
           renderRow={(row) => (

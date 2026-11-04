@@ -22836,6 +22836,108 @@
         },
         "required" : [ "kind", "lines", "reason" ]
       },
+      "RetailUsageSummary" : {
+        "properties" : {
+          "available_levels" : {
+            "description" : "Every level group_by accepts: branch, month, category and item",
+            "items" : {
+              "description" : "Every level group_by accepts: branch, month, category and item",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "description" : "The tenant's currency; a retail tenant keeps its books in one currency",
+            "type" : "string"
+          },
+          "group_by" : {
+            "description" : "The level these groups are: one of available_levels",
+            "type" : "string"
+          },
+          "has_more" : {
+            "description" : "True when more groups remain: next_to (month) or next_offset (the rest)",
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailUsageSummaryGroup"
+            },
+            "type" : "array"
+          },
+          "levels" : {
+            "description" : "The chain the request asked for, in order",
+            "items" : {
+              "description" : "The chain the request asked for, in order",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "next_level" : {
+            "description" : "The level under this one in the chain; absent at the end of the chain",
+            "type" : "string"
+          },
+          "next_offset" : {
+            "description" : "Branch, category and item: ask again with offset = next_offset",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "next_to" : {
+            "description" : "Month level: the day before the oldest month shown; ask again with to = next_to",
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailUsageSummaryGroup" : {
+        "properties" : {
+          "cost_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the figures cover: what was taken out, at the cost each record carries",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "damaged_count" : {
+            "description" : "Records of stock damaged",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "from" : {
+            "description" : "First calendar day of the month; month level only",
+            "format" : "date",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "A branch id, a category id, a product id, or the month (2026-10); pass it back as branch_id, category_id or item_id, or use from and to for a month",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "The branch, category or item name, or the month key",
+            "type" : "string"
+          },
+          "quantity" : {
+            "description" : "Units taken out, without a sign; item level only",
+            "type" : "string"
+          },
+          "records_count" : {
+            "description" : "Records in the group: one per item taken out, as the list shows them",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "to" : {
+            "description" : "Last calendar day of the month; month level only",
+            "format" : "date",
+            "type" : "string"
+          },
+          "unit" : {
+            "description" : "The item's unit; item level only",
+            "type" : "string"
+          },
+          "used_count" : {
+            "description" : "Records of stock used in the shop",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailUsualPack" : {
         "description" : "The usual size of a pack in a smaller unit, and what it is for",
         "properties" : {
@@ -48102,6 +48204,91 @@
           }
         },
         "summary" : "Report stock used or damaged, valued at cost (FR-RET-07); M",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/usage/summary" : {
+      "get" : {
+        "operationId" : "summariseRetailUsage",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "group_by",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "item_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailUsageSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Past usage and damage grouped by shop, month, category and item with totals (issue #816)",
         "tags" : [ "retail-stock" ]
       }
     },

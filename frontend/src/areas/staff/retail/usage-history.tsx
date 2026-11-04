@@ -1,7 +1,10 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { businessToday, daysBefore, retail, type EntryDistance, type StockMovement } from '../../../api/retail';
+import { businessToday, daysBefore, retail, type EntryDistance, type StockMovement, type UsageLevel, type UsageSummaryGroup } from '../../../api/retail';
+import { ListChain, ViewSwitch, useListView, type TreeKind } from './list-chain';
+import { USAGE_ORDER, USAGE_PLURALS, listUser, type ListSelection } from './list-chain-state';
+import { periodTitle } from './sales-grouped-state';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 import { SearchBox } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -52,6 +55,57 @@ function UsageRow({ m, branch, where }: { m: StockMovement; branch?: string; whe
   );
 }
 
+// JUSTIFICATION-A3: issue #816 asks for this list grouped by shop, month, category and item with totals, as the old app did.
+/** "2 used, 1 damaged", leaving out a kind with none. */
+export function kindsWord(g: UsageSummaryGroup): string {
+  const parts = [(g.used_count ?? 0) > 0 ? `${g.used_count} used` : '', (g.damaged_count ?? 0) > 0 ? `${g.damaged_count} damaged` : ''].filter(Boolean);
+  return parts.join(', ');
+}
+
+const usageKind = (filter: { productId: string }): TreeKind<UsageLevel, UsageSummaryGroup> => ({
+  name: 'usage',
+  plurals: USAGE_PLURALS,
+  fetch: (level, chain, sel, page, signal) =>
+    retail.usageSummary({ level, chain, signal, branchId: sel.branchId, from: sel.from, to: page.to ?? sel.to, categoryId: sel.categoryId, itemId: sel.itemId ?? (filter.productId || undefined), offset: page.offset }),
+  title: (level, g) => (level === 'month' ? periodTitle('month', g.key ?? '') : g.label ?? g.key ?? ''),
+  // The cost is the server's, present only with retail.profit.read; the count and the quantity are for everyone who reads the list.
+  figures: (_level, g) => (
+    <>
+      {g.cost_minor !== undefined && <><span className="rt-group-total"><Money minor={g.cost_minor} /></span>{' '}</>}
+      <span className="rt-group-meta">
+        {g.quantity !== undefined && <><span className="num">{showQty(g.quantity)}</span> {g.unit} taken out, </>}
+        {g.records_count === 1 ? '1 record' : `${g.records_count ?? 0} records`}: {kindsWord(g)}
+        {g.cost_minor !== undefined && ', at buying price'}
+      </span>
+    </>
+  ),
+  nothing: 'Nothing was used or damaged here.',
+});
+
+/**
+ * The records of an opened item: the list's own rows, read with what was opened above. The chain is always shop, month, category
+ * and item (no Group by here, as the old app), so rows open only under an item and the item names them; the category is above it.
+ */
+function UsageRows({ sel, all, nameOf }: { sel: ListSelection; all: boolean; nameOf: (id: string | undefined) => string }) {
+  const page = useInfiniteQuery({
+    queryKey: ['retail', 'usage-history', 'rows', sel],
+    queryFn: ({ pageParam, signal }) => retail.usageHistory({ from: sel.from ?? '', to: sel.to ?? '', ...(sel.branchId ? { branchId: sel.branchId } : {}), ...(sel.itemId ? { productId: sel.itemId } : {}), ...(pageParam ? { cursor: pageParam } : {}), signal }),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.next_cursor || undefined,
+  });
+  const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
+  return (
+    <>
+      {page.isPending && <p className="loading">Loading</p>}
+      <Problem error={page.error} />
+      <ul style={{ listStyle: 'none', padding: 0 }}>
+        {items.map((m) => <UsageRow key={m.id} m={m} branch={all && !sel.branchId ? nameOf(m.branch_id) : undefined} />)}
+      </ul>
+      {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older records'}</button>}
+    </>
+  );
+}
+
 export function UsageHistoryPage() {
   const today = businessToday();
   const [from, setFrom] = useState(daysBefore(today, 30));
@@ -66,12 +120,15 @@ export function UsageHistoryPage() {
   const products = useQuery({ queryKey: ['retail', 'products', 'all', itemSearch], queryFn: ({ signal }) => retail.listProducts({ query: itemSearch, signal }), enabled: itemSearch !== '', placeholderData: keepPreviousData });
   const branch = all ? undefined : (branchId ?? undefined);
   const ready = (all || branchId !== null) && from <= to;
+  // Issue #816: Flat list as it always was, or Grouped by shop, month, category and item with the server's totals.
+  const view = useListView<UsageLevel>(listUser(me), 'usage', USAGE_ORDER);
+  const grouped = view.view === 'grouped';
   const page = useInfiniteQuery({
     queryKey: ['retail', 'usage-history', from, to, branch ?? 'all', productId],
     queryFn: ({ pageParam, signal }) => retail.usageHistory({ from, to, ...(branch ? { branchId: branch } : {}), ...(productId ? { productId } : {}), ...(pageParam ? { cursor: pageParam } : {}), signal }),
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
-    enabled: ready,
+    enabled: ready && !grouped,
   });
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
   // ADR-122: how far from the shop each entry was made, for the owner only (asked for the entries, not the lines).
@@ -95,6 +152,15 @@ export function UsageHistoryPage() {
         )}
       </div>
       {from > to && <p className="hint" role="status">The first day is after the last day. Choose the days again.</p>}
+      <ViewSwitch view={view.view} onChange={view.setView} />
+      {grouped && ready && (
+        <ListChain<UsageLevel, UsageSummaryGroup>
+          kind={usageKind({ productId })} filterKey={{ productId }} chain={[...USAGE_ORDER]} enabled={ready} view={view} rootLabel="Past usage and damage"
+          range={{ from, to, ...(branch ? { branchId: branch } : {}) }}
+          renderRows={(sel) => <UsageRows sel={sel} all={all} nameOf={nameOf} />}
+        />
+      )}
+      {!grouped && <>
       {ready && page.isPending && <p className="loading">Loading</p>}
       <Problem error={page.error} />
       {page.data && items.length === 0 && (
@@ -107,6 +173,7 @@ export function UsageHistoryPage() {
         {items.map((m) => <UsageRow key={m.id} m={m} branch={all ? nameOf(m.branch_id) : undefined} where={where.get(usage(m))} />)}
       </ul>
       {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older records'}</button>}
+      </>}
     </Gate>
   );
 }

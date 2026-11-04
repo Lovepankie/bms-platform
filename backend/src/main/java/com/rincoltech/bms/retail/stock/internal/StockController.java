@@ -51,18 +51,21 @@ class StockController {
     private final StockCorrectionService corrections;
     private final StockSummaryService summaries;
     private final QuickAddService quickAdd;
+    private final UsageSummaryService usageSummaries;
 
     StockController(
             StockService service,
             UsageService usage,
             StockCorrectionService corrections,
             StockSummaryService summaries,
-            QuickAddService quickAdd) {
+            QuickAddService quickAdd,
+            UsageSummaryService usageSummaries) {
         this.service = service;
         this.usage = usage;
         this.corrections = corrections;
         this.summaries = summaries;
         this.quickAdd = quickAdd;
+        this.usageSummaries = usageSummaries;
     }
 
     @GetMapping("/stock")
@@ -144,6 +147,25 @@ class StockController {
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
         return service.movements(branchIds, productId, from, to, kinds, newestFirst, limit, cursor);
+    }
+
+    // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issue #816).
+    @GetMapping("/usage/summary")
+    @RequiresPermission("retail.stock.read")
+    @Operation(
+            summary = "Past usage and damage grouped by shop, month, category and item with totals (issue #816)",
+            operationId = "summariseRetailUsage")
+    UsageSummaryService.Summary usageSummary(
+            @RequestParam(name = "group_by") String groupBy,
+            @RequestParam(name = "level", required = false) String level,
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
+            @RequestParam(name = "item_id", required = false) UUID itemId,
+            @RequestParam(name = "offset", required = false) Integer offset) {
+        return usageSummaries.summary(
+                new UsageSummaryService.Query(groupBy, level, branchIds, from, to, categoryId, itemId, offset));
     }
 
     @PostMapping("/stock/corrections")

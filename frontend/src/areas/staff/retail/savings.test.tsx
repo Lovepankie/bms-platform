@@ -65,7 +65,8 @@ describe('savings form', () => {
 describe('savings records', () => {
   const rows: Savings[] = [
     { id: 'r1', branch_id: branch, business_date: today, total_sold_minor: 100000, amount_minor: 20000, overwritten: true, by_name: 'Test User 01', voided: false, historical: false },
-    { id: 'r2', branch_id: branch, business_date: daysBefore(today, 40), total_sold_minor: 50000, by_name: 'Test User 02', voided: true, void_reason: 'Entered twice', historical: false },
+    // The same month as r1, so both are in the group that opens first (issue #816 grouped the list).
+    { id: 'r2', branch_id: branch, business_date: today, total_sold_minor: 50000, by_name: 'Test User 02', voided: true, void_reason: 'Entered twice', historical: false },
   ];
   const seeded = () => {
     const client = new QueryClient();

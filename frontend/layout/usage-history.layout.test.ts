@@ -65,6 +65,48 @@ describe.each([1, 2])('Past usage and damage at 412px, font scale %i', (font) =>
     await page.close();
   });
 
+  // JUSTIFICATION-A3: the 412px case of the Grouped view issue #816 asks for, beside the flat list's cases.
+  it.each([false, true])('Grouped by shop, month, category and item (#816), seller %s: every header a 48px target inside the phone', async (seller) => {
+    const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
+    await openLayout(page, `layout/usage-history.html?font=${font}&grouped=1${seller ? '&seller=1' : ''}`, page.locator('.rt-group-head').first());
+    // Open the first shop, its month and its first category, so every level shows.
+    for (let level = 0; level < 3; level++) {
+      await page.locator('.rt-group-head[aria-expanded="false"]').first().click();
+      await page.locator('.rt-group-head').nth(level + 1).waitFor();
+    }
+    expect(await pageWidth(page), 'page width').toBeLessThanOrEqual(WIDTH);
+    const heads = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.rt-group-head')].map((h) => {
+        const box = h.getBoundingClientRect();
+        const group = getComputedStyle(h.closest('.rt-group') as HTMLElement);
+        return {
+          right: box.right, height: box.height,
+          edges: new Set([group.borderLeftWidth, group.borderRightWidth, group.borderTopWidth, group.borderBottomWidth]).size,
+          gradient: group.backgroundImage !== 'none' || getComputedStyle(h).backgroundImage !== 'none',
+        };
+      }),
+    );
+    expect(heads.length).toBeGreaterThanOrEqual(4);
+    for (const h of heads) {
+      expect(h.right, 'header inside the phone').toBeLessThanOrEqual(WIDTH);
+      expect(h.height, '48px target').toBeGreaterThanOrEqual(48);
+      expect(h.edges, 'no side or top stripe').toBe(1);
+      expect(h.gradient, 'no gradient').toBe(false);
+    }
+    const totals = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.rt-group-total .num')].map((e) => getComputedStyle(e).fontVariantNumeric));
+    const words = await page.locator('.rt-group-head').allTextContents();
+    if (seller) {
+      expect(totals, 'no cost for a seller without the profit permission').toEqual([]);
+      expect(words.filter((w) => /UGX|buying price/.test(w)), 'no cost words at any level, the item level included').toEqual([]);
+      expect(words.some((w) => /^Test extension cable.*12 piece taken out, 1 record: 1 damaged$/.test(w)), 'the item keeps its quantity').toBe(true);
+    } else {
+      expect(totals.length).toBeGreaterThanOrEqual(4);
+      expect(totals.every((v) => v.includes('tabular-nums'))).toBe(true);
+    }
+    expect(await page.getByText(/taken out, 1 record/).count(), 'the quantity at item level').toBeGreaterThan(0);
+    await page.close();
+  });
+
   it('shows the empty list with one action, a full 48px target, inside the phone', async () => {
     const page = await open(font, '&empty=1');
     expect(await pageWidth(page), 'page width').toBeLessThanOrEqual(WIDTH);

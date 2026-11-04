@@ -354,6 +354,22 @@ export function salesSummaryParams({ level, chain, branchId, from, to, buyer, pa
 /** The levels a restocks summary can group by (issue #350). */
 export type PurchaseLevel = 'branch' | 'year' | 'month' | 'supplier' | 'day' | 'category' | 'item' | 'variant';
 
+/** Past usage and damage grouped (issue #816): the level asked for, the whole chain, and what was opened above. */
+export interface UsageSummaryQuery {
+  level: UsageLevel;
+  chain: UsageLevel[];
+  branchId?: string;
+  from?: string;
+  to?: string;
+  categoryId?: string;
+  itemId?: string;
+  offset?: number;
+  signal?: AbortSignal;
+}
+export type UsageLevel = 'branch' | 'month' | 'category' | 'item';
+export type UsageSummary = S['RetailUsageSummary'];
+export type UsageSummaryGroup = S['RetailUsageSummaryGroup'];
+
 /** The levels a stock summary can group by: the items themselves are the stock list (issue #350). */
 export type StockChainLevel = 'branch' | 'category';
 
@@ -625,6 +641,8 @@ export interface RetailApi {
   listPurchases(q: { branchId?: string; from?: string; to?: string; supplierId?: string; categoryId?: string; productId?: string; status?: 'posted' | 'voided'; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<PurchasePage>;
   /** Groups of restocks at one level of a chain (shop, year, month, supplier, day, category, item); `next_to` (time levels) or `next_offset` continues (#350). */
   purchasesSummary(q: PurchasesSummaryQuery): Promise<PurchasesSummary>;
+  /** Past usage and damage by shop, month, category and item, summed on the server (issue #816); cost only with retail.profit.read. */
+  usageSummary(q: UsageSummaryQuery): Promise<UsageSummary>;
   /** Groups of the stock list by shop or category with the number of items and their value (#350). */
   stockSummary(q: StockSummaryQuery): Promise<StockSummary>;
   getPurchase(id: string): Promise<Purchase>;
@@ -1433,6 +1451,20 @@ const realRetail: RetailApi = {
           query: {
             group_by: chain.join(','), level, branch_id: branchId ? [branchId] : undefined, from: from || undefined, to: to || undefined,
             supplier_id: supplierId || undefined, category_id: categoryId || undefined, item_id: itemId || undefined, status, offset: offset || undefined,
+          },
+        },
+        signal,
+      }),
+    );
+  },
+
+  async usageSummary({ level, chain, branchId, from, to, categoryId, itemId, offset, signal }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/usage/summary', {
+        params: {
+          query: {
+            group_by: chain.join(','), level, branch_id: branchId ? [branchId] : undefined, from: from || undefined, to: to || undefined,
+            category_id: categoryId || undefined, item_id: itemId || undefined, offset: offset || undefined,
           },
         },
         signal,

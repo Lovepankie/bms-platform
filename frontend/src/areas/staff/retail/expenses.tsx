@@ -6,6 +6,8 @@ import { Segmented } from '../../../app/ui/Segmented';
 import { businessToday, isWaiting, retail, type ApprovalWaiting, type Expense, type ExpenseCategory, type ExpenseGroup, type ExpenseItem } from '../../../api/retail';
 import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useEntryDate, useReadScope, useSavedFor, useWindow } from './cash-ui';
+import type { CashFigures } from './cash-state';
+import { EXPENSE_ORDER } from './list-chain-state';
 import {
   MIN_EXPLANATION, activeCategories, deleteExpenseReason, draftOfExpense, itemsOf, needsExplanation, planExpense, withItem,
 } from './expenses-state';
@@ -192,6 +194,9 @@ export function ExpenseRowActions({ row, onDeleted }: { row: Expense; onDeleted?
   );
 }
 
+/** Issue #816: each group of the expense records totals what was spent, by category as the old app did. */
+const EXPENSE_FIGURES: CashFigures<Expense> = { amount: (r) => r.amount_minor, category: (r) => ({ id: r.category_id, name: r.category_name }) };
+
 export function ExpenseRecords({ onVoided }: { onVoided?: (message: string) => void }) {
   const scope = useReadScope();
   const window = useWindow();
@@ -210,6 +215,10 @@ export function ExpenseRecords({ onVoided }: { onVoided?: (message: string) => v
           rows={rows.data}
           empty="No expenses recorded in this period."
           what="expense"
+          list="expenses"
+          levels={EXPENSE_ORDER}
+          figures={EXPENSE_FIGURES}
+          totalWord="Spent"
           actions={(row, mayVoid) => (mayVoid ? <ExpenseRowActions row={row} onDeleted={() => onVoided?.('Expense deleted.')} /> : null)}
           renderRow={(row) => (
             <>
