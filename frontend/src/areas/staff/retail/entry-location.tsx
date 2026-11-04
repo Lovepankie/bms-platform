@@ -107,10 +107,10 @@ export function LocationAsk({ where }: { where: WhereNow }) {
     <div role="status" className="alert alert-info" data-testid="location-ask">
       <p>{ASK_REASON}</p>
       <p>Your phone asks you next, and saying no never stops a sale.</p>
-      <p>
-        <button type="button" onClick={where.allow}>Allow</button>{' '}
+      <div className="form-actions">
+        <button type="button" onClick={where.allow}>Allow</button>
         <button type="button" className="btn-ghost" onClick={where.decline}>No thanks</button>
-      </p>
+      </div>
     </div>
   );
 }
