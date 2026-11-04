@@ -186,15 +186,14 @@ left, the branch, the period, the person's roles.
     rule. (d) A seller or a Supervisor cannot discard their own failed sale. An administrator (an owner or administrator,
     `tenant_admin`) may, with a second written reason, audited as `self_discard` (Hillary's default, decided 22 Oct 2026,
     review of #463). (e) Waiting sales survive a sign-out on that device.
-12. **No entry's save waits more than 3 seconds (issue #812).** A daily entry of decision 13 sent online with no answer within
-    2 seconds, or lost on the network, goes to the outbox at once under the same `Idempotency-Key` and the same body, and the
-    screen says it is saved on the phone. On a phone with the CPU four times slower the tap takes about half a second before the
-    request leaves, so the whole save stays under 3 seconds. Measured in the layout suite (`layout/offline-forms.layout.test.ts`)
-    in Chromium through the real API client on the DevTools profiles: answered by the server in about 1 second on 3G; on Slow
-    3G, whose 2 second latency alone reaches the cap, the entry is kept on the phone in about 2.5 seconds and sent later. The
-    late answer and the outbox's send are one record: a second request under a key still in progress is tried again later, then
-    answered from the key. A sale keeps its 8 seconds (review of #839): at 2, a slow server or Slow 3G latency alone would turn
-    every sale into a provisional receipt; the sale's button shows it is busy while it waits.
+12. **The time to save on 3G (issue #812).** A daily entry of decision 13 waits for its answer as long as a sale does (8
+    seconds, decision 5 and issue #769; the lead's decision on the review of #839: the sale's wait is not lowered). With no
+    answer by then, or lost on the network, it goes to the outbox at once under the same `Idempotency-Key` and the same body,
+    and the screen says it is saved on the phone; the late answer and the outbox's send are one record (a second request under
+    a key still in progress is tried again later, then answered from the key). Measured in the layout suite
+    (`layout/offline-forms.layout.test.ts`) in Chromium, the CPU four times slower, through the real API client to a local
+    server on the DevTools profiles: about 1 second on 3G and about 2.5 seconds on Slow 3G (whose 2 second latency is most of
+    it), both answered by the server. Nothing was over 3 seconds on 3G, so nothing was changed for speed.
 13. **The other daily forms are kept on the phone too (issue #812).** Expenses (`POST /retail/expenses`), savings
     (`POST /retail/savings` and `/retail/savings/sales-staff`), banking (`POST /retail/bankings`), withdrawals
     (`POST /retail/withdrawals`), deliveries (`POST /retail/purchases`), stock moves (`POST /retail/transfers`) and usage or
@@ -202,18 +201,23 @@ left, the branch, the period, the person's roles.
     (a) **The item.** An entry is an outbox item with its route, its body as the form built it and its form's
     `Idempotency-Key` (also its id on the device); a refused entry keeps its form's draft so it can be fixed. (b) **Made
     offline**, the body leaves out its date fields and carries `offline: {occurred_at, online_as_of}`: the server dates the
-    entry the business day of `occurred_at`, judged as a sale is (decision 6): a time ahead of the server is now, and a time
-    more than 2 minutes before `online_as_of` had a phone clock behind and is dated now too; a date field sent with it is not
-    used. `online_as_of` is the server's time at the phone's last answered ping of `/healthz` (its Date header, kept on the
-    phone for every person, seller or not) or the catalogue's time, whichever is later. Because `occurred_at` comes from the
-    phone, an entry made more than 7 days ago is refused (422 `offline_entry_too_old`) and records nothing; its maker fixes it
-    and saves it as an entry of today (review of #839). Within the 7 days an entry may land on a day already banked, as an
-    offline sale may; it shows in that day's cash book. The date rule of #811 (pending ADR-120, PR #831: the app sets the date,
-    only the owner may choose an earlier one) is kept: the person never chooses the day of an entry made offline, the phone's
-    clock does, so the owner's backdate check does not apply to it. Offline the forms show no date box. Buy stock's
+    entry the business day of `occurred_at`, judged as a sale is (decisions 5 and 6), with the lead's decisions on the
+    review of #839, because `occurred_at` comes from the phone. `online_as_of` is required: the server's time at the
+    phone's last answered ping of `/healthz` (its Date header, kept on the phone for every person, seller or not) or the
+    catalogue's time, whichever is later. A time ahead of the server is now. A time more than 2 minutes before `online_as_of`
+    (a phone clock behind) is refused (422 `offline_clock_behind`). A time more than 7 days ago, the same limit as an offline
+    sale (its key is answered for 7 days, decision 5), needs the backdate permission of #811 (`retail.entry.backdate`,
+    the owner's, pending ADR-120, PR #831) at every branch the entry touches and is kept on its own day for the owner; for
+    anyone else it is refused (422 `offline_entry_too_old`) with "Only the owner can save it on its own day. Fix it on the
+    phone to save it as an entry of today." and nothing is recorded. A closed accounting period stays refused by the ledger
+    (`period_closed`) as for an offline sale: retail has no daily close (decision 6). A date field sent with the entry is
+    not used: within the 7 days the person never chooses the day, the phone's clock does, so the backdate check of #831 does
+    not apply to it; past them it is the owner's. Within the 7 days an entry may land on a day already banked, as an offline
+    sale may; it shows in that day's cash book. Offline the forms show no date box. Buy stock's
     `purchased_on` is still required by its route and not used for such an entry. (c) **Lost online**, the same body goes
     again under the same key, so the server answers it once (dated when it first arrived). (d) **Sent.** Any 2xx records it,
-    including the 202 of an expense that waits for an administrator (ADR-091): the approval itself stays online only, as
+    including the 202 of an expense that waits for an administrator (ADR-091), whose approval request carries the day the
+    entry was made, so however late it is approved it stays on that day; the approval itself stays online only, as
     every maker-checker answer does. A 409 that is not a key still in progress (the savings suggestion changed, the day is
     saved already) is a refusal, not a retry. (e) **Refused.** The entry stays on the phone with the server's words; it does
     not hold up the entries behind it and is never reported to a manager (the server has no record of it): its maker taps Fix

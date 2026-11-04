@@ -15716,7 +15716,7 @@ export interface components {
             /** @description At most 5 items, those holding the typed name first, then those a few letters apart */
             did_you_mean?: components["schemas"]["RetailNameHint"][];
         };
-        /** @description Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used; one made more than 7 days ago is refused (422 offline_entry_too_old) */
+        /** @description Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used. Made more than 2 minutes before online_as_of is refused (offline_clock_behind); made more than 7 days ago needs retail.entry.backdate at every branch it touches, else it is refused (offline_entry_too_old) */
         RetailOfflineEntry: {
             /**
              * Format: date-time
@@ -15725,9 +15725,9 @@ export interface components {
             occurred_at: string;
             /**
              * Format: date-time
-             * @description The server's time when the phone was last online, when it knows it
+             * @description The server's time when the phone was last online
              */
-            online_as_of?: string;
+            online_as_of: string;
         };
         RetailOfflineFailure: {
             /** Format: uuid */

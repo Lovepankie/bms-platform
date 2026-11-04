@@ -229,7 +229,7 @@ class SavingsService {
         branchContext.requireSells(branch, "branch_id");
         LocalDate date = businessDate(
                 caller,
-                OfflineEntry.day(r.offline(), r.businessDate(), support.now(), support.zone()),
+                OfflineEntry.day(r.offline(), r.businessDate(), support.now(), support.zone(), List.of(branch)),
                 "business_date");
         boolean profit = mayProfit(branch);
         boolean salesperson = !profit && setting.on();

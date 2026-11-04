@@ -170,7 +170,11 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
         body.put("suggestion_token", s.get("suggestion_token").asString());
         body.put(
                 "offline",
-                Map.of("occurred_at", java.time.Instant.now().minusSeconds(300).toString()));
+                Map.of(
+                        "occurred_at",
+                        java.time.Instant.now().minusSeconds(300).toString(),
+                        "online_as_of",
+                        java.time.Instant.now().minusSeconds(900).toString()));
         String key = UUID.randomUUID().toString();
         ResponseEntity<JsonNode> saved =
                 api.call(HttpMethod.POST, SALES_STAFF, body, seller, Map.of("Idempotency-Key", key));

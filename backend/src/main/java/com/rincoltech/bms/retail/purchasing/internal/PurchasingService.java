@@ -197,7 +197,12 @@ class PurchasingService implements QuickAddPurchase {
                         r.offline(),
                         r.purchasedOn(),
                         clock.now(),
-                        tenant.profile().timezone()))));
+                        tenant.profile().timezone(),
+                        // An old entry is the owner's at every branch the delivery stocks.
+                        r.lines().stream()
+                                .flatMap(l -> l.qtyByBranch().stream().map(PurchasingApi.BranchQty::branchId))
+                                .distinct()
+                                .toList()))));
     }
 
     /**

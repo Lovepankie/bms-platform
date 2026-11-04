@@ -1760,9 +1760,12 @@ damage keep working with no network, in the same outbox, count and dot as Sell.
   waits for an administrator to approve it." A refused one reads "Not recorded:" and the server's words, with **Fix** (the form
   opens on it), **Send again** and **Discard** ("Discard this entry? It is not recorded and is not sent again." **Discard** or
   **Keep it**). **Record another** (**Move more stock**, **Record another delivery**) opens a fresh form.
-- **Online**, a save with no answer within 2 seconds, or lost on the network, is kept on the phone the same way, under the same
-  key, so a save never waits more than 3 seconds on a slow phone on 3G. An entry kept for more than 7 days is refused with
-  "This entry was kept on the phone for more than 7 days. Fix it on the phone to save it as an entry of today."
+- **Online**, a save with no answer within the 8 seconds a sale waits, or lost on the network, is kept on the phone the same
+  way, under the same key. Measured on a slow phone: about 1 second on 3G, about 2.5 on Slow 3G.
+- **Refused for its time**: an entry kept for more than 7 days, sent by anyone but the owner, reads "Not recorded: This entry
+  was kept on the phone for more than 7 days. Only the owner can save it on its own day. Fix it on the phone to save it as an
+  entry of today." One made while the phone's clock was behind reads "Not recorded: The phone's clock was behind when this
+  entry was made, so its day is not known. Fix it on the phone to save it as an entry of today."
 - **Fix** never writes over a form with work in it: "That form has other work in it. Save or clear it first, then tap Fix
   again."
 - Offline, an item search with nothing saved on the phone says "Items are not saved on this phone. Search for items when you

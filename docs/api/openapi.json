@@ -15121,7 +15121,7 @@
         }
       },
       "RetailOfflineEntry" : {
-        "description" : "Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used; one made more than 7 days ago is refused (422 offline_entry_too_old)",
+        "description" : "Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it was made, and a date field sent with it is not used. Made more than 2 minutes before online_as_of is refused (offline_clock_behind); made more than 7 days ago needs retail.entry.backdate at every branch it touches, else it is refused (offline_entry_too_old)",
         "properties" : {
           "occurred_at" : {
             "description" : "When the entry was made on the phone",
@@ -15129,12 +15129,12 @@
             "type" : "string"
           },
           "online_as_of" : {
-            "description" : "The server's time when the phone was last online, when it knows it",
+            "description" : "The server's time when the phone was last online",
             "format" : "date-time",
             "type" : "string"
           }
         },
-        "required" : [ "occurred_at" ]
+        "required" : [ "occurred_at", "online_as_of" ]
       },
       "RetailOfflineFailure" : {
         "properties" : {

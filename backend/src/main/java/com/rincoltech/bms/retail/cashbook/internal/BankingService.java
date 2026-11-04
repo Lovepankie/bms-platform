@@ -123,8 +123,8 @@ class BankingService {
     private Banking recordBanking(BankingRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.BANKING_RECORD, r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date");
-        Instant bankedAt = support.entryTime(r.bankedAt(), r.offline());
+        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date", branch);
+        Instant bankedAt = support.entryTime(r.bankedAt(), r.offline(), branch);
         if (bankedAt.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("banked_at", "future_date", "A date cannot be in the future.")));
@@ -279,8 +279,8 @@ class BankingService {
     private Withdrawal recordWithdrawal(WithdrawalRequest r) {
         UUID branch = withdrawalBranch(r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date");
-        Instant at = support.entryTime(r.withdrawnAt(), r.offline());
+        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date", branch);
+        Instant at = support.entryTime(r.withdrawnAt(), r.offline(), branch);
         if (at.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("withdrawn_at", "future_date", "A date cannot be in the future.")));

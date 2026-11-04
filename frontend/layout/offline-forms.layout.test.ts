@@ -9,8 +9,8 @@ import { openLayout } from './open';
 //    scrolls sideways, and Fix, Send again, Discard and Record another are at least 48px high (docs/ui-rules.md rule 12).
 // 2. The time to save on a cheap phone on 3G: the CPU slowed four times and the network throttled to the DevTools 3G and Slow 3G
 //    profiles, the expense posted through the real API client to a local server. On 3G the server's answer comes in under 3
-//    seconds; when the answer would take longer (Slow 3G and a slow server), the form says Saved on this phone within 3 seconds
-//    and the entry goes later under the same key. The measured times are printed.
+//    seconds; the Slow 3G time is printed and reported. A server that does not answer within the 8 seconds a sale waits leaves
+//    the entry on the phone, sent later under the same key.
 
 let browser: Browser;
 let api: Server;
@@ -117,19 +117,18 @@ describe('the time to save on a cheap phone on 3G (#812)', () => {
     expect(ms).toBeLessThan(3000);
   });
 
-  // Slow 3G's 2 second latency alone reaches the 2 second cap, so this measures the entry kept on the phone, not a server answer.
-  it('keeps an expense on the phone on Slow 3G in under 3 seconds', async () => {
+  // Reported, as the lead decided on the review of #839: Slow 3G's 2 second latency alone takes most of it.
+  it('saves an expense on Slow 3G, answered by the server, and reports the time', async () => {
     const { ms, kept } = await timeToSave('Slow 3G', 50);
-    expect(kept).toBe(true);
-    expect(ms).toBeLessThan(3000);
+    expect(kept).toBe(false);
+    expect(ms).toBeLessThan(8000);
   });
 
-  it('never waits more than 3 seconds: a slower answer keeps the entry on the phone under the same key', async () => {
+  it('keeps the entry on the phone under the same key when the server does not answer within the 8 seconds a sale waits', async () => {
     posts.length = 0;
-    const { ms, kept } = await timeToSave('Slow 3G', 4000);
+    const { ms, kept } = await timeToSave('3G', 9000);
     expect(kept).toBe(true);
-    // The 2 second cap and the panel drawn on a phone four times slower: under 3 seconds in all.
-    expect(ms).toBeLessThan(3000);
+    expect(ms).toBeLessThan(10000);
     // The late request and the outbox's send carry the one key, so the server records one expense (RetailOfflineEntriesIT).
     const keys = new Set(posts.filter((p) => p.startsWith('POST /api/v1/retail/expenses')).map((p) => p.split(' ')[2]));
     expect([...keys]).toEqual(['00000000-0000-4000-8000-000000000812']);

@@ -87,7 +87,7 @@ class UsageService {
         LocalDate today = clock.today(tenant.profile().timezone());
         // An entry kept on the phone offline is dated the day it was made (ADR-067 decision 13).
         LocalDate requested = OfflineEntry.day(
-                r.offline(), r.occurredOn(), clock.now(), tenant.profile().timezone());
+                r.offline(), r.occurredOn(), clock.now(), tenant.profile().timezone(), List.of(branch));
         LocalDate on = requested == null ? today : requested;
         List<FieldProblem> problems = new ArrayList<>();
         if (on.isAfter(today)) {

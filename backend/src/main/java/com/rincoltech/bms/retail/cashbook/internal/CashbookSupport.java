@@ -116,16 +116,16 @@ class CashbookSupport {
      * The business date of a record that may have been kept on the phone offline: the day it was made, judged as an offline
      * sale is (ADR-067 decision 13), otherwise {@link #businessDate(LocalDate, String)} of the date it asks for.
      */
-    LocalDate entryDate(LocalDate requested, OfflineEntry offline, String field) {
-        return businessDate(OfflineEntry.day(offline, requested, now(), zone()), field);
+    LocalDate entryDate(LocalDate requested, OfflineEntry offline, String field, UUID branch) {
+        return businessDate(OfflineEntry.day(offline, requested, now(), zone(), List.of(branch)), field);
     }
 
     /** When a record kept offline happened (the time it was made, judged), or {@code at} as sent, or now. */
-    Instant entryTime(Instant at, OfflineEntry offline) {
+    Instant entryTime(Instant at, OfflineEntry offline, UUID branch) {
         if (at != null) {
             return at;
         }
-        return offline == null ? now() : offline.judged(now());
+        return offline == null ? now() : offline.judged(now(), List.of(branch));
     }
 
     /** The business date of a record: today when absent, never in the future (422 field problem). */

@@ -174,7 +174,7 @@ class ExpenseService {
     }
 
     private Checked check(UUID branch, ExpenseRequest r) {
-        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date");
+        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date", branch);
         // The savings cap reads the day's expenses under the same lock (ADR-080 decision 3).
         repo.lockBranchDay(branch, date);
         CategoryRow category = repo.category(r.categoryId(), false)

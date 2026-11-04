@@ -17,20 +17,15 @@ export const PING_EVERY_MS = 30_000;
 /** A ping slower than this counts as offline (issue #769). */
 export const PING_TIMEOUT_MS = 3_000;
 
-/**
- * A daily entry (issue #812) sent online with no answer within this goes to the outbox under the same key. On a cheap phone (CPU
- * four times slower) the tap takes about half a second before the request leaves and Saved on this phone is drawn, so no entry's
- * save takes over 3 seconds (measured in layout/offline-forms.layout.test.ts: about 1 second answered on DevTools 3G; on Slow 3G,
- * whose 2 second latency alone reaches this, the entry is kept on the phone in about 2.5).
- */
-export const ENTRY_ANSWER_MS = 2_000;
+/** A sale sent online with no answer within this goes to the outbox (issue #769). */
+export const SALE_ANSWER_MS = 8_000;
 
 /**
- * A sale sent online with no answer within this goes to the outbox (issue #769). It stays 8 seconds (review of #839): at 2 a
- * slow server or Slow 3G latency alone would turn every sale into a provisional receipt; a sale's own wait is said on its
- * screen, and the daily entries use {@link ENTRY_ANSWER_MS}.
+ * A daily entry (issue #812) sent online with no answer within this goes to the outbox under the same key: the same wait as a
+ * sale (the lead's decision on the review of #839). The time to save is measured in layout/offline-forms.layout.test.ts on a
+ * phone with the CPU four times slower: about 1 second on DevTools 3G and about 2.5 on Slow 3G, both answered by the server.
  */
-export const SALE_ANSWER_MS = 8_000;
+export const ENTRY_ANSWER_MS = SALE_ANSWER_MS;
 
 // JUSTIFICATION-A3: review of #839, finding 8: nothing keeps the server's time for a person who does not sell; one pair of helpers.
 const ONLINE_AS_OF = 'bms-online-as-of';

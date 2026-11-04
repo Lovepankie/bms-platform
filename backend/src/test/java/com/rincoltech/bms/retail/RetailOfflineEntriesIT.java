@@ -7,6 +7,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.cashbook.CashbookTestSupport;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -30,8 +31,8 @@ import tools.jackson.databind.JsonNode;
  * Entries kept on the phone with no network and sent later (issue #812, ADR-067 decision 13): an expense, savings, banking,
  * a withdrawal, Buy stock, Move stock and usage carry {@code offline.occurred_at} and are dated the day they were made,
  * judged as an offline sale is; a date sent with them is not used; the same key sent again records nothing more. A phone
- * clock ahead of the server, or behind the time it was last online, dates the entry when it reached the server.
- * Fabricated names and amounts.
+ * clock ahead of the server dates the entry now; one behind the time it was last online is refused; older than 7 days is
+ * the owner's only. Fabricated names and amounts.
  */
 class RetailOfflineEntriesIT extends IntegrationTest {
 
@@ -56,7 +57,7 @@ class RetailOfflineEntriesIT extends IntegrationTest {
         today = LocalDate.now(ZONE);
         yesterday = today.minusDays(1);
         product = cb.api.product("TEST-812", 100, 150);
-        assertThat(cb.restock(hq, product, 100, 150, "500", "cash", today.minusDays(3))
+        assertThat(cb.restock(hq, product, 100, 150, "500", "cash", today.minusDays(12))
                         .getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);
         expenseItem = cb.categoryWithItem("Test Transport", "Test Fuel", false);
@@ -67,12 +68,16 @@ class RetailOfflineEntriesIT extends IntegrationTest {
         return yesterday.atTime(12, 0).atZone(ZONE).toInstant();
     }
 
+    /** Two days ago at noon on the business clock. */
+    Instant madeTwoDaysAgo() {
+        return today.minusDays(2).atTime(12, 0).atZone(ZONE).toInstant();
+    }
+
+    /** The offline block; with no `onlineAsOf` given, the phone was last online an hour before the entry was made. */
     Map<String, Object> offline(Instant occurredAt, Instant onlineAsOf) {
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("occurred_at", occurredAt.toString());
-        if (onlineAsOf != null) {
-            o.put("online_as_of", onlineAsOf.toString());
-        }
+        o.put("online_as_of", (onlineAsOf == null ? occurredAt.minus(Duration.ofHours(1)) : onlineAsOf).toString());
         return o;
     }
 
@@ -183,7 +188,7 @@ class RetailOfflineEntriesIT extends IntegrationTest {
     }
 
     @Test
-    void aPhoneClockAheadOrBehindDatesTheEntryWhenItReachedTheServer() {
+    void aPhoneClockAheadDatesTheEntryNowAndOneBehindIsRefused() {
         Instant now = Instant.now();
         // Ahead: the phone says the entry is three hours from now.
         bodies(now.plus(Duration.ofHours(3)), null).forEach((path, body) -> {
@@ -194,14 +199,22 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                     .as(path)
                     .isEqualTo(today.toString());
         });
-        // Behind: made two days before the phone was last online, which cannot be.
+        // Behind: made two days before the phone was last online, which cannot be, so it is refused (the lead's
+        // decision on
+        // the review of #839), and nothing is recorded.
         bodies(now.minus(Duration.ofDays(2)), now.minus(Duration.ofMinutes(30))).forEach((path, body) -> {
             ResponseEntity<JsonNode> r = cb.api.postKeyed(
                     path, body.get(), ALL, "*", UUID.randomUUID().toString());
-            assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.CREATED);
-            assertThat(r.getBody().get(DATE_FIELD.get(path)).asString())
-                    .as(path)
-                    .isEqualTo(today.toString());
+            assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(r.getBody().toString()).as(path).contains("offline_clock_behind");
+        });
+        // Every queued entry says when the phone was last online.
+        bodies(now, null).forEach((path, body) -> {
+            Map<String, Object> b = body.get();
+            b.put("offline", Map.of("occurred_at", now.toString()));
+            ResponseEntity<JsonNode> r =
+                    cb.api.postKeyed(path, b, ALL, "*", UUID.randomUUID().toString());
+            assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         });
     }
 
@@ -217,15 +230,21 @@ class RetailOfflineEntriesIT extends IntegrationTest {
     }
 
     // JUSTIFICATION-A3: the review of #839 asks for the age bound and the approval of an offline expense to be proven.
-    /** Review of #839: occurred_at comes from the phone, so an entry made more than 7 days ago is refused, never backdated. */
+    /**
+     * Review of #839, the lead's decision: occurred_at comes from the phone, so an entry made more than 7 days ago (the
+     * offline sale's limit, ADR-067 decision 5) is refused for a member of staff, with a plain reason and nothing recorded,
+     * and kept on its own day for the owner, who holds the backdate permission (issue #811).
+     */
     @Test
-    void anEntryKeptOfflineForMoreThanSevenDaysIsRefusedAndRecordsNothing() {
-        Instant tooOld = Instant.now().minus(Duration.ofDays(8));
-        bodies(tooOld, tooOld).forEach((path, body) -> {
+    void anEntryOlderThanSevenDaysIsRefusedForStaffAndKeptOnItsDayForTheOwner() {
+        Instant old = Instant.now().minus(Duration.ofDays(8));
+        LocalDate oldDay = LocalDate.ofInstant(old, ZONE);
+        bodies(old, null).forEach((path, body) -> {
             ResponseEntity<JsonNode> r = cb.api.postKeyed(
                     path, body.get(), ALL, "*", UUID.randomUUID().toString());
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
             assertThat(r.getBody().toString()).as(path).contains("offline_entry_too_old");
+            assertThat(r.getBody().toString()).as(path).contains("Only the owner can save it on its own day");
         });
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM retail_expenses WHERE tenant_id = ?")
@@ -233,9 +252,25 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                         .query(Long.class)
                         .single())
                 .isZero();
+        String ownerPerms = ALL + "," + OfflineEntry.BACKDATE;
+        for (String path : List.of("/expenses", "/withdrawals", "/transfers")) {
+            ResponseEntity<JsonNode> r = cb.api.postKeyed(
+                    path,
+                    bodies(old, null).get(path).get(),
+                    ownerPerms,
+                    "*",
+                    UUID.randomUUID().toString());
+            assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.CREATED);
+            assertThat(r.getBody().get(DATE_FIELD.get(path)).asString())
+                    .as(path)
+                    .isEqualTo(oldDay.toString());
+        }
     }
 
-    /** Review of #839: an offline expense that waits for approval keeps the day it was made, however late it is approved. */
+    /**
+     * Review of #839: an offline expense that waits for approval carries the resolved day in its approval payload, so approved
+     * two days after it was made it stays on its own day.
+     */
     @Test
     void anOfflineExpenseThatWaitsForApprovalKeepsTheDayItWasMade() {
         TestDatabase.owner()
@@ -250,7 +285,7 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                         """).param(t.tenantId()).update();
         ResponseEntity<JsonNode> asked = cb.api.postKeyed(
                 "/expenses",
-                bodies(madeYesterday(), null).get("/expenses").get(),
+                bodies(madeTwoDaysAgo(), null).get("/expenses").get(),
                 ALL,
                 "*",
                 UUID.randomUUID().toString());
@@ -271,6 +306,6 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                         UUID.fromString(done.getBody().get("subject_id").asString()))
                 .query(LocalDate.class)
                 .single();
-        assertThat(dated).isEqualTo(yesterday);
+        assertThat(dated).isEqualTo(today.minusDays(2));
     }
 }

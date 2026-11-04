@@ -142,7 +142,12 @@ class TransferService implements ModuleSettingsChangeGuard {
         LocalDate today = clock.today(tenant.profile().timezone());
         // An entry kept on the phone offline is dated the day it was made (ADR-067 decision 13).
         LocalDate requested = OfflineEntry.day(
-                r.offline(), r.transferDate(), clock.now(), tenant.profile().timezone());
+                r.offline(),
+                r.transferDate(),
+                clock.now(),
+                tenant.profile().timezone(),
+                // An old entry is the owner's at both ends of the move.
+                List.of(from, r.toBranchId()));
         LocalDate on = requested == null ? today : requested;
         List<FieldProblem> problems = new ArrayList<>();
         Branches.Branch to = null;

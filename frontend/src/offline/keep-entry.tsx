@@ -43,7 +43,7 @@ export function useEntrySave(): EntrySave {
       };
       if (offline && !offline.connectivity.online()) return keep(false);
       try {
-        // A save never waits longer than ENTRY_ANSWER_MS (2 seconds, so under 3 in all on a slow 3G phone, issue #812): with no
+        // A save never waits longer than ENTRY_ANSWER_MS (the 8 seconds a sale waits, issue #812): with no
         // answer by then the entry is kept on the phone under the same key and body, and the late answer and the outbox's send are
         // one record.
         return await (offline ? answerWithin(send(), ENTRY_ANSWER_MS) : send());
