@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import com.rincoltech.bms.retail.cashbook.CashbookTestSupport;
 import com.rincoltech.bms.testsupport.MovableClock;
 import com.rincoltech.bms.testsupport.MovableClockConfig;
 import java.time.Instant;
@@ -214,19 +215,35 @@ class RetailUsageSummaryIT extends IntegrationTest {
      */
     @Test
     void noItemOrExpenseCanBeWithoutACategory() {
-        List<String> nullable =
-                TestDatabase.owner().sql("""
-                        SELECT table_name FROM information_schema.columns
-                         WHERE column_name = 'category_id' AND is_nullable = 'YES'
+        // Both columns are there, and neither takes a NULL (the review of 44e1389: an absent column must fail too).
+        List<String> columns = TestDatabase.owner().sql("""
+                        SELECT table_name || ' ' || is_nullable FROM information_schema.columns
+                         WHERE column_name = 'category_id' AND table_schema = current_schema()
                            AND table_name IN ('retail_products', 'retail_expenses')
                         """).query(String.class).list();
-        assertThat(nullable).isEmpty();
+        assertThat(columns).containsExactlyInAnyOrder("retail_products NO", "retail_expenses NO");
         assertThatThrownBy(() -> TestDatabase.owner()
                         .sql("UPDATE retail_products SET category_id = NULL WHERE id = ?")
                         .param(p1)
                         .update())
                 .rootCause()
-                .hasMessageContaining("null value");
+                .hasMessageContaining("null value in column \"category_id\"");
+        // An expense row is changed only by its void (a guard trigger), so the probe writes a copy of a real one
+        // without its category: refused by the column itself.
+        CashbookTestSupport cash = new CashbookTestSupport(http, t);
+        UUID[] fuel = cash.categoryWithItem("Test Fuel", "Test item 01", false);
+        ResponseEntity<JsonNode> spent = cash.expense(hq, fuel[0], fuel[1], 1_000, null);
+        assertThat(spent.getStatusCode()).as("%s", spent.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("""
+                                INSERT INTO retail_expenses
+                                SELECT (jsonb_populate_record(e, jsonb_build_object('id', gen_random_uuid(), 'category_id', NULL))).*
+                                  FROM retail_expenses e WHERE e.id = ?
+                                """)
+                        .param(RetailTestSupport.id(spent))
+                        .update())
+                .rootCause()
+                .hasMessageContaining("null value in column \"category_id\"");
     }
 
     @Test

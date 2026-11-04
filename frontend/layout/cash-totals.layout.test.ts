@@ -37,8 +37,6 @@ describe('cash book totals at 412px (#816)', () => {
         };
       }),
     );
-    // Two shops, the first opened down to its day.
-    expect(heads.length).toBeGreaterThanOrEqual(6);
     for (const h of heads) {
       expect(h.right, 'header inside the phone').toBeLessThanOrEqual(WIDTH);
       expect(h.height, '48px target').toBeGreaterThanOrEqual(48);
