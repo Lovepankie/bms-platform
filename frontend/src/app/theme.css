@@ -270,6 +270,11 @@ body {
 
   /* Interaction */
   --tap: 48px; /* docs/ui-rules.md rule 12 */
+  /* Button sizes per screen (issue #825, buttons.css): on a phone two targets stand at least --tap-gap apart; from 1024px a button
+     is as wide as its label, a main action at least --button-min-wide, and none wider than --button-max. */
+  --tap-gap: var(--space-2); /* 8px */
+  --button-min-wide: 10rem; /* 160px */
+  --button-max: 20rem; /* 320px */
   /* The phone's bottom tabs (issue #539, navigation.css), all from the target and the spacing steps. */
   --tab-height: calc(var(--tap) + var(--space-4)); /* 64px: the 48px target and room for the label */
   --tab-pill-width: calc(var(--tap) + var(--space-2)); /* 56px: the current tab's pill behind the icon */

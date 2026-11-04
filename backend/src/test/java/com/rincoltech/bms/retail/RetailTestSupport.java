@@ -23,7 +23,20 @@ public final class RetailTestSupport {
     /** The admin column of the chapter 8 matrix for retail. */
     public static final String ADMIN = "retail.catalogue.manage,retail.price.edit,retail.customer.manage,"
             + "retail.sale.create,retail.sale.read,retail.sale.void,retail.stock.read,retail.stock.transfer,"
-            + "retail.stocktake.commit,retail.purchase.create,retail.usage.report,retail.profit.read,retail.sale.all_sellers,retail.till.close";
+            + "retail.stocktake.commit,retail.purchase.create,retail.usage.report,retail.profit.read,retail.sale.all_sellers,retail.till.close,"
+            + "retail.entry.backdate";
+
+    /** The fabricated reason {@link #call} adds to an entry a test dates before today (ADR-120). */
+    public static final String LATE_REASON = "Entered late in a test";
+
+    /** The date fields of the entries the app dates itself (ADR-120). */
+    private static final java.util.Set<String> ENTRY_DATES =
+            java.util.Set.of("business_date", "paid_on", "purchased_on", "transfer_date");
+
+    /** The routes that create those entries; every other route refuses an unknown field such as date_reason. */
+    private static final String DATED_ROUTES =
+            "/(expenses|expenses/[^/]+/replace|savings|bankings|withdrawals|advances|advances/[^/]+/repayments|purchases"
+                    + "|purchases/[^/]+/replace|transfers)";
 
     /** The sales column of the chapter 8 matrix for retail. */
     public static final String SALES =
@@ -60,7 +73,32 @@ public final class RetailTestSupport {
             String branchIds,
             Map<String, String> extra) {
         return http.exchange(
-                BASE + path, method, new HttpEntity<>(body, headers(permissions, branchIds, extra)), JsonNode.class);
+                BASE + path,
+                method,
+                new HttpEntity<>(
+                        method == HttpMethod.POST && path.matches(DATED_ROUTES) ? withLateReason(body) : body,
+                        headers(permissions, branchIds, extra)),
+                JsonNode.class);
+    }
+
+    /**
+     * ADR-120: the tests written before it date their fabricated history as the owner and give no reason, so a body with an
+     * earlier entry date and no {@code date_reason} gets {@link #LATE_REASON}. EntryDatesIT sends its own bodies.
+     */
+    static Object withLateReason(Object body) {
+        java.time.LocalDate today = java.time.LocalDate.now(com.rincoltech.bms.kernel.BusinessClock.DEFAULT_ZONE);
+        if (!(body instanceof Map<?, ?> map)
+                || map.containsKey("date_reason")
+                || ENTRY_DATES.stream()
+                        .map(map::get)
+                        .noneMatch(v -> v != null
+                                && v.toString().matches("\\d{4}-\\d{2}-\\d{2}")
+                                && java.time.LocalDate.parse(v.toString()).isBefore(today))) {
+            return body;
+        }
+        Map<Object, Object> copy = new LinkedHashMap<>(map);
+        copy.put("date_reason", LATE_REASON);
+        return copy;
     }
 
     public ResponseEntity<JsonNode> get(String path, String permissions) {

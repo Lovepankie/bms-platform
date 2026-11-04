@@ -26,6 +26,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierReque
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.VoidPurchaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingRepository.NewLine;
+import com.rincoltech.bms.retail.stock.EntryDates;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.QuickAddPurchase;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -80,6 +81,7 @@ class PurchasingService implements QuickAddPurchase {
     private final AuditLog audit;
     private final RetailCapabilities capabilities;
     private final Validator validator;
+    private final EntryDates entryDates;
 
     PurchasingService(
             PurchasingRepository repo,
@@ -93,7 +95,9 @@ class PurchasingService implements QuickAddPurchase {
             BusinessClock clock,
             AuditLog audit,
             RetailCapabilities capabilities,
-            Validator validator) {
+            Validator validator,
+            EntryDates entryDates) {
+        this.entryDates = entryDates;
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -227,7 +231,7 @@ class PurchasingService implements QuickAddPurchase {
                     null));
         }
         PurchaseRequest r =
-                new PurchaseRequest(null, clock.today(tenant.profile().timezone()), method, "Quick add", lines);
+                new PurchaseRequest(null, clock.today(tenant.profile().timezone()), method, "Quick add", lines, null);
         // The bounds Buy stock's route checks before record(), so nothing Buy stock refuses is taken here; named by the
         // Quick add field the value came from.
         // Review of #716: a problem on the package line is named by the package fields it came from.
@@ -274,8 +278,13 @@ class PurchasingService implements QuickAddPurchase {
      * line's prices are the product's prices afterwards (latest restock wins), each change with its
      * own history row. Products are locked in id order first.
      */
-    private Purchase record(PurchaseRequest r) {
+    private Purchase record(PurchaseRequest sent) {
         LocalDate today = clock.today(tenant.profile().timezone());
+        // ADR-120: the app dates the purchase today when no date is sent.
+        PurchaseRequest r = sent.purchasedOn() != null
+                ? sent
+                : new PurchaseRequest(
+                        sent.supplierId(), today, sent.paymentMethod(), sent.note(), sent.lines(), sent.dateReason());
         List<FieldProblem> problems = new ArrayList<>();
         if (r.purchasedOn().isAfter(today)) {
             problems.add(new FieldProblem("purchased_on", "invalid", "A purchase cannot be dated in the future."));
@@ -374,11 +383,15 @@ class PurchasingService implements QuickAddPurchase {
                     "Setting the selling price needs the permission to change prices. Leave the selling price empty.");
         }
         PurchaseLines.requireUseFromNowOn(r.lines().stream().anyMatch(PurchasingService::usesFromNowOn));
+        Set<UUID> into = new TreeSet<>();
         for (PurchaseLineRequest l : r.lines()) {
             for (BranchQty b : l.qtyByBranch()) {
                 branches.resolveStocking(PERMISSION, b.branchId());
+                into.add(b.branchId());
             }
         }
+        // ADR-120: an earlier date needs the owner's permission at every branch the goods go into, and a reason.
+        EntryDates.Backdate backdate = entryDates.check(r.purchasedOn(), "purchased_on", r.dateReason(), into);
         products.forEach(catalogue::lock);
 
         UUID id = UUID.randomUUID();
@@ -515,6 +528,8 @@ class PurchasingService implements QuickAddPurchase {
         after.put("payment_method", r.paymentMethod());
         after.put("lines", lines.size());
         audit.record(AuditLog.Entry.created("retail.purchase.created", PURCHASE, id, null, after));
+        entryDates.audit(
+                backdate, PURCHASE, id, into.size() == 1 ? into.iterator().next() : null);
         Purchase made = repo.find(id).orElseThrow();
         if (sizesKept.isEmpty()) {
             return made;
@@ -638,7 +653,9 @@ class PurchasingService implements QuickAddPurchase {
                     r.purchasedOn(),
                     r.paymentMethod(),
                     note.length() > 300 ? note.substring(0, 300) : note,
-                    r.lines()));
+                    r.lines(),
+                    // ADR-120: the edited delivery is a new entry; an earlier day is the owner's, with a reason.
+                    r.dateReason()));
         });
     }
 

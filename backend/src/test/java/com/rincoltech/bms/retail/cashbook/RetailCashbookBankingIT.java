@@ -262,7 +262,8 @@ class RetailCashbookBankingIT extends IntegrationTest {
         assertThat(over.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(over.getBody().get("warnings").get(0).asString()).isEqualTo("cash_below_banked");
         assertThat(over.getBody().get("flag").asString()).isEqualTo("surplus");
-        ResponseEntity<JsonNode> cashier = bank(40_000, day, CASHIER);
+        // The cashier banks today: an earlier day is the owner's (ADR-120, RetailEntryDatesIT).
+        ResponseEntity<JsonNode> cashier = bank(40_000, LocalDate.now(BusinessClock.DEFAULT_ZONE), CASHIER);
         assertThat(cashier.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(cashier.getBody().has("warnings")).isFalse();
         assertThat(cashier.getBody().has("flag")).isFalse();

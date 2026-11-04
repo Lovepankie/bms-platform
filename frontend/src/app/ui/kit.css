@@ -199,6 +199,14 @@
   list-style: none;
 }
 
+/* The phone layout (under 720px, which holds the phone of issue #825 up to 600px): a list outside a card or sheet stands 8px from
+   what comes before and after it, so a field above its first row or a button under its last stands clear of it. */
+@media (max-width: 719px) {
+  .row-list:not(.ui-card > .row-list, .sheet-body > .row-list) {
+    margin-block: var(--tap-gap);
+  }
+}
+
 .row-list > li + li {
   border-top: 1px solid var(--color-border);
 }
@@ -354,6 +362,18 @@ button.list-row:focus-visible {
   flex-wrap: wrap;
   gap: var(--space-3);
   padding: 0 var(--space-5) var(--space-5);
+}
+
+/* A laptop (issue #825): the dialog's buttons are as wide as their labels and stand together at its right, in the order of the
+   page (the primary last, so at the far right), so what is seen matches the Tab order. */
+@media (min-width: 1024px) {
+  .sheet-actions {
+    justify-content: flex-end;
+  }
+
+  .sheet-actions > * {
+    max-width: min(100%, var(--button-max));
+  }
 }
 
 @media (max-width: 719px) {
@@ -688,7 +708,7 @@ button.list-row:focus-visible {
     border-top: 1px solid var(--color-border);
   }
 
-  .action-bar > :is(.rt-primary, .btn-primary, .btn-brand) {
+  .action-bar > :is(.rt-primary, .btn-primary, .btn-brand, .btn-danger) {
     display: flex;
     width: 100%;
     margin-top: 0;
@@ -698,10 +718,50 @@ button.list-row:focus-visible {
     margin-top: 0;
   }
 
+  /* A bar of more than one button (Barcode labels, #825): each full width, one under the other, --tap-gap apart, the main one
+     last and so nearest the thumb. */
+  .action-bar > :is(button, .btn) {
+    display: flex;
+    width: 100%;
+  }
+
+  .action-bar > * + :is(button, .btn) {
+    margin-top: var(--tap-gap);
+  }
+
   /* Over the bottom tabs (issue #539): the bar stops on top of them, and they take the home indicator inset. */
   .has-tab-bar .action-bar {
     bottom: var(--tab-bar-offset);
     padding-bottom: var(--space-3);
+  }
+}
+
+/* A laptop (issue #825): the bar is a row at the right of the form, each button as wide as its label (buttons.css), in the order
+   of the page with the main action last, so it stands at the far right and what is seen matches the Tab order. */
+@media (min-width: 1024px) {
+  .action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  /* The second selector outweighs retail.css's secondary action under the main one, which would push it apart from the main one. */
+  .action-bar > *,
+  .action-bar > .rt-primary ~ button:not(.rt-primary) {
+    margin: 0;
+  }
+
+  /* A BusyButton's status line: its own line under the buttons when it has words, out of the row while empty, so it takes no
+     gap; it stays in the page either way, so the live region is there when the words come. */
+  .action-bar > .busy-nudge {
+    flex-basis: 100%;
+    text-align: end;
+  }
+
+  .action-bar > .busy-nudge-empty {
+    position: absolute;
   }
 }
 
@@ -717,10 +777,11 @@ button.list-row:focus-visible {
   margin: 0 0 var(--space-2);
 }
 
-/* The four choices stay on one row at 360px: equal widths, the small text size, no wrap inside a choice. */
+/* The four choices stay on one row at 360px: equal widths, never under the 48px target (#825), the small text size, no wrap
+   inside a choice. */
 .period-picker .segmented > button {
   flex: 1 1 0;
-  min-width: 0;
+  min-width: var(--tap);
   padding: 8px var(--space-1);
   font-size: var(--text-sm);
   white-space: nowrap;
@@ -810,6 +871,14 @@ p:has(> .link-row:only-child) {
   margin: 0 0 var(--space-3);
   /* A grid or flex item: without this the one uncut line would widen its column, and the page with it (issue #343). */
   min-width: 0;
+}
+
+/* The phone layout (issue #825): the info button's 48px target hangs --space-3 below the line, so with any margin of at least
+   --space-3 under it the next control still stands --tap-gap clear. */
+@media (max-width: 719px) {
+  .hint-line {
+    padding-bottom: var(--tap-gap);
+  }
 }
 
 .hint-line > .hint {

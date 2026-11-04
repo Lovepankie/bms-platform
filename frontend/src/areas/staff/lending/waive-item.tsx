@@ -79,12 +79,12 @@ export function WaiveItemSheet({ loan, row, memberName, onClose }: {
         title="Check the waiver"
         actions={
           <>
-            <BusyButton key="send" busy={save.isPending} type="button" className="rt-primary" onClick={() => save.mutate({ component: draft.component, amount_minor: step.amountMinor ?? 0, reason: draft.reason.trim() })}>
-              Send waiver of {money(step.amountMinor ?? 0, c)}
-            </BusyButton>
             <button type="button" onClick={() => setReviewing(false)}>
               Change it
             </button>
+            <BusyButton key="send" busy={save.isPending} type="button" className="rt-primary" onClick={() => save.mutate({ component: draft.component, amount_minor: step.amountMinor ?? 0, reason: draft.reason.trim() })}>
+              Send waiver of {money(step.amountMinor ?? 0, c)}
+            </BusyButton>
           </>
         }
       >
