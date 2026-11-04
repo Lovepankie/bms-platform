@@ -237,12 +237,18 @@ export function EarlyWithdrawalForm({ inv }: { inv: Investment }) {
 }
 
 const INSTRUCTIONS = ['payout', 'rollover_principal', 'rollover_all'] as const;
+// What the toast says the investment will do (#836), after its number and "will".
+const MATURITY_DONE: Record<string, string> = {
+  payout: 'pay out at maturity',
+  rollover_principal: 'roll over the principal and pay the return at maturity',
+  rollover_all: 'roll over principal and return at maturity',
+};
 
 export function InstructionForm({ inv }: { inv: Investment }) {
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const [choice, setChoice] = useState<string>(inv.maturity_instruction ?? 'payout');
-  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh, meta: { success: () => `${inv.account_no ? `Investment ${inv.account_no}` : 'The investment'} at maturity: ${instructionWords(choice).toLowerCase()}` } });
+  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh, meta: { success: () => `${inv.account_no ? `Investment ${inv.account_no}` : 'The investment'} will ${MATURITY_DONE[choice] ?? instructionWords(choice).toLowerCase()}` } });
   return (
     <form aria-label="Maturity instruction" onSubmit={(e) => { e.preventDefault(); if (!save.isPending) save.mutate(); }}>
       <fieldset>

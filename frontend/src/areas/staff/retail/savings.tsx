@@ -82,7 +82,7 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
       if (!plan) throw new Error('The suggestion has not loaded');
       return retail.createSavings(plan.request, key, { salesStaff });
     },
-    meta: { success: (saved: Savings) => `Savings of ${money(saved?.amount_minor ?? 0)} saved` },
+    meta: { success: (saved: Savings) => (saved?.amount_minor != null ? `Savings of ${money(saved.amount_minor)} saved` : 'Savings for the day saved') },
     onSuccess: (saved) => {
       finish();
       showInRecords(queryClient, saved);

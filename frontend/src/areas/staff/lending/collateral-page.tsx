@@ -114,8 +114,9 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
     setBusy(true);
     setFailure(null);
     try {
-      await api.addValuation(id, valuationBody(d, unit));
-      sayDone(`Valuation of ${money(valuationBody(d, unit).market_value_minor, currency)} saved`);
+      const sent = valuationBody(d, unit);
+      await api.addValuation(id, sent);
+      sayDone(`Valuation of ${money(sent.market_value_minor, currency)} saved`);
       void queryClient.invalidateQueries({ queryKey: ['collateral'] });
       setOpen(false);
       setD(blankValuation(today));

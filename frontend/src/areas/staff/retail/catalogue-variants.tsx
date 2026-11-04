@@ -219,7 +219,12 @@ export function NewFamilyPage() {
       void navigate({ to: familyPath(family.id ?? '') as never });
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: (family: { name?: string; variants?: unknown[] }) => `Item ${family?.name ?? name.trim()} added with ${family?.variants?.length ?? preview.rows.length} sizes and colours` },
+    meta: {
+      success: (family: { name?: string; variants?: unknown[] }) => {
+        const n = family?.variants?.length ?? preview.rows.length;
+        return `Item ${family?.name ?? name.trim()} added with ${n} ${n === 1 ? 'size or colour' : 'sizes and colours'}`;
+      },
+    },
   });
   const submit = () => {
     if (!complete || save.isPending || sending.current) return;

@@ -91,7 +91,7 @@ export function MoneyForm({ account, kind, onDone }: { account: SavingsAccount; 
   const body = () => ({ amount_minor: amountMinor ?? 0, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined });
   // success-screen: the receipt with the new balance replaces the form; one sent for approval raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (!r?.executed ? null : `${kind === 'deposit' ? 'Deposit of' : 'Withdrawal of'} ${money(amountMinor ?? 0, account.currency)} ${kind === 'deposit' ? 'recorded on' : 'paid out from'} ${account.account_no ? `account ${account.account_no}` : 'the account'}`) },
+    meta: { success: (r: { executed?: boolean }) => (!r?.executed ? null : `${kind === 'deposit' ? 'Deposit' : 'Withdrawal'}${amountMinor != null ? ` of ${money(amountMinor, account.currency)}` : ''} ${kind === 'deposit' ? 'recorded on' : 'paid out from'} ${account.account_no ? `account ${account.account_no}` : 'the account'}`) },
     mutationFn: async () => {
       if (kind === 'deposit') {
         const r = await savings.deposit(accountId, body(), key);

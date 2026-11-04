@@ -243,7 +243,12 @@ export function PackEditor({ product }: { product: Product }) {
       setFilled({ factor: '', purpose: 'both' });
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
-    meta: { success: () => `${unitWord((units.data ?? []).find((u) => u.id === unitId)?.name)} added as a pack of ${product.description ?? 'the item'}` },
+    meta: {
+      success: () => {
+        const unit = unitWord((units.data ?? []).find((u) => u.id === unitId)?.name);
+        return unit ? `${unit} added as a pack of ${product.description ?? 'the item'}` : `Pack added to ${product.description ?? 'the item'}`;
+      },
+    },
   });
   if (!allowed) return null;
   const rows = packs.data ?? [];

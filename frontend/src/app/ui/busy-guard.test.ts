@@ -303,7 +303,10 @@ const SAYS_DONE =
 // JUSTIFICATION-A3: #836 asks for this rule in the toast guard; restOfSend reads a statement, not one argument, so it needs its own scanner.
 // Any call named like a toast (`toast(`, `showToast(`, `doneToast(`), as SAYS_DONE reads them, and `change(` of Expense lists,
 // which hands its words to the screen's toast (review of #840).
-const TOAST_CALL = /\b(?:show|sayDone|\w*[Tt]oast\w*|already|said|saved|done|onDone|onVoided|onThrown|change)\??\.?\(/g;
+const TOAST_CALL = /\b(?:show|sayDone|\w*[Tt]oast\w*|already|said|saved|done|onDone|onSaved|onVoided|onThrown|change)\??\.?\(/g;
+// A prop that hands toast words to a form that says them (the lending ReasonForm's `toastWords=`), read as a JSX attribute: its
+// string, or the expression in its braces (second review of #840).
+const TOAST_PROP = /\btoastWords=\{?/g;
 const META_SUCCESS = /\bmeta:\s*\{[^}]*?\bsuccess\s*:/g;
 // A whole string: after an opening, a ternary's `?` or `:`, a comma, an arrow, `&&`, `||` or `??`, and before a closing, a `:`
 // or a comma, so a piece joined with `+` or a value compared with `===` is not read as the words of a toast. A fallback
@@ -354,9 +357,11 @@ function bareToasts(text: string): string[] {
   const code = interpolationsAsWords(text);
   // Expense lists' change(run, words) takes its words second, so every argument of it is read.
   const starts = [...code.matchAll(TOAST_CALL)].map((m) => ({ from: m.index + m[0].length, all: m[0].startsWith('change') }))
-    .concat([...code.matchAll(META_SUCCESS)].map((m) => ({ from: m.index + m[0].length, all: false })));
+    .concat([...code.matchAll(META_SUCCESS)].map((m) => ({ from: m.index + m[0].length, all: false })))
+    .concat([...code.matchAll(TOAST_PROP)].map((m) => ({ from: m.index + m[0].length, all: false })));
   return starts.flatMap(({ from, all }) => {
-    const value = oneValue(code, from, all);
+    // A quoted attribute (`toastWords="Saved"`) is that string alone; anything else reads to its own end.
+    const value = /^["']/.test(code.slice(from)) ? (/^(["'])[^"']*\1/.exec(code.slice(from))?.[0] ?? '') : oneValue(code, from, all);
     const line = code.slice(0, from).split('\n').length;
     // An empty string is an id's fallback in a call inside the toast call (`retail.save(item.id ?? '')`), never its words.
     return [...value.matchAll(WHOLE_STRING)].filter((s) => s[2] !== '' && tooBare(s[2] ?? '')).map((s) => `${line} ${s[0]}`);
@@ -596,6 +601,12 @@ describe('success toast guard on fixtures', () => {
       expect(bareToasts(bare), bare).toHaveLength(1);
     }
     expect(bareToasts("change(() => retail.save(item.id ?? ''), `Category ${name} added`)")).toEqual([]);
+    // Second review of #840: words handed on through onSaved and through a toastWords prop.
+    for (const bare of ["onSaved?.('Saved')", '<ReasonForm id="r" toastWords="Saved" />', "<ReasonForm toastWords={'Done'} />", '<ReasonForm toastWords={ok ? `Loan ${no} written off` : `OK`} />']) {
+      expect(bareToasts(bare), bare).toHaveLength(1);
+    }
+    expect(bareToasts('<ReasonForm id="r" toastWords={`Loan ${no} written off`} submit="Request write-off" />')).toEqual([]);
+    expect(bareToasts('<ReasonForm id="r" toastWords="Loan written off" draftName="x" />')).toEqual([]);
     expect(bareToasts("show(`Category ${name} added`, 'success')")).toEqual([]);
     expect(bareToasts("show(`Item ${item.name} switched ${on ? 'on' : 'off'}`, 'success')")).toEqual([]);
     expect(bareToasts("const save = useMutation({ meta: { success: (_: unknown, kind: K) => (kind === 'deposit' ? 'Deposit recorded' : `Expense of ${money(a)} saved`) } });")).toEqual([]);

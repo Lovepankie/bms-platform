@@ -4,6 +4,7 @@ import { retail, type BranchRole } from '../../../api/retail';
 import type { ReactNode } from 'react';
 import { SkeletonList } from '../../../components/states';
 import { ScreenLink } from './screen-link';
+import { useBranchLabel } from './transfer';
 import { Gate, Problem, changeFailureText } from './ui';
 
 // Branch roles (ADR-033, spec section 2): which branches are shops and which are both.
@@ -18,9 +19,9 @@ const ROLES: { value: Role; label: string }[] = [
   { value: 'both', label: 'Both: keeps stock and sells' },
 ];
 
-// What a toast says a branch now does (#836), one entry for each role this screen can set. A Store is never set here: it is the
-// branch's sells_goods flag on Branches (ADR-104), so it has no words that say it sells.
-const ROLE_DONE: Record<Role, string> = { shop: 'sells to customers', both: 'keeps stock and sells' };
+// What a toast says a branch now does (#836), one entry for every role a branch can have, so no role reads as another. A Store
+// keeps stock only and never sells (ADR-048, ADR-104).
+const ROLE_DONE: Record<Role | 'store', string> = { shop: 'sells to customers', both: 'keeps stock and sells', store: 'keeps stock only and does not sell' };
 
 export function RoleRow({ row, busy, onChange, extra }: { row: BranchRole; busy?: boolean; onChange: (role: Role) => void; extra?: ReactNode }) {
   const id = `role-${row.branch_id}`;
@@ -49,6 +50,8 @@ export function RoleRow({ row, busy, onChange, extra }: { row: BranchRole; busy?
 export function BranchRoles() {
   const queryClient = useQueryClient();
   const roles = useQuery({ queryKey: ['retail', 'branch-roles'], queryFn: () => retail.branchRoles() });
+  // A row with no name and no code is named the way Move stock names a branch, from the branches the person holds.
+  const label = useBranchLabel();
   const set = useMutation({
     mutationFn: (v: { branchId: string; role: Role; name: string }) => retail.setBranchRole(v.branchId, v.role),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'branch-roles'] }),
@@ -64,7 +67,7 @@ export function BranchRoles() {
       <Problem error={roles.error ?? (set.error && new Error(changeFailureText(set.error, queryClient)))} />
       <ul className="stack" data-tour="retail-roles">
         {(roles.data ?? []).map((r) => (
-          <RoleRow key={r.branch_id} row={r} busy={set.isPending} extra={<p><ScreenLink screen="stockByLocation" to="/staff/retail/stock-by-location" label={`See the stock of ${r.name ?? r.code}`}>Stock</ScreenLink></p>} onChange={(role) => set.mutate({ branchId: r.branch_id ?? '', role, name: r.name ?? r.code ?? '' })} />
+          <RoleRow key={r.branch_id} row={r} busy={set.isPending} extra={<p><ScreenLink screen="stockByLocation" to="/staff/retail/stock-by-location" label={`See the stock of ${r.name ?? r.code}`}>Stock</ScreenLink></p>} onChange={(role) => set.mutate({ branchId: r.branch_id ?? '', role, name: r.name || r.code || label(r.branch_id) })} />
         ))}
       </ul>
     </Gate>
