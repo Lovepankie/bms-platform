@@ -386,6 +386,73 @@ class StockHealthRepository {
                 .list();
     }
 
+    // JUSTIFICATION-A3: issue #822 needs one new read; it sits with the usage read it mirrors.
+    record Flow(
+            UUID branchId,
+            UUID productId,
+            String code,
+            String description,
+            String unit,
+            BigDecimal opening,
+            BigDecimal received,
+            BigDecimal damaged,
+            BigDecimal used) {}
+
+    /**
+     * Issue #822, ADR-127: per branch and item that had stock up to {@code to}, the stock at the start of {@code from} (every
+     * movement before it, none when below zero), what came in during the period (deliveries, stock moved in, a starting stock
+     * first set; never a movement that reverses another or one a void reversed, never a count, a customer return or an undo),
+     * and what was damaged and used in it from the entries, leaving out an undone one as {@link #usage} does.
+     */
+    List<Flow> flow(List<UUID> branchIds, LocalDate from, LocalDate to) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> params = params(branchIds);
+        params.put("from", Date.valueOf(from));
+        params.put("to", Date.valueOf(to));
+        return jdbc.sql("WITH mv AS (SELECT m.branch_id, m.product_id, m.qty, m.business_date,"
+                        + " CASE WHEN m.business_date >= :from AND m.qty > 0 AND m.reverses_movement_id IS NULL"
+                        + "  AND m.kind IN ('opening', 'purchase', 'transfer_in', 'legacy_balance')"
+                        + " THEN NOT EXISTS (SELECT 1 FROM retail_stock_movements r WHERE r.tenant_id = m.tenant_id"
+                        + "  AND r.reverses_movement_id = m.id) ELSE false END AS received"
+                        + "  FROM retail_stock_movements m WHERE m.business_date <= :to" + in(branchIds, "m.branch_id")
+                        + "),"
+                        + " flow AS (SELECT branch_id, product_id,"
+                        + " greatest(coalesce(sum(qty) FILTER (WHERE business_date < :from), 0), 0) AS opening,"
+                        + " coalesce(sum(qty) FILTER (WHERE received), 0) AS received"
+                        + "  FROM mv GROUP BY branch_id, product_id),"
+                        + " lost AS (SELECT r.branch_id, l.product_id,"
+                        + " coalesce(sum(l.qty) FILTER (WHERE r.kind = 'damaged'), 0) AS damaged,"
+                        + " coalesce(sum(l.qty) FILTER (WHERE r.kind = 'used'), 0) AS used"
+                        + "  FROM retail_usage_reports r"
+                        + "  JOIN retail_usage_lines l ON l.tenant_id = r.tenant_id AND l.report_id = r.id"
+                        + " WHERE r.occurred_on BETWEEN :from AND :to"
+                        // An entry undone (issue #818) counts in no total, as a voided sale.
+                        + "   AND NOT EXISTS (SELECT 1 FROM retail_usage_undos d WHERE d.report_id = r.id)"
+                        + in(branchIds, "r.branch_id") + " GROUP BY r.branch_id, l.product_id)"
+                        + " SELECT coalesce(f.branch_id, x.branch_id) AS branch_id, p.id, p.code, p.description,"
+                        + " (SELECT u.name FROM retail_units u WHERE u.tenant_id = p.tenant_id AND u.id = p.unit_id) AS unit,"
+                        + " coalesce(f.opening, 0) AS opening, coalesce(f.received, 0) AS received,"
+                        + " coalesce(x.damaged, 0) AS damaged, coalesce(x.used, 0) AS used"
+                        + "  FROM flow f FULL JOIN lost x ON x.branch_id = f.branch_id AND x.product_id = f.product_id"
+                        + "  JOIN retail_products p ON p.tenant_id = current_setting('app.tenant_id')::uuid"
+                        + "       AND p.id = coalesce(f.product_id, x.product_id)"
+                        + " ORDER BY 1, p.code, p.id")
+                .params(params)
+                .query((rs, n) -> new Flow(
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("description"),
+                        rs.getString("unit"),
+                        rs.getBigDecimal("opening"),
+                        rs.getBigDecimal("received"),
+                        rs.getBigDecimal("damaged"),
+                        rs.getBigDecimal("used")))
+                .list();
+    }
+
     record Count(UUID branchId, int shortLines, int overLines, long loss, long gain) {}
 
     /** Committed stock-take differences per branch, valued at the cost the ledger posted them at. */

@@ -207,6 +207,81 @@ final class StockHealthApi {
             @Schema(description = COST_ONLY + "; used and damaged plus loss, less gain")
             Long netCostMinor) {}
 
+    // JUSTIFICATION-A3: issue #822 asks for a new report section; its records sit beside the other Stock health
+    // records.
+    static final String BASE_WORDS =
+            "The stock that passed through: the stock at the start of the first day plus what came in"
+                    + " during the period (deliveries, stock moved in, and a starting stock first set in it)";
+
+    @Schema(
+            name = "RetailDamageShareItem",
+            description = "One item in one shop: what was damaged and what was used, each as a share of the stock that"
+                    + " passed through (issue #822, ADR-127). Quantities in the item's smallest unit")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record DamageShareItem(
+            UUID productId,
+            String code,
+            String description,
+            String unit,
+
+            @Schema(description = "Stock at the start of the first day; none when it was below zero")
+            String openingQty,
+
+            @Schema(
+                    description =
+                            "What came in during the period: deliveries, stock moved in, a starting stock first set;"
+                                    + " a voided one is left out")
+            String receivedQty,
+
+            @Schema(description = BASE_WORDS + "; opening_qty plus received_qty")
+            String baseQty,
+
+            @Schema(description = "Damaged in the period; an undone entry is left out")
+            String damagedQty,
+
+            @Schema(description = "Used in the shop in the period; an undone entry is left out")
+            String usedQty,
+
+            @Schema(description = "damaged_qty over base_qty as a whole percent, half up; absent when base_qty is 0")
+            Integer damagedPct,
+
+            @Schema(description = "used_qty over base_qty as a whole percent, half up; absent when base_qty is 0")
+            Integer usedPct) {}
+
+    @Schema(
+            name = "RetailDamageShareBranch",
+            description = "One shop: its total over every item that passed through it, and the items damaged or used,"
+                    + " highest share first")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record DamageShareBranch(
+            UUID branchId,
+
+            @Schema(description = "Sum of base_qty over every item of the shop, each in its smallest unit")
+            String baseQty,
+
+            String damagedQty,
+            String usedQty,
+
+            @Schema(description = "Absent when base_qty is 0")
+            Integer damagedPct,
+
+            @Schema(description = "Absent when base_qty is 0")
+            Integer usedPct,
+
+            List<DamageShareItem> items) {}
+
+    @Schema(
+            name = "RetailDamageShare",
+            description =
+                    "Damaged and used as a share of the stock that passed through, per item and per shop (issue #822,"
+                            + " ADR-127). Only for retail.profit.read, and only the shops where it is held")
+    record DamageShare(
+            LocalDate from,
+            LocalDate to,
+
+            @Schema(description = "Shops with something damaged or used first, highest share first")
+            List<DamageShareBranch> branches) {}
+
     @Schema(name = "RetailStockHealth")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Report(

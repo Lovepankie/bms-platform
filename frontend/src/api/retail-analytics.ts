@@ -15,6 +15,10 @@ export type CoverRow = S['RetailCoverRow'];
 /** Slow movers on Stock health (issue #414): money tied up is absent without retail.profit.read in the row's branch. */
 export type SlowMovers = S['RetailSlowMovers'];
 export type SlowMover = S['RetailSlowMover'];
+/** Damaged and used as a share of the stock that passed through (issue #822, ADR-127): only for retail.profit.read. */
+export type DamageShare = S['RetailDamageShare'];
+export type DamageShareBranch = S['RetailDamageShareBranch'];
+export type DamageShareItem = S['RetailDamageShareItem'];
 export type CreditControl = S['RetailCreditControl'];
 export type Ageing = S['RetailAgeing'];
 /** Customer accounts (issue #196): ageing per credit buyer with a record, with the limit and the terms. */
@@ -59,6 +63,13 @@ export const retailAnalytics = {
     return unwrap(
       await api.GET('/api/v1/retail/reports/stock-health', {
         params: { query: { branch_id: branchId ? [branchId] : undefined, from, to, top, lead_days: leadDays, cover_days: coverDays } },
+      }),
+    );
+  },
+  async damageShare({ branchId, from, to }: { branchId?: string; from: string; to: string }): Promise<DamageShare> {
+    return unwrap(
+      await api.GET('/api/v1/retail/reports/stock-health/damage-share', {
+        params: { query: { branch_id: branchId ? [branchId] : undefined, from, to } },
       }),
     );
   },

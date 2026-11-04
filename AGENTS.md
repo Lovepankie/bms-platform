@@ -915,6 +915,16 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   movement's `entry_lines` and the toast the answer's `items_back`, both counted on the server, never from the list. Tests:
   `RetailUsageUndoIT` (also two undos at once and another business's entry), `usage-undo.dom.test.tsx`,
   `controls-state.test.ts`, `layout/usage-undo.layout.test.ts`.
+- **Built (damage and use as a share of stock, issue #822, ADR-127, FR-RET-92):** no migration and no permission.
+  `GET /retail/reports/stock-health/damage-share` (`retail.profit.read`; `StockHealthService.damageShare`,
+  `StockHealthRepository.flow`) gives per shop and item the damaged and used quantities of the period (this month by default),
+  each as a whole percent of the stock that passed through: the stock at the start of the first day plus what came in
+  (deliveries, stock moved in, a starting stock first set, never a voided or reversing movement), undone entries left out, no
+  share on a zero base, the highest first, with a shop total. Only the shops where the caller holds the permission; any other
+  branch or another business's is 404 `unknown_branch`. Stock health shows it in the Damage and use section
+  (`damage-share.tsx`) with its own period picker on This month and the base in one line, only to a profit reader; the read is
+  kept offline (`damage-share`); tour `page-stock-health` v4. Tests: `RetailDamageShareIT`, `damage-share.dom.test.tsx`,
+  `layout/damage-share.layout.test.ts`.
 - **Built (a receipt photo on a sale, a delivery, an expense and a usage entry, issue #819, ADR-124, FR-RET-89):** no
   migration and no permission. The catalogue's public port `ReceiptPhotos` (`ReceiptPhotoService`) stores the photo through the
   item photo's checks and limits as an `upload` document whose subject is the record (`retail.sale_receipt_photo`,

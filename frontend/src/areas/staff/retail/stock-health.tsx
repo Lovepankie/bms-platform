@@ -7,6 +7,7 @@ import { Choice, DateRange, Empty, Section, ToStock, defaultRange, moneyOrNone, 
 import { showQty } from './maths';
 import { StockMinimumEditor } from './stock-minimum';
 import { SlowMoversSection } from './slow-movers';
+import { DamageShareSection } from './damage-share';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -216,6 +217,7 @@ export function StockHealthPage() {
       <Problem error={report.error} />
       {report.data && <StockHealthView data={report.data} nameOf={nameOf} />}
       </div>
+      <DamageShareSection nameOf={nameOf} />
     </Gate>
   );
 }

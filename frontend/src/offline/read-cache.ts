@@ -51,6 +51,7 @@ const RETAIL_READS = new Set([
   'usage-history', // Past usage and damage
   'item-stock', // the item page's stock in each shop (issue #813)
   'item-movements', // the item page's movements with the balance after each
+  'damage-share', // Stock health's damage and use share, asked for only by a profit reader (issue #822, ADR-127)
   // The lists the daily forms kept on the phone offline wait on (issue #812, ADR-067 decision 13).
   'expense-categories', // the expense form's categories and items
   'cash-parties', // the beneficiary picker

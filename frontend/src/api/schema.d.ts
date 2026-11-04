@@ -6978,6 +6978,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/reports/stock-health/damage-share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Damaged and used as a share of the stock that passed through, per item and shop (issue #822)
+         * @description The base is the stock at the start of the first day plus what came in during the period (ADR-127). This month by default. Only the shops where the caller holds retail.profit.read; a branch_id outside them or of another business is 404 unknown_branch
+         */
+        get: operations["getRetailDamageShare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/reports/supplier-payables": {
         parameters: {
             query?: never;
@@ -14413,6 +14433,63 @@ export interface components {
             stocktake_difference_minor?: number;
             /** Format: int64 */
             usage_cost_minor?: number;
+        };
+        /** @description Damaged and used as a share of the stock that passed through, per item and per shop (issue #822, ADR-127). Only for retail.profit.read, and only the shops where it is held */
+        RetailDamageShare: {
+            /** @description Shops with something damaged or used first, highest share first */
+            branches?: components["schemas"]["RetailDamageShareBranch"][];
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+        };
+        /** @description One shop: its total over every item that passed through it, and the items damaged or used, highest share first */
+        RetailDamageShareBranch: {
+            /** @description Sum of base_qty over every item of the shop, each in its smallest unit */
+            base_qty?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: int32
+             * @description Absent when base_qty is 0
+             */
+            damaged_pct?: number;
+            damaged_qty?: string;
+            items?: components["schemas"]["RetailDamageShareItem"][];
+            /**
+             * Format: int32
+             * @description Absent when base_qty is 0
+             */
+            used_pct?: number;
+            used_qty?: string;
+        };
+        /** @description One item in one shop: what was damaged and what was used, each as a share of the stock that passed through (issue #822, ADR-127). Quantities in the item's smallest unit */
+        RetailDamageShareItem: {
+            /** @description The stock that passed through: the stock at the start of the first day plus what came in during the period (deliveries, stock moved in, and a starting stock first set in it); opening_qty plus received_qty */
+            base_qty?: string;
+            code?: string;
+            /**
+             * Format: int32
+             * @description damaged_qty over base_qty as a whole percent, half up; absent when base_qty is 0
+             */
+            damaged_pct?: number;
+            /** @description Damaged in the period; an undone entry is left out */
+            damaged_qty?: string;
+            description?: string;
+            /** @description Stock at the start of the first day; none when it was below zero */
+            opening_qty?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description What came in during the period: deliveries, stock moved in, a starting stock first set; a voided one is left out */
+            received_qty?: string;
+            unit?: string;
+            /**
+             * Format: int32
+             * @description used_qty over base_qty as a whole percent, half up; absent when base_qty is 0
+             */
+            used_pct?: number;
+            /** @description Used in the shop in the period; an undone entry is left out */
+            used_qty?: string;
         };
         RetailDashboard: {
             /**
@@ -33919,6 +33996,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockHealth"];
+                };
+            };
+        };
+    };
+    getRetailDamageShare: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDamageShare"];
                 };
             };
         };

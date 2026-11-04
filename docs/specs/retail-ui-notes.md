@@ -27,7 +27,7 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/profit` | Daily profit per branch, with the stock-take difference as its own column (#121) | `retail.profit.read` |
 | `/staff/retail/sales-analysis` | Sales analysis: totals by day, week or month, top items as bars, by branch, category, item and seller, slow movers, items with no sale (#149) | `retail.sale.read` (profit columns: `retail.profit.read`) |
 | `/staff/retail/margins` | Margins: profit and margin by item and category, items under a margin target, price change impact (#149) | `retail.profit.read` |
-| `/staff/retail/stock-health` | Stock health: days of cover, reorder suggestions, slow movers (#414), dead stock, used, damaged and found missing (#149) | `retail.stock.read` (cost: `retail.profit.read`) |
+| `/staff/retail/stock-health` | Stock health: days of cover, reorder suggestions, slow movers (#414), dead stock, used, damaged and found missing (#149); Damage and use as a share of stock (#822, ADR-127): its own period picker on This month, the hint "Out of the stock that passed through: the stock at the start plus what came in.", per shop a Shop total and each item damaged or used, the highest first, each share in words with the quantities ("Damaged 10%, 5 of 50 piece", "under 1%", "no stock came in to compare with"), kept for offline | `retail.stock.read` (cost: `retail.profit.read`; the damage and use section only with `retail.profit.read`) |
 | `/staff/retail/credit-control` | Credit control: what credit buyers owe by age, the overdue list, payments received (#149) | `retail.sale.read` |
 | `/staff/retail/evaluation` | Business evaluation: profit to date, expected profit of the stock at today's prices, a 30 day pace (#149) | `retail.profit.read` |
 | `/staff/retail/catalogue` | Catalogue home: links to the screens below the session may use | any one of the catalogue screens' permissions |
@@ -1232,7 +1232,7 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/retail/settings` | Retail settings | `page-retail-settings` v4 (slow movers step, #414) | none added |
 | `/staff/retail/stock` | Stock | `page-stock` v3 (existing) | none added |
 | `/staff/retail/stock-by-location` | Stores and shops | `page-stock-by-location` v1 (existing) | none added |
-| `/staff/retail/stock-health` | Stock health | `page-stock-health` v2 (slow movers step, #414) | item and branch names open Stock; Move on a slow mover opens Move stock filled in |
+| `/staff/retail/stock-health` | Stock health | `page-stock-health` v4 (slow movers step, #414; why-low, #412; damage and use share for profit readers, #822) | item and branch names open Stock; Move on a slow mover opens Move stock filled in |
 | `/staff/retail/stocktake` | Stock-take | `page-stocktake` v1 (existing) | none added |
 | `/staff/retail/supplier-bills` | Supplier invoices | `page-supplier-bills` v1 (added) | none added |
 | `/staff/retail/supplier-bills/$billId` | Supplier invoice | `page-supplier-bill` v1 (added) | supplier opens its open items; delivery number opens the delivery |

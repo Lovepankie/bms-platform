@@ -12417,6 +12417,109 @@
           }
         }
       },
+      "RetailDamageShare" : {
+        "description" : "Damaged and used as a share of the stock that passed through, per item and per shop (issue #822, ADR-127). Only for retail.profit.read, and only the shops where it is held",
+        "properties" : {
+          "branches" : {
+            "description" : "Shops with something damaged or used first, highest share first",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDamageShareBranch"
+            },
+            "type" : "array"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailDamageShareBranch" : {
+        "description" : "One shop: its total over every item that passed through it, and the items damaged or used, highest share first",
+        "properties" : {
+          "base_qty" : {
+            "description" : "Sum of base_qty over every item of the shop, each in its smallest unit",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "damaged_pct" : {
+            "description" : "Absent when base_qty is 0",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "damaged_qty" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDamageShareItem"
+            },
+            "type" : "array"
+          },
+          "used_pct" : {
+            "description" : "Absent when base_qty is 0",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "used_qty" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailDamageShareItem" : {
+        "description" : "One item in one shop: what was damaged and what was used, each as a share of the stock that passed through (issue #822, ADR-127). Quantities in the item's smallest unit",
+        "properties" : {
+          "base_qty" : {
+            "description" : "The stock that passed through: the stock at the start of the first day plus what came in during the period (deliveries, stock moved in, and a starting stock first set in it); opening_qty plus received_qty",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "damaged_pct" : {
+            "description" : "damaged_qty over base_qty as a whole percent, half up; absent when base_qty is 0",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "damaged_qty" : {
+            "description" : "Damaged in the period; an undone entry is left out",
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "opening_qty" : {
+            "description" : "Stock at the start of the first day; none when it was below zero",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "received_qty" : {
+            "description" : "What came in during the period: deliveries, stock moved in, a starting stock first set; a voided one is left out",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "used_pct" : {
+            "description" : "used_qty over base_qty as a whole percent, half up; absent when base_qty is 0",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "used_qty" : {
+            "description" : "Used in the shop in the period; an undone entry is left out",
+            "type" : "string"
+          }
+        }
+      },
       "RetailDashboard" : {
         "properties" : {
           "credit_recognition_starts_on" : {
@@ -45088,6 +45191,54 @@
           }
         },
         "summary" : "Days of cover, reorder suggestions, dead stock and shrinkage by branch (issue #149)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/stock-health/damage-share" : {
+      "get" : {
+        "description" : "The base is the stock at the start of the first day plus what came in during the period (ADR-127). This month by default. Only the shops where the caller holds retail.profit.read; a branch_id outside them or of another business is 404 unknown_branch",
+        "operationId" : "getRetailDamageShare",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDamageShare"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Damaged and used as a share of the stock that passed through, per item and shop (issue #822)",
         "tags" : [ "retail-reports" ]
       }
     },

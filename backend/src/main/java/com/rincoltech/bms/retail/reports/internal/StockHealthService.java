@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.reports.internal;
 
 import static com.rincoltech.bms.retail.reports.internal.AnalyticsSupport.PROFIT_READ;
 
+import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
@@ -11,6 +12,9 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.reports.internal.AnalyticsSupport.Window;
 import com.rincoltech.bms.retail.reports.internal.StockHealthApi.CoverList;
 import com.rincoltech.bms.retail.reports.internal.StockHealthApi.CoverRow;
+import com.rincoltech.bms.retail.reports.internal.StockHealthApi.DamageShare;
+import com.rincoltech.bms.retail.reports.internal.StockHealthApi.DamageShareBranch;
+import com.rincoltech.bms.retail.reports.internal.StockHealthApi.DamageShareItem;
 import com.rincoltech.bms.retail.reports.internal.StockHealthApi.DeadBranch;
 import com.rincoltech.bms.retail.reports.internal.StockHealthApi.DeadItem;
 import com.rincoltech.bms.retail.reports.internal.StockHealthApi.DeadStock;
@@ -23,6 +27,7 @@ import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.BranchPa
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.Count;
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.DeadRow;
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.DeadTotal;
+import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.Flow;
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.Pace;
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.SlowRow;
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.Usage;
@@ -38,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,18 +63,25 @@ class StockHealthService {
     static final int MAX_MONTHS = 120;
     private static final BigDecimal CAP = BigDecimal.valueOf(MAX_DAYS);
     private static final BigDecimal MONTHS_CAP = BigDecimal.valueOf(MAX_MONTHS);
+    private static final Comparator<BigDecimal> HIGHEST_FIRST = Comparator.nullsLast(Comparator.reverseOrder());
 
     private final StockHealthRepository repo;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final RetailCapabilities settings;
+    private final Branches branches;
 
     StockHealthService(
-            StockHealthRepository repo, CurrentTenant tenant, BusinessClock clock, RetailCapabilities settings) {
+            StockHealthRepository repo,
+            CurrentTenant tenant,
+            BusinessClock clock,
+            RetailCapabilities settings,
+            Branches branches) {
         this.repo = repo;
         this.tenant = tenant;
         this.clock = clock;
         this.settings = settings;
+        this.branches = branches;
     }
 
     @Transactional(readOnly = true)
@@ -237,6 +250,105 @@ class StockHealthService {
                 .filter(java.util.Objects::nonNull)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Issue #822, ADR-127: damaged and used as a share of the stock that passed through (the stock at the start of the first
+     * day plus what came in), per item and per shop, for {@code from} to {@code to}, this month by default. Only the shops
+     * where the caller holds retail.profit.read; a shop asked for outside that, or of another business, is 404.
+     */
+    @Transactional(readOnly = true)
+    DamageShare damageShare(List<UUID> branchIds, LocalDate from, LocalDate to) {
+        // JUSTIFICATION-A3: issue #822 asks for this report: one read, grouped per shop, beside the shrinkage.
+        Principal principal = CurrentPrincipal.require();
+        if (branchIds != null && !branchIds.isEmpty()) {
+            List<UUID> known = branches.all().stream().map(Branches.Branch::id).toList();
+            for (UUID b : branchIds) {
+                if (!known.contains(b) || !principal.may(PROFIT_READ, b)) {
+                    throw new ApiException(
+                            HttpStatus.NOT_FOUND,
+                            "unknown_branch",
+                            "Branch not found",
+                            "That branch is not one you may see the damage share of.",
+                            List.of(new FieldProblem("branch_id", "unknown_branch", "No such branch in your scope.")));
+                }
+            }
+        }
+        List<UUID> filter = principal.branchFilter(PROFIT_READ, branchIds);
+        LocalDate today = clock.today(tenant.profile().timezone());
+        LocalDate start = from != null ? from : (to == null ? today : to).withDayOfMonth(1);
+        Window w = AnalyticsSupport.window(start, to, today);
+        Map<UUID, List<Flow>> byBranch = new LinkedHashMap<>();
+        for (Flow f : repo.flow(filter, w.from(), w.to())) {
+            byBranch.computeIfAbsent(f.branchId(), k -> new ArrayList<>()).add(f);
+        }
+        List<DamageShareBranch> shops = new ArrayList<>();
+        byBranch.forEach((branch, flows) -> {
+            BigDecimal base = BigDecimal.ZERO;
+            BigDecimal damaged = BigDecimal.ZERO;
+            BigDecimal used = BigDecimal.ZERO;
+            List<DamageShareItem> items = new ArrayList<>();
+            for (Flow f : flows) {
+                BigDecimal itemBase = f.opening().add(f.received());
+                base = base.add(itemBase);
+                damaged = damaged.add(f.damaged());
+                used = used.add(f.used());
+                if (f.damaged().signum() > 0 || f.used().signum() > 0) {
+                    items.add(new DamageShareItem(
+                            f.productId(),
+                            f.code(),
+                            f.description(),
+                            f.unit(),
+                            Quantities.format(f.opening()),
+                            Quantities.format(f.received()),
+                            Quantities.format(itemBase),
+                            Quantities.format(f.damaged()),
+                            Quantities.format(f.used()),
+                            percent(f.damaged(), itemBase),
+                            percent(f.used(), itemBase)));
+                }
+            }
+            Comparator<DamageShareItem> byShare = Comparator.comparing(StockHealthService::itemShare, HIGHEST_FIRST);
+            items.sort(byShare.thenComparing(DamageShareItem::code).thenComparing(DamageShareItem::productId));
+            shops.add(new DamageShareBranch(
+                    branch,
+                    Quantities.format(base),
+                    Quantities.format(damaged),
+                    Quantities.format(used),
+                    percent(damaged, base),
+                    percent(used, base),
+                    items));
+        });
+        Comparator<DamageShareBranch> byShare = Comparator.comparing(StockHealthService::shopShare, HIGHEST_FIRST);
+        shops.sort(byShare.thenComparing(DamageShareBranch::branchId));
+        return new DamageShare(w.from(), w.to(), shops);
+    }
+
+    /** {@code part} over {@code base} as a whole percent, half up; null when nothing passed through. */
+    static Integer percent(BigDecimal part, BigDecimal base) {
+        if (base.signum() <= 0) {
+            return null;
+        }
+        BigDecimal hundredths = part.multiply(BigDecimal.valueOf(100));
+        return hundredths.divide(base, 0, RoundingMode.HALF_UP).intValueExact();
+    }
+
+    /** The order of the list: the larger of the damaged and used shares, exactly; null when nothing passed through. */
+    static BigDecimal share(String damaged, String used, String base) {
+        BigDecimal b = new BigDecimal(base);
+        if (b.signum() <= 0) {
+            return null;
+        }
+        BigDecimal larger = new BigDecimal(damaged).max(new BigDecimal(used));
+        return larger.divide(b, 9, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal itemShare(DamageShareItem i) {
+        return share(i.damagedQty(), i.usedQty(), i.baseQty());
+    }
+
+    private static BigDecimal shopShare(DamageShareBranch s) {
+        return share(s.damagedQty(), s.usedQty(), s.baseQty());
     }
 
     private List<Shrinkage> shrinkage(Principal principal, List<UUID> filter, Window w) {
