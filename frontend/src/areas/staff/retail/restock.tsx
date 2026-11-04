@@ -12,7 +12,9 @@ import { Gate, Money, Note, Problem, ProductPicker, money, useProfitAccess } fro
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
 import { ScreenToast, useItemAdded } from './toast';
-import { TRANSFER, UNITS, canUse, capabilityOn, holdsAt } from './permissions';
+import { BACKDATE, TRANSFER, UNITS, canUse, capabilityOn, holdsAt } from './permissions';
+import { entryDate } from './cash-state';
+import { DateField } from './cash-ui';
 import { NextSteps } from './next-steps';
 import { usualBuyingPack } from './ladder-state';
 import { OWN_PRICE_KEEPS_SIZE, baseCostMinor, baseQtyMilli, buyingPacks, chosenPack, deliveredFactor, mayKeepSize, packPriceMinor, quantityIn, sameFactor, unitWord, unitWords } from './units-state';
@@ -94,10 +96,12 @@ export function restockTotal(lines: RestockLine[]): number {
   }, 0);
 }
 
-export function buildPurchase(input: { supplierId: string; purchasedOn: string; method: PurchasePayment; lines: RestockLine[] }): PurchaseRequest {
+export function buildPurchase(input: { supplierId: string; purchasedOn?: string; dateReason?: string; method: PurchasePayment; lines: RestockLine[] }): PurchaseRequest {
   return {
     ...(input.supplierId ? { supplier_id: input.supplierId } : {}),
-    purchased_on: input.purchasedOn,
+    // ADR-120: no date for today, so the server dates the purchase itself; an owner's earlier day goes with its reason.
+    ...(input.purchasedOn ? { purchased_on: input.purchasedOn } : {}),
+    ...(input.dateReason ? { date_reason: input.dateReason } : {}),
     payment_method: input.method,
     lines: input.lines.map((l) => ({
       product_id: l.product.id ?? '',
@@ -138,6 +142,8 @@ export function creditNeedsSupplier(method: PurchasePayment, supplierId: string)
 export interface RestockDraft {
   supplierId: string;
   purchasedOn: string;
+  /** Why the owner chose an earlier day (ADR-120). */
+  dateReason?: string;
   method: PurchasePayment;
   lines: RestockLine[];
 }
@@ -192,6 +198,9 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
   const setMethod = field('method');
   const setLines = (f: (ls: RestockLine[]) => RestockLine[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
   const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
+  // ADR-120: only the owner, at every branch the goods go into, sees the date and may choose an earlier one.
+  const into = [...new Set(lines.flatMap((l) => Object.keys(l.qtyByBranch)))];
+  const dated = entryDate(into.every((b) => holdsAt(me, BACKDATE, b)) && holdsAt(me, BACKDATE, undefined), purchasedOn, draft.dateReason, businessToday());
 
   // success-screen: the purchase saved screen that replaces the form; an edited delivery goes back to Past purchases (issue #830)
   const save = useMutation({
@@ -201,7 +210,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
       const before = Object.fromEntries(lines.map((l) => [l.product.id ?? '', { sell: l.product.sell_minor, cost: l.product.cost_minor }]));
       // Edit (issue #830): one call voids the old delivery and saves this one naming it, in one transaction on the server, so
       // any refusal (its stock moved, an item switched off) leaves the old delivery as it was. The draft's key covers a retry.
-      const request = buildPurchase({ supplierId, purchasedOn, method, lines });
+      const request = buildPurchase({ supplierId, purchasedOn: dated.sent?.date, dateReason: dated.sent?.reason, method, lines });
       const saved = replaces?.id ? await retail.replacePurchase(replaces.id, request, key) : await retail.createPurchase(request, key);
       return { saved, context: { supplierName, before } };
     },
@@ -262,7 +271,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
 
   const problems = lines.map(restockLineProblem);
   const supplierProblem = creditNeedsSupplier(method, supplierId);
-  const blocked = lines.length === 0 || problems.some((p) => p !== null) || supplierProblem !== null;
+  const blocked = lines.length === 0 || problems.some((p) => p !== null) || supplierProblem !== null || dated.reasonMissing;
   // Issue #353: each line against the item's own purchases, said before saving, never blocking.
   const norms = useEntryNorms(lines.map((l) => l.product.id));
   const warnings = lines.flatMap((l, i): EntryWarning[] => {
@@ -319,11 +328,10 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
         )}
       />
       </div>
-      <label htmlFor="bought-on">Bought on</label>
-      <input id="bought-on" type="date" max={businessToday()} value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} />
-      {again && purchasedOn < businessToday() && (
+      <DateField id="bought-on" label="Bought on" entry={dated} value={dated.day} reason={draft.dateReason} onChange={setPurchasedOn} onReason={(dateReason) => setDraft((d) => ({ ...d, dateReason }))} />
+      {again && dated.earlier && (
         <p role="note" className="alert alert-warning" data-testid="date-warning">
-          This purchase is dated {showDate(purchasedOn)}. The cash book of that day may be banked already, and saving will change its figures. Use today's date unless the goods really arrived then.
+          This purchase is dated {showDate(dated.day)}. The cash book of that day may be banked already, and saving will change its figures. Use today's date unless the goods really arrived then.
         </p>
       )}
 

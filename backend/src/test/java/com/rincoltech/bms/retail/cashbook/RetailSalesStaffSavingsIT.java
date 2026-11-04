@@ -153,6 +153,38 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
         assertThat(body.has("day_expenses_minor")).isFalse();
     }
 
+    /**
+     * ADR-120 (issue #811): a seller saves today's savings only; an earlier day of the month is the owner's, a reason or not.
+     * JUSTIFICATION-A3: a new test case asked for by the review of #831; no existing test covers this route's date.
+     */
+    @Test
+    void aSellerIsRefusedAnEarlierDayOfTheMonthAndNothingIsWritten() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(today.getDayOfMonth() > 1, "yesterday is in this month");
+        LocalDate yesterday = today.minusDays(1);
+        theSwitch(true);
+        Map<String, Object> body = new LinkedHashMap<>(Map.of(
+                "branch_id", hq, "business_date", yesterday.toString(), "date_reason", "Forgot to save it yesterday"));
+        body.put(
+                "suggestion_token",
+                suggestion(seller, hq, yesterday)
+                        .getBody()
+                        .get("suggestion_token")
+                        .asString());
+
+        ResponseEntity<JsonNode> r =
+                api.call(HttpMethod.POST, SALES_STAFF, body, seller, Map.of("Idempotency-Key", "key-811-earlier-day"));
+
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("date_not_today");
+        String count = "SELECT count(*) FROM retail_daily_savings WHERE tenant_id = ?";
+        assertThat(TestDatabase.owner()
+                        .sql(count)
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     @Test
     void withTheSwitchOnASalesUserSeesTheAmountChangesItSavesItAndSeesTheMonthsRecordsIncludingAnOlderOne() {
         // Made before the switch was turned on: one this month, at the second branch, and one last month.

@@ -10,6 +10,7 @@ Amended by issue #799 (3 Nov 2026): the setting reaches sales staff, who hold `r
 Amended by issue #827 (3 Nov 2026), as the owner's old app did: every month's records, not only this month's, show their
 amounts to whoever may record savings or sell at the branch, and sellers see them grouped by shop, year, month and person with
 the sum at each level (decisions 3 and 8 changed, decision 10 added). No migration.
+Amended by ADR-120 (issue #811): sales staff save today's savings; an earlier day of the month is the owner's, with a reason.
 
 ## Context
 

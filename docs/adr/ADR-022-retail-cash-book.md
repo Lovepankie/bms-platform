@@ -9,7 +9,9 @@ Decisions 4, 5, 6 and 13 name their open questions where they depend on one.
 Completes the cash book that ADR-020 left out of the first release ("pending ADR-022"). Amends
 nothing in ADR-020. Decision 11 is amended by ADR-080 (issue #538): the suggestion is worked out from the day's profit less its
 expenses, a savings amount may not exceed that, and the overwrite reason is optional. Decision 13 is relaxed by ADR-118 (issue
-#802): adding an item to an active expense category needs `retail.expense.record`, not `retail.expense.manage`.
+#802): adding an item to an active expense category needs `retail.expense.record`, not `retail.expense.manage`. The business
+date of a record is amended by ADR-120 (issue #811): the server dates it today, and only a holder of `retail.entry.backdate`
+may choose an earlier day, with a reason that is audited.
 
 ## Context
 

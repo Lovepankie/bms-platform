@@ -123,12 +123,15 @@ class BankingService {
     private Banking recordBanking(BankingRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.BANKING_RECORD, r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        LocalDate date = support.businessDate(r.businessDate(), "business_date");
+        CashbookSupport.Dated dated = support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch);
+        LocalDate date = dated.date();
         Instant bankedAt = r.bankedAt() == null ? support.now() : r.bankedAt();
         if (bankedAt.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("banked_at", "future_date", "A date cannot be in the future.")));
         }
+        // ADR-120: the time of the banking is the app's too; an earlier day is the owner's, with the same reason.
+        dated = support.withTime(dated, bankedAt, "banked_at", r.dateReason(), branch);
         long amount = r.amountMinor();
         boolean profit = mayProfit(branch);
         // The snapshot: what the screen showed, computed here and never taken from the client.
@@ -157,6 +160,7 @@ class BankingService {
         after.put("business_date", date.toString());
         after.put("amount_minor", amount);
         audit.record(AuditLog.Entry.created("retail.banking.created", "retail.banking", id, branch, after));
+        support.auditBackdate(dated, "retail.banking", id, branch);
         Day d = figures.day(branch, date);
         BankingRow row = repo.banking(id, false).orElseThrow();
         return view(row, profit, d.bankedNet() - d.expectedToBank(), flag(d), warnings);
@@ -279,12 +283,14 @@ class BankingService {
     private Withdrawal recordWithdrawal(WithdrawalRequest r) {
         UUID branch = withdrawalBranch(r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        LocalDate date = support.businessDate(r.businessDate(), "business_date");
+        CashbookSupport.Dated dated = support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch);
+        LocalDate date = dated.date();
         Instant at = r.withdrawnAt() == null ? support.now() : r.withdrawnAt();
         if (at.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("withdrawn_at", "future_date", "A date cannot be in the future.")));
         }
+        dated = support.withTime(dated, at, "withdrawn_at", r.dateReason(), branch);
         long amount = r.amountMinor();
         List<String> warnings = new ArrayList<>();
         if (figures.bankBalance(branch, support.today()) - amount < 0) {
@@ -303,6 +309,7 @@ class BankingService {
                 id,
                 branch,
                 Map.of("business_date", date.toString(), "amount_minor", amount)));
+        support.auditBackdate(dated, "retail.withdrawal", id, branch);
         return view(repo.withdrawal(id, false).orElseThrow(), warnings);
     }
 
