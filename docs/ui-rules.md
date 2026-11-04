@@ -47,7 +47,22 @@ back to what opened it.
     first missing field. The kit's `Field` does all of this, and the lending forms (`form-fields.tsx`) follow it.
 11. Amounts open the numeric keypad (`inputmode="numeric"`), quantities use steppers, and a choice of 2 to 5 options is a
     segmented control.
-12. Touch targets are at least 48px.
+12. Touch targets are at least 48 by 48px. On a phone two targets stand at least 8px apart (`--tap-gap`) and the screen's main
+    action is full width in the stuck `ActionBar`; these rules hold in the app's phone layout, under 720px, which holds the
+    phone of issue #825 (up to 600px). On a laptop (from 1024px) a button is as wide as its label, never wider than
+    `--button-max` (320px), the main action at least `--button-min-wide` (160px) and at the right of its form, a secondary
+    action right under it (Clear this purchase) under it at the right, any other block button at its start, still 48px tall
+    for a touch laptop (issue #825). The gap rules hold under 720px and the width rules from 1024px; at every width a button
+    is at least 48px wide, the shop chart ranges and a search's Clear are 48px, and the buttons of a bar or sheet keep the
+    order below (the primary last), so between 720 and 1023px those change while the sizes of the laptop do not. The ActionBar and a sheet's buttons stand
+    together at the right in the order of the page, never reversed, so what is seen matches the Tab order, and the primary
+    comes last in the markup, so it stands at the far right on a laptop and nearest the thumb on a phone. The staff top bar keeps 8px between its targets at every
+    width; below 412px it takes two lines in the order of the page (the menu and the names, then the icon buttons at the
+    right), so the business and branch names keep the minimum of #605. A bar the page scrolls under (the top bar, the bottom
+    tabs, a stuck ActionBar) keeps its targets 8px inside every edge that faces the page.
+    `layout/buttons.layout.test.ts` measures the daily screens at 412 by 900 and 1366 by 800, and the design guard lists every
+    class named as a tap target (`.btn-*`, `.chip`, `.pill`, `*-btn`, `*-button`, `*-chip`, `*-pill`, `*-clear`, `*-close`,
+    `*-toggle`).
 
 ## Motion
 

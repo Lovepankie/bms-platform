@@ -10012,6 +10012,12 @@
             "format" : "date",
             "type" : "string"
           },
+          "date_reason" : {
+            "description" : "Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "party_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -10564,6 +10570,12 @@
           },
           "business_date" : {
             "format" : "date",
+            "type" : "string"
+          },
+          "date_reason" : {
+            "description" : "Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today",
+            "maxLength" : 300,
+            "minLength" : 0,
             "type" : "string"
           },
           "offline" : {
@@ -13535,6 +13547,12 @@
           },
           "category_id" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "date_reason" : {
+            "description" : "Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today",
+            "maxLength" : 300,
+            "minLength" : 0,
             "type" : "string"
           },
           "explanation" : {
@@ -17666,6 +17684,12 @@
       },
       "RetailPurchaseRequest" : {
         "properties" : {
+          "date_reason" : {
+            "description" : "Why the purchase has a date before today; needed then (ADR-120)",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "lines" : {
             "items" : {
               "$ref" : "#/components/schemas/RetailPurchaseLineRequest"
@@ -17688,7 +17712,7 @@
             "type" : "string"
           },
           "purchased_on" : {
-            "description" : "Not in the future",
+            "description" : "Defaults to today; not in the future, and before today only from a holder of retail.entry.backdate at every branch of the lines, with date_reason (ADR-120)",
             "format" : "date",
             "type" : "string"
           },
@@ -17698,7 +17722,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "lines", "payment_method", "purchased_on" ]
+        "required" : [ "lines", "payment_method" ]
       },
       "RetailPurchaseVoidRequest" : {
         "properties" : {
@@ -18556,6 +18580,12 @@
           "branch_id" : {
             "description" : "The branch that receives the money; defaults to the advance's branch",
             "format" : "uuid",
+            "type" : "string"
+          },
+          "date_reason" : {
+            "description" : "Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today",
+            "maxLength" : 300,
+            "minLength" : 0,
             "type" : "string"
           },
           "method" : {
@@ -19941,6 +19971,12 @@
           },
           "business_date" : {
             "format" : "date",
+            "type" : "string"
+          },
+          "date_reason" : {
+            "description" : "Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today",
+            "maxLength" : 300,
+            "minLength" : 0,
             "type" : "string"
           },
           "offline" : {
@@ -22365,6 +22401,12 @@
       },
       "RetailTransferRequest" : {
         "properties" : {
+          "date_reason" : {
+            "description" : "Why the move has a date before today; needed then (ADR-120)",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "from_branch_id" : {
             "description" : "The source branch; defaults to the caller's one branch",
             "format" : "uuid",
@@ -22392,7 +22434,7 @@
             "type" : "string"
           },
           "transfer_date" : {
-            "description" : "Defaults to today; not in the future",
+            "description" : "Defaults to today; not in the future, and before today only from a holder of retail.entry.backdate at the source branch, with date_reason (ADR-120)",
             "format" : "date",
             "type" : "string"
           }
@@ -23104,6 +23146,12 @@
           },
           "business_date" : {
             "format" : "date",
+            "type" : "string"
+          },
+          "date_reason" : {
+            "description" : "Why the entry has a date before today; needed then, and only a holder of retail.entry.backdate may send such a date (ADR-120). Leave the date out and the server dates it today",
+            "maxLength" : 300,
+            "minLength" : 0,
             "type" : "string"
           },
           "offline" : {

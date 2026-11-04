@@ -56,8 +56,8 @@ public record OfflineEntry(
     /** The oldest an entry kept offline may be without the owner's permission: the 7 days of ADR-067 decision 5. */
     public static final Duration MAX_AGE = Duration.ofDays(7);
 
-    /** Date an entry earlier than the app would (issue #811, pending ADR-120); the owner's. */
-    public static final String BACKDATE = "retail.entry.backdate";
+    /** Date an entry earlier than the app would (issue #811, ADR-120); the owner's. */
+    public static final String BACKDATE = EntryDates.BACKDATE;
 
     /** When the entry counts as made; refused for a phone clock behind, or when too old for the caller. */
     public Instant judged(Instant now, Collection<UUID> branches) {

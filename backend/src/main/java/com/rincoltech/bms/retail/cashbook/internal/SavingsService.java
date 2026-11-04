@@ -25,6 +25,7 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.SavingsRow;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookSupport.SalespeopleSavings;
 import com.rincoltech.bms.retail.reports.DailyProfits;
+import com.rincoltech.bms.retail.stock.EntryDates;
 import com.rincoltech.bms.retail.stock.OfflineEntry;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
@@ -231,6 +232,12 @@ class SavingsService {
                 caller,
                 OfflineEntry.day(r.offline(), r.businessDate(), support.now(), support.zone(), List.of(branch)),
                 "business_date");
+        // ADR-120: an earlier day is the owner's, with a reason, on the till's route and on the sales staff's alike.
+        // Savings
+        // kept offline were dated by the phone, not chosen (ADR-067 decision 13): past 7 days OfflineEntry asks for the
+        // owner.
+        EntryDates.Backdate backdate =
+                r.offline() != null ? null : support.entryDates().check(date, "business_date", r.dateReason(), branch);
         boolean profit = mayProfit(branch);
         boolean salesperson = !profit && setting.on();
         if (r.suggestionToken() == null || r.suggestionToken().isBlank()) {
@@ -329,6 +336,7 @@ class SavingsService {
             after.put("salespeople_setting", true);
         }
         audit.record(AuditLog.Entry.created("retail.savings.created", "retail.savings", id, branch, after));
+        support.entryDates().audit(backdate, "retail.savings", id, branch);
         return view(repo.savings(id, false).orElseThrow(), setting);
     }
 

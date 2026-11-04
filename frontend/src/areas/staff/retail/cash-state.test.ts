@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { retailMessage } from '../../../api/retail-errors';
-import { amountOrNull, clockTime, enteredBy, flagWords, groupByShopMonth, monthLabel, warningWords } from './cash-state';
+import { amountOrNull, clockTime, dateFields, enteredBy, entryDate, flagWords, groupByShopMonth, monthLabel, warningWords } from './cash-state';
 
 describe('cash book plain logic', () => {
   it('reads an amount in whole shillings and refuses anything else', () => {
@@ -47,6 +47,24 @@ describe('cash book plain logic', () => {
     expect(warningWords('cash_below_banked')).toMatch(/more than the cash/);
     expect(warningWords('bank_balance_negative')).toMatch(/bank balance/);
     expect(warningWords('something_new')).toBeNull();
+  });
+});
+
+describe('the date of a new entry (ADR-120)', () => {
+  const today = '2026-11-03';
+  it('is today, with nothing to send, for someone who may not choose it, whatever a kept draft says', () => {
+    expect(entryDate(false, '2026-10-30', 'old reason', today)).toEqual({ mayChoose: false, day: today, earlier: false, reasonMissing: false, sent: null });
+    expect(dateFields(entryDate(false, '2026-10-30', '', today))).toEqual({});
+  });
+  it('lets the owner choose an earlier day, only with a reason, and sends both', () => {
+    expect(entryDate(true, '2026-10-30', ' ', today)).toMatchObject({ day: '2026-10-30', earlier: true, reasonMissing: true });
+    const dated = entryDate(true, '2026-10-30', ' Slip found ', today);
+    expect(dated.reasonMissing).toBe(false);
+    expect(dateFields(dated, 'paid_on')).toEqual({ paid_on: '2026-10-30', date_reason: 'Slip found' });
+  });
+  it('sends nothing for today or a day after it, even for the owner', () => {
+    expect(entryDate(true, today, '', today).sent).toBeNull();
+    expect(entryDate(true, '2026-11-09', '', today)).toMatchObject({ day: today, sent: null });
   });
 });
 

@@ -47,7 +47,7 @@ const soap: Product = {
 const lamp: Product = { id: 'p2', code: 'TL-1', description: 'Test Lamp', unit: 'piece', sell_minor: 5000, active: true, qty: '9.000' };
 
 function open(lines: TransferLineDraft[]) {
-  const draft = { toBranchId: to, transferDate: '2026-10-23', note: '', lines };
+  const draft = { toBranchId: to, transferDate: '', note: '', lines };
   sessionStorage.setItem(`retail-draft:transfer:${me.user_id}:${from}`, JSON.stringify({ key: 'test-key-650', draft }));
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>

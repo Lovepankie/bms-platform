@@ -101,7 +101,9 @@ final class PurchasingApi {
             @Schema(description = "Required for a credit purchase")
             UUID supplierId,
 
-            @NotNull @Schema(description = "Not in the future")
+            @Schema(
+                    description = "Defaults to today; not in the future, and before today only from a holder of"
+                            + " retail.entry.backdate at every branch of the lines, with date_reason (ADR-120)")
             LocalDate purchasedOn,
 
             @NotNull
@@ -113,13 +115,17 @@ final class PurchasingApi {
 
             @Size(max = 300) String note,
             @NotEmpty @Size(max = 500) List<@Valid @NotNull PurchaseLineRequest> lines,
+
+            @Size(max = 300) @Schema(description = "Why the purchase has a date before today; needed then (ADR-120)")
+            String dateReason,
+
             @Valid OfflineEntry offline) {
 
         /** The same purchase dated {@code on}: an entry kept offline takes the day it was made (ADR-067 decision 13). */
         PurchaseRequest dated(LocalDate on) {
-            return on.equals(purchasedOn)
+            return java.util.Objects.equals(on, purchasedOn)
                     ? this
-                    : new PurchaseRequest(supplierId, on, paymentMethod, note, lines, offline);
+                    : new PurchaseRequest(supplierId, on, paymentMethod, note, lines, dateReason, offline);
         }
     }
 

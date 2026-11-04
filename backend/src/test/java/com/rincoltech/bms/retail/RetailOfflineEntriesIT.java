@@ -239,9 +239,13 @@ class RetailOfflineEntriesIT extends IntegrationTest {
     void anEntryOlderThanSevenDaysIsRefusedForStaffAndKeptOnItsDayForTheOwner() {
         Instant old = Instant.now().minus(Duration.ofDays(8));
         LocalDate oldDay = LocalDate.ofInstant(old, ZONE);
+        // A member of staff: everything an administrator holds for retail but the owner's backdate permission.
+        String staff = java.util.Arrays.stream(ALL.split(","))
+                .filter(p -> !p.equals(OfflineEntry.BACKDATE))
+                .collect(java.util.stream.Collectors.joining(","));
         bodies(old, null).forEach((path, body) -> {
             ResponseEntity<JsonNode> r = cb.api.postKeyed(
-                    path, body.get(), ALL, "*", UUID.randomUUID().toString());
+                    path, body.get(), staff, "*", UUID.randomUUID().toString());
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
             assertThat(r.getBody().toString()).as(path).contains("offline_entry_too_old");
             assertThat(r.getBody().toString()).as(path).contains("Only the owner can save it on its own day");

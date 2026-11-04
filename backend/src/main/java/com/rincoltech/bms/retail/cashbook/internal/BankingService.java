@@ -123,11 +123,19 @@ class BankingService {
     private Banking recordBanking(BankingRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.BANKING_RECORD, r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date", branch);
+        CashbookSupport.Dated dated =
+                support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch, r.offline());
+        LocalDate date = dated.date();
         Instant bankedAt = support.entryTime(r.bankedAt(), r.offline(), branch);
         if (bankedAt.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("banked_at", "future_date", "A date cannot be in the future.")));
+        }
+        // ADR-120: the time of the banking is the app's too; an earlier day is the owner's, with the same reason.
+        // An entry kept offline was timed by the phone, judged in entryTime (ADR-067 decision 13), not chosen by the
+        // person.
+        if (r.offline() == null) {
+            dated = support.withTime(dated, bankedAt, "banked_at", r.dateReason(), branch);
         }
         long amount = r.amountMinor();
         boolean profit = mayProfit(branch);
@@ -157,6 +165,7 @@ class BankingService {
         after.put("business_date", date.toString());
         after.put("amount_minor", amount);
         audit.record(AuditLog.Entry.created("retail.banking.created", "retail.banking", id, branch, after));
+        support.auditBackdate(dated, "retail.banking", id, branch);
         Day d = figures.day(branch, date);
         BankingRow row = repo.banking(id, false).orElseThrow();
         return view(row, profit, d.bankedNet() - d.expectedToBank(), flag(d), warnings);
@@ -279,11 +288,18 @@ class BankingService {
     private Withdrawal recordWithdrawal(WithdrawalRequest r) {
         UUID branch = withdrawalBranch(r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date", branch);
+        CashbookSupport.Dated dated =
+                support.entryDate(r.businessDate(), "business_date", r.dateReason(), branch, r.offline());
+        LocalDate date = dated.date();
         Instant at = support.entryTime(r.withdrawnAt(), r.offline(), branch);
         if (at.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("withdrawn_at", "future_date", "A date cannot be in the future.")));
+        }
+        // An entry kept offline was timed by the phone, judged in entryTime (ADR-067 decision 13), not chosen by the
+        // person.
+        if (r.offline() == null) {
+            dated = support.withTime(dated, at, "withdrawn_at", r.dateReason(), branch);
         }
         long amount = r.amountMinor();
         List<String> warnings = new ArrayList<>();
@@ -303,6 +319,7 @@ class BankingService {
                 id,
                 branch,
                 Map.of("business_date", date.toString(), "amount_minor", amount)));
+        support.auditBackdate(dated, "retail.withdrawal", id, branch);
         return view(repo.withdrawal(id, false).orElseThrow(), warnings);
     }
 

@@ -207,7 +207,7 @@ left, the branch, the period, the person's roles.
     catalogue's time, whichever is later. A time ahead of the server is now. A time more than 2 minutes before `online_as_of`
     (a phone clock behind) is refused (422 `offline_clock_behind`). A time more than 7 days ago, the same limit as an offline
     sale (its key is answered for 7 days, decision 5), needs the backdate permission of #811 (`retail.entry.backdate`,
-    the owner's, pending ADR-120, PR #831) at every branch the entry touches and is kept on its own day for the owner; for
+    the owner's, ADR-120) at every branch the entry touches and is kept on its own day for the owner; for
     anyone else it is refused (422 `offline_entry_too_old`) with "Only the owner can save it on its own day. Fix it on the
     phone to save it as an entry of today." and nothing is recorded. A closed accounting period stays refused by the ledger
     (`period_closed`) as for an offline sale: retail has no daily close (decision 6). A date field sent with the entry is

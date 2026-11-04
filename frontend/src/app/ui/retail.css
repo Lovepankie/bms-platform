@@ -201,6 +201,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A card's Open the item link and its Correct button (#813) stand 8px apart, side by side or one under the other (#825). */
+.stock-card > .item-page-link {
+  margin: 0 var(--tap-gap) var(--tap-gap) 0;
+}
+
+/* Open the item and the Items ways to add sizes and colours are links drawn as buttons: a 48px target wherever they stand, even
+   should .btn change (#825). */
+.item-page-link,
+[data-tour='product-add-sizes'],
+[data-tour='product-join-sizes'] {
+  display: inline-flex;
+  min-width: var(--tap);
+  min-height: var(--tap);
+}
+
 /* Issue #728: "0 here. 456 at Test Store" and its switch, under the quantity; in a table cell it reads from the left. */
 .stock-elsewhere {
   display: flex;
@@ -421,9 +436,32 @@
   font-size: var(--text-lg);
 }
 
-.rt-primary ~ button:not(.rt-primary) {
+/* A secondary action under the main one, also the one button right after an ActionBar holding it (Buy stock's Clear this
+   purchase, #825). */
+.rt-primary ~ button:not(.rt-primary),
+.action-bar:has(> .rt-primary) + button:not(.rt-primary) {
   width: 100%;
   margin-top: var(--space-3);
+}
+
+/* The phone layout (#825): a line holding a button right under the main action stands clear of it. */
+@media (max-width: 719px) {
+  .rt-primary + p:has(> :is(button, .btn)) {
+    margin-top: var(--space-3);
+  }
+}
+
+/* A laptop (issue #825, buttons.css): the main action and the buttons under it take the width of their label, at the right. */
+@media (min-width: 1024px) {
+  .rt-primary,
+  .rt-primary ~ button:not(.rt-primary),
+  .action-bar:has(> .rt-primary) + button:not(.rt-primary) {
+    display: flex;
+    width: fit-content;
+    min-width: min(100%, var(--button-min-wide));
+    max-width: min(100%, var(--button-max));
+    margin-inline-start: auto;
+  }
 }
 
 .rt section > h2:first-child {
@@ -999,7 +1037,7 @@ th[scope='rowgroup'] .cat-head {
 }
 
 .rc-chip {
-  min-height: 40px;
+  min-height: var(--tap);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border-strong);
   border-radius: 999px;

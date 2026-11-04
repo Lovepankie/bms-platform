@@ -100,6 +100,11 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
       title={`What one ${unit.name ?? ''} usually holds`}
       actions={
         <>
+          {had && (
+            <BusyButton busy={save.isPending && save.variables?.clear_usual_pack === true} type="button" disabled={save.isPending} onClick={() => save.mutate({ clear_usual_pack: true })}>
+              Remove the usual number
+            </BusyButton>
+          )}
           {removeOnly === null && <BusyButton
             busy={save.isPending && save.variables?.clear_usual_pack !== true}
             type="submit"
@@ -110,11 +115,6 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
           >
             Save
           </BusyButton>}
-          {had && (
-            <BusyButton busy={save.isPending && save.variables?.clear_usual_pack === true} type="button" disabled={save.isPending} onClick={() => save.mutate({ clear_usual_pack: true })}>
-              Remove the usual number
-            </BusyButton>
-          )}
         </>
       }
     >

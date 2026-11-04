@@ -6,6 +6,7 @@ import { branch, html, page } from './cashbook-test-utils';
 import { CategoryCard, ExpenseLists } from './expense-lists';
 import { ExpenseForm, ExpenseGroups, ExpenseRecords } from './expenses';
 import { activeCategories, itemsOf, needsExplanation, planExpense } from './expenses-state';
+import { entryDate } from './cash-state';
 
 const today = businessToday();
 const categories: ExpenseCategory[] = [
@@ -35,7 +36,7 @@ describe('expense rules', () => {
     expect(needsExplanation(categories, 'c1', 'i4')).toBe(false);
   });
 
-  const base = { branchId: branch, date: today, categoryId: 'c2', itemId: 'i4', partyId: '', amount: '5,000', explanation: '' };
+  const base = { branchId: branch, entry: entryDate(false, today, '', today), categoryId: 'c2', itemId: 'i4', partyId: '', amount: '5,000', explanation: '' };
 
   it('blocks an expense that needs an explanation until it has 3 characters', () => {
     expect(planExpense(base, categories).problem).toMatch(/at least 3/);

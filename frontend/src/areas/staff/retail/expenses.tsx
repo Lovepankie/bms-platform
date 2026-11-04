@@ -5,7 +5,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
 import { businessToday, isWaiting, retail, type ApprovalWaiting, type Expense, type ExpenseCategory, type ExpenseGroup, type ExpenseItem } from '../../../api/retail';
 import { useStaff } from '../context';
-import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
+import { DateField, RecordsByShop, Saved, WindowFields, useEntryDate, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import {
   MIN_EXPLANATION, activeCategories, deleteExpenseReason, draftOfExpense, itemsOf, needsExplanation, planExpense, withItem,
 } from './expenses-state';
@@ -26,7 +26,7 @@ import { EditNeedsInternet, KeptOnPhone, OfflineFormNote, isKept, useEntrySave }
 // beneficiary, the amount, and an explanation when the item needs one. A receipt photo is not offered yet:
 // the frontend has no documents upload client to send a receipt_document_id with (skipped on purpose).
 
-interface ExpenseDraft { date: string; categoryId: string; itemId: string; partyId: string; amount: string; explanation: string }
+interface ExpenseDraft { date: string; dateReason?: string; categoryId: string; itemId: string; partyId: string; amount: string; explanation: string }
 
 export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }: {
   branchId: string;
@@ -46,7 +46,8 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
   const list = categories.data ?? [];
   const items = itemsOf(list, draft.categoryId);
   const explain = needsExplanation(list, draft.categoryId, draft.itemId);
-  const plan = planExpense({ branchId, ...draft }, list);
+  const entry = useEntryDate(branchId, draft.date, draft.dateReason);
+  const plan = planExpense({ branchId, ...draft, entry }, list);
   // Issue #812: offline, or when the network drops, a new expense is kept on the phone; an edit stays online only.
   const entries = useEntrySave();
   const detail = [list.find((c) => c.id === draft.categoryId)?.name, items.find((i) => i.id === draft.itemId)?.name].filter(Boolean).join(', ');
@@ -94,7 +95,7 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
       {editOffline ? <EditNeedsInternet /> : entries.offlineMode && <OfflineFormNote what="expense" />}
-      {!entries.offlineMode && <DateField id="expense-date" label="Date" value={draft.date} onChange={(date) => update({ date })} />}
+      {!entries.offlineMode && <DateField id="expense-date" label="Date" entry={entry} value={entry.day} reason={draft.dateReason} onChange={(date) => update({ date })} onReason={(dateReason) => update({ dateReason })} />}
 
       {showsEmptyChoice(categories, categories.data && activeCategories(list)) ? (
         <EmptyChoice id="expense-category" label="Category" load={categories} text="No expense categories yet." ask="Ask the owner to add expense categories first."

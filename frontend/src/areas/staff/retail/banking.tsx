@@ -5,8 +5,8 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type Banking, type BankingDay, type BankingExpected } from '../../../api/retail';
 import { useStaff } from '../context';
 import { alreadyBankedLabel, bankingPrefill } from './banking-state';
-import { amountOrNull, clockTime, flagWords, groupByShopMonth, warningWords, type BankingFlag } from './cash-state';
-import { DateField, ImportedBadge, RecordsByShop, Saved, Warnings, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
+import { amountOrNull, clockTime, dateFields, flagWords, groupByShopMonth, warningWords, type BankingFlag } from './cash-state';
+import { DateField, ImportedBadge, RecordsByShop, Saved, Warnings, WindowFields, useEntryDate, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, holds, needsOf } from './permissions';
 import { ScreenLink } from './screen-link';
@@ -22,7 +22,7 @@ import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../off
 // the cash restock cost, the savings and the net amount to bank, and only then the flag, the difference and
 // the warning after a save. Several deposits on one day are allowed.
 
-interface BankingDraft { date: string; amount: string | null; reference: string }
+interface BankingDraft { date: string; dateReason?: string; amount: string | null; reference: string }
 
 export function ExpectedFigures({ expected, date }: { expected: BankingExpected; date?: string }) {
   return (
@@ -44,12 +44,13 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<BankingDraft>(`banking:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: null, reference: '' });
-  const expected = useQuery({ queryKey: ['retail', 'banking-expected', branchId, draft.date], queryFn: () => retail.bankingExpected({ branchId, date: draft.date }) });
+  const entry = useEntryDate(branchId, draft.date, draft.dateReason);
+  const expected = useQuery({ queryKey: ['retail', 'banking-expected', branchId, entry.day], queryFn: () => retail.bankingExpected({ branchId, date: entry.day }) });
   const shown = draft.amount ?? bankingPrefill(expected.data);
   const minor = amountOrNull(shown);
   // Issue #812: offline, or when the network drops, the banking is kept on the phone; the figures wait for the network.
   const entries = useEntrySave();
-  const body = { branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) };
+  const body = { branch_id: branchId, ...dateFields(entry), amount_minor: minor ?? 0, ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) };
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => entries.save(
@@ -67,15 +68,16 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
       onSaved?.(saved);
     },
   });
-  const blocked = minor === null || (expected.isPending && !entries.offlineMode) || save.isPending;
+  // Offline the date is the phone's (issue #812): the figures and the owner's earlier day wait for the network.
+  const blocked = minor === null || ((expected.isPending || entry.reasonMissing) && !entries.offlineMode) || save.isPending;
   if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
       {entries.offlineMode && <OfflineFormNote what="banking" />}
-      {!entries.offlineMode && <DateField id="banking-date" label="Date" value={draft.date} onChange={(date) => setDraft((d) => ({ ...d, date, amount: null }))} />}
+      {!entries.offlineMode && <DateField id="banking-date" label="Date" entry={entry} value={entry.day} reason={draft.dateReason} onChange={(date) => setDraft((d) => ({ ...d, date, amount: null }))} onReason={(dateReason) => setDraft((d) => ({ ...d, dateReason }))} />}
       {expected.isError && <Problem error={expected.error} />}
       {expected.isPending && !entries.offlineMode && <p className="loading">Loading</p>}
-      {expected.data && <ExpectedFigures expected={expected.data} date={draft.date} />}
+      {expected.data && <ExpectedFigures expected={expected.data} date={entry.day} />}
       <label htmlFor="banking-amount">Amount banked</label>
       <input id="banking-amount" inputMode="numeric" value={shown} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} aria-invalid={shown.trim() !== '' && minor === null} />
       {shown.trim() !== '' && minor === null && <p role="alert" className="rt-flag">Enter the amount in whole shillings.</p>}

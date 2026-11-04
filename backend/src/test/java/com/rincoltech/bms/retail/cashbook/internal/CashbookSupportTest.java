@@ -21,7 +21,7 @@ class CashbookSupportTest {
     static CashbookSupport support(Instant at, String dataKey) {
         CurrentTenant tenant =
                 () -> new CurrentTenant.Profile(TENANT, "test", "Test Shop", "UGX", ZoneId.of("Africa/Kampala"));
-        return new CashbookSupport(tenant, new BusinessClock(Clock.fixed(at, ZoneOffset.UTC)), null, dataKey);
+        return new CashbookSupport(tenant, new BusinessClock(Clock.fixed(at, ZoneOffset.UTC)), null, null, dataKey);
     }
 
     @Test

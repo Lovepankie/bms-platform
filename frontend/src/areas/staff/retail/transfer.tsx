@@ -9,7 +9,9 @@ import { ToStock } from './analytics-ui';
 import { parseQty, showQty } from './maths';
 import { buildTransfer, lineMilli, linePack, transferLineHint, transferProblem, withPacks, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
-import { TRANSFER, TRANSFER_RECEIPT, UNITS, capabilityOn, holdsAt, needsOf } from './permissions';
+import { BACKDATE, TRANSFER, TRANSFER_RECEIPT, UNITS, capabilityOn, holdsAt, needsOf } from './permissions';
+import { dateFields, entryDate } from './cash-state';
+import { DateField } from './cash-ui';
 import { BranchRequired, Gate, NoStockHere, PacksAndPiecesFields, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 import { ScanBar } from './scan';
 import { NextSteps, mayCountAt } from './next-steps';
@@ -60,17 +62,23 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
     `transfer:${me.user_id ?? ''}:${fromBranchId}`,
     { toBranchId: '', transferDate: businessToday(), note: '', lines: [] },
   );
+  // ADR-120: only the owner sees the date, at the source and, for a move that completes now, at the destination too; nothing
+  // is sent for today and the server dates the move itself.
+  const receivedLater = capabilityOn(me, 'retail', TRANSFER_RECEIPT);
+  const ownersHere = holdsAt(me, BACKDATE, fromBranchId) && (receivedLater || !draft.toBranchId || holdsAt(me, BACKDATE, draft.toBranchId));
+  const dated = entryDate(ownersHere, draft.transferDate, draft.dateReason, businessToday());
+  const body = { ...buildTransfer(fromBranchId, { ...draft, transferDate: dated.sent?.date ?? '' }), ...dateFields(dated, 'transfer_date') };
   // Issue #812: offline, or when the network drops, the move is kept on the phone and sent later.
   const entries = useEntrySave();
   // success-screen: Move stock shows the summary of the move in place of the form, and the toast says it too (#824)
   const save = useMutation({
     mutationFn: () => entries.save(
       {
-        kind: 'transfer', body: buildTransfer(fromBranchId, draft), key, branchId: fromBranchId,
+        kind: 'transfer', body, key, branchId: fromBranchId,
         detail: `to ${label(draft.toBranchId)}, ${draft.lines.length} ${draft.lines.length === 1 ? 'item' : 'items'}`,
         fix: { to: '/staff/retail/transfer', draftName: name, draft },
       },
-      () => retail.createTransfer(buildTransfer(fromBranchId, draft), key),
+      () => retail.createTransfer(body, key),
     ),
     meta: { success: (t: Transfer) => (t?.status === 'in_transit' ? `Stock sent to ${label(t.to_branch_id)}` : `Stock moved to ${label(t?.to_branch_id)}`) },
     onSuccess: (t) => {
@@ -129,7 +137,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       if (p) setDraft((d) => (d.lines.length > 0 ? d : { ...d, lines: [{ product: p, qty: prefill.qty }] }));
     }, () => undefined);
   }, [prefill, draft.lines.length, draft.toBranchId, destinations, fromBranchId, setDraft]);
-  const problem = transferProblem(fromBranchId, draft);
+  const problem = transferProblem(fromBranchId, draft) ?? (dated.reasonMissing ? 'Say why the date is earlier than today.' : null);
   // With the two-step transfer on (ADR-033) the stock leaves now and is counted at the destination once received.
   const sends = capabilityOn(me, 'retail', TRANSFER_RECEIPT);
   // Issue #353: each line against the item's own moves (or its purchases while it has few moves), said before saving, never blocking.
@@ -204,8 +212,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
         );
       })}
 
-      <label htmlFor="transfer-date">Date</label>
-      <input id="transfer-date" type="date" max={businessToday()} value={draft.transferDate} onChange={(e) => update({ transferDate: e.target.value })} />
+      {!entries.offlineMode && <DateField id="transfer-date" label="Date" entry={dated} value={dated.day} reason={draft.dateReason} onChange={(transferDate) => update({ transferDate })} onReason={(dateReason) => update({ dateReason })} />}
       <label htmlFor="transfer-note">Note (optional)</label>
       <input id="transfer-note" maxLength={300} value={draft.note} onChange={(e) => update({ note: e.target.value })} />
 

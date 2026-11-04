@@ -160,12 +160,12 @@ export function SignOutEverywhere({ open, waiting, busy, onConfirm, onClose }: {
       title="Sign out everywhere?"
       actions={
         <>
-          <BusyButton type="button" className="btn-danger" busy={busy} onClick={onConfirm}>
-            Sign out everywhere
-          </BusyButton>
           <button type="button" /* busy-exempt: closes the sheet */ className="btn-ghost" disabled={busy} onClick={onClose}>
             Cancel
           </button>
+          <BusyButton type="button" className="btn-danger" busy={busy} onClick={onConfirm}>
+            Sign out everywhere
+          </BusyButton>
         </>
       }
     >

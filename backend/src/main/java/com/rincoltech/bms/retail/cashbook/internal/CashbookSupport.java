@@ -7,6 +7,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
+import com.rincoltech.bms.retail.stock.EntryDates;
 import com.rincoltech.bms.retail.stock.OfflineEntry;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
@@ -59,16 +60,19 @@ class CashbookSupport {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final JdbcClient jdbc;
+    private final EntryDates entryDates;
     private final byte[] tokenKey;
 
     CashbookSupport(
             CurrentTenant tenant,
             BusinessClock clock,
             JdbcClient jdbc,
+            EntryDates entryDates,
             @Value("${bms.auth.data-key:}") String dataKey) {
         this.tenant = tenant;
         this.clock = clock;
         this.jdbc = jdbc;
+        this.entryDates = entryDates;
         byte[] key;
         if (dataKey == null || dataKey.isBlank()) {
             // The dev and test profiles may leave the data key blank; a token then lives until a restart.
@@ -113,11 +117,17 @@ class CashbookSupport {
     }
 
     /**
-     * The business date of a record that may have been kept on the phone offline: the day it was made, judged as an offline
-     * sale is (ADR-067 decision 13), otherwise {@link #businessDate(LocalDate, String)} of the date it asks for.
+     * The date of a new entry that may have been kept on the phone offline (ADR-067 decision 13): offline, the day it was
+     * made, judged as an offline sale is, with no backdate of ADR-120 to check, since the person did not choose it (past 7
+     * days {@link OfflineEntry} asks for the owner's backdate permission itself); otherwise
+     * {@link #entryDate(LocalDate, String, String, UUID)}.
      */
-    LocalDate entryDate(LocalDate requested, OfflineEntry offline, String field, UUID branch) {
-        return businessDate(OfflineEntry.day(offline, requested, now(), zone(), List.of(branch)), field);
+    Dated entryDate(LocalDate requested, String field, String reason, UUID branch, OfflineEntry offline) {
+        if (offline == null) {
+            return entryDate(requested, field, reason, branch);
+        }
+        return new Dated(
+                businessDate(OfflineEntry.day(offline, requested, now(), zone(), List.of(branch)), field), null);
     }
 
     /** When a record kept offline happened (the time it was made, judged), or {@code at} as sent, or now. */
@@ -137,6 +147,36 @@ class CashbookSupport {
                     List.of(new FieldProblem(field, "future_date", "A date cannot be in the future.")));
         }
         return date;
+    }
+
+    /** The date of an entry and, when it is before today, the owner's checked backdate (ADR-120); else none. */
+    record Dated(LocalDate date, EntryDates.Backdate backdate) {}
+
+    /**
+     * The business date of a new entry (ADR-120): today when absent, never in the future, and before today only from a
+     * holder of {@code retail.entry.backdate} at the branch, with a reason.
+     */
+    Dated entryDate(LocalDate requested, String field, String reason, UUID branch) {
+        LocalDate date = businessDate(requested, field);
+        return new Dated(date, entryDates.check(date, field, reason, branch));
+    }
+
+    /**
+     * ADR-120: the time of a banking or a withdrawal is part of its date. A time on an earlier day is gated like the date,
+     * and audited when the business date itself is today (review of #831), so either earlier day leaves its audit row.
+     */
+    Dated withTime(Dated dated, Instant at, String field, String reason, UUID branch) {
+        EntryDates.Backdate time = entryDates.check(dayOf(at), field, reason, branch);
+        return dated.backdate() != null || time == null ? dated : new Dated(dated.date(), time);
+    }
+
+    /** The {@code retail.entry.backdated} audit row of an entry dated before today; nothing otherwise. */
+    void auditBackdate(Dated dated, String entityType, UUID id, UUID branch) {
+        entryDates.audit(dated.backdate(), entityType, id, branch);
+    }
+
+    EntryDates entryDates() {
+        return entryDates;
     }
 
     /** The first and last day of a report: the last 30 days by default, at most 366. */
