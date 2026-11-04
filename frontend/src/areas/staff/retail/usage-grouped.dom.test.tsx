@@ -28,7 +28,10 @@ vi.mock('../../../api/retail', async (original) => {
   const real = await original<typeof import('../../../api/retail')>();
   return {
     ...real,
-    retail: { ...real.retail, usageSummary: (q: unknown) => summary(q), usageHistory: (q: unknown) => history(q), listProducts: () => Promise.resolve([]) },
+    retail: {
+      ...real.retail, usageSummary: (q: unknown) => summary(q), usageHistory: (q: unknown) => history(q),
+      listProducts: () => Promise.resolve([{ id: 'p1', code: 'BU-01', description: 'Test bulb' }]),
+    },
   };
 });
 
@@ -122,6 +125,35 @@ describe('Past usage and damage grouped (issue #816)', () => {
     // The item opens onto the list's own rows, read with the shop, the month and the item opened above.
     fireEvent.click(bulb);
     await waitFor(() => expect(within(bodyOf(bulb)).getAllByTestId('usage-row')).toHaveLength(1));
+    expect(history).toHaveBeenLastCalledWith(expect.objectContaining({ branchId: a, productId: 'p1', from: '2026-10-01', to: '2026-10-20' }));
+  });
+
+  // JUSTIFICATION-A3: the lead's note on the review of 178bacf asked for this DOM test (chain ending at category, flat search).
+  // Rows under a group carry every level opened above and the flat search, and a chain that ends at category (one stored
+  // earlier) is never used: the levels are always shop, month, category and item.
+  it('reads the rows with every level and the flat search, and never stops the chain at category', async () => {
+    arrange(true);
+    localStorage.setItem(`bms.listChain.usage.${admin.user_id}`, JSON.stringify(['branch', 'month', 'category']));
+    render(show(admin));
+    fireEvent.change(screen.getByLabelText('Item (type part of its name or code)'), { target: { value: 'bulb' } });
+    fireEvent.change(await screen.findByLabelText('Choose the item'), { target: { value: 'p1' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Grouped' }));
+    const shopA = await head(/^Test Branch A/);
+    // Only the bulb counts once the search chose it: 2 in October and 1 in September at head office.
+    await waitFor(() => expect(shopA.textContent).toContain('UGX 4,500'));
+    fireEvent.click(shopA);
+    const october = await head(/^October 2026/, bodyOf(shopA));
+    fireEvent.click(october);
+    const lights = await head(/^Test lights/, bodyOf(october));
+    expect(bodyOf(october).textContent).not.toContain('Test paints');
+    fireEvent.click(lights);
+    const bulb = await head(/^Test bulb/, bodyOf(lights));
+    fireEvent.click(bulb);
+    await waitFor(() => expect(within(bodyOf(bulb)).getAllByTestId('usage-row')).toHaveLength(1));
+    for (const [q] of summary.mock.calls as [UsageSummaryQuery][]) {
+      expect(q.chain).toEqual(['branch', 'month', 'category', 'item']);
+    }
+    expect(summary.mock.calls.at(-1)?.[0]).toMatchObject({ level: 'item', branchId: a, categoryId: 'c1', itemId: 'p1', from: '2026-10-01', to: '2026-10-20' });
     expect(history).toHaveBeenLastCalledWith(expect.objectContaining({ branchId: a, productId: 'p1', from: '2026-10-01', to: '2026-10-20' }));
   });
 

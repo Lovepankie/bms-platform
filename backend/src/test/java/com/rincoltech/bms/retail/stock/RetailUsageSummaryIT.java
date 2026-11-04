@@ -3,6 +3,7 @@ package com.rincoltech.bms.retail.stock;
 import static com.rincoltech.bms.retail.RetailTestSupport.ADMIN;
 import static com.rincoltech.bms.retail.RetailTestSupport.SALES;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
@@ -203,6 +204,29 @@ class RetailUsageSummaryIT extends IntegrationTest {
         JsonNode head = body(
                 api.call(HttpMethod.GET, "/usage/summary?group_by=month&branch_id=" + hq, null, ADMIN, "*", oneBranch));
         assertThat(group(head, "2026-10").get("cost_minor").asLong()).isEqualTo(1_450);
+    }
+
+    // JUSTIFICATION-A3: the lead's note on the review of 178bacf asked for the uncategorised case; this proves it
+    // cannot occur.
+    /**
+     * There is no "no category" group to make: an item and an expense always name a category (NOT NULL, V10 and V34), so
+     * not even the owner can write one without.
+     */
+    @Test
+    void noItemOrExpenseCanBeWithoutACategory() {
+        List<String> nullable =
+                TestDatabase.owner().sql("""
+                        SELECT table_name FROM information_schema.columns
+                         WHERE column_name = 'category_id' AND is_nullable = 'YES'
+                           AND table_name IN ('retail_products', 'retail_expenses')
+                        """).query(String.class).list();
+        assertThat(nullable).isEmpty();
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE retail_products SET category_id = NULL WHERE id = ?")
+                        .param(p1)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("null value");
     }
 
     @Test
