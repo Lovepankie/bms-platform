@@ -21,6 +21,7 @@ import { CustomerPicker } from './customer-picker';
 import { ScreenLink } from './screen-link';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
 import { Hint } from '../../../app/ui/Hint';
+import { ContactLinks } from './contact-links';
 
 // Customer orders with delivery (issue #385, ADR-052): orders that come by WhatsApp, Instagram, Facebook, a phone call or at the
 // counter. Saving an order keeps its items aside so the till cannot sell them; nothing is paid yet. The order is packed, sent out
@@ -168,6 +169,7 @@ export function OrderSummary({ order, branchName }: { order: Order; branchName?:
         {order.customer_name}
         {order.customer_phone && <>, <a href={`tel:${order.customer_phone}`}>{order.customer_phone}</a></>}
       </p>
+      <ContactLinks contact={order.customer_phone} name={order.customer_name} />
       <p className="hint">
         {order.delivery_place ? `Deliver to ${order.delivery_place}` : 'Collects at the shop'}
         {order.delivery_date ? `, on ${showDate(order.delivery_date)}` : ''}

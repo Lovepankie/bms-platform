@@ -10,6 +10,7 @@ import { DateField, ImportedBadge, RecordsByShop, Saved, VoidAction, useEntryDat
 import { usePersistedDraft } from './idempotency';
 import { PartyPicker, useCashParties } from './party-picker';
 import { CASHBOOK_READ, holds } from './permissions';
+import { ContactLinks } from './contact-links';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
@@ -198,7 +199,13 @@ export function AdvanceList({ onOpen }: { onOpen: (id: string) => void }) {
   );
 }
 
-export function AdvanceDetailView({ advance, onVoided }: { advance: Advance; onVoided?: (message: string) => void }) {
+/** The phone or other contact saved on a party, by its id, for the Call, Text and WhatsApp links (issue #817). */
+function usePartyContact(): (partyId: string | undefined) => string | undefined {
+  const parties = useCashParties();
+  return (partyId) => (parties.data ?? []).find((p) => p.id === partyId)?.contact;
+}
+
+export function AdvanceDetailView({ advance, contact, onVoided }: { advance: Advance; contact?: string; onVoided?: (message: string) => void }) {
   const mayVoid = useMayVoid()(advance.branch_id);
   const shopName = useBranchName();
   const repayments = advance.repayments ?? [];
@@ -210,6 +217,7 @@ export function AdvanceDetailView({ advance, onVoided }: { advance: Advance; onV
       <div className="table-wrap"><table>
         <tbody>
           <tr><td>For</td><td className="num">{advance.party_name}</td></tr>
+          {contact && <tr><td>Contact</td><td className="num">{contact}</td></tr>}
           {advance.taken_by_name && <tr><td>Taken by</td><td className="num">{advance.taken_by_name}</td></tr>}
           <tr><td>Date</td><td className="num">{showDate(advance.business_date)}</td></tr>
           <tr><td>Shop</td><td className="num">{shopName(advance.branch_id)}</td></tr>
@@ -219,6 +227,7 @@ export function AdvanceDetailView({ advance, onVoided }: { advance: Advance; onV
           <tr><td>Still owed</td><td className="num"><strong>{money(advance.balance_minor ?? 0)}</strong></td></tr>
         </tbody>
       </table></div>
+      <ContactLinks contact={contact} name={advance.party_name} />
       <p className="hint">{enteredBy(advance.by_name, advance.at)}{advance.voided && advance.void_reason ? `. Voided because: ${advance.void_reason}` : ''}</p>
       {voidOffered(advance, mayVoid) && (
         <>
@@ -247,29 +256,32 @@ export function AdvanceDetailView({ advance, onVoided }: { advance: Advance; onV
 
 function AdvanceDetail({ id, onClose, onVoided }: { id: string; onClose: () => void; onVoided: (message: string) => void }) {
   const advance = useQuery({ queryKey: ['retail', 'advance', id], queryFn: () => retail.getAdvance(id) });
+  const contactOf = usePartyContact();
   return (
     <>
       <button type="button" onClick={onClose}>Back to the list</button>
       {advance.isError && <Problem error={advance.error} />}
       {advance.isPending && <p className="loading">Loading</p>}
-      {advance.data && <AdvanceDetailView advance={advance.data} onVoided={onVoided} />}
+      {advance.data && <AdvanceDetailView advance={advance.data} contact={contactOf(advance.data.party_id)} onVoided={onVoided} />}
     </>
   );
 }
 
-export function OutstandingView({ report }: { report: AdvanceReport }) {
+export function OutstandingView({ report, contactOf }: { report: AdvanceReport; contactOf?: (partyId: string | undefined) => string | undefined }) {
   const parties = report.items ?? [];
   if (parties.length === 0) return <p className="empty-state">No advance has a balance.</p>;
   return (
     <>
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        {parties.map((p) => (
+        {parties.map((p) => ({ p, contact: contactOf?.(p.party_id) })).map(({ p, contact }) => (
           <li key={p.party_id} className="rt-card">
             <strong>{p.party_name}</strong>
+            {contact && <p className="hint">{contact}</p>}
             <p className="rt-row"><span>Advanced</span><span>{money(p.principal_minor ?? 0)}</span></p>
             <p className="rt-row"><span>Repaid</span><span>{money(p.repaid_minor ?? 0)}</span></p>
             <p className="rt-row"><span>Owes</span><strong>{money(p.balance_minor ?? 0)}</strong></p>
             <p className="hint">{p.count} {p.count === 1 ? 'advance' : 'advances'}, the oldest from {showDate(p.oldest_advance_date)}</p>
+            <ContactLinks contact={contact} name={p.party_name} />
           </li>
         ))}
       </ul>
@@ -281,11 +293,12 @@ export function OutstandingView({ report }: { report: AdvanceReport }) {
 function Outstanding() {
   const scope = useReadScope();
   const report = useQuery({ queryKey: ['retail', 'advances-report', scope], queryFn: () => retail.advancesReport({ branchIds: scope }) });
+  const contactOf = usePartyContact();
   return (
     <section aria-label="Outstanding advances">
       {report.isError && <Problem error={report.error} />}
       {report.isPending && <p className="loading">Loading</p>}
-      {report.data && <OutstandingView report={report.data} />}
+      {report.data && <OutstandingView report={report.data} contactOf={contactOf} />}
     </section>
   );
 }

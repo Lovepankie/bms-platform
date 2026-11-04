@@ -9,6 +9,7 @@ import { useStaff } from '../context';
 import { BuyerAccount } from './buyer-account';
 import { BuyerPricing } from './buyer-pricing';
 import { AddPanel } from './catalogue';
+import { ContactLinks } from './contact-links';
 import { canUse } from './permissions';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, changeFailureText, money, requireVersion, useToast } from './ui';
@@ -42,6 +43,7 @@ export function PersonRow({ row, busy, extra, onSave, onToggle }: {
         <strong>{row.name}</strong> {off && <span className="badge badge-warning">Switched off</span>}
       </p>
       <p className="hint">{row.contact ? row.contact : 'No contact saved.'}</p>
+      {!editing && <ContactLinks contact={row.contact} name={row.name} />}
       {owed !== undefined && (
         <p>{owed > 0 ? <>Owes <strong>{money(owed)}</strong> on credit sales, all your branches.</> : 'Owes nothing, all your branches.'}</p>
       )}
