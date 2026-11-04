@@ -94,8 +94,11 @@ describe.each([1, 2])('Past usage and damage at 412px, font scale %i', (font) =>
       expect(h.gradient, 'no gradient').toBe(false);
     }
     const totals = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.rt-group-total .num')].map((e) => getComputedStyle(e).fontVariantNumeric));
+    const words = await page.locator('.rt-group-head').allTextContents();
     if (seller) {
       expect(totals, 'no cost for a seller without the profit permission').toEqual([]);
+      expect(words.filter((w) => /UGX|buying price/.test(w)), 'no cost words at any level, the item level included').toEqual([]);
+      expect(words.some((w) => /^Test extension cable.*12 piece taken out, 1 record: 1 damaged$/.test(w)), 'the item keeps its quantity').toBe(true);
     } else {
       expect(totals.length).toBeGreaterThanOrEqual(4);
       expect(totals.every((v) => v.includes('tabular-nums'))).toBe(true);

@@ -215,16 +215,19 @@ export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderR
   /** What the total is, after the amount: "spent", "banked". */
   totalWord?: string;
 }) {
+  const shopName = useBranchName();
   if (rows.length === 0) return <p className="empty-state">{empty}</p>;
-  // Its own component, so the first record saved into an empty list opens the newest groups as a list that had records does.
-  return <RecordsTree rows={rows} empty={empty} what={what} renderRow={renderRow} voidWith={voidWith} onVoided={onVoided} actions={actions} list={list} levels={levels} figures={figures} totalWord={totalWord} />;
+  // Its own component keyed by the newest records' path, so a list that first gets records, gets a newer month or a new period
+  // opens its newest groups again instead of keeping the paths of rows no longer there.
+  const newest = [...startOpen(rows, [...levels], figures, shopName).keys()].at(-1);
+  return <RecordsTree key={newest} rows={rows} empty={empty} what={what} renderRow={renderRow} voidWith={voidWith} onVoided={onVoided} actions={actions} list={list} levels={levels} figures={figures} totalWord={totalWord} />;
 }
 
 function RecordsTree<T extends RecordLike>({ rows, empty, what, renderRow, voidWith, onVoided, actions, list, levels, figures, totalWord }: Parameters<typeof RecordsByShop<T>>[0] & { levels: readonly CashLevel[]; figures: CashFigures<T> }) {
   const { me } = useStaff();
   const shopName = useBranchName();
   const mayVoidIn = useMayVoid();
-  const view = useListView<CashLevel>(listUser(me), list, levels, levels, (chain) => startOpen(rows, chain, figures, shopName));
+  const view = useListView<CashLevel>(listUser(me), list, levels, levels, () => startOpen(rows, [...levels], figures, shopName));
   const mayVoid = (row: T) => mayVoidIn(row.branch_id);
   const kind: TreeKind<CashLevel, CashGroup> = {
     name: `cash-${list}`,
@@ -237,7 +240,7 @@ function RecordsTree<T extends RecordLike>({ rows, empty, what, renderRow, voidW
   };
   return (
     <ListChain<CashLevel, CashGroup>
-      kind={kind} filterKey={list} chain={view.chain} enabled view={view} rootLabel="All records" range={{}}
+      kind={kind} filterKey={list} chain={[...levels]} enabled view={view} rootLabel="All records" range={{}}
       renderRows={(sel) => (
         <ul style={{ listStyle: 'none', padding: 0 }}>
           {rowsIn(rows, sel, figures).map((row) => (

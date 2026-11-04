@@ -98,6 +98,23 @@ describe('cash book totals at every level (issue #816)', () => {
     expect(head(/^September 2026/, inB).textContent).toContain('UGX 6,000');
   });
 
+  it('opens the newest groups again when the period brings other records, not the paths of rows no longer shown', () => {
+    const { rerender } = show();
+    expect(head(/^October 2026/).getAttribute('aria-expanded')).toBe('true');
+    const september = rows.filter((r) => r.business_date?.startsWith('2026-09'));
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <StaffContext.Provider value={{ me: admin, branch: ALL_BRANCHES }}>
+          <RecordsByShop list="expenses" levels={EXPENSE_ORDER} figures={FIGURES} totalWord="Spent" rows={september} empty="No expenses." what="expense" renderRow={(r) => <span>{r.item_name}</span>} />
+        </StaffContext.Provider>
+      </QueryClientProvider>,
+    );
+    const shopA = head(/^Test Branch A/);
+    expect(shopA.getAttribute('aria-expanded')).toBe('true');
+    expect(head(/^September 2026/, bodyOf(shopA)).getAttribute('aria-expanded')).toBe('true');
+    expect(bodyOf(shopA).textContent).toContain('Test item 05');
+  });
+
   it('draws every amount in tabular figures, in a header a thumb can reach', () => {
     show();
     for (const total of document.querySelectorAll('.rt-group-total')) expect(total.querySelector('.num')).not.toBeNull();

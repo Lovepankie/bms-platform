@@ -49,7 +49,14 @@ describe('cash book totals at 412px (#816)', () => {
     const totals = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.rt-group-total .num')].map((e) => getComputedStyle(e).fontVariantNumeric));
     expect(totals.length).toBeGreaterThanOrEqual(6);
     expect(totals.every((v) => v.includes('tabular-nums'))).toBe(true);
-    expect(await page.getByText('UGX 987,656,321').count(), 'the first shop totals what was spent, the voided record left out').toBeGreaterThan(0);
+    const shopA = (await page.locator('.rt-group-head', { hasText: 'Test Branch A' }).textContent()) ?? '';
+    const shopB = (await page.locator('.rt-group-head', { hasText: 'Test Branch B' }).textContent()) ?? '';
+    expect(shopA, 'the first shop totals what was spent, the voided record left out').toContain('UGX 987,656,321');
+    expect(shopA).toContain('Spent in 2 expenses, 1 voided (not counted)');
+    expect(shopB).toContain('UGX 4,000');
+    expect(shopB).toContain('Spent in 1 expense');
+    // Shop A down to its newest day (shop, year, month, two categories, a day) and shop B with its year: at least seven.
+    expect(heads.length).toBeGreaterThanOrEqual(7);
     await page.close();
   });
 });

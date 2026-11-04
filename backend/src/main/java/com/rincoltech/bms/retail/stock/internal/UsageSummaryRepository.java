@@ -126,6 +126,7 @@ class UsageSummaryRepository {
             key = from.toString().substring(0, 7);
             label = key;
         } else {
+            // Never null: a movement names its branch and product, and a product its category (NOT NULL, V10).
             key = rs.getString("grp");
             label = rs.getString("label") == null ? "Unknown" : rs.getString("label");
         }

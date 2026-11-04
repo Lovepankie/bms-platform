@@ -80,7 +80,10 @@ const usageKind = (filter: { productId: string }): TreeKind<UsageLevel, UsageSum
   nothing: 'Nothing was used or damaged here.',
 });
 
-/** The records of an opened item: the list's own rows, read with what was opened above. */
+/**
+ * The records of an opened item: the list's own rows, read with what was opened above. The chain is always shop, month, category
+ * and item (no Group by here, as the old app), so rows open only under an item and the item names them; the category is above it.
+ */
 function UsageRows({ sel, all, nameOf }: { sel: ListSelection; all: boolean; nameOf: (id: string | undefined) => string }) {
   const page = useInfiniteQuery({
     queryKey: ['retail', 'usage-history', 'rows', sel],
@@ -147,7 +150,7 @@ export function UsageHistoryPage() {
       <ViewSwitch view={view.view} onChange={view.setView} />
       {grouped && ready && (
         <ListChain<UsageLevel, UsageSummaryGroup>
-          kind={usageKind({ productId })} filterKey={{ productId }} chain={view.chain} enabled={ready} view={view} rootLabel="Past usage and damage"
+          kind={usageKind({ productId })} filterKey={{ productId }} chain={[...USAGE_ORDER]} enabled={ready} view={view} rootLabel="Past usage and damage"
           range={{ from, to, ...(branch ? { branchId: branch } : {}) }}
           renderRows={(sel) => <UsageRows sel={sel} all={all} nameOf={nameOf} />}
         />

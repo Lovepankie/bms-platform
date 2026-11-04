@@ -10,6 +10,7 @@ import com.rincoltech.bms.retail.RetailTestSupport;
 import com.rincoltech.bms.testsupport.MovableClock;
 import com.rincoltech.bms.testsupport.MovableClockConfig;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -189,8 +190,64 @@ class RetailUsageSummaryIT extends IntegrationTest {
         assertThat(shops.get("items").get(0).get("key").asString()).isEqualTo(br2.toString());
     }
 
+    // JUSTIFICATION-A3: the review of 178bacf asked for these cases (profit at one branch, rounding, paging, refusals).
+    @Test
+    void costNeedsTheProfitPermissionInEveryBranchCovered() {
+        Map<String, String> oneBranch = Map.of("X-Dev-Scopes", "retail.profit.read=" + hq);
+        JsonNode all = body(api.call(HttpMethod.GET, "/usage/summary?group_by=month", null, ADMIN, "*", oneBranch));
+        for (JsonNode g : all.get("items")) {
+            assertThat(g.has("cost_minor"))
+                    .as("all shops, profit at one: %s", g)
+                    .isFalse();
+        }
+        JsonNode head = body(
+                api.call(HttpMethod.GET, "/usage/summary?group_by=month&branch_id=" + hq, null, ADMIN, "*", oneBranch));
+        assertThat(group(head, "2026-10").get("cost_minor").asLong()).isEqualTo(1_450);
+    }
+
+    @Test
+    void aRecordsCostIsRoundedHalfUpAsTheRowShowsIt() {
+        // 0.005 of a 300 item is 1.5, shown as 2 on the row and summed as 2.
+        usage(br2, "used", p1, "0.005");
+        String oct = "&branch_id=" + br2 + "&from=2026-10-01&to=2026-10-31";
+        JsonNode rows = body(api.get("/stock/movements?kind=usage&kind=damage" + oct, ADMIN));
+        long listed = 0;
+        for (JsonNode m : rows.get("items")) {
+            listed += m.get("line_cost_minor").asLong();
+        }
+        assertThat(listed).isEqualTo(902);
+        JsonNode items = body(api.get("/usage/summary?" + CHAIN + "&level=item" + oct, ADMIN));
+        assertThat(group(items, p1.toString()).get("cost_minor").asLong()).isEqualTo(902);
+        assertThat(group(items, p1.toString()).get("quantity").asString()).isEqualTo("3.005");
+    }
+
+    @Test
+    void monthsComeTwelveAPageWithTheNextToOfTheRest() {
+        // Thirteen more months at head office, one record each: fifteen months in all.
+        for (int i = 2; i <= 14; i++) {
+            clock.set(OCTOBER.atZone(ZoneOffset.UTC).minusMonths(i).toInstant());
+            usage(hq, "used", p1, "0.1");
+        }
+        JsonNode first = body(api.get("/usage/summary?group_by=month&branch_id=" + hq, ADMIN));
+        assertThat(first.get("items")).hasSize(12);
+        assertThat(first.get("has_more").asBoolean()).isTrue();
+        assertThat(first.get("next_to").asString()).isEqualTo("2025-10-31");
+        JsonNode rest = body(api.get(
+                "/usage/summary?group_by=month&branch_id=" + hq + "&to="
+                        + first.get("next_to").asString(),
+                ADMIN));
+        assertThat(rest.get("items")).hasSize(3);
+        assertThat(rest.get("has_more").asBoolean()).isFalse();
+        assertThat(rest.get("items").get(0).get("key").asString()).isEqualTo("2025-10");
+    }
+
     @Test
     void aBadChainOrLevelIsRefused() {
+        assertThat(api.get("/usage/summary?group_by=month&from=2026-10-02&to=2026-10-01", ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(api.get("/usage/summary?group_by=branch&offset=-1", ADMIN).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(api.get("/usage/summary?group_by=branch,branch", ADMIN).getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(api.get("/usage/summary?group_by=branch&level=item", ADMIN).getStatusCode())

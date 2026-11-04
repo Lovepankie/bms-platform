@@ -66,3 +66,29 @@ describe('real retail client', () => {
     await expect(retail.dailyProfit({ branchId: 'b1', from: '2026-10-01', to: '2026-10-02' })).rejects.toThrow(/do not have permission/i);
   });
 });
+
+// JUSTIFICATION-A3: the review of 178bacf asked for proof that the cash book lists hold every record their totals add up.
+// Issue #816: the cash book lists total their groups in the browser, so each must hold every record of the period. The endpoints
+// are paged (limit and cursor); the client follows next_cursor to the last page, and a list that stopped at the first page would
+// show totals that are too low.
+describe('the cash book lists read every page', () => {
+  const lists: [string, () => Promise<unknown[]>][] = [
+    ['/api/v1/retail/expenses', () => retail.listExpenses({ from: '2026-10-01', to: '2026-10-31' })],
+    ['/api/v1/retail/bankings', () => retail.listBankings({ from: '2026-10-01', to: '2026-10-31' })],
+    ['/api/v1/retail/savings', () => retail.listSavings({ from: '2026-10-01', to: '2026-10-31' })],
+    ['/api/v1/retail/withdrawals', () => retail.listWithdrawals({ from: '2026-10-01', to: '2026-10-31' })],
+    ['/api/v1/retail/advances', () => retail.listAdvances({})],
+  ];
+  it.each(lists)('%s: three pages, every row, the cursor passed on', async (path, read) => {
+    network.mockImplementation(async (request) => {
+      const cursor = new URL(request.url).searchParams.get('cursor');
+      const page = cursor === null ? 1 : Number(cursor.slice(1));
+      return json(200, { items: [{ id: `r${page}a` }, { id: `r${page}b` }], ...(page < 3 ? { next_cursor: `c${page + 1}` } : {}) });
+    });
+    const rows = await read();
+    expect(rows.map((r) => (r as { id: string }).id)).toEqual(['r1a', 'r1b', 'r2a', 'r2b', 'r3a', 'r3b']);
+    const urls = network.mock.calls.map((c) => new URL((c[0] as Request).url));
+    expect(urls.map((u) => u.pathname)).toEqual([path, path, path]);
+    expect(urls.map((u) => u.searchParams.get('cursor'))).toEqual([null, 'c2', 'c3']);
+  });
+});
