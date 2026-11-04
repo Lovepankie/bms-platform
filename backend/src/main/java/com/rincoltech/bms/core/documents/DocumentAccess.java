@@ -39,4 +39,17 @@ public interface DocumentAccess {
     default boolean downloadableWhenEnded(UUID subjectId, UUID documentId) {
         return false;
     }
+
+    /**
+     * Issue #819 (ADR-124): how long an upload of this subject type may wait for the record that names it before the nightly
+     * sweep deletes its file (the row stays, as every document's does); null, the default, keeps every file.
+     */
+    default java.time.Duration claimWithin() {
+        return null;
+    }
+
+    /** Is the upload named by a record of its owning module? Asked by the sweep, in the business's own transaction. */
+    default boolean claimed(UUID subjectId, UUID documentId) {
+        return true;
+    }
 }

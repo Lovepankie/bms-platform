@@ -81,6 +81,20 @@ public interface Documents {
     /** A stored image: its bytes, its type and its checksum (an ETag). */
     record Image(byte[] bytes, String contentType, String sha256) {}
 
+    /**
+     * Issue #819 (ADR-124): the newest document of {@code subjectType} of each of the subjects that has one, by subject id, in
+     * the caller's transaction and one query, so a module's list marks which of its records have a document without reading
+     * this module's table. Subjects with none are absent. No access check: the caller decides what it shows.
+     */
+    Map<UUID, UUID> newestOf(String subjectType, java.util.Collection<UUID> subjectIds);
+
+    /**
+     * Issue #819 (ADR-124): whether the document's file is still in storage (a photo no record claimed in time loses its file
+     * to the nightly sweep; its row stays). False for an unknown document. The lookup runs in the caller's transaction and the
+     * storage call asks for no bytes.
+     */
+    boolean stored(UUID documentId);
+
     /** Stores and records a prepared file in the caller's transaction. */
     StoredDocument store(Prepared prepared, String subjectType, UUID subjectId, UUID branchId);
 

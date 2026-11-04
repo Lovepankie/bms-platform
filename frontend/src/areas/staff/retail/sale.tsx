@@ -50,6 +50,7 @@ import { useBranchHold } from '../branch-picker';
 import { SELL_COUNT_NOTE, savingCount, unfinishedKey } from './unfinished-counts';
 import { icons } from '../../../components/icons';
 import { LocationAsk, useWhereNow } from './entry-location';
+import { ReceiptPhotoChoice, sendReceiptPhotoAfter } from './receipt-photo';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -287,6 +288,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   // network, goes to the outbox at once under the same key, with when it was taken (recorded offline), and the provisional
   // receipt shows. The answer that comes later is ignored here; the server finds the sale by its client sale id, or answers
   // from the key, whose hash leaves the delivery fields out, so the sale is recorded once (ADR-067 decision 5).
+  // Issue #819: the optional receipt photo goes after the sale is recorded and said, never holding the form, and never with a
+  // sale kept on the phone; it is cleared on every save, kept or sent, so it never goes with the next sale.
+  const [receipt, setReceipt] = useState<File | null>(null);
   const save = useMutation({
     meta: { success: (r: { sale: Sale } | { kept: OutboxItem }) => (r && 'kept' in r ? 'Sale saved on this phone' : r?.sale?.total_minor !== undefined ? `Sale of ${money(r.sale.total_minor)} saved` : 'Sale saved') },
     mutationFn: async ({ body, at, pricesAt }: { body: SaleRequest; at: string; pricesAt?: string }): Promise<{ sale: Sale } | { kept: OutboxItem }> => {
@@ -313,6 +317,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       if (e instanceof RetailError) setDraft((d) => ({ ...d, sent: undefined }));
     },
     onSuccess: (done) => {
+      setReceipt(null);
+      if (!('kept' in done)) sendReceiptPhotoAfter('sale', done.sale.id, receipt);
       if ('kept' in done) {
         // The sale goes to the server from the outbox: its confirmed warnings are recorded and forgotten, as for a sent sale.
         entry.saved();
@@ -658,6 +664,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
     },
     onSuccess: (item) => {
       finish();
+      setReceipt(null);
       if (offline?.connectivity.online()) void offline.engine.sync();
       onQueued?.(item);
     },
@@ -676,6 +683,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
     discard();
     setAddingBuyer(false);
     setReceived('');
+    setReceipt(null);
     setConfirmClear(false);
     save.reset();
   };
@@ -928,6 +936,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         </div>
       )}
       {keep.error && <p role="alert" className="alert alert-danger">This phone could not keep the sale: {keep.error.message}</p>}
+      <ReceiptPhotoChoice id="sale-receipt" file={receipt} onChange={setReceipt} />
       <SaleBar>
         <BusyButton type="submit" className="rt-primary sale-bar-action" busy={save.isPending || keep.isPending} notReady={problem !== null && !locked} data-tour="sale-save">
           {offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : (

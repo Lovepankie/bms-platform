@@ -915,6 +915,22 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   movement's `entry_lines` and the toast the answer's `items_back`, both counted on the server, never from the list. Tests:
   `RetailUsageUndoIT` (also two undos at once and another business's entry), `usage-undo.dom.test.tsx`,
   `controls-state.test.ts`, `layout/usage-undo.layout.test.ts`.
+- **Built (a receipt photo on a sale, a delivery, an expense and a usage entry, issue #819, ADR-124, FR-RET-89):** no
+  migration and no permission. The catalogue's public port `ReceiptPhotos` (`ReceiptPhotoService`) stores the photo through the
+  item photo's checks and limits as an `upload` document whose subject is the record (`retail.sale_receipt_photo`,
+  `retail.delivery_receipt_photo`, `retail.usage_receipt_photo`, and the existing `retail.expense_receipt`); each module adds
+  and serves its record's photo (`POST`/`GET .../receipt-photo` on sales, purchases, usage and expenses, and
+  `POST /retail/expenses/receipt-photos` for the expense form's `receipt_document_id`) and registers a `ReceiptPhotos.Rule`, the
+  record's own read check, which the catalogue makes the subject type's `DocumentAccess`. `retail.cashbook` now depends on
+  `retail.catalogue`. Sales, restocks and usage movements answer `has_receipt_photo`, and an expense answers the photo as its
+  `receipt_document_id`, asked of core.documents through `Documents.newestOf` (no retail module reads `documents` for it).
+  A voided or undone record takes no photo (409 `record_voided`); a sale's comes from its seller or whoever may cancel sales
+  there; an expense's photo belongs to one expense and its sender (409 `receipt_taken`). A photo no expense names within 24
+  hours loses its file to the nightly `core.documents.unclaimed-sweep` (`UnclaimedSweep`, the claim hooks of
+  `DocumentAccess`). The four forms have Add receipt photo (`receipt-photo.tsx`), sent after the save is said, bounded to 30
+  seconds and never offline, and cleared by every save; the sale page, Past purchases, the expense rows and Past usage and
+  damage show it small, opening full size, or offer to add one. Tests: `RetailReceiptPhotosIT`, `UnclaimedSweepIT`,
+  `receipt-photo.dom.test.tsx`, `layout/receipt-photo.layout.test.ts`.
 - **Built (a supplier's details and deliveries, issue #820, ADR-125, FR-RET-90):** migration `V134` (eight nullable columns
   on `retail_suppliers`: `email`, `address`, `country`, `website`, `payment_terms`, `bank_account`, `supplier_type`, `notes`,
   and the index `retail_purchases_supplier`); no new permission. A supplier carries `details` and `last_delivery_on` (the
@@ -1441,6 +1457,9 @@ Accepted (this list is the ADR index):
   location and accuracy on every sale (online and offline) and usage or damage entry, never refused without one; an optional
   location per shop set by the owner; the owner and administrators (`retail.entry_location.read`) read the distance from the shop in
   words, never the coordinates; the phone asks once; never logged, audited or hashed; migration `V132`
+- ADR-124 A receipt photo on a sale, a delivery, an expense and a usage entry (#819, asked for by the owner, as the old app
+  did): one optional photo per entry through the item photo's checks and storage, a document whose subject is the entry, seen
+  by whoever sees the entry; saved after the entry, never queued offline (no migration)
 - ADR-123 A wrong usage or damage entry is undone like a voided sale (#818, asked for by the owner): a required reason, the
   stock back at the same unit cost and the shrinkage reversed on the day of the undo, the entry kept and marked undone once
   (`retail_usage_undos`, migration `V133`), the permission of a sale void, audited and on Controls

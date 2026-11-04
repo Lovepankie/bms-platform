@@ -270,6 +270,35 @@ class DocumentService implements Documents {
     }
 
     @Override
+    public Map<UUID, UUID> newestOf(String subjectType, java.util.Collection<UUID> subjectIds) {
+        Map<UUID, UUID> newest = new LinkedHashMap<>();
+        if (subjectIds.isEmpty()) {
+            return newest;
+        }
+        jdbc.sql("""
+                        SELECT DISTINCT ON (subject_id) subject_id, id FROM documents
+                         WHERE subject_type = :type AND subject_id IN (:ids)
+                         ORDER BY subject_id, created_at DESC, id
+                        """)
+                .param("type", subjectType)
+                .param("ids", List.copyOf(new java.util.HashSet<>(subjectIds)))
+                .query(rs -> {
+                    newest.put(rs.getObject("subject_id", UUID.class), rs.getObject("id", UUID.class));
+                });
+        return newest;
+    }
+
+    @Override
+    public boolean stored(UUID documentId) {
+        return jdbc.sql("SELECT object_key FROM documents WHERE id = ?")
+                .param(documentId)
+                .query(String.class)
+                .optional()
+                .map(storage::exists)
+                .orElse(false);
+    }
+
+    @Override
     public Image readImageOf(String subjectType, UUID subjectId) {
         ImageRef ref = reads.execute(s -> imageRef(jdbc.sql("SELECT " + COLUMNS + " FROM documents"
                         + " WHERE subject_type = ? AND subject_id = ? ORDER BY created_at DESC, id LIMIT 1")

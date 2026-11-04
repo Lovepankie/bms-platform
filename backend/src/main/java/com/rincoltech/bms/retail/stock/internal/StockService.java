@@ -11,6 +11,7 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Search;
+import com.rincoltech.bms.retail.catalogue.ReceiptPhotos;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -80,6 +81,7 @@ class StockService {
     private final BusinessClock clock;
     private final AuditLog audit;
     private final RetailCapabilities capabilities;
+    private final ReceiptPhotos receiptPhotos;
 
     StockService(
             StockRepository repo,
@@ -90,7 +92,9 @@ class StockService {
             CurrentTenant tenant,
             BusinessClock clock,
             AuditLog audit,
-            RetailCapabilities capabilities) {
+            RetailCapabilities capabilities,
+            ReceiptPhotos receiptPhotos) {
+        this.receiptPhotos = receiptPhotos;
         this.repo = repo;
         this.ledger = ledger;
         this.catalogue = catalogue;
@@ -333,33 +337,42 @@ class StockService {
         String next = more
                 ? Cursor.encode(items.getLast().at() + "|" + items.getLast().id())
                 : null;
+        // Issue #819 (ADR-124): which usage and damage entries have a receipt photo, through the catalogue's port.
+        Map<UUID, UUID> photos = receiptPhotos.newest(
+                ReceiptPhotos.Kind.USAGE,
+                items.stream()
+                        .filter(m -> m.entryLines() != null)
+                        .map(MovementRow::sourceId)
+                        .toList());
         return new MovementPage(
                 items.stream()
-                        .map(m -> mayReadCost(m.branchId())
-                                ? m
-                                : new MovementRow(
-                                        m.id(),
-                                        m.at(),
-                                        m.branchId(),
-                                        m.productId(),
-                                        m.code(),
-                                        m.description(),
-                                        m.unit(),
-                                        m.kind(),
-                                        m.qty(),
-                                        null,
-                                        null,
-                                        m.sourceType(),
-                                        m.sourceId(),
-                                        m.reversesMovementId(),
-                                        m.historical(),
-                                        m.note(),
-                                        m.by(),
-                                        m.correction(),
-                                        m.balanceAfter(),
-                                        null,
-                                        m.undone(),
-                                        m.entryLines()))
+                        .map(m -> {
+                            boolean cost = mayReadCost(m.branchId());
+                            return new MovementRow(
+                                    m.id(),
+                                    m.at(),
+                                    m.branchId(),
+                                    m.productId(),
+                                    m.code(),
+                                    m.description(),
+                                    m.unit(),
+                                    m.kind(),
+                                    m.qty(),
+                                    cost ? m.unitCostMinor() : null,
+                                    cost ? m.lineCostMinor() : null,
+                                    m.sourceType(),
+                                    m.sourceId(),
+                                    m.reversesMovementId(),
+                                    m.historical(),
+                                    m.note(),
+                                    m.by(),
+                                    m.correction(),
+                                    m.balanceAfter(),
+                                    cost ? m.profitMinor() : null,
+                                    m.undone(),
+                                    m.entryLines(),
+                                    m.entryLines() == null ? null : photos.containsKey(m.sourceId()));
+                        })
                         .toList(),
                 next);
     }

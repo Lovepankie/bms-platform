@@ -228,7 +228,14 @@ final class StockApi {
             @Schema(
                     description = "On a usage or damage movement (issue #818): how many lines its entry has, all of"
                             + " which an undo puts back, whatever the list's filter or page")
-            Integer entryLines) {}
+            Integer entryLines,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "On a usage or damage movement (issue #819, ADR-124): a photo of the paper receipt is on"
+                                    + " its entry")
+            Boolean hasReceiptPhoto) {}
 
     @Schema(
             name = "RetailStockMovementUndone",

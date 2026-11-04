@@ -522,7 +522,8 @@ class SalesRepository {
                 s.writeOff(),
                 s.countedWhenPaid(),
                 s.deliveryFeeOwedMinor(),
-                s.device());
+                s.device(),
+                s.hasReceiptPhoto());
     }
 
     private static Sale header(ResultSet rs) throws SQLException {
@@ -573,7 +574,9 @@ class SalesRepository {
                                 rs.getObject("client_sale_id", UUID.class),
                                 instant(rs, "occurred_at"),
                                 rs.getBoolean("recorded_offline"),
-                                List.of()));
+                                List.of()),
+                // Issue #819: marked by SalesService through the receipt photo port, not read here.
+                false);
     }
 
     // ---- Payments --------------------------------------------------------------------------

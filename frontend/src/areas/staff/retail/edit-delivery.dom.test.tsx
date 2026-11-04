@@ -101,6 +101,24 @@ describe('Edit a delivery (issue #830)', () => {
     expect(edited.mock.calls[0]?.[0]?.note).toBe(editNote(purchase));
   });
 
+  it('keeps the receipt photo of the delivery it replaces when no new one is chosen (issue #819, review of #846)', async () => {
+    const purchase = await delivery();
+    const photo = new File([new Uint8Array([137, 80, 78, 71])], 'receipt.png', { type: 'image/png' });
+    await retail.addReceiptPhoto('delivery', purchase.id ?? '', photo);
+    vi.spyOn(retail, 'getPurchase').mockResolvedValue({ ...purchase, has_receipt_photo: true });
+    const replaceSpy = vi.spyOn(retail, 'replacePurchase');
+    const addSpy = vi.spyOn(retail, 'addReceiptPhoto');
+    const edited = vi.fn();
+    screenOf(admin, <Again purchaseId={purchase.id ?? ''} edit onEdited={edited} onSaved={() => undefined} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(addSpy).toHaveBeenCalledTimes(1));
+    const made = await replaceSpy.mock.results[0]?.value;
+    expect(addSpy.mock.calls[0]?.[0]).toBe('delivery');
+    expect(addSpy.mock.calls[0]?.[1]).toBe(made.id);
+    expect(addSpy.mock.calls[0]?.[1]).not.toBe(purchase.id);
+    expect(addSpy.mock.calls[0]?.[2]).toBeInstanceOf(File);
+  });
+
   it('changes nothing when the new delivery is refused, and keeps the person on the edit form with the reason', async () => {
     const purchase = await delivery();
     // The review of #830: the item was deleted (switched off) after the delivery, so a new delivery of it is refused.

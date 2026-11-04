@@ -494,7 +494,9 @@ class StockRepository {
                                         rs.getObject("undone_by", UUID.class),
                                         rs.getString("undone_by_name"),
                                         rs.getString("undo_reason")),
-                        rs.getInt("entry_lines") > 0 ? rs.getInt("entry_lines") : null))
+                        rs.getInt("entry_lines") > 0 ? rs.getInt("entry_lines") : null,
+                        // Issue #819: marked by StockService through the receipt photo port, not read here.
+                        null))
                 .list();
     }
 

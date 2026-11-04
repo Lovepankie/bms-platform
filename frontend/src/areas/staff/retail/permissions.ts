@@ -97,6 +97,8 @@ export const CASHBOOK_VOID = 'retail.cashbook.void';
 export const BACKDATE = 'retail.entry.backdate';
 export const EXPENSE_MANAGE = 'retail.expense.manage';
 export const EXPENSE_RECORD = 'retail.expense.record';
+/** Report usage or damage; also adds the receipt photo to such an entry (issue #819). */
+export const USAGE_REPORT = 'retail.usage.report';
 
 /** Party kinds anyone who records expenses may add on the fly; the others need retail.expense.manage (ADR-022 decision 13). */
 const BENEFICIARY_KINDS: readonly string[] = ['supplier', 'other'];

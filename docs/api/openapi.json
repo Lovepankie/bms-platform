@@ -17234,6 +17234,10 @@
           "currency" : {
             "type" : "string"
           },
+          "has_receipt_photo" : {
+            "description" : "Issue #819, ADR-124: a photo of the paper receipt is on the delivery",
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -18426,6 +18430,14 @@
           }
         }
       },
+      "RetailReceiptPhotoAdded" : {
+        "properties" : {
+          "photo_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "RetailReceiptPreview" : {
         "properties" : {
           "printed" : {
@@ -18907,6 +18919,10 @@
           "due_date" : {
             "format" : "date",
             "type" : "string"
+          },
+          "has_receipt_photo" : {
+            "description" : "Issue #819, ADR-124: a photo of the paper receipt is on the sale",
+            "type" : "boolean"
           },
           "historical" : {
             "type" : "boolean"
@@ -20807,6 +20823,10 @@
             "description" : "On a usage or damage movement (issue #818): how many lines its entry has, all of which an undo puts back, whatever the list's filter or page",
             "format" : "int32",
             "type" : "integer"
+          },
+          "has_receipt_photo" : {
+            "description" : "On a usage or damage movement (issue #819, ADR-124): a photo of the paper receipt is on its entry",
+            "type" : "boolean"
           },
           "historical" : {
             "type" : "boolean"
@@ -40179,6 +40199,112 @@
         "tags" : [ "retail-cashbook" ]
       }
     },
+    "/api/v1/retail/expenses/receipt-photos" : {
+      "post" : {
+        "operationId" : "uploadRetailExpenseReceiptPhoto",
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptPhotoAdded"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Send the photo of an expense's paper receipt before the expense: PNG, JPEG or WebP, 5 MB, re-encoded without metadata; pass the answer's photo_id as receipt_document_id (FR-RET-89)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/expenses/{expense_id}/receipt-photo" : {
+      "get" : {
+        "operationId" : "getRetailExpenseReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "expense_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The receipt photo of an expense, from the same origin (FR-RET-89)",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "addRetailExpenseReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "expense_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptPhotoAdded"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Add the photo of the paper receipt to an expense already recorded (FR-RET-89)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
     "/api/v1/retail/expenses/{expense_id}/replace" : {
       "post" : {
         "description" : "The old expense is voided with the reason \"Edited: entered again with the changes\" and the new one, at the same branch, carries an explanation naming it; a refusal of either changes nothing. Needs retail.expense.record at the branch as well, and, as every cash book route, retail.till.close (ADR-055). An amount that would wait for an administrator (ADR-091) is 422 edit_needs_approval.",
@@ -43646,6 +43772,77 @@
         "tags" : [ "retail-purchasing" ]
       }
     },
+    "/api/v1/retail/purchases/{purchase_id}/receipt-photo" : {
+      "get" : {
+        "operationId" : "getRetailPurchaseReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "purchase_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The receipt photo of a delivery, from the same origin (FR-RET-89)",
+        "tags" : [ "retail-purchasing" ]
+      },
+      "post" : {
+        "operationId" : "addRetailPurchaseReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "purchase_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptPhotoAdded"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Add the photo of the paper receipt to a delivery: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (FR-RET-89)",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
     "/api/v1/retail/purchases/{purchase_id}/replace" : {
       "post" : {
         "operationId" : "replaceRetailPurchase",
@@ -45739,6 +45936,77 @@
         },
         "summary" : "The facts of a sale's receipt to share, as its PDF prints them: number, business name, buyer and number, paid, balance, returns and net; own sales only without retail.sale.all_sellers (issue #439)",
         "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/sales/{sale_id}/receipt-photo" : {
+      "get" : {
+        "operationId" : "getRetailSaleReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The receipt photo of a sale, from the same origin (FR-RET-89)",
+        "tags" : [ "retail-sales" ]
+      },
+      "post" : {
+        "operationId" : "addRetailSaleReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptPhotoAdded"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Add the photo of the paper receipt to a sale: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (FR-RET-89)",
+        "tags" : [ "retail-sales" ]
       }
     },
     "/api/v1/retail/sales/{sale_id}/receipt/link" : {
@@ -48613,6 +48881,77 @@
           }
         },
         "summary" : "Past usage and damage grouped by shop, month, category and item with totals (issue #816)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/usage/{report_id}/receipt-photo" : {
+      "get" : {
+        "operationId" : "getRetailUsageReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "report_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The receipt photo of a usage or damage entry, from the same origin (FR-RET-89)",
+        "tags" : [ "retail-stock" ]
+      },
+      "post" : {
+        "operationId" : "addRetailUsageReceiptPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "report_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptPhotoAdded"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Add the photo of the paper receipt to a usage or damage entry: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (FR-RET-89)",
         "tags" : [ "retail-stock" ]
       }
     },

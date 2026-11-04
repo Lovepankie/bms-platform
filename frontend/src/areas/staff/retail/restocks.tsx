@@ -8,6 +8,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showDate } from './maths';
 import { holdsAt, PURCHASE_CREATE } from './permissions';
+import { ReceiptPhoto } from './receipt-photo';
 import { alreadyVoided, listIsStale, quantityWords, stateOf, unitHint, voidReasonOf, MIN_VOID_REASON } from './restock-correct-state';
 import { Gate, Problem, Success, money } from './ui';
 import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
@@ -105,6 +106,7 @@ export function RestockCard({ purchase, supplier, onDone }: { purchase: Purchase
       </ul>
       {/* Issue #830: an edited delivery names the one it replaces, which stays in this list marked Voided. */}
       {purchase.note && <p className="hint" data-testid="purchase-note">{purchase.note}</p>}
+      <ReceiptPhoto kind="delivery" recordId={purchase.id} has={purchase.has_receipt_photo} canAdd={!voided && holdsAt(me, PURCHASE_CREATE, undefined)} />
       {voided && (
         <p className="hint" data-testid="void-note">
           Voided {showDate(purchase.voided_on)}. Reason: {purchase.void_reason}

@@ -11,7 +11,8 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { Hint } from '../../../app/ui/Hint';
 import { EmptyState } from '../../../app/ui/EmptyState';
 import { useStaff } from '../context';
-import { ENTRY_LOCATION, canUse, holds } from './permissions';
+import { ENTRY_LOCATION, USAGE_REPORT, canUse, holds, holdsAt } from './permissions';
+import { ReceiptPhoto } from './receipt-photo';
 import { useEntryDistances, whereWords } from './entry-location';
 import { UndoUsageAction, UndoneMark, undoneWords } from './usage-undo';
 import { showDate, showQty } from './maths';
@@ -56,6 +57,7 @@ export function firstLines(items: StockMovement[]): Set<string> {
 }
 
 function UsageRow({ m, branch, where, first }: { m: StockMovement; branch?: string; where?: EntryDistance; first: boolean }) {
+  const { me } = useStaff();
   const cost = costOf(m);
   return (
     <li className="rt-card" data-testid="usage-row">
@@ -71,6 +73,8 @@ function UsageRow({ m, branch, where, first }: { m: StockMovement; branch?: stri
       {m.note && <p className="hint">Reason: {m.note}</p>}
       {m.undone && first && <p className="hint" data-testid="usage-undone-words">{undoneWords(m)}. The stock went back.</p>}
       {where && <p className="hint" data-testid="usage-where">Where: {whereWords(where)}</p>}
+      {/* Issue #819: the entry's receipt photo, once per entry, on its first line. */}
+      {first && <ReceiptPhoto kind="usage" recordId={m.source_id} has={m.has_receipt_photo} canAdd={!m.undone && holdsAt(me, USAGE_REPORT, m.branch_id)} />}
       {first && <UndoUsageAction m={m} />}
     </li>
   );

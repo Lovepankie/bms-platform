@@ -28,6 +28,11 @@ interface ObjectStorage {
     /** Removes an object; used when the transaction that stored it rolls back. */
     void delete(String key);
 
+    /** Whether an object is stored under the key, without fetching its bytes where the store allows (issue #819). */
+    default boolean exists(String key) {
+        return get(key).isPresent();
+    }
+
     /** An object's key and when storage last wrote it. */
     record Listed(String key, java.time.Instant lastModified) {}
 

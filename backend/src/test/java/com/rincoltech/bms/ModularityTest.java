@@ -117,7 +117,7 @@ class ModularityTest {
         ApplicationModule cashbook = MODULES.getModuleByName("retail.cashbook").orElseThrow();
         // ADR-022 decision 1 says the declared list is exactly these (core.operations joined with #177, core.approvals
         // with the
-        // expense approval of #343, ADR-091).
+        // expense approval of #343, ADR-091, retail.catalogue with the receipt photo of #819, ADR-124).
         assertThat(com.rincoltech.bms.retail.cashbook.CashBookHistory.class
                         .getPackage()
                         .getAnnotation(org.springframework.modulith.ApplicationModule.class)
@@ -130,6 +130,7 @@ class ModularityTest {
                         "core.ledger",
                         "core.documents",
                         "core.operations",
+                        "retail.catalogue",
                         "retail.sales",
                         "retail.purchasing",
                         "retail.reports",
@@ -145,6 +146,7 @@ class ModularityTest {
                         "core.ledger",
                         "core.documents",
                         "core.operations",
+                        "retail.catalogue",
                         "retail.sales",
                         "retail.purchasing",
                         "retail.reports",

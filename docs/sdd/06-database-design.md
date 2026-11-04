@@ -1052,6 +1052,13 @@ The worker's dispatcher reads pending rows across tenants through
 tenant. Index `(tenant_id, subject_type, subject_id)`. A document is written once: `bms_app` holds
 SELECT and INSERT only. `sha256` is of the stored bytes, after images are re-encoded.
 
+Receipt photos (issue #819, ADR-124, no migration) are `upload` documents whose subject is the record they show:
+`retail.sale_receipt_photo` (a `retail_sales` id), `retail.delivery_receipt_photo` (a `retail_purchases` id, no branch),
+`retail.usage_receipt_photo` (a `retail_usage_reports` id) and `retail.expense_receipt` (a `retail_expenses` id for a photo
+added later; one sent with the expense is named by `retail_expenses.receipt_document_id` and its subject is a fresh id). The
+newest of a record is shown; the subject index finds it, asked through `Documents.newestOf`. A photo sent before its expense
+that no expense names within 24 hours has its object deleted by the nightly `core.documents.unclaimed-sweep`; its row stays.
+
 ### `report_runs` (RLS)
 
 Built (issue #214, extras slice D1, migration V49; ADR-038). (std, no `version`) `report_key text NOT NULL` (a key such as

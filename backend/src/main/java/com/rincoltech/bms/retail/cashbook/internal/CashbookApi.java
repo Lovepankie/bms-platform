@@ -399,7 +399,11 @@ final class CashbookApi {
             offline = OfflineEntry.unlessChosen(offline, dateReason);
         }
 
-        /** What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13). */
+        /**
+         * What the Idempotency-Key covers: the request without its offline block (ADR-067 decision 13) and without its receipt
+         * photo (issue #819, ADR-124): a phone that keeps an expense whose answer was lost drops the photo from the copy it
+         * sends later, and that copy is the same expense under the same key.
+         */
         ExpenseRequest forKey() {
             return new ExpenseRequest(
                     branchId,
@@ -409,7 +413,7 @@ final class CashbookApi {
                     partyId,
                     amountMinor,
                     explanation,
-                    receiptDocumentId,
+                    null,
                     dateReason,
                     null);
         }

@@ -5337,6 +5337,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/expenses/receipt-photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send the photo of an expense's paper receipt before the expense: PNG, JPEG or WebP, 5 MB, re-encoded without metadata; pass the answer's photo_id as receipt_document_id (FR-RET-89) */
+        post: operations["uploadRetailExpenseReceiptPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/expenses/{expense_id}/receipt-photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The receipt photo of an expense, from the same origin (FR-RET-89) */
+        get: operations["getRetailExpenseReceiptPhoto"];
+        put?: never;
+        /** Add the photo of the paper receipt to an expense already recorded (FR-RET-89) */
+        post: operations["addRetailExpenseReceiptPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/expenses/{expense_id}/replace": {
         parameters: {
             query?: never;
@@ -6491,6 +6526,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/purchases/{purchase_id}/receipt-photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The receipt photo of a delivery, from the same origin (FR-RET-89) */
+        get: operations["getRetailPurchaseReceiptPhoto"];
+        put?: never;
+        /** Add the photo of the paper receipt to a delivery: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (FR-RET-89) */
+        post: operations["addRetailPurchaseReceiptPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/purchases/{purchase_id}/replace": {
         parameters: {
             query?: never;
@@ -7183,6 +7236,24 @@ export interface paths {
         get: operations["getRetailSaleReceipt"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}/receipt-photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The receipt photo of a sale, from the same origin (FR-RET-89) */
+        get: operations["getRetailSaleReceiptPhoto"];
+        put?: never;
+        /** Add the photo of the paper receipt to a sale: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (FR-RET-89) */
+        post: operations["addRetailSaleReceiptPhoto"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8137,6 +8208,24 @@ export interface paths {
         get: operations["summariseRetailUsage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/usage/{report_id}/receipt-photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The receipt photo of a usage or damage entry, from the same origin (FR-RET-89) */
+        get: operations["getRetailUsageReceiptPhoto"];
+        put?: never;
+        /** Add the photo of the paper receipt to a usage or damage entry: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (FR-RET-89) */
+        post: operations["addRetailUsageReceiptPhoto"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16909,6 +16998,8 @@ export interface components {
             /** Format: uuid */
             created_by?: string;
             currency?: string;
+            /** @description Issue #819, ADR-124: a photo of the paper receipt is on the delivery */
+            has_receipt_photo?: boolean;
             /** Format: uuid */
             id?: string;
             lines?: components["schemas"]["RetailPurchaseLine"][];
@@ -17535,6 +17626,10 @@ export interface components {
             /** @description The link with https://, for the WhatsApp message */
             url?: string;
         };
+        RetailReceiptPhotoAdded: {
+            /** Format: uuid */
+            photo_id?: string;
+        };
         RetailReceiptPreview: {
             printed?: components["schemas"]["RetailReceiptPrint"];
             /** Format: uuid */
@@ -17765,6 +17860,8 @@ export interface components {
             device?: components["schemas"]["RetailSaleDevice"];
             /** Format: date */
             due_date?: string;
+            /** @description Issue #819, ADR-124: a photo of the paper receipt is on the sale */
+            has_receipt_photo?: boolean;
             historical?: boolean;
             /** Format: uuid */
             id?: string;
@@ -18792,6 +18889,8 @@ export interface components {
              * @description On a usage or damage movement (issue #818): how many lines its entry has, all of which an undo puts back, whatever the list's filter or page
              */
             entry_lines?: number;
+            /** @description On a usage or damage movement (issue #819, ADR-124): a photo of the paper receipt is on its entry */
+            has_receipt_photo?: boolean;
             historical?: boolean;
             /** Format: uuid */
             id?: string;
@@ -30833,6 +30932,84 @@ export interface operations {
             };
         };
     };
+    uploadRetailExpenseReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailReceiptPhotoAdded"];
+                };
+            };
+        };
+    };
+    getRetailExpenseReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    addRetailExpenseReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailReceiptPhotoAdded"];
+                };
+            };
+        };
+    };
     replaceRetailExpense: {
         parameters: {
             query?: never;
@@ -33015,6 +33192,57 @@ export interface operations {
             };
         };
     };
+    getRetailPurchaseReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                purchase_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    addRetailPurchaseReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                purchase_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailReceiptPhotoAdded"];
+                };
+            };
+        };
+    };
     replaceRetailPurchase: {
         parameters: {
             query?: never;
@@ -34136,6 +34364,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSaleReceipt"];
+                };
+            };
+        };
+    };
+    getRetailSaleReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    addRetailSaleReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailReceiptPhotoAdded"];
                 };
             };
         };
@@ -35842,6 +36121,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailUsageSummary"];
+                };
+            };
+        };
+    };
+    getRetailUsageReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    addRetailUsageReceiptPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailReceiptPhotoAdded"];
                 };
             };
         };

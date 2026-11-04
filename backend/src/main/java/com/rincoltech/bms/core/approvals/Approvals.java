@@ -30,6 +30,13 @@ public interface Approvals {
     boolean markStale(String actionType, java.util.UUID subjectId, String note);
 
     /**
+     * Issue #819 (ADR-124): the branch of a request of this action still pending whose payload's top-level {@code field} is
+     * {@code value}, in the caller's transaction; empty when there is none. A module asks it only of its own action type
+     * (an expense waiting for an administrator names its receipt photo in its payload).
+     */
+    java.util.Optional<java.util.UUID> pendingWith(String actionType, String field, String value);
+
+    /**
      * As {@link #request(ActionRequest)}, weighed against the rule the caller already read to decide to ask (ADR-091), so the rule
      * is read once: a switch saved between the caller's read and this call cannot run at once an action the caller will answer as
      * waiting. The request then waits for a checker as the caller decided.

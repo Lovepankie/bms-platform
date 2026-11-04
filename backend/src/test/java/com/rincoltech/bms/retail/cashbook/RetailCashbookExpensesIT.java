@@ -510,17 +510,18 @@ class RetailCashbookExpensesIT extends IntegrationTest {
         TestDatabase.owner()
                 .sql("""
                         INSERT INTO documents (id, tenant_id, doc_type, subject_type, subject_id, object_key, content_type,
-                            size_bytes, sha256)
+                            size_bytes, sha256, created_by)
                         VALUES (?, ?, 'upload', ?, gen_random_uuid(), 'tenants/' || ?::text || '/test/' || ?::text,
-                            'application/pdf', 10, repeat('a', 64))
+                            'application/pdf', 10, repeat('a', 64), ?)
                         """)
-                .params(id, t.tenantId(), subjectType, t.tenantId(), id)
+                // Issue #819: an expense names only a receipt its recorder sent, so the fabricated one is theirs.
+                .params(id, t.tenantId(), subjectType, t.tenantId(), id, cb.api.userId())
                 .update();
         return id;
     }
 
     @Test
-    void aReceiptMustBeADocumentUploadedForAnExpenseNeverAMembersFile() {
+    void aReceiptMustBeADocumentUploadedForAnExpenseNeverAMembersFile() throws java.io.IOException {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("branch_id", hq);
         body.put("category_id", rent);
@@ -533,7 +534,33 @@ class RetailCashbookExpensesIT extends IntegrationTest {
         assertThat(refused.getBody().get("errors").get(0).get("code").asString())
                 .isEqualTo("unknown_document");
 
-        body.put("receipt_document_id", document("retail.expense_receipt"));
+        body.put("receipt_document_id", sentReceipt());
         assertThat(cb.post("/expenses", body, CASHBOOK_ADMIN).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    // JUSTIFICATION-A3: since #819 an expense names only a receipt whose file is kept, so the test sends a real one.
+    /** A receipt photo the recorder sent through the expense form's route (issue #819), its file kept. */
+    String sentReceipt() throws java.io.IOException {
+        java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(
+                new java.awt.image.BufferedImage(80, 80, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", png);
+        org.springframework.util.MultiValueMap<String, Object> form =
+                new org.springframework.util.LinkedMultiValueMap<>();
+        form.add("file", new org.springframework.core.io.ByteArrayResource(png.toByteArray()) {
+            @Override
+            public String getFilename() {
+                return "receipt.png";
+            }
+        });
+        org.springframework.http.HttpHeaders h = cb.api.headers("retail.expense.record", "*", Map.of());
+        h.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        return http.exchange(
+                        RetailTestSupport.BASE + "/expenses/receipt-photos",
+                        org.springframework.http.HttpMethod.POST,
+                        new org.springframework.http.HttpEntity<>(form, h),
+                        JsonNode.class)
+                .getBody()
+                .get("photo_id")
+                .asString();
     }
 }

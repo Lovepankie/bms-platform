@@ -15,7 +15,7 @@ import { newIdempotencyKey, usePersistedDraft } from './idempotency';
 import { PartyPicker, useCashParties } from './party-picker';
 import { CASHBOOK_READ, EXPENSE_RECORD, holds, holdsAt, needsOf } from './permissions';
 import { ScreenLink } from './screen-link';
-import { useToast } from './toast';
+import { sayDone, useToast } from './toast';
 import { BranchRequired, Gate, Problem, WaitingForApproval, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { ActionBar } from '../../../app/ui/ActionBar';
@@ -23,10 +23,11 @@ import { AddByName, EmptyChoice, showsEmptyChoice, type AddInline, type ChoiceAd
 import { addOn } from './screen-link';
 import type { Kept } from '../../../offline/entries';
 import { EditNeedsInternet, KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
+import { RECEIPT_KEPT, RECEIPT_LATER_NOTE, ReceiptPhoto, ReceiptPhotoChoice, bounded, withPhotoNote } from './receipt-photo';
 
 // Company expenses (FR-RET-24): shop, date, category, then an item of that category, an optional
-// beneficiary, the amount, and an explanation when the item needs one. A receipt photo is not offered yet:
-// the frontend has no documents upload client to send a receipt_document_id with (skipped on purpose).
+// beneficiary, the amount, and an explanation when the item needs one. An optional receipt photo (issue #819, ADR-124) is
+// sent first and named by the expense's receipt_document_id; offline the expense is kept without it.
 
 interface ExpenseDraft { date: string; dateReason?: string; categoryId: string; itemId: string; partyId: string; amount: string; explanation: string }
 
@@ -54,17 +55,47 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
   const entry = useEntryDate(branchId, entries.offlineMode ? businessToday() : draft.date, draft.dateReason);
   const plan = planExpense({ branchId, ...draft, entry }, list);
   const detail = [list.find((c) => c.id === draft.categoryId)?.name, items.find((i) => i.id === draft.itemId)?.name].filter(Boolean).join(', ');
+  // Issue #819: the photo is sent once per file chosen, so a retry under the same key names the same document; an edit keeps
+  // the photo the expense had unless another is chosen. A photo that fails, or takes longer than RECEIPT_SEND_MS, is left out,
+  // the expense is saved without it and the saved message says so. Every save, kept on the phone or sent, clears the photo.
+  const [receipt, setReceipt] = useState<File | null>(null);
+  const sentReceipt = useRef<{ file: File; id?: string } | null>(null);
+  const photoNote = useRef<string | null>(null);
+  const keptPhoto = useRef(false);
+  const withReceipt = async () => {
+    photoNote.current = null;
+    let id = replaces?.receipt_document_id;
+    if (receipt && !entries.offlineMode) {
+      if (sentReceipt.current?.file !== receipt) {
+        sentReceipt.current = await bounded((signal) => retail.sendExpenseReceiptPhoto(receipt, signal)).then((r) => ({ file: receipt, id: r.photo_id }), () => null);
+      }
+      if (sentReceipt.current?.id) id = sentReceipt.current.id;
+      else photoNote.current = RECEIPT_LATER_NOTE;
+    }
+    return id ? { ...plan.request, receipt_document_id: id } : plan.request;
+  };
   // success-screen: the Saved panel replaces the form; one that waits for approval says so on the form instead; an edited one (issue #830) closes its form
   const save = useMutation({
     // Edit (issue #830): one call voids the old expense and saves this one naming it, in one transaction on the server, so any
     // refusal (an amount that would wait for an administrator, an item switched off) leaves the old expense as it was.
-    mutationFn: async (): Promise<Expense | ApprovalWaiting | Kept> => (replaces?.id ? retail.replaceExpense(replaces.id, plan.request, key) : entries.save(
-      { kind: 'expense', body: plan.request, key, branchId, detail, amountMinor: plan.request.amount_minor, fix: { to: '/staff/retail/expenses', draftName: name, draft } },
-      () => retail.createExpense(plan.request, key),
-    )),
-    meta: { success: (saved: Expense) => (isWaiting(saved) ? null : `Expense${saved.amount_minor != null ? ` of ${money(saved.amount_minor)}` : ''} ${replaces ? 'updated' : 'saved'}`) },
+    mutationFn: async (): Promise<Expense | ApprovalWaiting | Kept> => {
+      const request = await withReceipt();
+      // The lead's decision on the second review of #846: an expense kept on the phone never carries its photo (the server's
+      // key covers the expense without it, so the copy sent later is the same expense); the photo is added from the record.
+      const { receipt_document_id: photoId, ...kept } = request;
+      keptPhoto.current = photoId != null;
+      return replaces?.id ? retail.replaceExpense(replaces.id, request, key) : entries.save(
+        { kind: 'expense', body: kept, key, branchId, detail, amountMinor: request.amount_minor, fix: { to: '/staff/retail/expenses', draftName: name, draft } },
+        () => retail.createExpense(request, key),
+      );
+    },
+    meta: { success: (saved: Expense) => (isWaiting(saved) ? null : withPhotoNote(`Expense${saved.amount_minor != null ? ` of ${money(saved.amount_minor)}` : ''} ${replaces ? 'updated' : 'saved'}`, photoNote.current)) },
     onSuccess: (saved) => {
+      setReceipt(null);
+      sentReceipt.current = null;
       if (isKept(saved)) {
+        // After the kept words of the app's toast: the photo stayed behind and is added from the record.
+        if (keptPhoto.current) sayDone(RECEIPT_KEPT);
         discard();
         return;
       }
@@ -149,6 +180,8 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
       <label htmlFor="expense-amount">Amount</label>
       <input id="expense-amount" inputMode="numeric" value={draft.amount} onChange={(e) => update({ amount: e.target.value })} />
 
+      <ReceiptPhotoChoice id="expense-receipt" file={receipt} onChange={setReceipt} />
+
       {plan.problem && draft.categoryId !== '' && draft.amount.trim() !== '' && <p role="alert" className="rt-flag">{plan.problem}</p>}
       <Problem error={save.error} />
       <ActionBar>
@@ -214,6 +247,7 @@ export function ExpenseRowActions({ row, onDeleted }: { row: Expense; onDeleted?
 const EXPENSE_FIGURES: CashFigures<Expense> = { amount: (r) => r.amount_minor, category: (r) => ({ id: r.category_id, name: r.category_name }) };
 
 export function ExpenseRecords({ onVoided }: { onVoided?: (message: string) => void }) {
+  const { me } = useStaff();
   const scope = useReadScope();
   const window = useWindow();
   const rows = useQuery({
@@ -243,6 +277,7 @@ export function ExpenseRecords({ onVoided }: { onVoided?: (message: string) => v
               {row.category_name} / {row.item_name}
               {row.party_name ? `, for ${row.party_name}` : ''}
               {row.explanation ? <><br />{row.explanation}</> : null}
+              <div><ReceiptPhoto kind="expense" recordId={row.id} has={row.receipt_document_id != null} canAdd={!row.voided && holdsAt(me, EXPENSE_RECORD, row.branch_id ?? '')} /></div>
             </>
           )}
         />

@@ -890,6 +890,20 @@ export function createMockRetail(): RetailApi {
         return familyOf(familyId);
       }),
     photo: (photoId) => run(() => photos.get(photoId) ?? refuse(404, 'not_found', 'That could not be found.')),
+    // Issue #819: a receipt photo is kept under its record, the newest shown, as the server does.
+    addReceiptPhoto: (kind, recordId, file) => run(() => {
+      if (file.size > 5 * 1024 * 1024) refuse(413, 'file_too_large', 'The photo is larger than 5 MB.');
+      const id = nextId('d');
+      photos.set(id, file);
+      photos.set(`${kind}:${recordId}`, file);
+      return { photo_id: id };
+    }),
+    sendExpenseReceiptPhoto: (file) => run(() => {
+      const id = nextId('d');
+      photos.set(id, file);
+      return { photo_id: id };
+    }),
+    receiptPhoto: (kind, recordId) => run(() => photos.get(`${kind}:${recordId}`) ?? refuse(404, 'not_found', 'That could not be found.')),
 
     priceHistory: (id) => run(() => ((find(id) && history.get(id)) || undefined)?.map((h) => (profitAccess ? h : { ...h, old_cost_minor: undefined, new_cost_minor: undefined })) || [{ id: nextId('h'), at: '2026-09-01T08:00:00Z', source: 'initial', new_sell_minor: find(id).sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: find(id).costMinor } : {}) }]),
 

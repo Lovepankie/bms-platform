@@ -15,7 +15,8 @@ class DocumentJobsTest {
 
     private final ApplicationContextRunner context = new ApplicationContextRunner()
             .withUserConfiguration(DocumentJobs.class)
-            .withBean(OrphanSweep.class, () -> mock(OrphanSweep.class));
+            .withBean(OrphanSweep.class, () -> mock(OrphanSweep.class))
+            .withBean(UnclaimedSweep.class, () -> mock(UnclaimedSweep.class));
 
     @Test
     void theSweepIsARecurringTaskByDefault() {
@@ -24,6 +25,15 @@ class DocumentJobsTest {
             RecurringTask<?> task = c.getBean("documentOrphanSweepTask", RecurringTask.class);
             assertThat(task.getName()).isEqualTo(OrphanSweep.JOB);
         });
+    }
+
+    @Test
+    void theUnclaimedSweepIsARecurringTaskByDefaultAndItsSwitchRemovesIt() {
+        context.run(c -> assertThat(c.getBean("documentUnclaimedSweepTask", RecurringTask.class)
+                        .getName())
+                .isEqualTo(UnclaimedSweep.JOB));
+        context.withPropertyValues("bms.documents.unclaimed-sweep-enabled=false")
+                .run(c -> assertThat(c).doesNotHaveBean("documentUnclaimedSweepTask"));
     }
 
     @Test

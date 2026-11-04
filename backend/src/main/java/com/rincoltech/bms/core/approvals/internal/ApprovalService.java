@@ -173,6 +173,16 @@ class ApprovalService implements Approvals {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public java.util.Optional<UUID> pendingWith(String actionType, String field, String value) {
+        return jdbc.sql("""
+                        SELECT branch_id FROM approval_requests
+                         WHERE action_type = ? AND status = 'pending' AND payload ->> ? = ?
+                         ORDER BY requested_at, id LIMIT 1
+                        """).params(actionType, field, value).query(UUID.class).optional();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public boolean markStale(String actionType, UUID subjectId, String note) {
         List<Row> pending = jdbc.sql(
                         "SELECT " + COLUMNS

@@ -11,7 +11,7 @@ import { chosenUnitHint, listIsStale, redraftOf } from './restock-correct-state'
 import { Gate, Money, Note, Problem, ProductPicker, money, useProfitAccess } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
-import { ScreenToast, useItemAdded } from './toast';
+import { ScreenToast, sayDone, useItemAdded } from './toast';
 import { BACKDATE, TRANSFER, UNITS, canUse, capabilityOn, holdsAt } from './permissions';
 import { entryDate } from './cash-state';
 import { DateField } from './cash-ui';
@@ -29,6 +29,7 @@ import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { AddByName } from '../../../app/ui/EmptyChoice';
 import { PickerWithAdd } from '../../../app/ui/PickerWithAdd';
 import { EditNeedsInternet, KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
+import { RECEIPT_LATER, ReceiptPhotoChoice, bounded, sendReceiptPhotoAfter } from './receipt-photo';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -209,6 +210,9 @@ export function RestockForm({ onSaved, draftName, fixSearch, fromEdit = false, i
   // phone dates it and no date box shows, so a draft's earlier day never holds the save (second review of #839).
   const entries = useEntrySave();
   const dated = entryDate(into.every((b) => holdsAt(me, BACKDATE, b)) && holdsAt(me, BACKDATE, undefined), entries.offlineMode ? businessToday() : purchasedOn, draft.dateReason, businessToday());
+  // Issue #819: the optional receipt photo goes after the delivery is saved and said, never holding the form, and never with one
+  // kept on the phone; it is cleared on every save, so it never goes with the next delivery.
+  const [receipt, setReceipt] = useState<File | null>(null);
   // success-screen: the purchase saved screen that replaces the form; an edited delivery goes back to Past purchases (issue #830)
   const save = useMutation({
     meta: { success: ({ saved }: { saved: Purchase }) => (replaces ? 'Delivery updated' : saved?.purchase_no ? `Purchase ${saved.purchase_no} saved` : 'Purchase saved') },
@@ -233,6 +237,12 @@ export function RestockForm({ onSaved, draftName, fixSearch, fromEdit = false, i
       return isKept(saved) ? saved : { saved, context: { supplierName, before } };
     },
     onSuccess: (result) => {
+      setReceipt(null);
+      if (!isKept(result)) {
+        // Edit (issue #830): with no new photo chosen, the edited delivery keeps the photo of the one it replaces, as an expense does.
+        if (receipt || !replaces?.id || !replaces.has_receipt_photo) sendReceiptPhotoAfter('delivery', result.saved.id, receipt);
+        else void bounded((signal) => retail.receiptPhoto('delivery', replaces.id ?? '', signal)).then((b) => sendReceiptPhotoAfter('delivery', result.saved.id, new File([b], 'receipt', { type: b.type })), () => sayDone(RECEIPT_LATER));
+      }
       entry.saved();
       if (isKept(result)) {
         discard();
@@ -459,13 +469,14 @@ export function RestockForm({ onSaved, draftName, fixSearch, fromEdit = false, i
       {supplierProblem && <p role="alert" className="rt-flag" data-testid="credit-needs-supplier">{supplierProblem}</p>}
 
       <p className="rt-total" aria-live="polite" data-testid="restock-total">Total cost <Money minor={restockTotal(lines)} /></p>
+      <ReceiptPhotoChoice id="restock-receipt" file={receipt} onChange={setReceipt} />
       <Problem error={save.error} />
       <ActionBar>
         <BusyButton type="submit" className="rt-primary" data-tour="restock-save" busy={save.isPending} notReady={blocked}>{replaces ? 'Save changes' : 'Save the purchase'}</BusyButton>
       </ActionBar>
 
       {lines.length > 0 && !save.isPending && (
-        <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this purchase</button>
+        <button type="button" onClick={() => { discard(); setReceipt(null); save.reset(); }}>Clear this purchase</button>
       )}
       {toast}
     </form>

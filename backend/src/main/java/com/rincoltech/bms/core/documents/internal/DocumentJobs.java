@@ -31,4 +31,15 @@ class DocumentJobs {
         return Tasks.recurring(OrphanSweep.JOB, Schedules.daily(BusinessClock.DEFAULT_ZONE, LocalTime.of(4, 10)))
                 .execute((instance, context) -> sweep.sweepAll(dryRun));
     }
+
+    /**
+     * Issue #819 (ADR-124): the files of uploads no record claimed in time, deleted at 04:40 Kampala time;
+     * {@code bms.documents.unclaimed-sweep-enabled=false} removes the task.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "bms.documents.unclaimed-sweep-enabled", havingValue = "true", matchIfMissing = true)
+    RecurringTask<Void> documentUnclaimedSweepTask(UnclaimedSweep sweep) {
+        return Tasks.recurring(UnclaimedSweep.JOB, Schedules.daily(BusinessClock.DEFAULT_ZONE, LocalTime.of(4, 40)))
+                .execute((instance, context) -> sweep.sweepAll());
+    }
 }

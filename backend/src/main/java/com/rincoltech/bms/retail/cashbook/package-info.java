@@ -22,6 +22,7 @@
             "core.ledger",
             "core.documents",
             "core.operations",
+            "retail.catalogue",
             "retail.sales",
             "retail.purchasing",
             "retail.reports",

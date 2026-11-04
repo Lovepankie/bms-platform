@@ -823,6 +823,24 @@ class CashbookRepository {
                 .update();
     }
 
+    /** Issue #819: the receipt is already named by an expense, or was added to one. */
+    boolean receiptTaken(UUID documentId, UUID subjectId) {
+        return jdbc.sql(
+                        "SELECT EXISTS (SELECT 1 FROM retail_expenses WHERE receipt_document_id = :doc OR id = :subject)")
+                .param("doc", documentId)
+                .param("subject", subjectId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /** Issue #819: the expense names this receipt. */
+    boolean namesReceipt(UUID expenseId, UUID documentId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_expenses WHERE id = ? AND receipt_document_id = ?)")
+                .params(expenseId, documentId)
+                .query(Boolean.class)
+                .single();
+    }
+
     Optional<ExpenseRow> expense(UUID id, boolean forUpdate) {
         return jdbc.sql(EXPENSE_SELECT + " WHERE t.id = ?" + (forUpdate ? " FOR UPDATE OF t" : ""))
                 .param(id)

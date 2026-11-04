@@ -8,7 +8,8 @@ import { receiptNote } from './price-state';
 import { enteredPriceMinor, enteredQty } from './units-state';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
-import { ENTRY_LOCATION, SALE_RETURN, canRankSellers, canUse, holdsAt } from './permissions';
+import { ENTRY_LOCATION, SALE_CREATE, SALE_RETURN, SALE_VOID, canRankSellers, canUse, holdsAt } from './permissions';
+import { ReceiptPhoto } from './receipt-photo';
 import { useEntryDistances, whereWords } from './entry-location';
 import { settledWords } from './returns-state';
 import { showDate } from './transfers';
@@ -130,6 +131,9 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
       </table></div>
       <ContactLinks contact={sale.buyer_contact} name={sale.buyer_name} />
       {where && <p data-testid="sale-where">Where: {whereWords(where)}</p>}
+      {/* As the server rules (review of #846): the person who made the sale, or whoever may cancel sales at its branch. */}
+      <ReceiptPhoto kind="sale" recordId={sale.id} has={sale.has_receipt_photo}
+        canAdd={sale.status !== 'voided' && holdsAt(me, SALE_CREATE, sale.branch_id) && (sale.created_by === me.user_id || holdsAt(me, SALE_VOID, sale.branch_id))} />
       <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>

@@ -123,7 +123,9 @@ class ExpenseService {
             CategoryRow category,
             ItemRow item,
             PartyRow party,
-            String explanation) {}
+            String explanation,
+            /* Issue #819: the receipt photo the expense names, null when none or when its file is gone. */
+            UUID receipt) {}
 
     @Transactional
     Outcome<ExpenseOutcome> create(String key, ExpenseRequest r) {
@@ -189,6 +191,11 @@ class ExpenseService {
      * of the approval) and its reason, if any, is audited with the expense.
      */
     private Checked check(UUID branch, ExpenseRequest r, boolean approved) {
+        return check(branch, r, approved, null);
+    }
+
+    /** As above for an edit, which may keep the receipt of the expense it replaces ({@code replacing}). */
+    private Checked check(UUID branch, ExpenseRequest r, boolean approved, UUID replacing) {
         LocalDate date;
         EntryDates.Backdate backdate;
         if (approved) {
@@ -228,15 +235,50 @@ class ExpenseService {
                     .orElseThrow(() -> ApiException.validation(
                             List.of(new FieldProblem("party_id", "unknown_party", "No such active beneficiary."))));
         }
-        if (r.receiptDocumentId() != null
-                && documents
-                        .find(r.receiptDocumentId())
-                        .filter(d -> RECEIPT_SUBJECT.equals(d.subjectType()))
-                        .isEmpty()) {
-            throw ApiException.validation(
-                    List.of(new FieldProblem("receipt_document_id", "unknown_document", "No such uploaded receipt.")));
+        UUID receipt = checkReceipt(r.receiptDocumentId(), approved, replacing);
+        return new Checked(branch, date, backdate, category, item, party, explanation, receipt);
+    }
+
+    /**
+     * Issue #819 (ADR-124, the lead's decision on the review of #846): a receipt photo is named by one expense only, and only
+     * by the person who sent it, so a photo id never makes a receipt readable anywhere else: 409 {@code receipt_taken}
+     * otherwise. An edit keeps the receipt of the expense it replaces; an approval names the receipt its maker sent.
+     */
+    private UUID checkReceipt(UUID documentId, boolean approved, UUID replacing) {
+        if (documentId == null) {
+            return null;
         }
-        return new Checked(branch, date, backdate, category, item, party, explanation);
+        Documents.StoredDocument d = documents
+                .find(documentId)
+                .filter(x -> RECEIPT_SUBJECT.equals(x.subjectType()))
+                .orElseThrow(() -> ApiException.validation(List.of(
+                        new FieldProblem("receipt_document_id", "unknown_document", "No such uploaded receipt."))));
+        if (replacing != null && (replacing.equals(d.subjectId()) || repo.namesReceipt(replacing, documentId))) {
+            return documentId;
+        }
+        UUID caller = CurrentPrincipal.require().userId();
+        boolean sender = approved || java.util.Objects.equals(d.createdBy(), caller);
+        // An expense waiting for an administrator names its photo in its request (review of #846); on approval, it.
+        boolean waiting = !approved
+                && approvals
+                        .pendingWith(ExpenseAction.TYPE, "receipt_document_id", documentId.toString())
+                        .isPresent();
+        if (!sender || waiting || repo.receiptTaken(documentId, d.subjectId())) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "receipt_taken",
+                    "Receipt photo taken",
+                    "This receipt photo belongs to another expense or was sent by someone else. Add the photo again.");
+        }
+        if (!documents.stored(documentId)) {
+            // The lead's decision on the second review of #846: an expense is never recorded naming a photo whose
+            // file is gone (a photo no expense named for a day loses it to the nightly sweep); 422 in words.
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "receipt_document_id",
+                    "receipt_gone",
+                    "This receipt photo is no longer kept. Add the photo again.")));
+        }
+        return documentId;
     }
 
     private Expense write(UUID id, Checked c, ExpenseRequest r, UUID by) {
@@ -262,7 +304,7 @@ class ExpenseService {
                 amount,
                 support.currency(),
                 explanation,
-                r.receiptDocumentId(),
+                c.receipt(),
                 support.now(),
                 by,
                 entry);
@@ -307,10 +349,23 @@ class ExpenseService {
                 ? Cursor.encode(
                         items.getLast().createdAt() + "|" + items.getLast().id())
                 : null;
-        return new ExpensePage(items.stream().map(ExpenseService::view).toList(), next);
+        // ADR-124: the receipt sent with an expense, else the newest photo added to it later, through core.documents.
+        Map<UUID, UUID> later = documents.newestOf(
+                RECEIPT_SUBJECT,
+                items.stream()
+                        .filter(e -> e.receiptDocumentId() == null)
+                        .map(ExpenseRow::id)
+                        .toList());
+        return new ExpensePage(
+                items.stream().map(e -> view(e, later.get(e.id()))).toList(), next);
     }
 
     static Expense view(ExpenseRow e) {
+        return view(e, null);
+    }
+
+    /** {@code addedLater}: the photo added to an expense recorded without a receipt (ADR-124), else null. */
+    static Expense view(ExpenseRow e, UUID addedLater) {
         return new Expense(
                 e.id(),
                 e.branchId(),
@@ -324,7 +379,7 @@ class ExpenseService {
                 e.currency(),
                 e.amountMinor(),
                 e.explanation(),
-                e.receiptDocumentId(),
+                e.receiptDocumentId() != null ? e.receiptDocumentId() : addedLater,
                 e.by(),
                 e.byName(),
                 e.createdAt(),
@@ -367,7 +422,7 @@ class ExpenseService {
                     null);
             UUID branch = branchContext.resolve(CashbookSupport.EXPENSE_RECORD, old.branchId());
             // ADR-120: the edited expense is a new entry; an earlier day is the owner's, with a reason, audited.
-            Checked c = check(branch, edited, false);
+            Checked c = check(branch, edited, false, id);
             if (approvals.rule(ExpenseAction.TYPE).asks(edited.amountMinor())) {
                 throw ApiException.rule(
                         "edit_needs_approval",
@@ -416,6 +471,14 @@ class ExpenseService {
                 row.branchId(),
                 Map.of("business_date", row.businessDate().toString()),
                 Map.of("reason", reason)));
-        return view(repo.expense(id, false).orElseThrow());
+        return viewWithPhoto(repo.expense(id, false).orElseThrow());
+    }
+
+    /** One expense as the list shows it, with a photo added later (review of #846), so no answer reads differently. */
+    private Expense viewWithPhoto(ExpenseRow e) {
+        UUID later = e.receiptDocumentId() != null
+                ? null
+                : documents.newestOf(RECEIPT_SUBJECT, List.of(e.id())).get(e.id());
+        return view(e, later);
     }
 }
