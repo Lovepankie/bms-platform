@@ -61,7 +61,8 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }, fa
 
 // Every whitespace character the server removes from an email (kernel.EmailAddresses, issue #823): \s covers the spaces, tabs,
 // the non-breaking space and the other Unicode spaces; the rest are the characters \s leaves out that a copy and paste can carry.
-const EMAIL_WHITESPACE = new RegExp(`[\\s${String.fromCharCode(0x85, 0x180e, 0x200b, 0x200c, 0x200d, 0x2060)}]`, 'g');
+// The zero width non-joiner and joiner (U+200C, U+200D) stay: some scripts need them, so an address may hold one (issue #857).
+const EMAIL_WHITESPACE = new RegExp(`[\\s${String.fromCharCode(0x85, 0x180e, 0x200b, 0x2060)}]`, 'g');
 
 /** An email as the server looks it up and saves it: no whitespace anywhere, lower case (issue #823). */
 export const cleanEmail = (typed: string): string => typed.replace(EMAIL_WHITESPACE, '').toLowerCase();

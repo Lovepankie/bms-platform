@@ -144,6 +144,14 @@ class BusinessClosureIT extends IntegrationTest {
                         INSERT INTO retail_customers (id, tenant_id, name, contact)
                         VALUES (?, ?, 'Test Customer 01', '+256700000002')
                         """).params(UUID.randomUUID(), b.t().tenantId()).update();
+        // A supplier's details (V134, issue #849): SupplierDetailsErasure clears them with the removal.
+        db.sql("""
+                        INSERT INTO retail_suppliers (id, tenant_id, name, contact, email, address, country, website,
+                            payment_terms, bank_account, supplier_type, notes)
+                        VALUES (?, ?, 'Test Supplier 01', '+256700000004', 'orders@supplier-test.example',
+                            'Plot 1, Test Street', 'Uganda', 'supplier-test.example', '30 days', '0000111122',
+                            'Wholesaler', 'Ask for Test Person 01.')
+                        """).params(UUID.randomUUID(), b.t().tenantId()).update();
         db.sql("""
                         INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, buyer_name,
                             buyer_contact, currency, total_minor, cost_total_minor, paid_minor, status, historical,
@@ -492,6 +500,18 @@ class BusinessClosureIT extends IntegrationTest {
                         id,
                         saleTotal))
                 .isEqualTo(1);
+        // Issue #849: the supplier's bank account number, email, address and every other detail are gone.
+        assertThat(count(
+                        "SELECT count(*) FROM retail_suppliers WHERE tenant_id = ? AND (bank_account IS NOT NULL"
+                                + " OR email IS NOT NULL OR address IS NOT NULL OR country IS NOT NULL"
+                                + " OR website IS NOT NULL OR payment_terms IS NOT NULL"
+                                + " OR supplier_type IS NOT NULL OR notes IS NOT NULL"
+                                + " OR name = 'Test Supplier 01' OR contact = '+256700000004')",
+                        id))
+                .isZero();
+        assertThat(count("SELECT count(*) FROM retail_suppliers WHERE tenant_id = ?", id))
+                .as("the supplier row stays for the money records that name it")
+                .isPositive();
         // The audit trails keep what happened (amounts, dates, ids, codes) and lose who it was about.
         assertThat(count(
                         "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND (data::text ~ ? OR ip IS NOT NULL)",
@@ -528,6 +548,11 @@ class BusinessClosureIT extends IntegrationTest {
                 .isEqualTo(1);
         assertThat(count(
                         "SELECT count(*) FROM retail_sales WHERE tenant_id = ? AND buyer_name = 'Test Buyer 01'", kept))
+                .isEqualTo(1);
+        assertThat(count(
+                        "SELECT count(*) FROM retail_suppliers WHERE tenant_id = ? AND bank_account = '0000111122'"
+                                + " AND email = 'orders@supplier-test.example' AND address = 'Plot 1, Test Street'",
+                        kept))
                 .isEqualTo(1);
         assertThat(count(
                         "SELECT count(*) FROM users WHERE tenant_id = ? AND lower(email) = lower(?)",

@@ -924,7 +924,9 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   branch or another business's is 404 `unknown_branch`. Stock health shows it in the Damage and use section
   (`damage-share.tsx`) with its own period picker on This month and the base in one line, only to a profit reader; the read is
   kept offline (`damage-share`); tour `page-stock-health` v4. Tests: `RetailDamageShareIT`, `damage-share.dom.test.tsx`,
-  `layout/damage-share.layout.test.ts`.
+  `layout/damage-share.layout.test.ts`. Issue #854: a void dated after the period leaves it as it was (`r.business_date <=
+  :to`, ADR-127 Consequences); the section shows only where the person holds `retail.profit.read` at the shop chosen (any
+  shop when all are chosen), so a manager of one shop looking at another sees no section; quantities are grouped in thousands.
 - **Built (a receipt photo on a sale, a delivery, an expense and a usage entry, issue #819, ADR-124, FR-RET-89):** no
   migration and no permission. The catalogue's public port `ReceiptPhotos` (`ReceiptPhotoService`) stores the photo through the
   item photo's checks and limits as an `upload` document whose subject is the record (`retail.sale_receipt_photo`,

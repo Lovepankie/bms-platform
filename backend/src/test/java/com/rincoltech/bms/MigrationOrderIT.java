@@ -5,6 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLWarning;
+import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -3012,12 +3017,20 @@ class MigrationOrderIT {
             UUID twin = UUID.randomUUID();
             UUID twinSpaced = UUID.randomUUID();
             UUID plain = UUID.randomUUID();
+            UUID blank = UUID.randomUUID();
             Map<UUID, String> emails = Map.of(
-                    spaced, "test.owner" + nbsp + "@example.test",
-                    inside, "Test.Cl erk@example.test",
-                    twin, "test.twin@example.test",
-                    twinSpaced, "test.twin" + nbsp + "@example.test",
-                    plain, "test.plain@example.test");
+                    spaced,
+                    "test.owner" + nbsp + "@example.test",
+                    inside,
+                    "Test.Cl erk@example.test",
+                    twin,
+                    "test.twin@example.test",
+                    twinSpaced,
+                    "test.twin" + nbsp + "@example.test",
+                    plain,
+                    "test.plain@example.test",
+                    blank,
+                    " " + nbsp + " ");
             emails.forEach((id, email) -> owner.sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
                             + " VALUES (?, ?, 'staff', 'Test Staff V135', ?, 'active')")
                     .params(id, tenant, email)
@@ -3044,7 +3057,76 @@ class MigrationOrderIT {
                             .query(UUID.class)
                             .list())
                     .containsExactlyInAnyOrder(spaced, inside);
+
+            // Issue #857: the check after every migrate names each reason on its own, with the fix and no email.
+            UUID operator = UUID.randomUUID();
+            owner.sql("INSERT INTO platform_users (id, email, full_name) VALUES (?, ?, 'Test Operator V135')")
+                    .params(operator, "op v135@example.test")
+                    .update();
+            // The counts are across every business, so only this case's business and operator are asserted, by reason.
+            List<String> warnings = leftOverWarnings(postgres);
+            assertThat(warnings).noneMatch(w -> w.contains("@"));
+            assertThat(warnings)
+                    .filteredOn(w -> w.contains("are the email of another staff user") && w.contains(tenant.toString()))
+                    .singleElement()
+                    .asString()
+                    .contains("puts in their own email", "staff-email-left-over.md");
+            assertThat(warnings)
+                    .filteredOn(w -> w.contains("hold nothing but whitespace") && w.contains(tenant.toString()))
+                    .singleElement()
+                    .asString()
+                    .contains("staff-email-left-over.md");
+            assertThat(warnings)
+                    .filteredOn(w -> w.contains("hold whitespace that can be removed") && w.contains(tenant.toString()))
+                    .as("the clean rows V135 already fixed are not reported")
+                    .isEmpty();
+            assertThat(warnings)
+                    .filteredOn(w -> w.startsWith("operator email:"))
+                    .singleElement()
+                    .asString()
+                    .contains("staff-email-left-over.md");
+
+            // The runbook's operator fix, as written there, works on this schema and clears the WARNING.
+            // JUSTIFICATION-A3: the #860 review asks the runbook's operator statements to be run in a test.
+            owner.sql("""
+                            UPDATE platform_users
+                               SET email = lower(regexp_replace(email,
+                                       '[\\s\\x00a0\\x0085\\x1680\\x180e\\x2000-\\x200b\\x2028\\x2029\\x202f\\x205f\\x2060\\x3000\\xfeff]', '', 'g')),
+                                   updated_at = now()
+                             WHERE id = ?
+                            """).param(operator).update();
+            owner.sql("""
+                            INSERT INTO platform_audit_log (id, action, data)
+                            VALUES (gen_random_uuid(), 'platform.user.email_cleaned',
+                                    jsonb_build_object('platform_user_id', ?::text, 'reason', 'whitespace removed (issue #857)'))
+                            """).param(operator).update();
+            assertThat(owner.sql("SELECT email FROM platform_users WHERE id = ?")
+                            .param(operator)
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("opv135@example.test");
+            assertThat(leftOverWarnings(postgres)).noneMatch(w -> w.startsWith("operator email:"));
         }
+    }
+
+    /**
+     * The WARNINGs of {@code afterMigrate__staff_email_left_over.sql}, run on its own as the owner (issue #857).
+     * JUSTIFICATION-A3: #857 asks the left-over WARNING to count each reason; this reads what the check raises.
+     */
+    private static List<String> leftOverWarnings(PostgreSQLContainer postgres) {
+        List<String> warnings = new ArrayList<>();
+        String url = postgres.getJdbcUrl();
+        String check = "src/main/resources/db/migration/afterMigrate__staff_email_left_over.sql";
+        try (Connection connection = DriverManager.getConnection(url, "bms_owner", TestDatabase.OWNER_PASSWORD);
+                Statement statement = connection.createStatement()) {
+            statement.execute(Files.readString(Path.of(check)));
+            for (SQLWarning warning = statement.getWarnings(); warning != null; warning = warning.getNextWarning()) {
+                warnings.add(warning.getMessage());
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot run the staff email check", e);
+        }
+        return warnings;
     }
 
     /**

@@ -14,6 +14,7 @@ import { StaffContext } from '../context';
 // or shown for a person without retail.profit.read. Fabricated names and figures.
 
 const BRANCH_A = '00000000-0000-4000-8000-0000000000a1';
+const BRANCH_B = '00000000-0000-4000-8000-0000000000a2';
 const damageShare = vi.fn();
 
 vi.mock('../../../api/retail-analytics', async (original) => {
@@ -45,10 +46,10 @@ const data: DamageShare = {
   ],
 };
 
-function show(ui: ReactElement, me: Me = mockMe('admin')) {
+function show(ui: ReactElement, me: Me = mockMe('admin'), branch = BRANCH_A) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me, branch: BRANCH_A }}>{ui}</StaffContext.Provider>
+      <StaffContext.Provider value={{ me, branch }}>{ui}</StaffContext.Provider>
     </QueryClientProvider>,
   );
 }
@@ -66,7 +67,8 @@ describe('damage and use share (#822)', () => {
     expect(items[0]).toContain('Damaged 10%, 5 of 50 piece');
     expect(items[0]).toContain('Used 4%, 2 of 50 piece');
     expect(items[0]).toContain('40 at the start, 10 came in');
-    expect(items[1]).toContain('Damaged under 1%, 1 of 1000 kg');
+    expect(items[1]).toContain('Damaged under 1%, 1 of 1,000 kg');
+    expect(items[1]).toContain('900 at the start, 100 came in');
     expect(items[2]).toContain('Damaged 1 piece, no stock came in to compare with');
     expect(items[2]).not.toContain('%');
   });
@@ -95,6 +97,35 @@ describe('damage and use share (#822)', () => {
     expect(screen.queryByText(BASE_HINT)).toBeNull();
     expect(screen.queryByText(/Damage and use/)).toBeNull();
     expect(damageShare).not.toHaveBeenCalled();
+  });
+
+  // JUSTIFICATION-A3: #854 items 3 and 4 ask for these three cases; they reuse this file's show and data.
+  it('groups thousands in every quantity, as everywhere else (#854)', () => {
+    const big: DamageShare = { ...data, branches: [{ branch_id: BRANCH_A, base_qty: '9247.000', damaged_qty: '0.000', used_qty: '12.500', damaged_pct: 0, used_pct: 0, items: [] }] };
+    show(<DamageShareView data={big} nameOf={nameOf} />);
+    const shop = screen.getByTestId('damage-share-shop').textContent ?? '';
+    expect(shop).toContain('Damaged 0%, 0 of 9,247');
+    expect(shop).toContain('Used under 1%, 12.5 of 9,247');
+  });
+
+  const profitAtA = (): Me => {
+    const admin = mockMe('admin');
+    return { ...admin, permission_scopes: { ...(admin.permission_scopes ?? {}), 'retail.profit.read': { all_branches: false, branch_ids: [BRANCH_A] } } };
+  };
+
+  it('shows nothing and asks nothing at a shop where the person may not see profit (#854)', () => {
+    show(<DamageShareSection nameOf={nameOf} />, profitAtA(), BRANCH_B);
+    expect(screen.queryByText(BASE_HINT)).toBeNull();
+    expect(screen.queryByText(/Branch not found/)).toBeNull();
+    expect(damageShare).not.toHaveBeenCalled();
+  });
+
+  it('shows the section at the shop where the person may see profit (#854)', async () => {
+    damageShare.mockResolvedValue(data);
+    show(<DamageShareSection nameOf={nameOf} />, profitAtA(), BRANCH_A);
+    expect(screen.getByText(BASE_HINT)).toBeTruthy();
+    await waitFor(() => expect(damageShare).toHaveBeenCalled());
+    expect((damageShare.mock.calls[0]?.[0] as { branchId?: string }).branchId).toBe(BRANCH_A);
   });
 
   it('keeps the read for offline', () => {

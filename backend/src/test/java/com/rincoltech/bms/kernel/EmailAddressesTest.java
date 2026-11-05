@@ -33,6 +33,17 @@ class EmailAddressesTest {
         }
     }
 
+    /** Issue #857: the zero width non-joiner and joiner belong to how some scripts are written, so they stay. */
+    @Test
+    void theZeroWidthNonJoinerAndJoinerAreKept() {
+        for (int joiner : new int[] {0x200C, 0x200D}) {
+            String typed = " Test.Ow" + Character.toString(joiner) + "ner@example.test ";
+            assertThat(EmailAddresses.normalise(typed))
+                    .as("U+%04X", joiner)
+                    .isEqualTo("test.ow" + Character.toString(joiner) + "ner@example.test");
+        }
+    }
+
     @Test
     void nothingStaysNothing() {
         assertThat(EmailAddresses.normalise(null)).isNull();

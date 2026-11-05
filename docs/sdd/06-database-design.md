@@ -643,7 +643,12 @@ A staff email is stored with no whitespace anywhere and in lower case: the appli
 `kernel.EmailAddresses` before it saves it or looks it up (issue #823). `V135` cleans the stored staff emails that hold
 whitespace (a non-breaking space passed the old check), with a system `core.user.email_cleaned` audit row each (the email
 before and after), and leaves exactly as it was a row whose cleaned email another staff user of the business already has (a
-WARNING in the migration log names the businesses, never the email).
+WARNING in the migration log names the businesses, never the email). Since issue #857 the Flyway callback
+`afterMigrate__staff_email_left_over.sql` (no version, never in `flyway_schema_history`, read only) runs after every migrate
+and raises one WARNING per reason a row is still left: a clash with another staff user, nothing but whitespace, whitespace that
+can be removed, and a platform operator email holding whitespace, each with the fix
+(`docs/runbooks/staff-email-left-over.md`). The zero width non-joiner and joiner (U+200C, U+200D) are no longer removed
+(issue #857): some scripts need them.
 `is_owner boolean NOT NULL DEFAULT false` (`V79`, ADR-062, FR-IAM-18): the Owner of the business. `contact_changed_at
 timestamptz` (`V79`): when the email or phone last changed; `second_factor_changed_at timestamptz` (`V79`): when two-step
 sign-in was last set up or reset; the Owner's own transfer waits 24 hours after either (or after

@@ -79,8 +79,13 @@ controls.
 - **One form of a staff email** (issue #823). Before any lookup (staff and operator sign-in, forgot password) and any save
   (invitation, edit, the first administrator), the server removes every whitespace character from a typed email, at the
   ends and inside (spaces, tabs, line breaks, the non-breaking space and the other Unicode spaces, and the zero width
-  characters a copy and paste carries), and lower cases it (`kernel.EmailAddresses`); the screen does the same, but the
-  server is the guard. The per-address limit and the lock key use the same form, so typing spaces into an address does
+  space, word joiner and byte order mark a copy and paste carries), and lower cases it (`kernel.EmailAddresses`); the
+  screen does the same, but the server is the guard. The zero width non-joiner and joiner (U+200C, U+200D) are kept
+  (issue #857): some scripts need them, so removing one would make another address. Operator accounts are cleaned the
+  same way: the sign-in looks them up in that form and `deploy/sql/create-platform-user.sql` saves them in it (issue #857).
+  A stored email still holding a space after `V135` is reported after every migrate, each reason on its own, and fixed by
+  hand (`docs/runbooks/staff-email-left-over.md`), because such a person is looked up as the colleague whose email the
+  cleaned form is, and their wrong tries would lock that colleague. The per-address limit and the lock key use the same form, so typing spaces into an address does
   not give a guesser fresh buckets or a fresh lock: the limits and the lockout behave as before. A login without `@` is
   read as a phone by its own check (`kernel.PhoneNumbers`), whose meaning spaces do not change.
 - One-time codes, invitation and setup tokens, recovery codes and refresh tokens are stored as

@@ -169,6 +169,8 @@ timer run; stop `bms-pull.timer` first if it must stay.
 - Exit 1 with `failed-migration` in `state/history.log`: the migration failed and nothing was
   switched. Fix forward with a new migration in a pull request. A `V98:` message about staff
   users sharing a phone is fixed in the data instead: `docs/runbooks/staff-duplicate-phones.md`.
+- Exit 0 with a `staff email:` or `operator email:` WARNING in the migrate log: an email still holds a space after V135;
+  the deploy is fine, fix the rows the same day with `docs/runbooks/staff-email-left-over.md`.
 - Exit 1 with `failed-health` then `rolled-back-to`: the new release did not become ready and the
   previous one is serving again. See `docs/runbooks/rollback.md`.
 - Exit 2: invalid tag. Exit 3: another deploy holds the lock.

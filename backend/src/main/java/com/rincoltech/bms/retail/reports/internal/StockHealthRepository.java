@@ -401,8 +401,9 @@ class StockHealthRepository {
     /**
      * Issue #822, ADR-127: per branch and item that had stock up to {@code to}, the stock at the start of {@code from} (every
      * movement before it, none when below zero), what came in during the period (deliveries, stock moved in, a starting stock
-     * first set; never a movement that reverses another or one a void reversed, never a count, a customer return or an undo),
-     * and what was damaged and used in it from the entries, leaving out an undone one as {@link #usage} does.
+     * first set; never a movement that reverses another or one a void reversed by {@code to}, never a count, a customer return
+     * or an undo), and what was damaged and used in it from the entries, leaving out an undone one as {@link #usage} does. A
+     * void dated after the period does not change it (issue #854): the period reads as the books stood on its last day.
      */
     List<Flow> flow(List<UUID> branchIds, LocalDate from, LocalDate to) {
         if (branchIds != null && branchIds.isEmpty()) {
@@ -415,7 +416,7 @@ class StockHealthRepository {
                         + " CASE WHEN m.business_date >= :from AND m.qty > 0 AND m.reverses_movement_id IS NULL"
                         + "  AND m.kind IN ('opening', 'purchase', 'transfer_in', 'legacy_balance')"
                         + " THEN NOT EXISTS (SELECT 1 FROM retail_stock_movements r WHERE r.tenant_id = m.tenant_id"
-                        + "  AND r.reverses_movement_id = m.id) ELSE false END AS received"
+                        + "  AND r.reverses_movement_id = m.id AND r.business_date <= :to) ELSE false END AS received"
                         + "  FROM retail_stock_movements m WHERE m.business_date <= :to" + in(branchIds, "m.branch_id")
                         + "),"
                         + " flow AS (SELECT branch_id, product_id,"

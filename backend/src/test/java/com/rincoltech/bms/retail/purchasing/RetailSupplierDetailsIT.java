@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -368,6 +370,118 @@ class RetailSupplierDetailsIT extends IntegrationTest {
                         .getStatusCode())
                 .as("editing stays retail.catalogue.manage")
                 .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * Issue #849 (ADR-055): two buyers at one branch, one without {@code retail.profit.read}; that one sees only their
+     * own restocks among the supplier's deliveries and dates the last delivery from them alone, on the page and in the
+     * list.
+     * JUSTIFICATION-A3: #849 item 1 asks for this test; it reuses this class's supplier and page helpers.
+     */
+    @Test
+    void aBuyerWithoutProfitSeesOnlyTheirOwnDeliveries() {
+        UUID id = supplier("Test Supplier 12", null, null);
+        String head = t.headOffice().toString();
+        String buyer = BUYER + ",retail.entry.backdate";
+        String profitBuyer = buyer + ",retail.profit.read";
+        RetailTestSupport mine = new RetailTestSupport(http, t);
+        RetailTestSupport colleague = new RetailTestSupport(http, t);
+        LocalDate today = LocalDate.now(BusinessClock.DEFAULT_ZONE);
+        String older = today.minusDays(4).toString();
+        String newer = today.minusDays(1).toString();
+        UUID own = restockAs(mine, buyer, id, older);
+        UUID theirs = restockAs(colleague, profitBuyer, id, newer);
+        // Two people: each restock is recorded as made by the one who sent it.
+        assertThat(mine.userId()).isNotEqualTo(colleague.userId());
+        String madeBy = "SELECT created_by FROM retail_purchases WHERE tenant_id = ? AND id = ?";
+        assertThat(TestDatabase.owner()
+                        .sql(madeBy)
+                        .params(t.tenantId(), own)
+                        .query(UUID.class)
+                        .single())
+                .isEqualTo(mine.userId());
+        assertThat(TestDatabase.owner()
+                        .sql(madeBy)
+                        .params(t.tenantId(), theirs)
+                        .query(UUID.class)
+                        .single())
+                .isEqualTo(colleague.userId());
+
+        JsonNode seen = mine.call(HttpMethod.GET, "/suppliers/" + id + "/deliveries", null, buyer, head, Map.of())
+                .getBody();
+        assertThat(ids(seen)).containsExactly(own.toString());
+        JsonNode page = mine.call(HttpMethod.GET, "/suppliers/" + id, null, buyer, head, Map.of())
+                .getBody();
+        assertThat(page.get("last_delivery_on").asString()).isEqualTo(older);
+        JsonNode listed = byName(
+                mine.call(HttpMethod.GET, "/suppliers", null, buyer, head, Map.of())
+                        .getBody(),
+                "Test Supplier 12");
+        assertThat(listed.get("last_delivery_on").asString()).isEqualTo(older);
+
+        // The colleague who may see profit sees both, the newest first.
+        JsonNode all = colleague
+                .call(HttpMethod.GET, "/suppliers/" + id + "/deliveries", null, profitBuyer, head, Map.of())
+                .getBody();
+        assertThat(ids(all)).containsExactly(theirs.toString(), own.toString());
+        assertThat(colleague
+                        .call(HttpMethod.GET, "/suppliers/" + id, null, profitBuyer, head, Map.of())
+                        .getBody()
+                        .get("last_delivery_on")
+                        .asString())
+                .isEqualTo(newer);
+    }
+
+    UUID restockAs(RetailTestSupport who, String permissions, UUID supplier, String on) {
+        Map<String, Object> body = RetailPurchasingIT.purchase(
+                "cash", supplier, List.of(RetailPurchasingIT.line(product, 1_000L, null, Map.of(t.headOffice(), "2"))));
+        body.put("purchased_on", on);
+        ResponseEntity<JsonNode> bought = who.postKeyed(
+                "/purchases",
+                body,
+                permissions,
+                t.headOffice().toString(),
+                UUID.randomUUID().toString());
+        assertThat(bought.getStatusCode()).as("%s", bought.getBody()).isEqualTo(HttpStatus.CREATED);
+        return RetailTestSupport.id(bought);
+    }
+
+    /**
+     * Issue #849: no audit row of a supplier ever holds its bank account number, nor a key that could, on the add or on
+     * an edit that sets or clears it; the add's row holds the name alone, and an edit only names the fields it changed.
+     */
+    @Test
+    void noSupplierAuditRowHoldsTheBankAccount() {
+        UUID id = supplier("Test Supplier 13", "+256700000113", details());
+        ResponseEntity<JsonNode> set =
+                patch(id, Map.of("details", Map.of("bank_account", "0000333344", "notes", "Changed.")));
+        assertThat(set.getStatusCode()).as("%s", set.getBody()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> cleared = patch(id, Map.of("details", Map.of("bank_account", "")));
+        assertThat(cleared.getStatusCode()).as("%s", cleared.getBody()).isEqualTo(HttpStatus.OK);
+
+        List<String> rows = TestDatabase.owner()
+                .sql("SELECT data::text FROM audit_log WHERE tenant_id = ? AND entity_id = ?")
+                .params(t.tenantId(), id)
+                .query(String.class)
+                .list();
+        assertThat(rows).hasSize(3).noneMatch(r -> r.contains("0000111122") || r.contains("0000333344"));
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM audit_log WHERE tenant_id = ? AND entity_id = ?"
+                                + " AND jsonb_path_exists(data, 'strict $.**.bank_account')")
+                        .params(t.tenantId(), id)
+                        .query(Long.class)
+                        .single())
+                .as("no key named bank_account at any depth")
+                .isZero();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT data -> 'after' ->> 'name' || '|'"
+                                + " || (SELECT count(*) FROM jsonb_object_keys(data -> 'after')) FROM audit_log"
+                                + " WHERE tenant_id = ? AND entity_id = ? AND action = 'retail.supplier.created'")
+                        .params(t.tenantId(), id)
+                        .query(String.class)
+                        .single())
+                .as("the add's row holds the name alone")
+                .isEqualTo("Test Supplier 13|1");
     }
 
     private static JsonNode byName(JsonNode list, String name) {

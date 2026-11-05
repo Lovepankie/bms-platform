@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -260,6 +261,69 @@ class SignInLimitsIT extends IntegrationTest {
         } finally {
             throttle.signInPerIp = suite;
         }
+    }
+
+    /**
+     * Issue #857 item 5: an email of nobody typed with spaces gets exactly the answer an email of nobody typed plainly
+     * gets, and the answer a real account gets, on sign-in and on Forgot password: the same status and body, one
+     * password hash spent on sign-in (held here, so the wait for it shows as 503 for all three), and the Forgot password
+     * time floor.
+     */
+    // JUSTIFICATION-A3: #857 item 5 asks for this test; it reuses this class's login, forgot and slot helpers.
+    @Test
+    void aSpacedEmailOfNobodyIsAnsweredLikeAnyOtherEmail() {
+        String real = Api.email("clerk");
+        Api.staff(t, real, new Role("cashier", t.headOffice()));
+        String plain = Api.email("nobody");
+        String nobody = Api.email("nobody");
+        String spaced =
+                "  " + nobody.substring(0, 3) + " " + nobody.substring(3).replace("@", " @ ") + "\t";
+
+        ResponseEntity<JsonNode> forReal = login(api, STAFF_LOGIN, real, "Wrong-Password-0", freshIp());
+        ResponseEntity<JsonNode> forPlain = login(api, STAFF_LOGIN, plain, "Wrong-Password-0", freshIp());
+        ResponseEntity<JsonNode> forSpaced = login(api, STAFF_LOGIN, spaced, "Wrong-Password-0", freshIp());
+        assertThat(answer(forSpaced))
+                .isEqualTo(answer(forPlain))
+                .isEqualTo(answer(forReal))
+                .startsWith("401 invalid_credentials ");
+        assertThat(new TreeSet<>(forSpaced.getBody().propertyNames()))
+                .isEqualTo(new TreeSet<>(forPlain.getBody().propertyNames()));
+        // The failure counted on the cleaned address, as for any address of nobody.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT failed_login_count FROM sign_in_address_failures WHERE address_hash = ?")
+                        .param(addressKey(nobody))
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
+
+        int slots = passwords.hashing.drainPermits();
+        passwords.waitMillis = 200;
+        try {
+            List<String> busy = new ArrayList<>();
+            for (String login : List.of(real, plain, spaced)) {
+                busy.add(answer(login(api, STAFF_LOGIN, login, "Wrong-Password-1", freshIp())));
+            }
+            assertThat(busy).containsOnly(busy.getFirst());
+            assertThat(busy.getFirst()).startsWith("503 sign_in_busy ");
+        } finally {
+            passwords.hashing.release(slots);
+            passwords.waitMillis = Passwords.WAIT_SECONDS * 1000;
+        }
+
+        List<ResponseEntity<JsonNode>> forgotten = new ArrayList<>();
+        for (String login :
+                List.of(real, Api.email("nobody"), " " + Api.email("nobody").replace("@", " @") + " ")) {
+            long started = System.nanoTime();
+            ResponseEntity<JsonNode> response = forgot(login);
+            long millis = (System.nanoTime() - started) / 1_000_000;
+            assertThat(response.getStatusCode()).as(login).isEqualTo(HttpStatus.ACCEPTED);
+            // Nothing in the time of the answer says what happened inside: the floor, as PasswordResetIT checks it.
+            assertThat(millis).as(login).isGreaterThanOrEqualTo(350);
+            forgotten.add(response);
+        }
+        assertThat(forgotten.get(2).getBody())
+                .isEqualTo(forgotten.get(1).getBody())
+                .isEqualTo(forgotten.get(0).getBody());
     }
 
     /** FR-IAM-15: reset links for one address are bounded whoever asks, with the same 429 for an address of nobody. */

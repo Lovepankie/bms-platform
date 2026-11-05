@@ -4,9 +4,12 @@ import { businessToday } from '../../../api/retail';
 import { retailAnalytics, type DamageShare, type DamageShareItem } from '../../../api/retail-analytics';
 import { PeriodPicker, presetRange } from '../../../app/ui/PeriodPicker';
 import { SkeletonList } from '../../../components/states';
+import { useStaff } from '../context';
 import { Empty, Section } from './analytics-ui';
-import { showQty } from './maths';
-import { Problem, useBranchView, useProfitAccess } from './ui';
+import { shown } from './ladder-state';
+import { milliOf } from './maths';
+import { PROFIT, canSeeProfit, holdsAt } from './permissions';
+import { Problem, useBranchView } from './ui';
 
 // Damage and use on Stock health (issue #822, ADR-127), as the owner's old app showed it: how much of each item was damaged
 // and how much was used in the shop, each as a whole percent of the stock that passed through (the stock at the start plus
@@ -17,6 +20,9 @@ import { Problem, useBranchView, useProfitAccess } from './ui';
 type NameOf = (id: string | undefined) => string;
 
 export const BASE_HINT = 'Out of the stock that passed through: the stock at the start plus what came in.';
+
+/** A quantity the server sent ("9247.000") for people, thousands grouped as elsewhere ("9,247"; issue #854). */
+const showQty = (text: string): string => shown(BigInt(milliOf(text)));
 
 /** "10%", "under 1%" for a little out of a lot, or null when nothing passed through to compare with. */
 export function percentWords(pct: number | undefined, qty: string | undefined): string | null {
@@ -69,10 +75,15 @@ export function DamageShareView({ data, nameOf }: { data: DamageShare; nameOf: N
   );
 }
 
-/** The section of Stock health, with its own period picker on This month; nothing at all without retail.profit.read. */
+/**
+ * The section of Stock health, with its own period picker on This month; nothing at all without retail.profit.read at the shop
+ * chosen (any shop when all are chosen, and the server then answers only those where it is held). A manager with it at one shop
+ * looking at another sees no section, not a refusal (issue #854).
+ */
 export function DamageShareSection({ nameOf }: { nameOf: NameOf }) {
-  const owner = useProfitAccess();
+  const { me } = useStaff();
   const { all, branchId } = useBranchView();
+  const owner = all ? canSeeProfit(me) : Boolean(branchId) && holdsAt(me, PROFIT, branchId);
   const [days, setDays] = useState(() => presetRange('month', businessToday()));
   const report = useQuery({
     queryKey: ['retail', 'damage-share', all ? 'all' : branchId, days.from, days.to],
