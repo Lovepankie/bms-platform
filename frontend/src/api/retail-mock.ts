@@ -1724,8 +1724,12 @@ export function createMockRetail(): RetailApi {
         return visibleTransfer(t);
       })),
 
-    listTransfers: ({ branchId, status }) =>
-      delay({ items: transfers.filter((t) => (!branchId || t.from_branch_id === branchId || t.to_branch_id === branchId) && (!status || t.status === status)).map(visibleTransfer) }),
+    listTransfers: ({ branchId, status, cursor }) => {
+      // Pages of 50, as the server sends them (issue #798: Stock moves shows more on request).
+      const wanted = transfers.filter((t) => (!branchId || t.from_branch_id === branchId || t.to_branch_id === branchId) && (!status || t.status === status));
+      const start = Number(cursor ?? 0) || 0;
+      return delay({ items: wanted.slice(start, start + 50).map(visibleTransfer), ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });
+    },
 
     getTransfer: (id) => {
       const t = transfers.find((x) => x.id === id);

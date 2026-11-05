@@ -1582,7 +1582,7 @@ export const stockByLocationPage: Tour = {
 
 export const inTransitPage: Tour = {
   id: 'page-in-transit',
-  version: 1,
+  version: 2,
   title: 'This page: stock on the way',
   audience: (me) => held(me, 'retail.stock.read') && capable(me, 'transfer_receipt'),
   autoStart: false,
@@ -1600,7 +1600,7 @@ export const inTransitPage: Tour = {
       target: 'transit-list',
       module: 'retail',
       title: 'Receive or take back',
-      body: 'At the branch it was sent to, check what arrived and tap Mark as received. At the branch that sent it, you can take it back until then.',
+      body: 'At the branch it was sent to, tap Check what arrived on a move, then Mark as received. At the branch that sent it, tap Take this back until then.',
     },
   ],
 };

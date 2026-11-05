@@ -94,18 +94,39 @@ function TakeBackForm({ transfer }: { transfer: InFlightTransfer }) {
   );
 }
 
-export function InTransitCard({ transfer, mayReceive, mayTakeBack }: { transfer: InFlightTransfer; mayReceive: boolean; mayTakeBack: boolean }) {
+/**
+ * One move on its way. It opens on its summary (rule 1, issue #798): the route, the date and wait, what moved in short, and the
+ * cost to a holder of retail.profit.read. Check what arrived opens the items and the receive form, and Take this back opens its
+ * reason, one at a time, so the card has at most one brand button and only once a form is open (`opened` starts one open).
+ */
+export function InTransitCard({ transfer, mayReceive, mayTakeBack, opened = null }: { transfer: InFlightTransfer; mayReceive: boolean; mayTakeBack: boolean; opened?: 'receive' | 'takeBack' | null }) {
   const label = useBranchLabel();
   const profit = useProfitAccess();
+  const [form, setForm] = useState<'receive' | 'takeBack' | null>(opened);
+  const lines = transfer.lines ?? [];
+  const names = lines.map((l) => l.description ?? l.code ?? '');
+  const more = names.length > 2 ? `, and ${names.length - 2} more` : '';
   return (
     <li className="rt-card">
       <strong style={{ display: 'block' }}>From {label(transfer.from_branch_id)} to {label(transfer.to_branch_id)}</strong>
       <span className="muted" style={{ display: 'block' }}>{showDate(transfer.transfer_date)}, {waiting(transfer.age_days)}</span>
-      <Items transfer={transfer} />
-      {transfer.note && <p>Note: {transfer.note}</p>}
+      <span style={{ display: 'block' }}>{names.length} {names.length === 1 ? 'item' : 'items'}: {names.slice(0, 2).join(', ')}{more}</span>
       {profit && transfer.cost_total_minor !== undefined && <p>Value at cost: {money(transfer.cost_total_minor)}</p>}
-      {mayReceive && <ReceiveForm transfer={transfer} />}
-      {mayTakeBack && <TakeBackForm transfer={transfer} />}
+      {form === null ? (
+        <div className="cluster">
+          {mayReceive && <button type="button" onClick={() => setForm('receive')}>Check what arrived</button>}
+          {mayTakeBack && <button type="button" onClick={() => setForm('takeBack')}>Take this back</button>}
+          {!mayReceive && !mayTakeBack && lines.length > 2 && <button type="button" onClick={() => setForm('receive')}>Show every item</button>}
+        </div>
+      ) : (
+        <>
+          <Items transfer={transfer} />
+          {transfer.note && <p>Note: {transfer.note}</p>}
+          {form === 'receive' && mayReceive && <ReceiveForm transfer={transfer} />}
+          {form === 'takeBack' && mayTakeBack && <TakeBackForm transfer={transfer} />}
+          <button type="button" onClick={() => setForm(null)}>Close</button>
+        </>
+      )}
     </li>
   );
 }

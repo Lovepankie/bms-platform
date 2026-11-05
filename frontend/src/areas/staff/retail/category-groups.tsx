@@ -22,7 +22,7 @@ const byName = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
  * The items in groups, by category name, A to Z, the items without a category last and each group
  * in the order the items came. `subtotalOf` writes a group's subtotal (null for none).
  */
-export function groupByCategory<T>(items: T[], categoryOf: (item: T) => string | null | undefined, subtotalOf?: (items: T[]) => string | null): Group<T>[] {
+export function groupByCategory<T>(items: T[], categoryOf: (item: T) => string | null | undefined, subtotalOf?: (items: T[]) => string | null, keepOrder = false): Group<T>[] {
   const found = new Map<string, Group<T>>();
   for (const item of items) {
     const label = (categoryOf(item) ?? '').trim();
@@ -31,7 +31,8 @@ export function groupByCategory<T>(items: T[], categoryOf: (item: T) => string |
     group.items.push(item);
     found.set(key, group);
   }
-  const groups = [...found.values()].sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : byName.compare(a.label, b.label)));
+  // `keepOrder` (a month of a dated list, issue #798) keeps the groups in the order their first rows came.
+  const groups = keepOrder ? [...found.values()] : [...found.values()].sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : byName.compare(a.label, b.label)));
   if (subtotalOf) for (const g of groups) g.subtotal = subtotalOf(g.items);
   return groups;
 }
@@ -81,6 +82,8 @@ export type CategoryGroups<T> = {
   minGroups: number;
   /** The grouping is worth drawing: switched on, and at least `minGroups` groups. */
   active: boolean;
+  /** What one row is called on a group's header ("2 moves"); items when not given. */
+  noun?: [string, string];
 };
 
 /**
@@ -100,6 +103,9 @@ export function useCategoryGroups<T>(o: {
   /** The list shown is still the previous answer (a kept placeholder): the default is not decided from it. */
   pending?: boolean;
   minGroups?: number;
+  /** Groups in the order their rows came (months of a dated list), not A to Z. */
+  keepOrder?: boolean;
+  noun?: [string, string];
 }): CategoryGroups<T> {
   const [grouped, setGroupedState] = useState(() => readGrouped(o.screen));
   const latch = useRef<{ key: string; open: boolean } | null>(null);
@@ -107,7 +113,7 @@ export function useCategoryGroups<T>(o: {
   const [opened, setOpened] = useState<Opened>({ key: o.resetKey, map: {} });
   const mine = opened.key === o.resetKey ? opened : { key: o.resetKey, map: {} };
   const base = mine.base ?? latch.current?.open ?? defaultOpen(o.items.length, o.searching);
-  const groups = groupByCategory(o.items, o.categoryOf, o.subtotalOf);
+  const groups = groupByCategory(o.items, o.categoryOf, o.subtotalOf, o.keepOrder);
   const isOpen = (key: string) => mine.map[key] ?? base;
   return {
     grouped,
@@ -118,6 +124,7 @@ export function useCategoryGroups<T>(o: {
     setAll: (open) => setOpened({ key: o.resetKey, base: open, map: {} }),
     minGroups: o.minGroups ?? 1,
     active: grouped && groups.length >= (o.minGroups ?? 1),
+    noun: o.noun,
   };
 }
 
@@ -148,7 +155,7 @@ export function GroupControls<T>({ state, paged = false }: { state: CategoryGrou
 }
 
 /** What a group's header says: the count and the subtotal, if the screen has one. */
-export const groupSummary = (g: { items: unknown[]; subtotal: string | null }) => `${g.items.length} ${g.items.length === 1 ? 'item' : 'items'}${g.subtotal ? `, ${g.subtotal}` : ''}`;
+export const groupSummary = (g: { items: unknown[]; subtotal: string | null }, noun: [string, string] = ['item', 'items']) => `${g.items.length} ${g.items.length === 1 ? noun[0] : noun[1]}${g.subtotal ? `, ${g.subtotal}` : ''}`;
 
 function Header({ label, summary, open, controls, onToggle }: { label: string; summary: string; open: boolean; controls: string; onToggle: () => void }) {
   return (
@@ -170,7 +177,7 @@ export function GroupedBodies<T>({ state, colSpan, renderRow }: { state: Categor
         return (
           <Fragment key={g.key}>
             <tbody className="cat-group">
-              <tr><th scope="rowgroup" colSpan={colSpan}><Header label={g.label} summary={groupSummary(g)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></th></tr>
+              <tr><th scope="rowgroup" colSpan={colSpan}><Header label={g.label} summary={groupSummary(g, state.noun)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></th></tr>
             </tbody>
             <tbody id={id} hidden={!open}>{open && g.items.map(renderRow)}</tbody>
           </Fragment>
@@ -190,7 +197,7 @@ export function GroupedCards<T>({ state, renderItem }: { state: CategoryGroups<T
         const id = `${base}-${i}`;
         return (
           <section key={g.key} className="cat-group">
-            <h3 className="cat-title"><Header label={g.label} summary={groupSummary(g)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></h3>
+            <h3 className="cat-title"><Header label={g.label} summary={groupSummary(g, state.noun)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></h3>
             <ul id={id} hidden={!open} style={{ listStyle: 'none', padding: 0 }}>{open && g.items.map(renderItem)}</ul>
           </section>
         );
