@@ -1,18 +1,27 @@
 import { useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { draftInProgress, restoreDraft } from '../areas/staff/retail/idempotency';
-import { useOffline } from './offline-context';
-import { GAVE_UP_CODE, IN_PROGRESS_CODES, type OutboxItem } from './outbox';
+import { useOffline, type Offline } from './offline-context';
+import { GAVE_UP_CODE, IN_PROGRESS_CODES, heldWords, type OutboxItem } from './outbox';
 
 // The state of an entry kept on the phone that is not a sale (issue #812, ADR-067 decision 13), as the sync sheet and the
 // form's Saved on this phone panel show it.
 
-/** Waiting, sending, sent (or sent and waiting for an administrator, ADR-091), or not recorded, in plain words. */
-export function entryStateWords(item: OutboxItem): string {
+/**
+ * Waiting, sending, sent (or sent and waiting for an administrator, ADR-091), not recorded, or held for its maker (issue
+ * #852, `name` theirs when known), in plain words.
+ */
+export function entryStateWords(item: OutboxItem, name?: string): string {
+  if (item.state === 'held') return heldWords(name);
   if (item.state === 'sent') return item.recorded?.waiting ? 'Sent. It waits for an administrator to approve it.' : 'Sent. It is recorded.';
   if (item.state === 'failed') return `Not recorded: ${item.error?.message ?? ''}`;
   if (item.state === 'sending') return 'Sending';
   return item.attempts > 0 ? `Waiting to try again: ${item.error?.message ?? ''}` : 'Waiting to be sent';
+}
+
+/** The name of the person who made an item, when this phone knows it: the signed-in person's own items only. */
+export function makerName(offline: Offline | null, item: OutboxItem): string | undefined {
+  return offline && item.scope === offline.scope ? offline.name : undefined;
 }
 
 /**
@@ -24,7 +33,8 @@ export function EntryState({ item }: { item: OutboxItem }) {
   const router = useRouter({ warn: false });
   const [asking, setAsking] = useState(false);
   const [formInUse, setFormInUse] = useState(false);
-  if (item.state !== 'failed') return <p className="muted">{entryStateWords(item)}</p>;
+  // A held entry has nothing to Fix, Send again or Discard (issue #852): it is kept as it is and goes with its maker.
+  if (item.state !== 'failed') return <p className="muted">{entryStateWords(item, makerName(offline, item))}</p>;
   // The server may have recorded it (it gave up answering, or was still recording): a new key, or discarding it and typing
   // it again, could save it twice, so only Send again, under its own key, is offered (the lead's decision 2 on the third
   // review of #839; Fix and Discard come back once the server has refused that key). An entry sent online first whose

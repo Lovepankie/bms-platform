@@ -100,4 +100,15 @@ class DeliveryWorthShownTest {
         assertThat(PurchasingService.showsWorth(twoShops, oneShop)).isFalse();
         assertThat(PurchasingService.showsWorth(AT_A, buyer)).isFalse();
     }
+
+    /** Issue #852 (review item 8): the catalogue answers 0 for an item it no longer has or never had. */
+    @Test
+    void aDeletedOrUnknownItemWithNoLinePriceIsUnpriced() {
+        Long worth = PurchasingService.worth(AT_A.lines(), id -> 0L);
+        assertThat(worth).isNull();
+        Purchase shown = AT_A.withWorth(worth);
+        assertThat(shown.hasUnpricedItems()).isTrue();
+        assertThat(shown.sellWorthMinor()).isNull();
+        assertThat(shown.expectedProfitMinor()).isNull();
+    }
 }

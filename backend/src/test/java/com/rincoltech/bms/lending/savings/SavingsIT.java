@@ -8,6 +8,7 @@ import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.loans.LoanFixtures;
 import com.rincoltech.bms.lending.members.MemberLookup;
+import com.rincoltech.bms.testsupport.KeyOwnership;
 import com.rincoltech.bms.testsupport.MovableClock;
 import com.rincoltech.bms.testsupport.MovableClockConfig;
 import com.rincoltech.bms.testsupport.SmsTenants;
@@ -338,6 +339,17 @@ class SavingsIT extends LoanFixtures {
                 .isEqualTo(txn.get("id").asString());
         assertThat(deposit(account, 60_000, k).getBody().get("code").asString()).isEqualTo("idempotency_key_reused");
         assertThat(get(account).get("balance_minor").asLong()).isEqualTo(50_000);
+        // Issue #852: another cashier with this key is refused, sees none of the receipt and moves nothing.
+        Map<String, Object> same = Map.of("amount_minor", 50_000, "payment_method_key", "cash");
+        ResponseEntity<JsonNode> theirs = send(
+                HttpMethod.POST,
+                ACCOUNTS + "/" + account + "/deposits",
+                withKey(as(UUID.randomUUID(), cashierPerms, "*", null), k),
+                same);
+        KeyOwnership.refused(theirs, d, account, same);
+        assertThat(KeyOwnership.holders(t.tenantId(), k)).containsExactly(cashier);
+        assertThat(get(account).get("balance_minor").asLong()).isEqualTo(50_000);
+        KeyOwnership.replayed(deposit(account, 50_000, k), d);
 
         // A value date in the future, or before the account opened, is refused.
         ResponseEntity<JsonNode> future = send(

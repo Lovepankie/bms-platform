@@ -9,6 +9,7 @@ import com.rincoltech.bms.core.payments.GatewayException;
 import com.rincoltech.bms.core.payments.PaymentGateway;
 import com.rincoltech.bms.lending.loans.LoanFixtures;
 import com.rincoltech.bms.lending.loans.LoanServicing;
+import com.rincoltech.bms.testsupport.KeyOwnership;
 import com.rincoltech.bms.testsupport.MovableClock;
 import com.rincoltech.bms.testsupport.MovableClockConfig;
 import java.time.Duration;
@@ -856,6 +857,19 @@ class UnallocatedReceiptsIT extends LoanFixtures {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1L);
+        // Issue #852: another cashier with this key is refused, sees none of the request and asks for nothing.
+        ResponseEntity<JsonNode> theirs =
+                ask(receipt, "allocate", body, UUID.randomUUID(), cashierPerms, "replay-224-key");
+        KeyOwnership.refused(theirs, first, receipt, body);
+        assertThat(KeyOwnership.holders(t.tenantId(), "replay-224-key")).containsExactly(cashier);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM approval_requests WHERE subject_id = ?")
+                        .param(receipt)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
+        assertThat(receiptRow(receipt).get("status")).isEqualTo("open");
+        KeyOwnership.replayed(ask(receipt, "allocate", body, cashier, cashierPerms, "replay-224-key"), first);
         // A key without a request body that matches is refused, not replayed.
         ResponseEntity<JsonNode> reused = ask(
                 receipt,

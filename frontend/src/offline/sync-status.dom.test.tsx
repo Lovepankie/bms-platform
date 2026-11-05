@@ -167,6 +167,25 @@ describe('the sheet', () => {
 });
 
 describe('a shared phone', () => {
+  // JUSTIFICATION-A3: the test issue #852 asks for, not a mechanism.
+  it("says a sale and an entry another person's sign-in met are saved by their maker and sent when they sign in again, never to type them again (issue #852)", async () => {
+    const send = vi.fn(async () => ({ status: 422, body: { code: 'idempotency_key_other_user', detail: 'Someone else in this business already used this Idempotency-Key. Nothing was saved; send the request again with a new key.' } }));
+    const offline = testOffline(seller, { online: true, deps: { send, signedInAs: () => null } });
+    if (!offline) throw new Error('a seller sells offline');
+    const entry = item('e', 2, { request: undefined, method: undefined, totalMinor: 5000, entry: { kind: 'expense', path: '/api/v1/retail/expenses', body: {}, words: 'Expense, Transport' } });
+    await withItems(offline, [item('a', 1), entry]);
+    show(offline);
+    await act(() => offline.engine.sync());
+    expect(send).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: /waiting to sync/ }));
+    const list = await screen.findByRole('list', { name: 'Waiting to sync' });
+    const words = 'This was saved by Test Seller 01; it is sent when they sign in again.';
+    expect(list.textContent?.split(words)).toHaveLength(3);
+    expect(list.textContent).not.toMatch(/enter it again|re-?enter|type it again|new key|Not recorded/i);
+    // Nothing to fix, send again or discard: it is kept as it is for its maker.
+    for (const name of ['Fix', 'Send again', 'Discard']) expect(screen.queryByRole('button', { name })).toBeNull();
+  });
+
   it('says how many sales another person left waiting on this phone', async () => {
     show(testOffline(seller, { online: true, othersWaiting: 2 }), <OthersWaitingNote />);
     expect(screen.getByTestId('others-waiting').textContent).toContain('2 sales from another person are waiting on this phone.');

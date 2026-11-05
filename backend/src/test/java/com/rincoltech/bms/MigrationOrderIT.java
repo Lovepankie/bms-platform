@@ -3100,6 +3100,53 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V136 (issue #852, ADR-026 decision 5) adds one index and changes no row: keys stored before it, one key under two
+     * people included, stay as they were. JUSTIFICATION-A3: a new test case; no existing case covers V136.
+     */
+    @Test
+    void idempotencyKeyLookupMigrationKeepsEveryKey() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("136") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v136', 'Test Tenant V136',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            for (UUID person : List.of(UUID.randomUUID(), UUID.randomUUID())) {
+                owner.sql("INSERT INTO idempotency_keys (tenant_id, principal_id, key, method, path, request_hash,"
+                                + " status, response_status, response_body)"
+                                + " VALUES (?, ?, 'test-key-v136', 'POST', '/test', ?, 'completed', 201, '{}')")
+                        .params(tenant, person, "0".repeat(64))
+                        .update();
+            }
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT count(*) FROM idempotency_keys WHERE key = 'test-key-v136'")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(2);
+            assertThat(owner.sql("SELECT indexdef FROM pg_indexes WHERE indexname = 'idempotency_keys_tenant_key'")
+                            .query(String.class)
+                            .single())
+                    .doesNotContain("UNIQUE")
+                    .contains("(tenant_id, key)");
+            // Built in Flyway's transaction, not CONCURRENTLY (which waited on Flyway's own lock): finished and usable.
+            assertThat(owner.sql("SELECT indisvalid AND indisready FROM pg_index"
+                                    + " WHERE indexrelid = 'idempotency_keys_tenant_key'::regclass")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

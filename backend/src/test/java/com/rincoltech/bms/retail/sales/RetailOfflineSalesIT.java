@@ -372,19 +372,19 @@ class RetailOfflineSalesIT extends IntegrationTest {
 
     /**
      * True once a transaction waits on one that itself waits on {@code txid}: the second request waiting on the first
-     * request's uncommitted Idempotency-Key row, while the first waits on the row the test holds.
+     * request's hold on the Idempotency-Key (its transaction lock on the key since issue #852, of any lock type), while
+     * the first waits on the row the test holds.
      */
     boolean waitingOnAWaiterOf(String txid) throws InterruptedException {
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(4);
         while (System.nanoTime() < until) {
             long waiting =
                     TestDatabase.owner().sql("""
-                            SELECT count(*) FROM pg_locks w
-                              JOIN pg_locks h ON h.locktype = 'transactionid' AND h.granted
-                                             AND h.transactionid = w.transactionid AND h.pid <> w.pid
-                             WHERE w.locktype = 'transactionid' AND NOT w.granted
-                               AND h.pid IN (SELECT pid FROM pg_locks WHERE locktype = 'transactionid'
-                                                AND NOT granted AND transactionid::text = ?)
+                            SELECT count(DISTINCT w.pid) FROM pg_locks w
+                             WHERE NOT w.granted
+                               AND EXISTS (SELECT 1 FROM unnest(pg_blocking_pids(w.pid)) AS b(pid)
+                                            WHERE b.pid IN (SELECT pid FROM pg_locks WHERE locktype = 'transactionid'
+                                                               AND NOT granted AND transactionid::text = ?))
                             """).param(txid).query(Long.class).single();
             if (waiting > 0) {
                 return true;

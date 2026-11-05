@@ -7,6 +7,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Session;
+import com.rincoltech.bms.testsupport.KeyOwnership;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
@@ -1018,6 +1019,19 @@ class ReferralsIT extends IntegrationTest {
                         .get("code")
                         .asString())
                 .isEqualTo("idempotency_key_reused");
+        // Issue #852: another operator with this key is refused, sees none of the line and adds nothing.
+        String otherEmail = Api.email("ref-operator");
+        Session other = platform.signIn(Api.platformUser(otherEmail), otherEmail, Api.PASSWORD, null);
+        String path = "/api/v1/platform/referrals/" + rx + "/commissions";
+        Map<String, Object> same = Map.of("amount_minor", 800, "currency", "UGX", "reason", "Test: worked out by hand");
+        ResponseEntity<JsonNode> theirs =
+                platform.call(HttpMethod.POST, path, same, other.accessToken(), Map.of("Idempotency-Key", key));
+        KeyOwnership.refused(theirs, first, path, same);
+        assertThat(KeyOwnership.holders(a.tenantId(), key)).containsExactly(operatorId);
+        // Typed lines mark a replay by 200 and the same line, not by the Idempotent-Replayed header.
+        ResponseEntity<JsonNode> mine = addLine(rx, 800, "Test: worked out by hand", key);
+        assertThat(mine.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(amounts(mine.getBody())).containsExactly(800L);
         assertThat(amounts(detail(rx))).containsExactly(800L);
         assertThat(audits("platform.referral.commission_added")).isEqualTo(1);
     }

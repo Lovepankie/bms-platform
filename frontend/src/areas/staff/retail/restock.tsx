@@ -119,16 +119,18 @@ export function restockWorth(lines: RestockLine[]): number | null {
 
 /**
  * Issue #821: the delivery's cost, what it should sell for and the expected profit (a loss said as one), one line each. With an
- * item that has no selling price yet (a null worth), the cost and that sentence instead of the other two.
+ * item that has no selling price yet (a null worth), the cost and that sentence instead of the other two. With no line yet (an
+ * undefined worth), the cost alone, as the server leaves both fields out of a delivery with no line (issue #852).
  */
-export function DeliveryWorth({ paid, worth, label }: { paid: number; worth: number | null; label: string }) {
-  const profit = worth === null ? 0 : worth - paid;
+export function DeliveryWorth({ paid, worth, label }: { paid: number; worth: number | null | undefined; label: string }) {
+  const known = worth !== null && worth !== undefined;
+  const profit = known ? worth - paid : 0;
   return (
     <>
       <dl className="rt-figures" aria-label={label} data-testid="delivery-worth">
         <div><dt>Total cost</dt><dd><Money minor={paid} /></dd></div>
-        {worth !== null && <div><dt>Should sell for</dt><dd><Money minor={worth} /></dd></div>}
-        {worth !== null && <div><dt>{profit < 0 ? 'Expected loss' : 'Expected profit'}</dt><dd><strong><Money minor={Math.abs(profit)} /></strong></dd></div>}
+        {known && <div><dt>Should sell for</dt><dd><Money minor={worth} /></dd></div>}
+        {known && <div><dt>{profit < 0 ? 'Expected loss' : 'Expected profit'}</dt><dd><strong><Money minor={Math.abs(profit)} /></strong></dd></div>}
       </dl>
       {worth === null && <p className="hint" data-testid="unpriced-note">Some items have no selling price yet.</p>}
     </>
@@ -507,7 +509,7 @@ export function RestockForm({ onSaved, draftName, fixSearch, fromEdit = false, i
 
       {/* Issue #821: who reads profit at every branch on the form sees what the delivery should sell for; anyone else, the total cost as before. */}
       {canProfit && into.every((b) => holdsAt(me, PROFIT, b)) ? (
-        <div className="rt-total rt-total-figures" aria-live="polite" data-testid="restock-total"><DeliveryWorth paid={restockTotal(lines)} worth={restockWorth(lines)} label="This delivery" /></div>
+        <div className="rt-total rt-total-figures" aria-live="polite" data-testid="restock-total"><DeliveryWorth paid={restockTotal(lines)} worth={lines.length ? restockWorth(lines) : undefined} label="This delivery" /></div>
       ) : (
         <p className="rt-total" aria-live="polite" data-testid="restock-total">Total cost <Money minor={restockTotal(lines)} /></p>
       )}

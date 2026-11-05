@@ -6,6 +6,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Session;
+import com.rincoltech.bms.testsupport.KeyOwnership;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -512,6 +513,29 @@ class OperatorScreensIT extends IntegrationTest {
                 .isEqualTo(1);
         assertThat(audits("platform.tenant.payment_recorded", a.id())).isEqualTo(1);
         assertThat(lastOperator("platform.tenant.payment_recorded", a.id())).isEqualTo(operatorId);
+
+        // JUSTIFICATION-A3: issue #852 asks for a test per module that uses the key; this one reuses the payment above.
+        // Issue #852: another operator with this key is refused, sees none of the payment and records nothing.
+        String otherEmail = Api.email("operator");
+        Session other = platform.signIn(Api.platformUser(otherEmail), otherEmail, Api.PASSWORD, null);
+        Map<String, Object> same = payment(10000, 1, "TEST-REF-01");
+        ResponseEntity<JsonNode> theirs =
+                platform.call(HttpMethod.POST, path, same, other.accessToken(), Map.of("Idempotency-Key", key));
+        KeyOwnership.refused(theirs, first, path, same);
+        assertThat(KeyOwnership.holders(a.id(), key)).containsExactly(operatorId);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM subscription_payments WHERE tenant_id = ?")
+                        .param(a.id())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        assertThat(audits("platform.tenant.payment_recorded", a.id())).isEqualTo(1);
+        // Operator payments mark a replay by 200 and the same payment, not by the Idempotent-Replayed header.
+        ResponseEntity<JsonNode> mine =
+                platform.call(HttpMethod.POST, path, same, operator.accessToken(), Map.of("Idempotency-Key", key));
+        assertThat(mine.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(mine.getBody().get("id").asString())
+                .isEqualTo(first.getBody().get("id").asString());
 
         ResponseEntity<JsonNode> year = platform.call(
                 HttpMethod.POST,

@@ -20,8 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Chapter 7 section 7.8 on {@code idempotency_keys}. The insert of the key row waits on a
- * concurrent request holding the same key; {@code lock_timeout} bounds that wait at 5 seconds.
+ * Chapter 7 section 7.8 on {@code idempotency_keys}. Every request with a key first takes a transaction lock on the
+ * business and the key, whoever sends it, so a concurrent request with the same key waits for the first to commit or
+ * roll back; {@code lock_timeout} bounds that wait at 5 seconds (409 {@code idempotency_in_progress}). Under the lock it
+ * reads the key's row in this business: the caller's own row is replayed or refused as before; a row of anyone else is
+ * refused with 422 {@code idempotency_key_other_user} and its stored answer is never read into the response (issue #852,
+ * ADR-026 decision 5).
  */
 @Service
 class JdbcIdempotency implements Idempotency {
@@ -34,12 +38,31 @@ class JdbcIdempotency implements Idempotency {
         this.mapper = mapper;
     }
 
-    private record Stored(String requestHash, String status, String body) {}
+    private record Stored(String requestHash, String body) {}
+
+    /**
+     * The transaction lock of one key in the bound business. A test that holds a key in progress takes the same lock
+     * (HeldIdempotencyKey).
+     */
+    static final String LOCK_SQL =
+            "SELECT pg_advisory_xact_lock(hashtextextended(current_setting('app.tenant_id') || ':idempotency:' || ?, 0))";
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public <T> Outcome<T> once(
             String key, String method, String path, Object request, Class<T> responseType, Supplier<T> work) {
+        return run(CurrentPrincipal.require().userId(), key, method, path, request, responseType, work);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public <T> Outcome<T> onceAsJob(
+            String job, String key, String method, String path, Object request, Class<T> type, Supplier<T> work) {
+        return run(Idempotency.jobPrincipal(job), key, method, path, request, type, work);
+    }
+
+    private <T> Outcome<T> run(
+            UUID principal, String key, String method, String path, Object request, Class<T> type, Supplier<T> work) {
         if (key == null || key.isBlank()) {
             throw ApiException.rule(
                     "idempotency_key_missing",
@@ -49,11 +72,30 @@ class JdbcIdempotency implements Idempotency {
             throw ApiException.validation(
                     List.of(new FieldProblem("Idempotency-Key", "invalid", "The key must be 8 to 100 characters.")));
         }
-        UUID principal = CurrentPrincipal.require().userId();
         String hash = sha256(method + " " + path + "\n" + mapper.writeValueAsString(request));
         jdbc.sql("SET LOCAL lock_timeout = '5s'").update();
         int inserted;
         try {
+            // Whoever sends the key: a second person's request waits for the first one's answer like a retry does.
+            jdbc.sql(LOCK_SQL).param(key).query(rs -> {});
+            // The caller's own row first; a business may hold one key under two people from before issue #852, and each
+            // of them still replays their own.
+            Boolean mine = jdbc.sql("""
+                            SELECT principal_id = ? AS mine FROM idempotency_keys
+                             WHERE tenant_id = current_setting('app.tenant_id')::uuid AND key = ?
+                             ORDER BY (principal_id = ?) DESC LIMIT 1
+                            """)
+                    .params(principal, key, principal)
+                    .query(Boolean.class)
+                    .optional()
+                    .orElse(null);
+            if (Boolean.FALSE.equals(mine)) {
+                // Neither the other person's answer nor whether their request matched this one is told.
+                throw ApiException.rule(
+                        Idempotency.OTHER_USER,
+                        "Someone else in this business already used this Idempotency-Key. Nothing was saved; send the"
+                                + " request again with a new key.");
+            }
             inserted = jdbc.sql("""
                             INSERT INTO idempotency_keys (tenant_id, principal_id, key, method, path, request_hash, status)
                             VALUES (current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, 'in_progress')
@@ -71,23 +113,23 @@ class JdbcIdempotency implements Idempotency {
         }
         if (inserted == 0) {
             Stored stored = jdbc.sql("""
-                            SELECT request_hash, status, response_body::text AS body FROM idempotency_keys
-                             WHERE principal_id = ? AND key = ?
+                            SELECT request_hash, response_body::text AS body FROM idempotency_keys
+                             WHERE tenant_id = current_setting('app.tenant_id')::uuid AND principal_id = ? AND key = ?
                             """)
                     .params(principal, key)
-                    .query((rs, n) -> new Stored(rs.getString(1), rs.getString(2), rs.getString(3)))
+                    .query((rs, n) -> new Stored(rs.getString(1), rs.getString(2)))
                     .single();
             if (!stored.requestHash().equals(hash)) {
                 throw ApiException.rule(
                         Idempotency.KEY_REUSED, "This Idempotency-Key was used for a different request.");
             }
-            return new Outcome<>(mapper.readValue(stored.body(), responseType), true);
+            return new Outcome<>(mapper.readValue(stored.body(), type), true);
         }
         T body = work.get();
         jdbc.sql("""
                         UPDATE idempotency_keys SET status = 'completed', response_status = 201,
                                response_body = CAST(? AS jsonb)
-                         WHERE principal_id = ? AND key = ?
+                         WHERE tenant_id = current_setting('app.tenant_id')::uuid AND principal_id = ? AND key = ?
                         """).params(mapper.writeValueAsString(body), principal, key).update();
         return new Outcome<>(body, false);
     }

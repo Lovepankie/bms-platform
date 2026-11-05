@@ -3,8 +3,8 @@ import { useRef, useState } from 'react';
 import { api, problemOf } from '../api/client';
 import { BusyButton } from '../app/ui/BusyButton';
 import { money } from '../areas/staff/retail/ui';
-import { EntryState } from './entry-state';
-import { discarded, failedCount, sentEntries, waiting, waitingWords, type OutboxItem } from './outbox';
+import { EntryState, makerName } from './entry-state';
+import { discarded, failedCount, heldWords, sentEntries, waiting, waitingWords, type OutboxItem } from './outbox';
 import { useOffline, useOnline, useOutbox } from './offline-context';
 
 // The status in the staff bar (issue #458, ADR-067 decision 10): a dot, green online, grey offline, amber while sending,
@@ -168,6 +168,7 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
 }
 
 function SyncRow({ item, onAgain }: { item: OutboxItem; onAgain: () => void }) {
+  const offline = useOffline();
   const failed = item.state === 'failed';
   if (item.entry) {
     return (
@@ -194,6 +195,9 @@ function SyncRow({ item, onAgain }: { item: OutboxItem; onAgain: () => void }) {
             Send again
           </button>
         </>
+      ) : item.state === 'held' ? (
+        // Kept as it is for the person who made it, never typed again (issue #852).
+        <p className="muted">{heldWords(makerName(offline, item))}</p>
       ) : (
         <p className="muted">{item.state === 'sending' ? 'Sending' : item.attempts > 0 ? `Waiting to try again: ${item.error?.message ?? ''}` : 'Waiting its turn'}</p>
       )}

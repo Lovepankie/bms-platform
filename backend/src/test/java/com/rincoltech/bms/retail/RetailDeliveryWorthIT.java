@@ -189,6 +189,8 @@ class RetailDeliveryWorthIT extends IntegrationTest {
         ResponseEntity<JsonNode> again = api.postKeyed("/purchases", body, ADMIN, "*", key);
         assertThat(again.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
         hasWorth(again.getBody(), 1_600, 600);
+        // The same person, now holding only the buyer's permissions (one X-Dev-User-Id per RetailTestSupport). Another
+        // person with this key is refused and gets nothing (issue #852, RetailRestockKeyPerPersonIT).
         ResponseEntity<JsonNode> asBuyer = api.postKeyed("/purchases", body, BUYER, "*", key);
         assertThat(asBuyer.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
         assertThat(RetailTestSupport.id(asBuyer)).isEqualTo(RetailTestSupport.id(made));

@@ -11,6 +11,21 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+/**
+ * The person the access token is for (its subject), or null with no token or one this page cannot read. Only to keep the
+ * offline outbox from sending one person's items under another's sign-in (issue #852); the server checks the token itself.
+ */
+export function signedInUser(): string | null {
+  const payload = accessToken?.split('.')[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { sub?: unknown };
+    return typeof claims.sub === 'string' ? claims.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 export function setAccessToken(token: string | null): void {
   // A new sign-in replaced the refresh cookie: the session left behind by an offline sign-out is no longer this device's.
   if (token !== null) {

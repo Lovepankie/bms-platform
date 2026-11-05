@@ -19,6 +19,9 @@ describe('lending problem details in plain words', () => {
 
   it('shares the retail messages for common codes', () => {
     expect(lendingMessage({ code: 'idempotency_key_reused' }, 422)).toMatch(/different entry/i);
+    expect(lendingMessage({ code: 'idempotency_key_other_user' }, 422)).toMatch(/someone else/i);
+    // Issue #852: never told to enter it again; the other person may have saved it already.
+    expect(lendingMessage({ code: 'idempotency_key_other_user' }, 422)).not.toMatch(/enter it again|re-?enter/i);
     expect(lendingMessage({ code: 'permission_denied' }, 403)).toMatch(/do not have permission/i);
   });
 

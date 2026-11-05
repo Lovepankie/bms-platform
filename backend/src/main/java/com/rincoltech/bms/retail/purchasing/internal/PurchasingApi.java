@@ -342,8 +342,8 @@ final class PurchasingApi {
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(
                     description = "Issue #821 (ADR-126): true, for a holder of retail.profit.read, when an item"
-                            + " on a line has no selling price yet; sell_worth_minor and expected_profit_minor are"
-                            + " then absent")
+                            + " on a line has no selling price yet, or the line sets none and its item was deleted or"
+                            + " is unknown (issue #852); sell_worth_minor and expected_profit_minor are then absent")
             Boolean hasUnpricedItems) {
 
         // JUSTIFICATION-A3: a restock gained the void fields of issue #351; the short constructor keeps the three

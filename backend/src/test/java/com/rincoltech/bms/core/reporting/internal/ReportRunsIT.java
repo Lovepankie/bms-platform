@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.reporting.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.testsupport.KeyOwnership;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -391,6 +392,23 @@ class ReportRunsIT extends ReportsItSupport {
         ResponseEntity<JsonNode> reused = post(t, user, PORTFOLIO, "test.rows", Map.of("n", 7), "json", key);
         assertThat(reused.getStatusCode().value()).isEqualTo(422);
         assertThat(reused.getBody().get("code").asString()).isEqualTo("idempotency_key_reused");
+
+        // Issue #852: another person with the key is refused, sees none of the run and queues nothing.
+        ResponseEntity<JsonNode> theirs =
+                post(t, UUID.randomUUID(), PORTFOLIO, "test.rows", Map.of("n", 2), "json", key);
+        KeyOwnership.refused(theirs, first, body("test.rows", Map.of("n", 2), "json"));
+        assertThat(KeyOwnership.holders(t.tenantId(), key)).containsExactly(user);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*)::int FROM report_runs WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
+        // Report runs mark a replay by 200 and the same run, not by the Idempotent-Replayed header.
+        ResponseEntity<JsonNode> mine = post(t, user, PORTFOLIO, "test.rows", Map.of("n", 2), "json", key);
+        assertThat(mine.getStatusCode().value()).isEqualTo(200);
+        assertThat(mine.getBody().get("id").asString())
+                .isEqualTo(first.getBody().get("id").asString());
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.investments.InvestmentServicing.DailyRun;
 import com.rincoltech.bms.lending.loans.LoanFixtures;
+import com.rincoltech.bms.testsupport.KeyOwnership;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -387,6 +388,21 @@ class InvestmentsIT extends LoanFixtures {
                 .containsExactly("investment_returns_payable:30000:0", "cash_on_hand:0:30000");
         ResponseEntity<JsonNode> replay = pay(id, "return-payouts", k);
         assertThat(replay.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+        // Issue #852: another cashier with this key is refused, sees none of the payout and pays nothing.
+        Map<String, Object> same = Map.of("payment_method_key", "cash");
+        ResponseEntity<JsonNode> theirs = send(
+                HttpMethod.POST,
+                INV + "/" + id + "/return-payouts",
+                withKey(as(UUID.randomUUID(), cashierPerms, "*", null), k),
+                same);
+        KeyOwnership.refused(theirs, paid, id, same);
+        assertThat(KeyOwnership.holders(t.tenantId(), k)).containsExactly(cashier);
+        assertThat(count(
+                        "SELECT count(*) FROM lending_investment_transactions WHERE investment_id = ?::uuid AND"
+                                + " txn_type = 'return_payout'",
+                        id))
+                .isEqualTo(1);
+        KeyOwnership.replayed(pay(id, "return-payouts", k), paid);
         assertThat(pay(id, "return-payouts", key()).getBody().toString()).contains("no_return_due");
         assertThat(inv(id).get("return_paid_minor").asLong()).isEqualTo(30_000);
 

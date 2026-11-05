@@ -5,9 +5,10 @@ import type { SalePayment, SaleRequest } from '../api/retail';
 
 /**
  * queued: waiting its turn; sending: on its way (sent again with the same key after a reload); failed: refused; sent: done;
- * discarded: a manager discarded it, so it is never sent again and goes after a day.
+ * discarded: a manager discarded it, so it is never sent again and goes after a day; held: the server keeps its key under the
+ * person who made it and a try went out under someone else's sign-in (issue #852), so it waits, unchanged, for its maker.
  */
-export type OutboxState = 'queued' | 'sending' | 'failed' | 'sent' | 'discarded';
+export type OutboxState = 'queued' | 'sending' | 'failed' | 'sent' | 'discarded' | 'held';
 
 /** A line as the provisional receipt shows it. */
 export interface OutboxLine {
@@ -115,7 +116,7 @@ export function nextToSend(items: OutboxItem[], now: number): OutboxItem | undef
   return head && head.nextAttemptAt <= now ? head : undefined;
 }
 
-/** What waits to sync: queued and failed items (a failed one waits for a manager or another try). */
+/** What waits to sync: queued, failed and held items (a failed one waits for a manager or another try, a held one for its maker). */
 export function waiting(items: OutboxItem[]): OutboxItem[] {
   return inOrder(items).filter((i) => i.state !== 'sent' && i.state !== 'discarded');
 }
@@ -140,11 +141,23 @@ export function waitingWords(count: number): string {
 /** 409 codes that mean an earlier request for the same sale has not finished yet (issue #769, ADR-067 decision 4). */
 export const IN_PROGRESS_CODES = ['idempotency_in_progress', 'client_sale_in_progress'];
 
+/** 422: another person in the business stored this key (issue #852). For the outbox it is never a refusal: see {@link classify}. */
+export const OTHER_USER_CODE = 'idempotency_key_other_user';
+
+/**
+ * What a held item says (issue #852): it is kept as it is and goes when its maker signs in again. Never "enter it again":
+ * the maker's own request may have recorded it under its key already.
+ */
+export function heldWords(name?: string): string {
+  return `This was saved by ${name?.trim() || 'the person who made it'}; it is sent when they sign in again.`;
+}
+
 /** The answer to one try, as the engine reads it. */
 export type SendOutcome =
   | { kind: 'sent'; sale?: { id: string; saleNo: string }; recorded?: { id: string; waiting: boolean } }
   | { kind: 'retry'; code?: string; message: string; answered?: boolean }
   | { kind: 'auth' }
+  | { kind: 'held' }
   | { kind: 'refused'; code?: string; message: string };
 
 /**
@@ -153,11 +166,15 @@ export type SendOutcome =
  * Issue #769: a 409 saying the same sale is still in progress (an earlier request under its key or its client sale id has
  * not finished) means try again later, never a refusal, and does not count towards giving up, so the item is never failed,
  * reported or discarded while that earlier request may still record the sale.
+ * Issue #852: a 422 `idempotency_key_other_user` means the try went out under another person's sign-in (a shared phone);
+ * the server keeps the key, and maybe the sale or entry, under its maker. The item is held, never failed, re-keyed or
+ * sent under anyone else, and goes again with its own key once its maker signs in.
  */
 export function classify(status: number, body: unknown): SendOutcome {
   const b = (body ?? {}) as { id?: string; sale_no?: string; code?: string; detail?: string; errors?: { field?: string; message?: string }[] };
   if (status >= 200 && status < 300 && b.id) return { kind: 'sent', sale: { id: b.id, saleNo: b.sale_no ?? '' } };
   if (status === 401) return { kind: 'auth' };
+  if (status === 422 && b.code === OTHER_USER_CODE) return { kind: 'held' };
   if (status === 409 && IN_PROGRESS_CODES.includes(b.code ?? '')) {
     return { kind: 'retry', code: b.code, message: 'The server is still recording this sale.', answered: false };
   }
@@ -223,6 +240,9 @@ export function applyOutcome(item: OutboxItem, outcome: SendOutcome, now: number
     }
     case 'auth':
       return { ...item, state: 'queued' };
+    case 'held':
+      // The same id, key and request; no try or refusal is counted against it (issue #852).
+      return { ...item, state: 'held', error: { code: OTHER_USER_CODE, message: heldWords() } };
     case 'refused':
       if (outcome.code === DISCARDED_CODE) return markDiscarded(item, now, outcome.message);
       return { ...item, state: 'failed', attempts: item.attempts + 1, refusals: (item.refusals ?? 0) + 1, error: { code: outcome.code, message: outcome.message }, decision: undefined, failureId: undefined };

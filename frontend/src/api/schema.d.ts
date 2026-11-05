@@ -17082,7 +17082,7 @@ export interface components {
             expected_profit_minor?: number;
             /** @description Issue #819, ADR-124: a photo of the paper receipt is on the delivery */
             has_receipt_photo?: boolean;
-            /** @description Issue #821 (ADR-126): true, for a holder of retail.profit.read, when an item on a line has no selling price yet; sell_worth_minor and expected_profit_minor are then absent */
+            /** @description Issue #821 (ADR-126): true, for a holder of retail.profit.read, when an item on a line has no selling price yet, or the line sets none and its item was deleted or is unknown (issue #852); sell_worth_minor and expected_profit_minor are then absent */
             has_unpriced_items?: boolean;
             /** Format: uuid */
             id?: string;

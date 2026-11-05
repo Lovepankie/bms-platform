@@ -6,6 +6,7 @@ describe('retail problem details in plain words', () => {
     ['insufficient_stock', 422, /not enough stock/i],
     ['price_below_cost', 422, /not above the item's buying price/i],
     ['idempotency_key_reused', 422, /different entry/i],
+    ['idempotency_key_other_user', 422, /^(?!.*(enter it again|re-?enter|type it again)).*someone else.*Nothing was saved under your name/i],
     ['idempotency_in_progress', 409, /still being saved/i],
     ['idempotency_key_missing', 422, /reload/i],
     ['permission_denied', 403, /do not have permission/i],

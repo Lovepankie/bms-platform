@@ -27,8 +27,9 @@ purchases. The figures tell the margin of every line, so they are the owner's, a
 2. **Only a delivery that stands.** A voided restock (ADR-044) had its stock taken back out and will never sell, so it has
    no worth: both fields are absent from it, from the answer of its void on, and Past purchases shows its total alone, as
    before. A restock the caller sees no line of has none either. When an item on a line has no selling price yet (a price
-   of 0 on the line, or no price of its own and the item's price 0), the worth is not known: both fields are left out and
-   `has_unpriced_items` is true for whoever may read profit, and the screens say "Some items have no selling price yet."
+   of 0 on the line, or no price of its own and the item's price 0), the worth is not known: both fields are left out. An
+   item that was deleted or that the catalogue does not know counts the same, as unpriced, when its line sets no price of
+   its own (issue #852): its current price is read as 0, never guessed. In all of these `has_unpriced_items` is true for whoever may read profit, and the screens say "Some items have no selling price yet."
    under the total cost, on the form as soon as such a line is on it.
 3. **The server decides who sees it.** Every restock response (the list, one restock, and the answers of create, void and
    replace) carries `sell_worth_minor` and `expected_profit_minor` only for a caller holding `retail.profit.read` at every

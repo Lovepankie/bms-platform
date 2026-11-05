@@ -723,23 +723,27 @@ class PurchasingService implements QuickAddPurchase {
         if (!showsWorth(p, CurrentPrincipal.get())) {
             return p;
         }
+        return p.withWorth(worth(
+                p.lines(),
+                id -> prices.computeIfAbsent(
+                        id,
+                        k -> catalogue.find(k).map(ProductSnapshot::sellMinor).orElse(0L))));
+    }
+
+    /**
+     * The worth of the lines at the price each line set, else the item's current one ({@code current}, 0 for an item
+     * deleted or unknown); null when an item has no selling price yet (review of #850, issue #852).
+     */
+    static Long worth(List<PurchasingApi.PurchaseLine> lines, java.util.function.Function<UUID, Long> current) {
         long worth = 0;
-        for (PurchasingApi.PurchaseLine l : p.lines()) {
-            Long sell = l.sellMinor() != null
-                    ? l.sellMinor()
-                    : prices.computeIfAbsent(
-                            l.productId(),
-                            id -> catalogue
-                                    .find(id)
-                                    .map(ProductSnapshot::sellMinor)
-                                    .orElse(0L));
+        for (PurchasingApi.PurchaseLine l : lines) {
+            long sell = l.sellMinor() != null ? l.sellMinor() : current.apply(l.productId());
             if (sell <= 0) {
-                // An item with no selling price yet: no worth, said as such (review of #850).
-                return p.withWorth(null);
+                return null;
             }
             worth = Math.addExact(worth, Quantities.value(new BigDecimal(l.qtyTotal()), sell));
         }
-        return p.withWorth(worth);
+        return worth;
     }
 
     // JUSTIFICATION-A3: the checks moved out of shown() so a unit test proves the no-principal case (review of #850).

@@ -63,7 +63,12 @@ left, the branch, the period, the person's roles.
    one session refresh; a refresh that got no answer is a try to do again later; a refused refresh stops the engine and the
    header asks the person to sign in. The engine goes on whenever a new access token arrives (a sign-in or any refresh). A 2xx removes the item and keeps the server's sale
    number for the receipt. Any other 4xx (a 409 that is not "in progress" included) is a refusal: the item is kept, marked failed with the server's words, reported to
-   the server (decision 7) and skipped, so the next one goes. Sync starts on the `online` event, on a successful health ping
+   the server (decision 7) and skipped, so the next one goes. The one exception is 422 `idempotency_key_other_user`
+   (issue #852, ADR-026 decision 5): the try went out under another person's sign-in on a shared phone, and the server
+   keeps the key, and maybe the sale or entry, under its maker. The item is held, never failed, reported, discarded,
+   re-keyed or sent under anyone else, shown as "This was saved by <name>; it is sent when they sign in again" (never
+   "enter it again"), and goes with its own key when its maker signs in again. The engine also sends nothing while the
+   access token is another person's than the outbox's, read at each send and after each refresh. Sync starts on the `online` event, on a successful health ping
    (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now. A ping with no answer
    within 3 s is pinged again at once, and two in a row count as offline (issue #769): on a weak mobile connection a slow
    answer means a sale would hang, and one slow ping on a cold link does not flip the state. For the same reason a cash,

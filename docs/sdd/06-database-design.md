@@ -1013,7 +1013,11 @@ in the business transaction, so they are gap-free (FR-DOC-04).
 | `created_at` | `timestamptz NOT NULL` | |
 | `expires_at` | `timestamptz NOT NULL` | `created_at + 7 days`; purged nightly. |
 
-PK `(tenant_id, principal_id, key)`. Behaviour in chapter 7 section 7.8.
+PK `(tenant_id, principal_id, key)`. Index `idempotency_keys_tenant_key (tenant_id, key)` (V136, issue #852), not unique:
+a key is read across the people of a business so that a replay answers only the person who stored it and anyone else is
+refused; rows stored before V136 may hold one key under two people. V136 builds it in Flyway's transaction under a 10 second
+`lock_timeout`, not `CONCURRENTLY`, which would wait on Flyway's own lock for good. Behaviour in chapter 7
+section 7.8.
 
 ### `outbox_events` (RLS)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BACKOFF_MS, applyOutcome, backoff, classify, expired, failedCount, inOrder, nextToSend, provisionalNumber, requeue, waiting, waitingWords, type OutboxItem } from './outbox';
+import { BACKOFF_MS, applyOutcome, backoff, classify, classifyEntry, expired, failedCount, heldWords, inOrder, nextToSend, provisionalNumber, requeue, waiting, waitingWords, type OutboxItem } from './outbox';
 
 // The outbox of offline sales (issue #458, ADR-067; NFR-OFF-07): the order, the backoff, the answers and the counts.
 // Fabricated ids and amounts.
@@ -89,6 +89,21 @@ describe('an answer from the server', () => {
     expect(next.error).toEqual({ code: 'branch_does_not_sell', message: 'This branch does not sell.' });
     expect(waiting([next])).toHaveLength(1);
     expect(failedCount([next])).toBe(1);
+  });
+
+  it("holds a sale or an entry whose key another person's sign-in met, unchanged and never failed (issue #852)", () => {
+    const other = { code: 'idempotency_key_other_user', detail: 'Someone else in this business already used this Idempotency-Key.' };
+    expect(classify(422, other)).toEqual({ kind: 'held' });
+    expect(classifyEntry(422, other)).toEqual({ kind: 'held' });
+    const held = applyOutcome(item('a', 1, { attempts: 2 }), classify(422, other), T0);
+    expect(held).toMatchObject({ id: 'a', key: 'key-a', state: 'held', attempts: 2, error: { code: 'idempotency_key_other_user' } });
+    expect(held.refusals).toBeUndefined();
+    expect(held.error?.message).toBe('This was saved by the person who made it; it is sent when they sign in again.');
+    expect(heldWords('Test Seller 02')).toBe('This was saved by Test Seller 02; it is sent when they sign in again.');
+    // It still waits, is not counted failed, and does not hold up the sale behind it.
+    expect(waiting([held])).toHaveLength(1);
+    expect(failedCount([held])).toBe(0);
+    expect(nextToSend([held, item('b', 2)], T0)?.id).toBe('b');
   });
 
   it('a failed sale sent again keeps its client id and key and goes now', () => {

@@ -64,6 +64,41 @@ questions are not settled by chapters 3 and 6 as written:
    one core helper was a follow-up refactor that touches retail, kept out of this increment.
    Issue #177 did it: the one `Idempotency` in `core.operations` now serves retail and lending
    (see the note under Consequences).
+   **Amended by issue #852 (4 Nov 2026): a replay answers only the person who stored the key.** A
+   key is looked up in the whole business under a transaction lock on the business and the key,
+   whoever sends it. The caller's own row replays or is refused as before; a row another person
+   stored is refused with 422 `idempotency_key_other_user`, nothing is done, and neither their
+   stored answer nor whether their request matched is told. Before, the row was keyed by person
+   (`principal_id`, NOT NULL since V1) but looked up only by person, so another person's request
+   with the key ran its own work again; now it is refused. 422 because it is a rule refusal like
+   `idempotency_key_reused`, not a race. No row lacks a person, so nothing is backfilled; V136
+   adds the index `(tenant_id, key)` for the lookup, not unique because rows stored before it may
+   hold one key under two people. Those rows stay safe: each of the two still replays only their
+   own answer and anyone else is refused; keys are kept 7 days, so they are gone a week after the
+   deploy. The in-progress wait is unchanged and applies to every person (409
+   `idempotency_in_progress` after 5 seconds). Tests: `RetailIdempotencyProtocolIT` and one
+   per module (`RetailSalesKeyPerPersonIT`, `RetailRestockKeyPerPersonIT`,
+   `RetailCashbookKeyPerPersonIT`, `RetailUsageKeyPerPersonIT`, `LoanServicingIT`, `SavingsIT`).
+   V136 builds the index with a plain `CREATE INDEX` in Flyway's transaction, under a 10 second
+   `lock_timeout`, not `CONCURRENTLY`: a concurrent build waits for every open transaction to end,
+   and Flyway holds its migration lock in one, so the build waited on Flyway for good (a CI run hung
+   there; a deploy would have too). The table holds 7 days of keys, so the build is short; keyed
+   writes wait on it briefly, and a table held by a long transaction fails the migration after 10
+   seconds with nothing changed, to be run again. **Rolling-deploy window:** while instances on the old
+   code still serve requests, they neither take the key lock nor look across people, so until the
+   last old instance stops, two people sending one key can each run their work under it (the
+   behaviour before issue #852). Rows stored that way are the ones the non-unique index allows
+   for; nothing is repaired afterwards. The window is the length of the container switch (ADR-006).
+   **Jobs and callbacks.** Every caller of `Idempotency.once` (75 call sites, listed in
+   `IdempotencyCallersTest`) runs on a staff, member or operator request: `once` reads the
+   person from `CurrentPrincipal`, which only the authentication filter sets
+   (`SecurityArchitectureTest`), so no job, listener or payment callback calls it today, and one
+   that did would get 401 before any work. The jobs and the gateway callback deduplicate on their
+   own rows (the task instance, the payment intent). Work with no signed-in person that needs the
+   key protocol uses `Idempotency.onceAsJob(job, ...)`: the key is held under a stable principal
+   per job (a name-based UUID of the job's name, never equal to a person's random one), so a
+   retried run replays the first run's answer; another job or a person with the key is refused
+   like another person. Test: `IdempotencyJobRetryIT`.
 
 Also decided here, within the rules of chapter 3:
 

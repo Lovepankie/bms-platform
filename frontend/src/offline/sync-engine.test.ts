@@ -385,6 +385,57 @@ describe('the sync engine', () => {
     expect((await store.outbox(SCOPE))[0]).toEqual(before);
   });
 
+  // JUSTIFICATION-A3: the tests issue #852 asks for, not a mechanism.
+  it("holds a sale and an entry another person's sign-in met, never sends them under that person, and sends them with their keys when the maker signs in again (issue #852)", async () => {
+    // The token of the moment: null while unknown (the request may still go out under anyone), else its person.
+    let who: string | null = null;
+    const other = { status: 422, body: { code: 'idempotency_key_other_user', detail: 'Someone else in this business already used this Idempotency-Key.' } };
+    const { engine, store, sent, deps } = setup(async (i) => (who === 'u1' ? ok(i) : other), { signedInAs: () => who });
+    const entry = item('e', 2, { request: undefined, method: undefined, entry: { kind: 'expense', path: '/api/v1/retail/expenses', body: { amount_minor: 5000 }, words: 'Expense, Transport' } });
+    await engine.queue(item('a', 1));
+    await engine.queue(entry);
+    await engine.sync();
+    // Both went out under a sign-in the phone could not read and met another person's key: held, as they were.
+    expect(sent).toEqual(['a:key-a', 'e:key-e']);
+    for (const held of [...engine.snapshot().items, ...(await store.outbox(SCOPE))]) {
+      expect(held).toMatchObject({ state: 'held', key: `key-${held.id}`, attempts: 0, error: { code: 'idempotency_key_other_user', message: 'This was saved by the person who made it; it is sent when they sign in again.' } });
+      expect(held.refusals).toBeUndefined();
+    }
+    expect(deps.report).not.toHaveBeenCalled();
+    await expect(engine.takeBack('e')).resolves.toBeUndefined();
+
+    // Another person is signed in now: nothing of this outbox goes, not the held items and not a new one.
+    who = 'u2';
+    await engine.queue(item('b', 3));
+    engine.resume();
+    await engine.syncNow();
+    expect(sent).toEqual(['a:key-a', 'e:key-e']);
+    expect(engine.snapshot().items.map((i) => [i.id, i.state])).toEqual([['a', 'held'], ['e', 'held'], ['b', 'queued']]);
+
+    // The maker signs in again: each goes once, in order, under its own key, and is recorded.
+    who = 'u1';
+    engine.resume();
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a', 'e:key-e', 'a:key-a', 'e:key-e', 'b:key-b']);
+    expect(engine.snapshot().items.map((i) => [i.id, i.key, i.state])).toEqual([['a', 'key-a', 'sent'], ['e', 'key-e', 'sent'], ['b', 'key-b', 'sent']]);
+  });
+
+  it('sends nothing after a refresh that brought another person\'s session, and keeps the item as it was (issue #852)', async () => {
+    let who: string | null = 'u1';
+    const { engine, sent } = setup(async () => ({ status: 401, body: {} }), {
+      signedInAs: () => who,
+      refreshSession: async () => {
+        who = 'u2';
+        return true;
+      },
+    });
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a']);
+    expect(engine.snapshot().items[0]).toMatchObject({ state: 'queued', key: 'key-a', attempts: 0 });
+    expect(engine.snapshot().needsSignIn).toBe(false);
+  });
+
   it("never sends another person's outbox", async () => {
     const { engine } = setup(async (i) => ok(i));
     await expect(engine.queue(item('a', 1, { scope: 'test.example|someone-else' }))).rejects.toThrow();

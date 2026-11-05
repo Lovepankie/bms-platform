@@ -8,7 +8,8 @@ import type { OfflineStore } from './store';
 // after a lost answer, a reload or a crash is the same sale on the server. Since issue #812 (ADR-067 decision 13) the same
 // queue carries the other daily entries (expenses, savings, banking, withdrawals, Buy stock, Move stock, usage), in the one
 // order by when each was made; an entry is sent again under its own Idempotency-Key, and a refused entry is never reported
-// to a manager: its maker fixes it in its form or discards it.
+// to a manager: its maker fixes it in its form or discards it. Since issue #852 nothing is sent under another person's
+// sign-in (a shared phone), and an item the server says another person's key holds is held for its maker, unchanged.
 
 /** A server answer: the HTTP status and the parsed body. A thrown error means the request never got an answer. */
 export interface Answer {
@@ -27,6 +28,11 @@ export interface SyncDeps {
   store: OfflineStore;
   scope: string;
   send(item: OutboxItem): Promise<Answer>;
+  /**
+   * The user id a request would go out under now (the access token's person), or null when unknown (issue #852). Another
+   * person's: nothing of this outbox is sent. Its own person's: what was held for them goes again.
+   */
+  signedInAs?(): string | null;
   refreshSession(): Promise<boolean>;
   /** The last refresh got no answer at all (no network): a try to do again later, not a sign-in to ask for. */
   refreshUnreachable?(): boolean;
@@ -96,6 +102,10 @@ export class SyncEngine {
   /** Sync now was asked: the next run makes what is backing off due first, after it read the outbox again. */
   private dueNow = false;
   private cancelTimer: (() => void) | null = null;
+  /** Another person is signed in (issue #852): nothing is sent until a new access token arrives. */
+  private elsewhere = false;
+  /** The held items went back in the queue for this sign-in of their maker; again only after another person was seen. */
+  private released = false;
   private readonly listeners = new Set<() => void>();
   private snap: SyncSnapshot = { items: [], syncing: false, needsSignIn: false };
 
@@ -151,10 +161,11 @@ export class SyncEngine {
     this.emit();
   }
 
-  /** A new access token arrived (a sign-in or a refresh): sending may go on, at once. */
+  /** A new access token arrived (a sign-in or a refresh): sending may go on, at once, and a held item may be its maker's to send. */
   resume(): void {
-    if (!this.needsSignIn) return;
+    if (!this.needsSignIn && !this.elsewhere && !this.items.some((i) => i.state === 'held')) return;
     this.needsSignIn = false;
+    this.elsewhere = false;
     this.emit();
     void this.sync();
   }
@@ -230,12 +241,18 @@ export class SyncEngine {
       }
       await this.followDecisions();
       for (;;) {
-        if (this.needsSignIn) return;
+        if (this.needsSignIn || this.elsewhere) return;
+        await this.releaseHeld();
         const item = nextToSend(this.items, this.deps.now());
         if (!item) break;
         this.syncing = true;
         this.emit();
         const outcome = await this.attempt(item);
+        if (outcome === null) {
+          // Another person signed in (issue #852): the item is put back as it was, and nothing more goes now.
+          await this.save(item);
+          return;
+        }
         if (outcome.kind === 'auth') {
           this.needsSignIn = true;
           await this.save(applyOutcome(item, outcome, this.deps.now()));
@@ -253,16 +270,43 @@ export class SyncEngine {
 
   /**
    * One send, marked as on its way first, with one refresh of an expired session. A refresh that got no answer (no network)
-   * is a try to do again later, not a sign-in to ask for.
+   * is a try to do again later, not a sign-in to ask for. Null, and nothing sent, while another person is signed in, before
+   * the send and after a refresh, which may bring another person's session (issue #852).
    */
-  private async attempt(item: OutboxItem): Promise<SendOutcome> {
+  private async attempt(item: OutboxItem): Promise<SendOutcome | null> {
+    if (this.otherPerson()) return null;
     await this.save({ ...item, state: 'sending' });
     let outcome = await this.once(item);
     if (outcome.kind === 'auth') {
-      if (await this.deps.refreshSession()) outcome = await this.once(item);
-      else if (this.deps.refreshUnreachable?.()) outcome = { kind: 'retry', message: 'No connection to the server.' };
+      if (await this.deps.refreshSession()) {
+        if (this.otherPerson()) return null;
+        outcome = await this.once(item);
+      } else if (this.deps.refreshUnreachable?.()) outcome = { kind: 'retry', message: 'No connection to the server.' };
     }
     return outcome;
+  }
+
+  // JUSTIFICATION-A3: issue #852 asks for this guard; nothing in the engine knew whose sign-in a request goes out under.
+  /** The request would go out under another person's sign-in (issue #852); the engine then stops until a new token. */
+  private otherPerson(): boolean {
+    const who = this.deps.signedInAs?.() ?? null;
+    if (who === null || who === this.person()) return false;
+    this.elsewhere = true;
+    this.released = false;
+    return true;
+  }
+
+  /** Once the maker is signed in, what was held for them goes back in the queue, unchanged: the same id and key. */
+  private async releaseHeld(): Promise<void> {
+    if (this.released || this.deps.signedInAs?.() !== this.person()) return;
+    this.released = true;
+    const now = this.deps.now();
+    for (const item of this.items.filter((i) => i.state === 'held')) await this.save({ ...item, state: 'queued', nextAttemptAt: now, error: undefined });
+  }
+
+  /** The person of this outbox: the user id in its scope. */
+  private person(): string {
+    return this.deps.scope.slice(this.deps.scope.indexOf('|') + 1);
   }
 
   private async once(item: OutboxItem): Promise<SendOutcome> {
@@ -312,7 +356,7 @@ export class SyncEngine {
   private plan(): void {
     this.cancelTimer?.();
     this.cancelTimer = null;
-    if (this.needsSignIn) return;
+    if (this.needsSignIn || this.elsewhere) return;
     const head = inOrder(this.items).find((i) => i.state === 'queued' || i.state === 'sending');
     if (!head) return;
     const wait = Math.max(head.nextAttemptAt - this.deps.now(), 0);

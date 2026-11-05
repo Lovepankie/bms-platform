@@ -572,7 +572,10 @@ Notes:
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
   valuation (review F5); tenant-wide products and price history need it in any branch. A restock's
   `sell_worth_minor` and `expected_profit_minor` (issue #821, ADR-126) need it at every branch the caller sees the restock
-  stock, and are added after the idempotency store, so a replayed answer never carries them to anyone else. The damage and
+  stock, and are added after the idempotency store, so a replayed answer never carries them to anyone else. A replay
+  itself answers only the person who stored the key (issue #852, ADR-026 decision 5): another person in the business who
+  sends the same Idempotency-Key, on any route, gets 422 `idempotency_key_other_user`, nothing is done, and the stored
+  answer (a restock's total and lines, a sale, a receipt) is never read into their response. The damage and
   use share of Stock health (issue #822, ADR-127) is its own route, `GET /retail/reports/stock-health/damage-share`, guarded
   by `retail.profit.read`: anyone else gets 403 and no figures, and it answers only the branches where the caller holds it
   (a branch outside them, or of another business, is 404). The item page
@@ -1198,6 +1201,7 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
 | SIM swap used to take over a member portal | PIN plus OTP only at activation and reset; SMS notice to the member on PIN reset; staff can revoke portal access |
 | Forged payment callback | Signature verification plus status query before booking (FR-PAY-02) |
 | Replayed payment callback | Idempotency on the provider reference (FR-PAY-03) |
+| Another person's Idempotency-Key sent to read their stored answer | A replay answers only the person who stored the key; anyone else in the business gets 422 `idempotency_key_other_user`, nothing is done and nothing of the stored answer is shown (issue #852, ADR-026 decision 5) |
 | Leaked backup | Backups encrypted before upload; private bucket; 30-day retention |
 | Enumeration of member records across the member portal | Ownership check returns 404, UUIDs not sequential |
 | Sign-up flood or a stranger consuming the shared host | Rate limits, honeypot, email confirmation, operator verification before anything is provisioned (ADR-024) |

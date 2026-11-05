@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getAccessToken, refreshSession, setAccessToken } from './session';
+import { getAccessToken, refreshSession, setAccessToken, signedInUser } from './session';
 
 // #112 item 7: a reload starts with no access token in memory; the staff layout calls refreshSession,
 // which must sign the user back in from the HttpOnly refresh cookie while that is valid (used at least
@@ -42,5 +42,17 @@ describe('session restore on reload', () => {
   it('treats a network failure as not signed in, without throwing', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('offline'))));
     expect(await refreshSession()).toBe(false);
+  });
+});
+
+describe('whose sign-in a request goes out under (issue #852)', () => {
+  it("reads the token's person, and null with no token or one it cannot read", () => {
+    const part = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+    setAccessToken(`${part({ alg: 'none' })}.${part({ sub: '00000000-0000-4000-8000-0000000000a1', knd: 'staff' })}.sig`);
+    expect(signedInUser()).toBe('00000000-0000-4000-8000-0000000000a1');
+    setAccessToken('not-a-token');
+    expect(signedInUser()).toBeNull();
+    setAccessToken(null);
+    expect(signedInUser()).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { api, type Me } from '../api/client';
 import { retail } from '../api/retail';
-import { getAccessToken, refreshFailedOffline, refreshSession, subscribe as onToken } from '../auth/session';
+import { getAccessToken, refreshFailedOffline, refreshSession, signedInUser, subscribe as onToken } from '../auth/session';
 import { REFRESH_EVERY_MS, refreshCatalogue, type CatalogueSource } from './catalogue';
 import { browserConnectivity, type Connectivity } from './connectivity';
 import { sayDone } from '../areas/staff/retail/toast';
@@ -46,6 +46,8 @@ export interface Offline {
   scope: string;
   /** The signed-in person, whose own refused sales another manager decides. */
   userId: string;
+  /** Their name, for an item held for them on a shared phone: "This was saved by ..." (issue #852). */
+  name?: string;
   store: OfflineStore;
   engine: SyncEngine;
   connectivity: Connectivity;
@@ -160,6 +162,8 @@ export function browserServices(): OfflineServices {
         const id = window.setTimeout(fn, ms);
         return () => window.clearTimeout(id);
       },
+      // Whose sign-in a request goes out under, read as it is sent: a shared phone may have changed hands (issue #852).
+      signedInAs: signedInUser,
       refreshSession,
       refreshUnreachable: refreshFailedOffline,
       // Two tabs of the app never send the same outbox at once.
@@ -374,6 +378,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
 
   const manager = (me?.permissions ?? []).includes('retail.offline.resolve');
   const admin = isAdmin(me);
+  const name = me?.full_name;
   return useMemo(() => {
     if (!svc || !scope || !engine) return null;
     return {
@@ -382,6 +387,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       othersWaiting: others,
       scope,
       userId: userId ?? '',
+      name,
       store: svc.store,
       engine,
       connectivity: svc.connectivity,
@@ -400,7 +406,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
         await svc.store.setLastPerson(svc.host, null);
       },
     };
-  }, [svc, scope, engine, catalogue, readScope, refresh, manager, admin, userId, others, client]);
+  }, [svc, scope, engine, catalogue, readScope, refresh, manager, admin, userId, name, others, client]);
 }
 
 /** Asks the browser to keep this site's storage (the outbox) when space runs low; a refusal or no support changes nothing. */

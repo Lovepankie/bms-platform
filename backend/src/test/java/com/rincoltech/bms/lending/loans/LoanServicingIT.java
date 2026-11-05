@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.testsupport.ImageFixtures;
+import com.rincoltech.bms.testsupport.KeyOwnership;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -1407,6 +1408,38 @@ class LoanServicingIT extends LoanFixtures {
         assertThat(b.getBody().get("approval_request_id").asString())
                 .isEqualTo(a.getBody().get("approval_request_id").asString());
         assertThat(b.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+        booksAgree();
+    }
+
+    // JUSTIFICATION-A3: issue #852 asks for a test per module that uses the key; this one reuses the loan fixtures.
+    /**
+     * Issue #852 (ADR-026 decision 5): another cashier with the first one's key is refused, sees none of the stored
+     * repayment and records nothing; the first cashier still replays it.
+     */
+    @Test
+    void idempotency_anotherPersonsRepaymentKeyIsRefusedAndRecordsNothing() {
+        String loan = approved(exampleB("IDEMP"), 1_200_000, 3, 52);
+        disburse(loan, today);
+        String k = key();
+        ResponseEntity<JsonNode> first = repay(loan, 100_000, today, k);
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount_minor", 100_000);
+        body.put("value_date", today.toString());
+        body.put("payment_method_key", "cash");
+        body.put("external_reference", "TEST-REF");
+
+        ResponseEntity<JsonNode> theirs = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/repayments",
+                withKey(as(UUID.randomUUID(), cashierPerms, "*", null), k),
+                body);
+        KeyOwnership.refused(theirs, first, loan, body);
+        assertThat(KeyOwnership.holders(t.tenantId(), k)).containsExactly(cashier);
+        assertThat(get(loan, "/transactions").get("items").findValuesAsString("txn_type"))
+                .containsExactly("repayment", "disbursement");
+
+        KeyOwnership.replayed(repay(loan, 100_000, today, k), first);
         booksAgree();
     }
 
