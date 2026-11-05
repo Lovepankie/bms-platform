@@ -79,7 +79,7 @@ export function ReferralList({ data }: { data: MyReferrals }) {
     <section className="rt-card stack" aria-labelledby="referral-list-title">
       <h2 id="referral-list-title">Your referrals</h2>
       {items.length === 0 ? (
-        <p className="empty-state">No business has signed up with your link yet.</p>
+        <p className="empty-state">No business has signed up with your link yet. Share the link above with a business you know.</p>
       ) : (
         <>
           <p>

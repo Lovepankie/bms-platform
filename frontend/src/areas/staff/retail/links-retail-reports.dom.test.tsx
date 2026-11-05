@@ -8,6 +8,7 @@ import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 import { CreditControlView } from './credit-control';
+import { DamageShareView } from './damage-share';
 import { SalesAnalysisView } from './sales-analysis';
 import { TransferSummary } from './transfer';
 
@@ -49,13 +50,26 @@ describe('links on the retail report pages', () => {
     show(<SalesAnalysisView data={data} />);
     const sales = screen.getAllByRole('link').filter((a) => a.getAttribute('href') === '/staff/retail/sales');
     expect(sales.length).toBe(2);
-    expect(screen.getAllByRole('link', { name: 'Test Item 01' })[0]?.getAttribute('href')).toBe('/staff/retail/stock');
+    // Issue #336: the item opens its own stock, not the whole list.
+    expect(screen.getAllByRole('link', { name: 'Test Item 01' })[0]?.getAttribute('href')).toBe('/staff/retail/stock?item=p1');
   });
 
   it('opens Stock from both branches of a stock move', () => {
     show(<TransferSummary transfer={{ id: 't1', from_branch_id: BRANCH, to_branch_id: BRANCH, transfer_date: '2026-04-01', status: 'completed', lines: [] }} />);
     const links = screen.getAllByRole('link', { name: /Test Branch A/ });
     expect(links.length).toBe(2);
-    for (const a of links) expect(a.getAttribute('href')).toBe('/staff/retail/stock');
+    // Issue #336: each branch name opens that branch's stock.
+    for (const a of links) expect(a.getAttribute('href')).toBe(`/staff/retail/stock?branch=${BRANCH}`);
+  });
+
+  it('opens Stock from the shop and the item of damage and use on Stock health', () => {
+    const data = {
+      branches: [{ branch_id: BRANCH, base_qty: '10.000', damaged_qty: '1.000', used_qty: '0.000', damaged_pct: 10, used_pct: 0,
+        items: [{ product_id: 'p1', code: 'TI-01', description: 'Test Item 01', unit: 'piece', opening_qty: '10.000', received_qty: '0.000', base_qty: '10.000', damaged_qty: '1.000', used_qty: '0.000', damaged_pct: 10, used_pct: 0 }] }],
+    };
+    show(<DamageShareView data={data} nameOf={() => 'Test Branch A'} />);
+    expect(screen.getByRole('link', { name: 'Test Branch A' }).getAttribute('href')).toBe(`/staff/retail/stock?branch=${BRANCH}`);
+    // An item under one shop opens that item at that shop (review of #797).
+    expect(screen.getByRole('link', { name: 'Test Item 01' }).getAttribute('href')).toBe(`/staff/retail/stock?item=p1&branch=${BRANCH}`);
   });
 });

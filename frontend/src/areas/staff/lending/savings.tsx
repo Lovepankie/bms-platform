@@ -53,7 +53,7 @@ export function SavingsGate({ title, children }: { title: string; children: Reac
 }
 
 export function AccountRows({ items, term = '' }: { items: SavingsAccount[]; term?: string }) {
-  if (items.length === 0) return <p className="empty-state">No savings accounts match.</p>;
+  if (items.length === 0) return <p className="empty-state">No savings accounts match. Change the search or filters, or open one from the member's page.</p>;
   return (
     <ul className="ln-list">
       {items.map((a) => (

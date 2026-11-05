@@ -230,7 +230,7 @@ export function SuppliersPage() {
       </div>
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
-      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="suppliers" /> : <p className="empty-state">No suppliers yet.</p>)}
+      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="suppliers" /> : <p className="empty-state">No suppliers yet. Add the first one above.</p>)}
       <div data-tour="person-list">
         <SearchResults fetching={finding}>
           <ul style={{ listStyle: 'none', padding: 0 }}>

@@ -34,7 +34,7 @@ function MarginTable({ title, rows, flag }: { title: string; rows: MarginRow[]; 
         {rows.map((r) => (
           <tr key={r.id ?? r.label}>
             <td>
-              {title === 'Item' ? <ToStock>{r.label}</ToStock> : r.label}
+              {title === 'Item' ? <ToStock item={r.id}>{r.label}</ToStock> : r.label}
               {r.code && <><br /><span className="hint">{r.code}</span></>}
               {phone && <><br /><span className="hint">Sales {money(r.sales_minor ?? 0)}, cost {money(r.cost_minor ?? 0)}, {showQty(r.qty ?? '0')}{r.unit ? ` ${r.unit}` : ''} sold</span></>}
             </td>
@@ -63,7 +63,7 @@ function PriceChanges({ items }: { items: PriceChangeImpact[] }) {
       <ul className="an-cards">
         {items.map((c) => (
           <li key={c.product_id} className="rt-card">
-            <strong><ToStock>{c.description}</ToStock></strong>
+            <strong><ToStock item={c.product_id}>{c.description}</ToStock></strong>
             <span className="hint">{c.code}</span>
             <p>Price {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {showDate(c.changed_on)}</p>
             <p>Before: <Pace units={c.units_before} days={c.days_before} />, margin {percentOrNone(c.margin_before_bp) || 'n/a'}</p>
@@ -82,7 +82,7 @@ function PriceChanges({ items }: { items: PriceChangeImpact[] }) {
         {items.map((c) => (
           <tr key={c.product_id}>
             <td>
-              <ToStock>{c.description}</ToStock><br />
+              <ToStock item={c.product_id}>{c.description}</ToStock><br />
               <span className="hint">{c.code}: {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {showDate(c.changed_on)}</span>
             </td>
             <td className="num"><Pace units={c.units_before} days={c.days_before} /></td>

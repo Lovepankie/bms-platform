@@ -717,8 +717,8 @@ const groupedViewStep = (what: string, levels: string): TourStep => ({
 
 export const stockPage: Tour = {
   id: 'page-stock',
-  // Version 2 adds the Correct step (issue #351); version 3 the grouped view (issue #350).
-  version: 3,
+  // Version 2 adds the Correct step (issue #351); version 3 the grouped view (issue #350); version 4 the one item from a link (issue #336).
+  version: 4,
   title: 'This page: stock',
   audience: (me) => held(me, 'retail.stock.read'),
   autoStart: false,
@@ -726,6 +726,7 @@ export const stockPage: Tour = {
   steps: [
     ...retailSales.steps.filter((s) => s.id === 'stock-search' || s.id === 'restock-ask' || s.id === 'correct-stock'),
     groupedViewStep('your stock by shop and category, with its value', 'shop and product category'),
+    { id: 'from-a-link', target: 'stock-list', module: 'retail', title: 'Come from a report', body: 'An item or shop name on a report opens its stock here. Show every item takes you back to the whole list.' },
   ],
 };
 
@@ -767,7 +768,7 @@ const salesGroupsStep: TourStep = {
   target: 'sales-groups',
   module: 'retail',
   title: 'Open a line',
-  body: 'Tap a line to open it. Each line shows what was sold, how many sales, and how they were paid. Profit shows if you may see it. The way you came shows above the list; tap a place in it to go back. Tap a day to see its sales one by one.',
+  body: 'Tap a line to open it. Each line shows what was sold, how many sales, and how they were paid. Profit shows if you may see it. The way you came shows above the list; tap a place in it to go back. Tap a day to see its sales one by one. A sale number on another page, such as a credit note, opens that sale here.',
 };
 
 const groupByStep: TourStep = {
@@ -780,8 +781,8 @@ const groupByStep: TourStep = {
 
 export const salesPage: Tour = {
   id: 'page-sales',
-  // Version 2 adds the Group by step (issue #341).
-  version: 2,
+  // Version 2 adds the Group by step (issue #341); version 3 says a sale number elsewhere opens the sale here (issue #336).
+  version: 3,
   title: 'This page: all sales',
   audience: (me) => held(me, 'retail.sale.read'),
   autoStart: false,
@@ -795,8 +796,8 @@ export const salesPage: Tour = {
 
 export const creditSalesPage: Tour = {
   id: 'page-credit-sales',
-  // Version 2 adds the Group by step (issue #341).
-  version: 2,
+  // Version 2 adds the Group by step (issue #341); version 3 says a sale number elsewhere opens the sale here (issue #336).
+  version: 3,
   title: 'This page: credit sales',
   audience: (me) => held(me, 'retail.sale.read'),
   autoStart: false,

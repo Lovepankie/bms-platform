@@ -30,7 +30,7 @@ export function LendingGate({ title, children }: { title: string; children: Reac
 }
 
 export function LoanRows({ items, term = '' }: { items: LoanListItem[]; term?: string }) {
-  if (items.length === 0) return <p className="empty-state">No loans match.</p>;
+  if (items.length === 0) return <p className="empty-state">No loans match. Change the search or filters, or start one with New loan application.</p>;
   return (
     <ul className="ln-list">
       {items.map((l) => (

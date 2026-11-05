@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { Segmented } from '../../../app/ui/Segmented';
@@ -20,7 +20,7 @@ import { STOCK_NAMES, STOCK_ORDER, listUser, withoutShop, type ListSelection } f
 import { GroupedStock, type StockFilter } from './stock-grouped';
 import { keptWords } from './orders-state';
 import { CategoryChips, FindBar, NoItem, onlyMatch, useChosenChip, useFindTerm } from './phone-find';
-import { ScreenLink } from './screen-link';
+import { ScreenLink, useAddress } from './screen-link';
 import { Hint } from '../../../app/ui/Hint';
 import { HelpTip } from '../../../app/ui/HelpTip';
 import { WORDS } from '../../../app/glossary';
@@ -331,24 +331,77 @@ function StockRows({ sel, filter, all, branchId }: { sel: ListSelection; filter:
   );
 }
 
+/**
+ * Issue #336: `?branch=<id>` opens that branch's stock by switching to it, once, when this person works there; then the address
+ * keeps only `item`. Returns the branch asked for that this person cannot switch to, so the page can say so.
+ */
+function useBranchFromAddress(branch: string | undefined, item: string | undefined, go: ReturnType<typeof useAddress>['go']): string | null {
+  const { me, branch: current, chooseBranch } = useStaff();
+  // A branch this session cannot switch to (not one of its branches, or no switcher where the page is drawn) is said, never dropped in silence.
+  const known = branch !== undefined && chooseBranch !== undefined && (me.branches ?? []).some((b) => b.id === branch);
+  useEffect(() => {
+    if (branch === undefined || !known) return;
+    if (branch !== current) chooseBranch?.(branch);
+    go('/staff/retail/stock', item ? { item } : {}, true);
+  }, [branch, known, current, chooseBranch, go, item]);
+  return branch !== undefined && !known ? branch : null;
+}
+
+/** Issue #336: the note over Stock opened for one item from a link, with the way back to every item (a 48px button on a neutral note). */
+export function OneItemNote({ name, onEvery }: { name?: string; onEvery: () => void }) {
+  return (
+    <div role="status" className="alert alert-info" data-testid="one-item">
+      <p>{name ? `Showing one item: ${name}.` : 'Showing one item.'}</p>
+      <button type="button" className="btn-sm" onClick={onEvery}>Show every item</button>
+    </div>
+  );
+}
+
+const textOf = (v: unknown) => (typeof v === 'string' && v !== '' ? v : undefined);
+
+/** Issue #336: `?item=<id>` shows that one item's stock, found by its code, with a way back to every item. */
+function useItemFromAddress(item: string | undefined) {
+  const product = useQuery({ queryKey: ['retail', 'product', item], queryFn: () => retail.getProduct(item ?? ''), enabled: item !== undefined });
+  return { item, product };
+}
+
 export function StockPage() {
   const { me } = useStaff();
+  const address = useAddress();
+  const unknownBranch = useBranchFromAddress(textOf(address.search.branch), textOf(address.search.item), address.go);
+  const fromAddress = useItemFromAddress(textOf(address.search.item));
+  const oneItem = fromAddress.item !== undefined;
   const { all, branchId } = useBranchView();
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
   const list = useListView(listUser(me), 'stock', STOCK_ORDER);
-  const grouped = list.view === 'grouped';
   const search = useLiveSearch();
+  // One item from the address is a plain list of that item, never grouped.
+  const grouped = list.view === 'grouped' && !oneItem;
   // Issue #690: digits that are a known barcode search by that item's code.
-  const { query, match, looking } = useFindTerm(search.term);
+  const find = useFindTerm(search.term);
+  const query = oneItem ? (fromAddress.product.data?.code ?? '') : find.query;
+  const match = fromAddress.item ?? find.match;
+  const looking = find.looking || (oneItem && fromAddress.product.isPending);
   const [negativeOnly, setNegativeOnly] = useState(false);
   const [level, setLevel] = useState<StockLevel | ''>('');
   // Closed branches that still hold stock are left out of the whole-business list unless asked for (#329).
   const [showClosed, setShowClosed] = useState(false);
-  // An inactive item (issue #342) leaves the list unless asked for; its history and the reports keep it.
-  const [showInactive, setShowInactive] = useState(false);
+  // An inactive item (issue #342) leaves the list unless asked for; its history and the reports keep it. One item from the address shows even when inactive.
+  const [inactiveChosen, setShowInactive] = useState(false);
+  const showInactive = inactiveChosen || oneItem;
   const categories = useQuery({ queryKey: ['retail', 'categories'], queryFn: () => retail.listCategories() });
-  const [categoryId, setCategoryId, chipReady] = useChosenChip('stock', categories.data, categories.isError);
+  const [chipCategory, setCategoryId, chipLoaded] = useChosenChip('stock', categories.data, categories.isError);
+  // One item from the address ignores the remembered category chip, and the list waits until its code is known.
+  const categoryId = oneItem ? '' : chipCategory;
+  const chipReady = chipLoaded && (!oneItem || fromAddress.product.data !== undefined);
+  const everyItem = () => address.go('/staff/retail/stock', {});
+  // Typing a search leaves the one item from the link, so the box always does what it says (review of #797).
+  const typed = search.term !== '';
+  const { go } = address;
+  useEffect(() => {
+    if (typed && oneItem) go('/staff/retail/stock', {}, true);
+  }, [typed, oneItem, go]);
   const one = useQuery({
     queryKey: ['retail', 'stock', branchId, query, categoryId, negativeOnly, level, showInactive],
     queryFn: ({ signal }) => retail.listStock({ branchId: branchId ?? '', query, categoryId, negativeOnly, level: level || undefined, includeInactive: showInactive, signal }),
@@ -386,6 +439,11 @@ export function StockPage() {
         <SearchBox id="stock-search" label="Search by name, code, barcode or category" search={search} fetching={finding} count={shown} />
         <CategoryChips categories={categories.data ?? []} value={categoryId} onChange={setCategoryId} />
       </FindBar>
+      {oneItem && (
+        <OneItemNote name={fromAddress.product.data?.description} onEvery={everyItem} />
+      )}
+      <Problem error={fromAddress.product.error} />
+      {unknownBranch !== null && <p className="hint" data-testid="branch-not-yours">That branch cannot be opened here (it is closed, or not one you work at), so this is the stock of the branch you are using.</p>}
       {!all && branchId !== null && <NoStockHere branchId={branchId} />}
       {!all && branchId !== null && <UnfinishedCounts branchId={branchId} />}
       <ViewSwitch view={list.view} onChange={list.setView} />

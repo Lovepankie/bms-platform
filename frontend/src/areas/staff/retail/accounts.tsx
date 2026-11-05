@@ -48,7 +48,7 @@ function AccountsPage() {
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       <SearchBox id="search-accounts" label="Search by name or phone" search={search} fetching={finding} count={rows.data ? people.length : undefined} more={rows.hasNextPage} />
-      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="customers who owe" /> : <p className="empty-state">No customers who owe yet.</p>)}
+      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="customers who owe" /> : <p className="empty-state">No customers who owe yet. A buyer appears here after a sale on credit.</p>)}
       <SearchResults fetching={finding}>
         <ul style={{ listStyle: 'none', padding: 0 }} data-tour="accounts-list">
           {people.map((r) => <AccountRow key={r.id} row={r} />)}

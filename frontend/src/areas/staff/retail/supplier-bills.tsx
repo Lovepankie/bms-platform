@@ -63,7 +63,7 @@ export function SupplierBillsPage() {
           <span>Only invoices that are still owed</span>
         </label>
       </div>
-      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="invoices" /> : <p className="empty-state">{openOnly ? 'Nothing is owed on any invoice.' : 'No supplier invoices yet.'}</p>)}
+      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="invoices" /> : <p className="empty-state">{openOnly ? 'Nothing is owed on any invoice.' : 'No supplier invoices yet. Add one with New supplier invoice.'}</p>)}
       <div data-tour="bills-list">
         <SearchResults fetching={list.finding}>
           <ul style={{ listStyle: 'none', padding: 0 }}>

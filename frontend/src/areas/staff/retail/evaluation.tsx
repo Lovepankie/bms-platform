@@ -72,7 +72,7 @@ export function EvaluationView({ data, nameOf }: { data: Evaluation; nameOf: (id
                   {(c.products ?? []).map((p) => (
                     <tr key={p.product_id}>
                       <td>
-                        <ToStock>{p.description}</ToStock><br /><span className="hint">{p.code}</span>
+                        <ToStock item={p.product_id}>{p.description}</ToStock><br /><span className="hint">{p.code}</span>
                         {phone && <><br /><span className="hint">{showQty(p.qty_on_hand ?? '0')} {p.unit} in stock, {percentOrNone(p.stock?.over_cost_bp) || 'n/a'} over cost; profit so far {money(p.period?.profit_minor ?? 0)}</span></>}
                       </td>
                       {!phone && <td className="num">{money(p.period?.profit_minor ?? 0)}</td>}

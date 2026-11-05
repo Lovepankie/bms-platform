@@ -241,7 +241,7 @@ export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew
   return (
     <section aria-label="Saved">
       <h2>{HEADING[transfer.status ?? 'completed'] ?? 'Stock moved'}</h2>
-      <p>From <ToStock>{label(transfer.from_branch_id)}</ToStock> to <ToStock>{label(transfer.to_branch_id)}</ToStock> on {showDate(transfer.transfer_date)}.</p>
+      <p>From <ToStock branch={transfer.from_branch_id}>{label(transfer.from_branch_id)}</ToStock> to <ToStock branch={transfer.to_branch_id}>{label(transfer.to_branch_id)}</ToStock> on {showDate(transfer.transfer_date)}.</p>
       {transfer.status === 'in_transit' && <p>It is on its way. It is in neither branch's stock until the other branch receives it (see On the way).</p>}
       <ul>
         {(transfer.lines ?? []).map((l) => {

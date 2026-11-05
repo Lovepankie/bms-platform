@@ -5,7 +5,7 @@ import { retailAnalytics, type DamageShare, type DamageShareItem } from '../../.
 import { PeriodPicker, presetRange } from '../../../app/ui/PeriodPicker';
 import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
-import { Empty, Section } from './analytics-ui';
+import { Empty, Section, ToStock } from './analytics-ui';
 import { shown } from './ladder-state';
 import { milliOf } from './maths';
 import { PROFIT, canSeeProfit, holdsAt } from './permissions';
@@ -39,10 +39,10 @@ export function shareWords(label: string, pct: number | undefined, qty: string |
   return `${label} ${percent}, ${showQty(qty ?? '0')} of ${showQty(base ?? '0')}${u}`;
 }
 
-function ItemRow({ item }: { item: DamageShareItem }) {
+function ItemRow({ item, branchId }: { item: DamageShareItem; branchId?: string }) {
   return (
     <li className="rt-card" data-testid="damage-share-item">
-      <strong>{item.description}</strong>
+      <strong><ToStock item={item.product_id} branch={branchId}>{item.description}</ToStock></strong>
       <span className="hint">{item.code}</span>
       <div className="rt-row"><span className="num">{shareWords('Damaged', item.damaged_pct, item.damaged_qty, item.base_qty, item.unit)}</span></div>
       <div className="rt-row"><span className="num">{shareWords('Used', item.used_pct, item.used_qty, item.base_qty, item.unit)}</span></div>
@@ -58,7 +58,7 @@ export function DamageShareView({ data, nameOf }: { data: DamageShare; nameOf: N
     <ul className="an-cards" data-testid="damage-share">
       {shops.map((shop) => (
         <li key={shop.branch_id} className="rt-card" data-testid="damage-share-shop">
-          <h3>{nameOf(shop.branch_id)}</h3>
+          <h3><ToStock branch={shop.branch_id}>{nameOf(shop.branch_id)}</ToStock></h3>
           <div className="rt-row"><span>Shop total</span></div>
           <div className="rt-row"><span className="num">{shareWords('Damaged', shop.damaged_pct, shop.damaged_qty, shop.base_qty)}</span></div>
           <div className="rt-row"><span className="num">{shareWords('Used', shop.used_pct, shop.used_qty, shop.base_qty)}</span></div>
@@ -66,7 +66,7 @@ export function DamageShareView({ data, nameOf }: { data: DamageShare; nameOf: N
             <p className="hint">Nothing damaged or used here.</p>
           ) : (
             <ul className="an-cards">
-              {(shop.items ?? []).map((item) => <ItemRow key={item.product_id} item={item} />)}
+              {(shop.items ?? []).map((item) => <ItemRow key={item.product_id} item={item} branchId={shop.branch_id} />)}
             </ul>
           )}
         </li>

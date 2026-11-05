@@ -63,11 +63,11 @@ export function PurchaseOrdersPage() {
         <legend>Show</legend>
         <p className="cluster">
           {STATUSES.map((s) => (
-            <button key={s.value} type="button" className={status === s.value ? 'btn-sm rt-primary' : 'btn-sm'} aria-pressed={status === s.value} onClick={() => setStatus(s.value)}>{s.label}</button>
+            <button key={s.value} type="button" className="find-chip" aria-pressed={status === s.value} onClick={() => setStatus(s.value)}>{s.label}</button>
           ))}
         </p>
       </fieldset>
-      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="orders" /> : <p className="empty-state">No purchase orders yet.</p>)}
+      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="orders" /> : <p className="empty-state">No purchase orders yet. Make one with New purchase order.</p>)}
       <SearchResults fetching={list.finding}>
         <ul style={{ listStyle: 'none', padding: 0 }} data-tour="purchase-orders-list">
           {list.rows.map((r) => <OrderRow key={r.id} row={r} />)}

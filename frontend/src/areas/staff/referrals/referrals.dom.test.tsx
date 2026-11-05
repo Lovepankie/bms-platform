@@ -89,7 +89,7 @@ describe('the list', () => {
 
   it('says so when nobody signed up yet', async () => {
     shell(() => Promise.resolve({ ...sample, items: [], totals: [] }));
-    expect(await screen.findByText('No business has signed up with your link yet.')).toBeTruthy();
+    expect(await screen.findByText('No business has signed up with your link yet. Share the link above with a business you know.')).toBeTruthy();
   });
 
   it('shows the error in plain words', async () => {

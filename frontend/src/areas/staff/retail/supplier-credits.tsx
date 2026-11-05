@@ -63,7 +63,7 @@ export function SupplierCreditsPage() {
           <option value="voided">Voided</option>
         </select>
       </div>
-      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="credit notes" /> : <p className="empty-state">No supplier credit notes yet.</p>)}
+      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="credit notes" /> : <p className="empty-state">No supplier credit notes yet. Add one with New credit note.</p>)}
       <div data-tour="credits-list">
         <SearchResults fetching={list.finding}>
           <ul style={{ listStyle: 'none', padding: 0 }}>

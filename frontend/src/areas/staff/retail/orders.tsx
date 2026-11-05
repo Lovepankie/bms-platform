@@ -18,7 +18,7 @@ import { UNITS, capabilityOn, holdsAt } from './permissions';
 import { newLine, withUnit } from './sale-state';
 import { SaleLineCard } from './sale';
 import { CustomerPicker } from './customer-picker';
-import { ScreenLink } from './screen-link';
+import { SaleLink, ScreenLink } from './screen-link';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
 import { Hint } from '../../../app/ui/Hint';
 import { ContactLinks } from './contact-links';
@@ -183,7 +183,7 @@ export function OrderSummary({ order, branchName }: { order: Order; branchName?:
       </ul>
       <p className="hint">Items {money(order.items_total_minor ?? 0)}, delivery {money(order.delivery_fee_minor ?? 0)}, <strong>total {money(order.total_minor ?? 0)}</strong></p>
       {order.notes && <p className="hint">{order.notes}</p>}
-      {order.status === 'delivered' && <p className="hint">Delivered {showDate(order.delivered_on)}, sale {order.sale_no}</p>}
+      {order.status === 'delivered' && <p className="hint">Delivered {showDate(order.delivered_on)}, sale <SaleLink saleId={order.sale_id}>{order.sale_no}</SaleLink></p>}
       {order.sale_voided && <p className="hint">The sale was voided, and its delivery fee with it.</p>}
       {order.fee_method === 'account' && !order.sale_voided && <p className="hint">{order.fee_paid_on ? `Delivery fee paid on ${showDate(order.fee_paid_on)}` : 'Delivery fee on the customer account, not paid yet'}</p>}
       {order.status === 'cancelled' && <p className="hint">Cancelled because: {order.cancel_reason}</p>}
@@ -360,7 +360,7 @@ export function OrdersPage() {
       <Hint tour="orders-help">Orders that come by WhatsApp, Instagram, Facebook, a phone call or at the counter. Saving an order keeps its items aside. The money is taken when it is delivered, and then it is a normal sale.</Hint>
       <div className="rt-row" data-tour="orders-board" aria-label="Orders at each step">
         {tiles.map((t) => (
-          <button key={t.view} type="button" className={view === t.view ? 'btn-sm rt-primary' : 'btn-sm'} aria-pressed={view === t.view} onClick={() => setView(t.view)}>
+          <button key={t.view} type="button" className="find-chip" aria-pressed={view === t.view} onClick={() => setView(t.view)}>
             {t.label}: {t.count ?? '...'}
           </button>
         ))}
@@ -404,7 +404,7 @@ export function OrdersPage() {
         {list.data && (
           <SearchResults fetching={fetching}>
             {items.length === 0 ? (
-              search.term ? <NoResults term={search.term} onClear={search.clear} noun="orders" /> : <p className="empty-state">No orders here.</p>
+              search.term ? <NoResults term={search.term} onClear={search.clear} noun="orders" /> : <p className="empty-state">No orders here. Take one with New order.</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0 }}>
                 {items.map((o) => <OrderCard key={o.id} order={o} branchName={all ? nameOf(o.branch_id) : undefined} />)}

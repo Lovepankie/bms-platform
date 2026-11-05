@@ -48,7 +48,7 @@ function SummaryRows({ label, rows, withCost }: { label: string; rows: { key: st
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {rows.map(({ key, name, sums }) => (
           <li key={key} className="rt-card">
-            <strong>{label === 'Branch' ? <ToStock>{name}</ToStock> : name}</strong>
+            <strong>{label === 'Branch' ? <ToStock branch={key}>{name}</ToStock> : name}</strong>
             <div className="rt-row"><span>At selling price</span><span className="num">{money(sums.sales ?? 0)}</span></div>
             {withCost && sums.cost !== undefined && <div className="rt-row"><span>At buying price</span><span className="num">{money(sums.cost)}</span></div>}
             {withCost && sums.profit !== undefined && <div className="rt-row"><span>Expected profit</span><span className="num">{money(sums.profit)}</span></div>}
@@ -72,7 +72,7 @@ function SummaryRows({ label, rows, withCost }: { label: string; rows: { key: st
       <tbody>
         {rows.map(({ key, name, sums }) => (
           <tr key={key}>
-            <td>{label === 'Branch' ? <ToStock>{name}</ToStock> : name}</td>
+            <td>{label === 'Branch' ? <ToStock branch={key}>{name}</ToStock> : name}</td>
             {withCost && <td className="num">{sums.cost !== undefined ? money(sums.cost) : ''}</td>}
             <td className="num">{money(sums.sales ?? 0)}</td>
             {withCost && <td className="num">{sums.profit !== undefined ? money(sums.profit) : ''}</td>}
@@ -119,7 +119,7 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
           {(valuation.rows ?? []).map((r) => (
             <tr key={`${r.branch_id}-${r.product_id}`}>
               <td>
-                <ToStock>{r.description}</ToStock><br /><CategoryLabel category={r.category} />
+                <ToStock item={r.product_id} branch={r.branch_id}>{r.description}</ToStock><br /><CategoryLabel category={r.category} />
                 {nameOf && <><br /><span className="hint">{nameOf(r.branch_id)}</span></>}
                 {phone && <><br /><span className="hint">{showQty(r.qty ?? '0')} in stock{withCost && r.value_at_cost_minor !== undefined ? `, cost ${money(r.value_at_cost_minor)}` : ''}</span></>}
               </td>

@@ -211,7 +211,7 @@ export function DashboardView({ data, nameOf, choice = DEFAULT_RANGE, onChoice, 
       {links}
 
       <h3>By shop</h3>
-      {shops.length === 0 ? <p className="empty-state">No sales or stock to show yet.</p> : (
+      {shops.length === 0 ? <p className="empty-state">No sales or stock to show yet. Buy stock or record a sale and each shop shows here.</p> : (
         <div className="table-wrap" tabIndex={0}><table>
           <thead>
             <tr>

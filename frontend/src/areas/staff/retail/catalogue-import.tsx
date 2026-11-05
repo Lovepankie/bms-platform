@@ -146,7 +146,7 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
       <ActionBar>
-        <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate(makeCodes)}>
+        <BusyButton busy={check.isPending} type="button" className={ready ? undefined : 'rt-primary'} data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate(makeCodes)}>
           {draft ? 'Check these items' : 'Check the file'}
         </BusyButton>
       </ActionBar>

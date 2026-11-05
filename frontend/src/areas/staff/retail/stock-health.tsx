@@ -58,7 +58,7 @@ function CoverTable({ rows, nameOf, reorder }: { rows: CoverRow[]; nameOf: NameO
         {rows.map((r) => (
           <tr key={`${r.branch_id}-${r.product_id}`}>
             <td>
-              <ToStock>{r.description}</ToStock><br />
+              <ToStock item={r.product_id} branch={r.branch_id}>{r.description}</ToStock><br />
               <span className="hint">{r.code}, {nameOf(r.branch_id)}</span>
               {reorder && lowWords(r) && <><br /><span className="badge badge-warning">{lowWords(r)}</span></>}
               {reorder && <LevelToggle row={r} />}
@@ -103,7 +103,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
               <tbody>
                 {(dead?.branches ?? []).map((b) => (
                   <tr key={b.branch_id}>
-                    <td><ToStock>{nameOf(b.branch_id)}</ToStock></td>
+                    <td><ToStock branch={b.branch_id}>{nameOf(b.branch_id)}</ToStock></td>
                     <td className="num">{b.item_count}</td>
                     <td className="num">
                       {b.value_at_price_minor !== undefined ? money(b.value_at_price_minor) : ''}
@@ -130,7 +130,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                 {(dead?.items ?? []).map((i) => (
                   <tr key={`${i.branch_id}-${i.product_id}`}>
                     <td>
-                      <ToStock>{i.description}</ToStock><br /><span className="hint">{i.code}, {nameOf(i.branch_id)}</span>
+                      <ToStock item={i.product_id} branch={i.branch_id}>{i.description}</ToStock><br /><span className="hint">{i.code}, {nameOf(i.branch_id)}</span>
                       {phone && <><br /><span className="hint">{showQty(i.qty_on_hand ?? '0')} {i.unit} in stock</span></>}
                     </td>
                     {!phone && <td className="num">{showQty(i.qty_on_hand ?? '0')} {i.unit}</td>}

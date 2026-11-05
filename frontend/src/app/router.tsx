@@ -135,8 +135,9 @@ const textParams = (...names: string[]) => (s: Record<string, unknown>) =>
 const retailHomeRoute = retailScreen('/').lazy(() => import('../areas/staff/retail/home').then((m) => m.Route));
 // `item` is the item Quick add just made (issue #632, Sell it) and `branch` where its stock was added: the sale starts with it on there.
 const retailSaleRoute = retailScreen('/sale', 'Record a sale', textParams('item', 'branch')).lazy(() => import('../areas/staff/retail/sale').then((m) => m.Route));
-const retailCreditSalesRoute = retailScreen('/credit-sales', 'Credit sales').lazy(() => import('../areas/staff/retail/sales').then((m) => m.CreditRoute));
-const retailSalesRoute = retailScreen('/sales', 'All sales').lazy(() => import('../areas/staff/retail/sales').then((m) => m.Route));
+// Issue #336: `sale` opens one sale, so a sale number elsewhere links to it; `item` and `branch` open the stock of one item or branch.
+const retailCreditSalesRoute = retailScreen('/credit-sales', 'Credit sales', textParams('sale')).lazy(() => import('../areas/staff/retail/sales').then((m) => m.CreditRoute));
+const retailSalesRoute = retailScreen('/sales', 'All sales', textParams('sale')).lazy(() => import('../areas/staff/retail/sales').then((m) => m.Route));
 // Customer orders with delivery (issue #385): the list by step, one order with its history, and the fees and cancellations report.
 const retailOrdersRoute = retailScreen('/orders', 'Orders').lazy(() => import('../areas/staff/retail/orders').then((m) => m.Route));
 const retailOrderRoute = retailScreen('/orders/$orderId', 'Order').lazy(() => import('../areas/staff/retail/order').then((m) => m.Route));
@@ -147,7 +148,7 @@ const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(
 const retailPurchaseRoute = retailScreen('/restocks/$purchaseId', 'Purchase').lazy(() => import('../areas/staff/retail/restocks').then((m) => m.PurchaseRoute));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
 const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage').lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
-const retailStockRoute = retailScreen('/stock', 'Stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
+const retailStockRoute = retailScreen('/stock', 'Stock', textParams('item', 'branch')).lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
 // The item page (issue #813): one item's stock in each shop and every movement of it with the balance after each.
 const retailItemPageRoute = retailScreen('/items/$productId', 'Item').lazy(() => import('../areas/staff/retail/item-page').then((m) => m.Route));
 // Quick add (issue #632): `name` is what Sell's search typed before it found nothing, so the form starts with it.

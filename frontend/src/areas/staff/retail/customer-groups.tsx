@@ -127,7 +127,7 @@ export function CustomerGroups() {
       <Problem error={failure && new Error(failure)} />
       {groups.isPending && <p className="loading">Loading</p>}
       <Problem error={groups.error} />
-      {groups.data && groups.data.length === 0 && <p className="empty-state">No customer groups yet.</p>}
+      {groups.data && groups.data.length === 0 && <p className="empty-state">No customer groups yet. Make one with Add group.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }} data-tour="customer-groups-list">
         {(groups.data ?? []).map((g) => (
           <GroupCard
