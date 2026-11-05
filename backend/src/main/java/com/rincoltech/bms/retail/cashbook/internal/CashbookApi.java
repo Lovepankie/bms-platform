@@ -243,7 +243,10 @@ final class CashbookApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = SAVINGS_LINE)
             Long savingsMinor,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = SAVINGS_LINE)
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description = PROFIT_ONLY
+                            + "; without it the voids are folded into expected_after_savings_minor only (issue #847)")
             Long savingsVoidsMinor,
 
             long expensesMinor,
@@ -263,7 +266,8 @@ final class CashbookApi {
                     description =
                             "Issue #814, ADR-115 decision 11: cash expected less the day's savings (plus their voids),"
                                     + " never less the cash purchases; present only without retail.profit.read, while the owner's"
-                                    + " setting salespeople_see_savings_amount is on")
+                                    + " setting salespeople_see_savings_amount is on. Below zero when the savings are more"
+                                    + " than the cash expected; the form then shows 0 and says so (issue #847)")
             Long expectedAfterSavingsMinor,
 
             long bankedSoFarMinor) {}

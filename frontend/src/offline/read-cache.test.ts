@@ -145,6 +145,58 @@ describe('keeping and restoring', () => {
     }
   });
 
+  // JUSTIFICATION-A3: a new test case issue #847 asks for (the kept Banking answer goes with the savings switch).
+  it('drops the kept Banking answer that carried the savings once the owner turns the savings switch off (issue #847)', async () => {
+    const on = accessOf({ ...mockMe('cashier'), salespeople_see_savings_amount: true });
+    const off = accessOf({ ...mockMe('cashier'), salespeople_see_savings_amount: false });
+    const key = ['retail', 'banking-expected', 'b1', '2026-11-02'];
+    const store = memoryStore();
+    const client = new QueryClient();
+    const keeping = keepReads(client, store, SHOP, on, () => Date.now(), 0);
+    await fetched(client, key, { cash_expected_minor: 150000, savings_minor: 20000, expected_after_savings_minor: 130000 });
+    await expect.poll(async () => (await store.readCache(SHOP)) !== null).toBe(true);
+    keeping.stop();
+
+    const afterOff = new QueryClient();
+    expect(restore(afterOff, await store.readCache(SHOP), Date.now(), off)).toEqual([]);
+    expect(afterOff.getQueryData(key)).toBeUndefined();
+    expect(restore(new QueryClient(), await store.readCache(SHOP), Date.now(), on)).toHaveLength(1);
+  });
+
+  // JUSTIFICATION-A3: the test the lead asks for on #858 (a copy kept under the six-part rights form before the app update).
+  it('reads a copy kept under the older rights form once and writes it again under the new one; other rights stay unused (issue #847)', async () => {
+    const older = (access: string) => JSON.stringify((JSON.parse(access) as unknown[]).slice(0, 6));
+    const on = accessOf({ ...mockMe('cashier'), salespeople_see_savings_amount: true });
+    const off = accessOf({ ...mockMe('cashier'), salespeople_see_savings_amount: false });
+    const banking = ['retail', 'banking-expected', 'b1', '2026-11-02'];
+    const kept = [entry(['retail', 'home', 'all'], { title: 'Test kept totals' }, Date.now()), entry(banking, { savings_minor: 20000 }, Date.now())];
+
+    // The switch on: every read comes back, and the copy is written again under the new form.
+    const store = memoryStore();
+    await store.putReadCache(SHOP, { savedAt: 1, access: older(on), entries: kept });
+    const client = new QueryClient();
+    expect(restore(client, await store.readCache(SHOP), Date.now(), on)).toHaveLength(2);
+    const keeper = keepReads(client, store, SHOP, on, () => Date.now(), 0);
+    await keeper.rekey();
+    keeper.stop();
+    expect((await store.readCache(SHOP))?.access).toBe(on);
+    expect((await store.readCache(SHOP))?.entries).toHaveLength(2);
+
+    // The switch off: the older form does not say whether it was on, so its Banking answer is not shown nor written again.
+    const second = memoryStore();
+    await second.putReadCache(SHOP, { savedAt: 1, access: older(off), entries: kept });
+    const offClient = new QueryClient();
+    expect(restore(offClient, await second.readCache(SHOP), Date.now(), off).map((e) => e.queryKey[1])).toEqual(['home']);
+    expect(offClient.getQueryData(banking)).toBeUndefined();
+    const offKeeper = keepReads(offClient, second, SHOP, off, () => Date.now(), 0);
+    await offKeeper.rekey();
+    offKeeper.stop();
+    expect((await second.readCache(SHOP))?.entries.map((e) => e.queryKey[1])).toEqual(['home']);
+
+    // The older form of other rights is still another person's rights: not used.
+    expect(restore(new QueryClient(), { savedAt: 1, access: older(ADMIN), entries: kept }, Date.now(), on)).toEqual([]);
+  });
+
   // JUSTIFICATION-A3: a new test case the #774 follow-up asks for (no write over a copy of other rights before a ping).
   it('never writes over a copy made under other rights before a ping confirms the network, then replaces it (issue #774)', async () => {
     const store = memoryStore();

@@ -57,14 +57,7 @@ class RetailBankingSavingsLineIT extends IntegrationTest {
         assertThat(cb.sale(hq, "cash", product, "10", today).getStatusCode()).isEqualTo(HttpStatus.CREATED);
         ResponseEntity<JsonNode> bought = cb.restock(hq, product, 1_000, 1_500, "2", "cash", today);
         assertThat(bought.getStatusCode()).as("%s", bought.getBody()).isEqualTo(HttpStatus.CREATED);
-        JsonNode s = cb.get("/savings/suggestion?branch_id=" + hq + "&date=" + today, ALL)
-                .getBody();
-        Map<String, Object> saving = new LinkedHashMap<>();
-        saving.put("branch_id", hq);
-        saving.put("business_date", today.toString());
-        saving.put("suggestion_token", s.get("suggestion_token").asString());
-        ResponseEntity<JsonNode> saved = cb.post("/savings", saving, ALL);
-        assertThat(saved.getStatusCode()).as("%s", saved.getBody()).isEqualTo(HttpStatus.CREATED);
+        saveSavings(today);
         owner = Api.staff(t, Api.email("bs-owner"), new Role("tenant_admin", null));
         TestDatabase.owner()
                 .sql("UPDATE users SET is_owner = true WHERE id = ?")
@@ -73,6 +66,19 @@ class RetailBankingSavingsLineIT extends IntegrationTest {
         String email = Api.email("bs-till-seller");
         UUID id = Api.staff(t, email, new Role("retail_sales", null), new Role("retail_till", null));
         seller = api.signIn(id, email, Api.PASSWORD, null).accessToken();
+    }
+
+    /** The day's suggested savings at the head office, saved by a holder of every cash book permission. */
+    ResponseEntity<JsonNode> saveSavings(LocalDate day) {
+        JsonNode s = cb.get("/savings/suggestion?branch_id=" + hq + "&date=" + day, ALL)
+                .getBody();
+        Map<String, Object> saving = new LinkedHashMap<>();
+        saving.put("branch_id", hq);
+        saving.put("business_date", day.toString());
+        saving.put("suggestion_token", s.get("suggestion_token").asString());
+        ResponseEntity<JsonNode> saved = cb.post("/savings", saving, ALL);
+        assertThat(saved.getStatusCode()).as("%s", saved.getBody()).isEqualTo(HttpStatus.CREATED);
+        return saved;
     }
 
     /** The Owner turns the switch on or off in Business set-up. */
@@ -122,7 +128,7 @@ class RetailBankingSavingsLineIT extends IntegrationTest {
 
         noCashPurchasesOrNet(e);
         assertThat(e.get("savings_minor").asLong()).isEqualTo(savings);
-        assertThat(e.get("savings_voids_minor").asLong()).isZero();
+        assertThat(e.has("savings_voids_minor")).isFalse();
         assertThat(e.get("cash_expected_minor").asLong())
                 .isEqualTo(full.get("cash_expected_minor").asLong());
         assertThat(e.get("expected_after_savings_minor").asLong())
@@ -130,6 +136,60 @@ class RetailBankingSavingsLineIT extends IntegrationTest {
         // The owner keeps the net figure and is not sent the seller's line.
         assertThat(full.has("expected_after_savings_minor")).isFalse();
         assertThat(full.has("expected_minor")).isTrue();
+    }
+
+    /**
+     * Issue #847: a savings record of an earlier day voided today puts its amount back in today's till. The seller is not sent
+     * the voided amount on its own (their Savings view leaves voided records out); it is folded into the after-savings figure,
+     * with the sign of the owner's net figure.
+     */
+    @Test
+    void aSavingsRecordOfAnEarlierDayVoidedTodayIsAddedBackIntoTheSellersFigureOnly() {
+        LocalDate earlier = today.minusDays(2);
+        UUID lamp = cb.api.product("LAMP-5", 1_000, 1_500);
+        cb.api.stockUp(hq, lamp, "10");
+        assertThat(cb.sale(hq, "cash", lamp, "4", earlier).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        JsonNode saved = saveSavings(earlier).getBody();
+        long voided = saved.get("amount_minor").asLong();
+        assertThat(voided).isPositive();
+        String record = saved.get("id").asString();
+        ResponseEntity<JsonNode> undone = cb.voidIt("/savings/" + record, "Saved on the wrong day", ALL);
+        assertThat(undone.getStatusCode()).as("%s", undone.getBody()).isEqualTo(HttpStatus.OK);
+        theSwitch(true);
+
+        JsonNode full = ownersExpected();
+        long savings = full.get("savings_minor").asLong();
+        long voids = full.get("savings_voids_minor").asLong();
+        assertThat(savings).isPositive();
+        assertThat(voids).isEqualTo(voided);
+        JsonNode e = sellersExpected();
+
+        assertThat(e.has("savings_voids_minor")).isFalse();
+        assertThat(e.get("savings_minor").asLong()).isEqualTo(savings);
+        long afterSavings = e.get("expected_after_savings_minor").asLong();
+        assertThat(afterSavings).isEqualTo(e.get("cash_expected_minor").asLong() - savings + voids);
+        long net = full.get("expected_minor").asLong();
+        long purchases = full.get("cash_purchases_minor").asLong();
+        assertThat(afterSavings).isEqualTo(net + purchases);
+    }
+
+    /** Issue #847: the savings line follows the seller's branches; another shop's banking is unknown to them. */
+    @Test
+    void withTheSwitchOnASellerAtOneShopAskingForAnotherShopsBankingGets404() {
+        theSwitch(true);
+        String email = Api.email("bs-hq-seller");
+        UUID id = Api.staff(t, email, new Role("retail_sales", hq), new Role("retail_till", hq));
+        String hqSeller = api.signIn(id, email, Api.PASSWORD, null).accessToken();
+
+        ResponseEntity<JsonNode> own = api.get(R + "/bankings/expected?branch_id=" + hq + "&date=" + today, hqSeller);
+        assertThat(own.getStatusCode()).as("%s", own.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(own.getBody().has("expected_after_savings_minor")).isTrue();
+
+        ResponseEntity<JsonNode> other =
+                api.get(R + "/bankings/expected?branch_id=" + t.secondBranch() + "&date=" + today, hqSeller);
+        assertThat(other.getStatusCode()).as("%s", other.getBody()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(other.getBody().get("code").asString()).isEqualTo("unknown_branch");
+        assertThat(other.getBody().toString()).doesNotContain("savings_minor");
     }
 
     @Test

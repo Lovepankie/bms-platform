@@ -293,6 +293,26 @@ describe('a shared phone', () => {
     await waitFor(() => expect(second.getQueryData(['retail', 'home', 'all'])).toEqual({ title: 'Test figures of the seller' }));
   });
 
+  // JUSTIFICATION-A3: the test the lead asks for on #858 (a copy kept before the app update, opened offline).
+  it('opened offline after the app update, shows the copy kept under the older rights form and writes it again under the new one, never another person\'s (issue #847)', async () => {
+    const store = memoryStore();
+    const seller: Me = { ...mockMe('sales'), user_id: 'u1' };
+    const older = JSON.stringify((JSON.parse(accessOf(seller)) as unknown[]).slice(0, 6));
+    const copy = (title: string) =>
+      ({ savedAt: 1, access: older, entries: [{ queryKey: ['retail', 'home', 'all'], queryHash: '["retail","home","all"]', state: { data: { title }, dataUpdatedAt: Date.now(), status: 'success' } }] }) as never;
+    await store.putReadCache(scopeOf(HOST, 'u1'), copy('Test figures kept before the update'));
+    await store.putReadCache(scopeOf(HOST, 'u2'), copy('Test figures of another person'));
+    const offline = () => ({ ...services(store, async () => {})(), connectivity: testConnectivity(false) });
+    const client = new QueryClient();
+    renderHook(() => useOfflineSupport(seller, false, offline, client));
+
+    await waitFor(() => expect(client.getQueryData(['retail', 'home', 'all'])).toEqual({ title: 'Test figures kept before the update' }));
+    await waitFor(async () => expect((await store.readCache(scopeOf(HOST, 'u1')))?.access).toBe(accessOf(seller)));
+    expect(JSON.stringify(await store.readCache(scopeOf(HOST, 'u1')))).toContain('kept before the update');
+    expect(JSON.stringify(client.getQueryCache().getAll().map((q) => q.state.data))).not.toContain('another person');
+    expect((await store.readCache(scopeOf(HOST, 'u2')))?.access).toBe(older);
+  });
+
   it('signs out a person with no offline support and still clears their kept figures, also when the store fails (issue #763)', async () => {
     const store = memoryStore();
     const client = new QueryClient();

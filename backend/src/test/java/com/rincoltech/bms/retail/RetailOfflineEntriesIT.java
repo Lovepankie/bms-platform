@@ -210,9 +210,10 @@ class RetailOfflineEntriesIT extends IntegrationTest {
             ResponseEntity<JsonNode> r = cb.api.postKeyed(
                     path, body.get(), ALL, "*", UUID.randomUUID().toString());
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.CREATED);
-            assertThat(r.getBody().get(DATE_FIELD.get(path)).asString())
-                    .as(path)
-                    .isEqualTo(today.toString());
+            // Issue #856: dated the server's now, which is between `now` and the answer on the business clock.
+            String dated = r.getBody().get(DATE_FIELD.get(path)).asString();
+            String before = LocalDate.ofInstant(now, ZONE).toString();
+            assertThat(dated).as(path).isIn(before, LocalDate.now(ZONE).toString());
         });
         // Behind: made two days before the phone was last online, which cannot be, so it is refused (the lead's
         // decision on
@@ -409,7 +410,9 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                     .get(path.equals("/bankings") ? "banked_at" : "withdrawn_at")
                     .asString();
             assertThat(Instant.parse(at)).as(path).isEqualTo(made);
-            assertThat(r.getBody().get("business_date").asString()).as(path).isEqualTo(today.toString());
+            // Issue #856: the day the entry was made on the business clock, not today (they differ after midnight).
+            String madeOn = LocalDate.ofInstant(made, ZONE).toString();
+            assertThat(r.getBody().get("business_date").asString()).as(path).isEqualTo(madeOn);
         }
     }
 

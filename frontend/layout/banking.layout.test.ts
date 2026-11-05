@@ -47,6 +47,20 @@ describe('the Banking form of the Till role at 412px (#814)', () => {
     await page.close();
   });
 
+  it('with savings more than the cash expected: Expected to bank is 0 with the plain line, and the amount is filled with 0 (#847)', async () => {
+    const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
+    await openLayout(page, 'layout/banking.html?more', page.getByText('Savings set aside'));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), 'page width').toBeLessThanOrEqual(WIDTH);
+    const texts = await page.locator('[aria-label="What to expect"] .rt-row').allTextContents();
+    expect(texts.some((t) => t.includes('Expected to bank') && t.includes('UGX 0'))).toBe(true);
+    expect(texts.join(' ')).not.toMatch(/-\s*UGX|UGX\s*-/);
+    const line = page.getByText('Savings are more than the cash in the till today.');
+    const box = await line.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= WIDTH).toBe(true);
+    expect(await page.locator('#banking-amount').inputValue()).toBe('0');
+    await page.close();
+  });
+
   it('with the switch off: the cash expected only, the amount filled with it', async () => {
     const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
     await openLayout(page, 'layout/banking.html?off', page.getByText('Cash expected'));

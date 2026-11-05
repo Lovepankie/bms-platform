@@ -14,6 +14,8 @@ Amended by ADR-120 (issue #811): sales staff save today's savings; an earlier da
 Amended by issue #814 (4 Nov 2026), as the owner's old app did: while the setting is on, whoever may bank sees on Banking the
 day's savings and the cash expected less them, and the amount is filled with it; cash purchases stay hidden (decision 5
 changed, decision 11 added; FR-RET-21). No migration.
+Amended by issue #847 (4 Nov 2026), the review of #814: the savings voids are folded into the seller's after-savings figure
+only, a figure below zero shows as 0 with a plain line, and the kept offline answer goes with the setting (decision 11).
 
 ## Context
 
@@ -113,14 +115,20 @@ want the person closing the till to set the savings aside by hand and to check t
 11. **Banking shows the savings line (issue #814, as the owner's old app did).** The old app's Banked form showed every seller
     the day's sales less the savings. While the setting is on, `GET /retail/bankings/expected` sends a caller without
     `retail.profit.read` who may bank at the branch (`retail.banking.record`, the Till role) `savings_minor` and
-    `savings_voids_minor`, and `expected_after_savings_minor`: `cash_expected_minor` less the savings plus their voids. It is
+    `expected_after_savings_minor`: `cash_expected_minor` less the savings plus their voids. The voids are folded into that
+    figure only and `savings_voids_minor` stays with `retail.profit.read` (issue #847): a voided record is not on the seller's
+    Savings view, so its amount is not sent on its own. When the savings are more than the cash expected the figure is below
+    zero; the form then shows 0 with the line "Savings are more than the cash in the till today.", matching the filled
+    amount, never a negative amount (issue #847). A branch outside the caller's banking scope is 404 as before. It is
     deliberately not net of cash purchases, so `cash_purchases_minor` and the net `expected_minor` stay with `retail.profit.read`
     (ADR-022 decision 13), as do the stored `expected_minor`, `difference_minor`, `flag` and `warnings` of a save and every
     figure of the banking report. A caller with `retail.profit.read` is not sent `expected_after_savings_minor`; their figure is
     `expected_minor`. `BankingService.expected` decides it on the server, reading the setting once per request; the Banking form
     shows "Savings set aside" and "Expected to bank" when the answer carries them and prefills the amount banked with
     `expected_after_savings_minor` less what is already banked that day. The answer is the read kept on the phone for offline
-    use (ADR-116), so the form shows the same lines offline. With the setting off the answer is as before. The savings were
+    use (ADR-116), so the form shows the same lines offline; the setting is part of the rights a kept copy is made under, so
+    the kept answer goes once the setting is turned off (ADR-116 decision 3, issue #847). With the setting off the answer is
+    as before. The savings were
     already visible to these people on Savings while the setting is on, so this shows nothing the owner has not already allowed.
 
 ## Consequences

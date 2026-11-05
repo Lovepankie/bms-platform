@@ -96,7 +96,9 @@ class BankingService {
         Day d = figures.day(branch, on);
         boolean profit = mayProfit(branch);
         // Issue #814, ADR-115 decision 11: with the owner's savings switch on, whoever may bank sees the day's savings
-        // and the cash expected less them; the cash purchases and the net of them stay with retail.profit.read.
+        // and the cash expected less them; the cash purchases and the net of them stay with retail.profit.read. The
+        // savings voided that day are folded into the after-savings figure only: a voided record is not on the
+        // seller's Savings view, so its amount is not sent on its own (issue #847).
         boolean savingsLine = !profit && support.salespeopleSavings().on();
         boolean savings = profit || savingsLine;
         return new BankingExpected(
@@ -109,7 +111,7 @@ class BankingService {
                 d.repaymentVoids(),
                 profit ? d.cashPurchases() : null,
                 savings ? d.savings() : null,
-                savings ? d.savingsVoids() : null,
+                profit ? d.savingsVoids() : null,
                 d.expenses(),
                 d.advancesOut(),
                 d.repaymentsIn(),

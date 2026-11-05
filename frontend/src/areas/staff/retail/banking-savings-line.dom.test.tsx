@@ -48,7 +48,8 @@ const till = mockMe('cashier');
 const branch = till.branches?.[0]?.id ?? '';
 const today = businessToday();
 const off: BankingExpected = { branch_id: branch, business_date: today, cash_expected_minor: 150000, banked_so_far_minor: 10000 };
-const on: BankingExpected = { ...off, savings_minor: 20000, savings_voids_minor: 0, expected_after_savings_minor: 130000 };
+// Issue #847: the savings voided that day are folded into expected_after_savings_minor and never sent on their own.
+const on: BankingExpected = { ...off, savings_minor: 20000, expected_after_savings_minor: 130000 };
 
 function open() {
   const queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -89,6 +90,17 @@ describe('Banking for the Till role and the savings switch (#814)', () => {
     expect(screen.queryByText('Expected to bank')).toBeNull();
     expect(screen.queryByText(/Stock bought with cash/)).toBeNull();
     expect((screen.getByLabelText('Amount banked') as HTMLInputElement).value).toBe('140000');
+  });
+
+  it('when the savings are more than the cash expected shows 0 and says so in plain words, matching the filled amount (#847)', async () => {
+    api.bankingExpected.mockResolvedValue({ ...on, savings_minor: 170000, expected_after_savings_minor: -20000, banked_so_far_minor: 0 });
+    open();
+    await screen.findByText('Savings set aside');
+    expect(row('Expected to bank')).toContain('UGX 0');
+    expect(row('Expected to bank')).not.toContain('-');
+    expect(screen.getByText('Savings are more than the cash in the till today.')).toBeTruthy();
+    expect(screen.queryByText('Cash expected less the savings set aside.')).toBeNull();
+    expect((screen.getByLabelText('Amount banked') as HTMLInputElement).value).toBe('0');
   });
 
   it('offline, from the answer kept on the phone with the switch on, shows the same lines and fills the amount (#812)', async () => {

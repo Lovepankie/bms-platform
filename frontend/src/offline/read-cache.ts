@@ -74,15 +74,17 @@ export function keptForReading(key: QueryKey): boolean {
 
 /**
  * What a person may see, as one string: their permissions with the branches each covers, their branches, modules and
- * capabilities. A kept copy made under another value (a manager made a seller, a branch taken away) is thrown away.
+ * capabilities, and whether the owner's savings switch is on (it decides whether Banking's kept answer carries the savings,
+ * issue #847). A kept copy made under another value (a manager made a seller, a branch taken away, the switch turned off) is
+ * thrown away.
  */
-export function accessOf(me: Pick<Me, 'permissions' | 'permission_scopes' | 'all_branches' | 'branches' | 'modules' | 'module_capabilities'>): string {
+export function accessOf(me: Pick<Me, 'permissions' | 'permission_scopes' | 'all_branches' | 'branches' | 'modules' | 'module_capabilities' | 'salespeople_see_savings_amount'>): string {
   const sorted = (list: readonly unknown[] | undefined | null) => [...(list ?? [])].map(String).sort();
   const scopes = Object.entries(me.permission_scopes ?? {})
     .map(([p, s]) => `${p}:${(s as { all_branches?: boolean })?.all_branches ? '*' : sorted((s as { branch_ids?: string[] })?.branch_ids).join(',')}`)
     .sort();
   const caps = Object.entries(me.module_capabilities ?? {}).map(([m, c]) => `${m}:${sorted(c as string[]).join(',')}`).sort();
-  return JSON.stringify([sorted(me.permissions), scopes, me.all_branches === true, sorted((me.branches ?? []).map((b) => b.id)), sorted(me.modules), caps]);
+  return JSON.stringify([sorted(me.permissions), scopes, me.all_branches === true, sorted((me.branches ?? []).map((b) => b.id)), sorted(me.modules), caps, me.salespeople_see_savings_amount === true]);
 }
 
 const lendingReport = (r: unknown) => {
@@ -173,7 +175,43 @@ export function merged(before: ReadEntry[], fresh: ReadEntry[], now: number, max
 
 /** Whether a kept copy may be shown to a person with these rights now. */
 export function usable(cache: ReadCache | null, access: string): cache is ReadCache {
-  return cache !== null && cache.access === access;
+  return cache !== null && (cache.access === access || cache.access === olderForm(access));
+}
+
+/**
+ * The same rights as {@link accessOf} wrote them before issue #847 added the savings switch (six parts), so a copy kept before
+ * the app was updated is still shown offline and then written again under the new form. The copy lives under this person's
+ * own scope (business host and person), so it is never another person's.
+ */
+function olderForm(access: string): string | undefined {
+  try {
+    const parts: unknown = JSON.parse(access);
+    return Array.isArray(parts) && parts.length === 7 ? JSON.stringify(parts.slice(0, 6)) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether the copy was kept under the older form of these rights and is to be written again under the new one. */
+export function keptUnderOlderForm(cache: ReadCache | null, access: string): boolean {
+  return cache !== null && cache.access !== access && cache.access === olderForm(access);
+}
+
+/**
+ * The kept reads that may be used under these rights. A copy of the older form does not say whether the savings switch was on,
+ * so with it off now its Banking answers go, as they would have if the switch had been part of the rights (issue #847).
+ */
+function entriesUnder(cache: ReadCache, access: string): ReadEntry[] {
+  if (cache.access === access || savingsSwitchOn(access)) return cache.entries;
+  return cache.entries.filter((e) => e.queryKey[1] !== 'banking-expected');
+}
+
+function savingsSwitchOn(access: string): boolean {
+  try {
+    return (JSON.parse(access) as unknown[])[6] === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -182,7 +220,7 @@ export function usable(cache: ReadCache | null, access: string): cache is ReadCa
  */
 export function restore(client: QueryClient, cache: ReadCache | null, now: number, access: string): ReadEntry[] {
   if (!usable(cache, access)) return [];
-  const entries = cache.entries.filter((e) => keptForReading(e.queryKey) && now - e.state.dataUpdatedAt <= KEEP_DAYS * DAY_MS);
+  const entries = entriesUnder(cache, access).filter((e) => keptForReading(e.queryKey) && now - e.state.dataUpdatedAt <= KEEP_DAYS * DAY_MS);
   if (entries.length > 0) hydrate(client, { mutations: [], queries: entries }, { defaultOptions: { queries: { gcTime: Infinity } } });
   return entries;
 }
@@ -201,6 +239,8 @@ export interface ReadKeeper {
    * the keeper has just written is never removed in its place (review of #784).
    */
   dropOther(): Promise<void>;
+  /** Writes the copy again at once under these rights, in turn with the other writes: a copy of the older form (issue #847). */
+  rekey(): Promise<void>;
 }
 
 /**
@@ -244,7 +284,8 @@ export function keepReads(
           // The ping can take seconds: a keeper stopped meanwhile (sign-out, the layout left) writes nothing.
           if (!confirmed || stopped) return;
         }
-        const kept = usable(before, access) ? before.entries : [];
+        // A copy of the older form of these rights is written again under the new form here (issue #847).
+        const kept = usable(before, access) ? entriesUnder(before, access) : [];
         const sizes = new Map([...mine.values()].map((m) => [m.entry, m.size]));
         const entries = merged(kept, [...mine.values()].map((m) => m.entry), now(), READ_CACHE_MAX_BYTES, (e) => sizes.get(e) ?? JSON.stringify(e).length);
         if (!stopped) await store.putReadCache(scope, { savedAt: now(), access, entries });
@@ -285,6 +326,12 @@ export function keepReads(
       });
       writing = drop.catch(() => undefined);
       return drop;
+    },
+    rekey: () => {
+      if (stopped) return writing;
+      if (timer !== undefined) clearTimeout(timer);
+      save();
+      return writing;
     },
   };
 }

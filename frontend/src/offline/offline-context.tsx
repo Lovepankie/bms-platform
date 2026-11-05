@@ -8,7 +8,7 @@ import { browserConnectivity, type Connectivity } from './connectivity';
 import { sayDone } from '../areas/staff/retail/toast';
 import { sentWords } from './entries';
 import { waiting, type OutboxItem } from './outbox';
-import { accessOf, followConnectivity, forgetInMemory, keepReads, restore, usable, type ReadKeeper } from './read-cache';
+import { accessOf, followConnectivity, forgetInMemory, keepReads, keptUnderOlderForm, restore, usable, type ReadKeeper } from './read-cache';
 import { deviceStore, scopeOf, type Catalogue, type OfflineStore } from './store';
 import { SyncEngine, browserTabLock, type SyncDeps, type SyncSnapshot } from './sync-engine';
 
@@ -323,6 +323,8 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
             return;
           }
           keeper.adopt(restore(client, c, now(), access));
+          // Kept before the app was updated (issue #847): shown, offline too, and written once under the new form.
+          if (keptUnderOlderForm(c, access) && live) await keeper.rekey();
         },
         () => undefined,
       );

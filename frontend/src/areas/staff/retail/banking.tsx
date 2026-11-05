@@ -38,9 +38,10 @@ export function ExpectedFigures({ expected, date }: { expected: BankingExpected;
       {expected.savings_minor !== undefined && <p className="rt-row"><span>Savings set aside</span><strong>{money(expected.savings_minor)}</strong></p>}
       {expected.expected_minor !== undefined && <p className="rt-row"><span>Expected to bank</span><strong>{money(expected.expected_minor)}</strong></p>}
       {expected.expected_minor === undefined && expected.expected_after_savings_minor !== undefined && (
+        // Issue #847: never a negative amount; 0, as the amount banked is filled, and the reason in plain words.
         <>
-          <p className="rt-row"><span>Expected to bank</span><strong>{money(expected.expected_after_savings_minor)}</strong></p>
-          <Hint>Cash expected less the savings set aside.</Hint>
+          <p className="rt-row"><span>Expected to bank</span><strong>{money(Math.max(0, expected.expected_after_savings_minor))}</strong></p>
+          <Hint>{expected.expected_after_savings_minor < 0 ? 'Savings are more than the cash in the till today.' : 'Cash expected less the savings set aside.'}</Hint>
         </>
       )}
       <p className="rt-row"><span>{alreadyBankedLabel(date ?? expected.business_date, businessToday())}</span><strong>{money(expected.banked_so_far_minor ?? 0)}</strong></p>

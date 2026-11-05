@@ -463,6 +463,9 @@ widths: see its README), and the script is not committed. Notes:
   hint "Cash expected less the savings set aside.", and the amount banked is filled with Expected to bank less
   what is already banked that day. Stock bought with cash, the difference and the flag stay hidden. The server
   sends these lines; the form only shows what the answer carries, online and from the read kept on the phone.
+  When the savings are more than the cash expected, Expected to bank shows 0 with the plain line "Savings are
+  more than the cash in the till today." and the amount is filled with 0, never a negative amount. The read kept
+  on the phone goes once the Owner turns the switch off (issue #847).
 - The bottom bar now carries Retail plus up to five shortcuts in the pilot's order (Sale, Banked, Savings,
   Expenses, Advances), so an administrator's bar no longer shows Stock and Restock; both stay on the Retail home.
   Six items still fit at 360px.
