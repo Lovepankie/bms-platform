@@ -27,14 +27,22 @@ staff waited for the owner or picked a wrong item. The same screen already lets 
    lower-cased name (V34) stays the backstop: the insert is `ON CONFLICT DO NOTHING`, and when a writer that skipped the lock
    won, the create reads that item and answers with it (with `reuse_existing`) or 409 `duplicate_item`, never a 500. A switched off item of
    that name is refused with 409 `item_switched_off` ("Ask the owner to switch it on again"), so a retired item is never
-   offered. Without `reuse_existing` a taken name is 409 `duplicate_item` as before, which set-up keeps.
+   offered. Without `reuse_existing` a taken name is 409 `duplicate_item` as before, which set-up keeps. Since issue #810 the
+   same tidy applies everywhere a name is stored or checked: the owner's rename (PATCH) stores the tidied name and takes the
+   category lock before the item's, and both the set-up check and the reuse check compare the stored name tidied the same way
+   (every run of white space one space, then the ends trimmed, so a stored "\tFuel" is "Fuel"). Every name stored from then on
+   is tidy, so the V34 index on the lower-cased name is a true backstop. Names stored before are not changed by a migration:
+   `docs/runbooks/expense-item-names.md` is the read-only look at them.
 3. **In place on the form.** Under the Item picker a person who holds `retail.expense.record` at the form's shop sees "Add a
-   new item", the same plain words as "Add a new beneficiary". It opens a small sheet with the item's name under the chosen
-   category; saving puts the item in the list at once and picks it. In an empty category the same button replaces "Ask the
+   new item", the same plain words as "Add a new beneficiary", when they may also close the till (ADR-055, which every cash
+   book route asks for, so the screen never offers what the server refuses). It opens a small sheet with the item's name under
+   the chosen category; saving puts the item in the list at once and picks it. The category is the one chosen when the name
+   is sent (issue #810). Changing the category closes the sheet; an answer that arrives after a change adds the item to the
+   category it was sent for and picks it only if that category is still the chosen one. In an empty category the same button replaces "Ask the
    owner to add its items first"; a person who may not add items at that shop still sees that line, or the owner's link to
    Expense lists. The screen offers the button only at a shop where the person records expenses, while the server accepts any
    holder of `retail.expense.record`, because the item lists are the business's, not a shop's (one list for every shop).
-4. **Set-up is unchanged.** The owner still renames, flags and switches off items in Expense lists; an item added in place is
+4. **Set-up is unchanged** (apart from the tidied name of decision 2). The owner still renames, flags and switches off items in Expense lists; an item added in place is
    an ordinary item there, with its `retail.expense_item.created` audit row naming who added it.
 
 ## Consequences

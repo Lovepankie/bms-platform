@@ -65,7 +65,8 @@ accepted can be recognised.
    verify, look up by `provider_message_id`, update status to `delivered` or
    `undelivered`. Unknown ids are counted and ignored. Built in #215 for Africa's Talking
    (`SmsDeliveryReportController`, `AfricasTalkingSmsProvider.readDeliveryReport`, migration `V130`): the path token
-   `BMS_SMS_CALLBACK_TOKEN` in constant time, a rate limit, only the id, status and failure reason read (never the
+   `BMS_SMS_CALLBACK_TOKEN` in constant time, a rate limit (past it only the first throttled requests of a minute are
+   counted, issue #808), a body of unknown length refused with 411 before it is read (#808), only the id, status and failure reason read (never the
    number); `Success` is delivered, `Failed` and `Rejected` undelivered, `Sent`, `Submitted` and `Buffered` interim (no
    move). The platform-only definer function `sms_delivery_report_apply` moves a `sent` row once and never back, and every
    outcome is counted per Kampala day in `sms_report_counters`. A report that arrives before the sender has recorded the

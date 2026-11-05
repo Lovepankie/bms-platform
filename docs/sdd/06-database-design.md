@@ -432,9 +432,12 @@ last minute), then by due time, and locks the best twenty candidates in that ord
   `core.sms_usage` (chapter 14 section 14.6).
 - `sms_report_counters` (platform, `V130`; row-level security forced with no policy, no grant to `bms_app`): `day`
   (Kampala), `outcome` (a word of ours: `moved`, `repeated`, `not_forward`, `interim`, `unknown_id`, `ambiguous_id`,
-  `bad_token`, `throttled`, `malformed`, `unknown_status`, `oversized`, `store_failed`), `hits`; primary key `(day,
-  outcome)`. Written only by `app_count_sms_report(day, outcome)`; no id, number or tenant. Cleared with the delivery rows
-  by `sms_deliveries_purge` after 13 months.
+  `bad_token`, `throttled`, `malformed`, `unknown_status`, `oversized`, `no_length`, `store_failed`), `hits`; primary key
+  `(day, outcome)`. Written only by `app_count_sms_report(day, outcome)`, which since `V137` (issue #808) refuses a
+  transaction bound to a tenant, as `sms_delivery_report_apply` does; no id, number or tenant. Cleared with the delivery
+  rows by `sms_deliveries_purge` after 13 months (the counters of every day before the purge's cut-off; the `V130` header's
+  "400 days" was wrong, `V137` says so). Since `V137` the purge answers the delivery rows it deleted only, as in `V50`; the
+  counter rows it clears with them are not in that figure.
 - `sms_opt_outs` (tenant, row-level security): `id`, `tenant_id`, `created_at`, `member_id` (no foreign key; null for a row
   about a number alone), `recipient_hash` (null means the member on any number; a row needs a member or a hash),
   `recipient_masked` (`+256*****1234`, for display; the number is never stored), `scope` [`reminders`, `all`], `source`

@@ -456,7 +456,10 @@ Decision 7 is built (migration `V130`, spec section 4.18). Where the build sharp
    unset, and unset keeps the route answering 404. A wrong token is 404 and counted, inside a rate limit bucket of its own (a
    tenth of the report bucket), and past that bucket a guess costs no database write. The application's own limit per
    address and overall (3000 and 6000 a minute by default) holds without the edge rule and the provider's source address
-   allow-list, which stay operator tasks (chapter 9).
+   allow-list, which stay operator tasks (chapter 9). Since issue #808 a throttled request is counted `throttled` only inside
+   a bucket of its own (a tenth of the report bucket, as for a wrong token), so a flood past the limit costs no database
+   write, and a body of unknown length (chunked, no Content-Length) is refused with 411 `length_required` and counted
+   `no_length` before it is read, so the 16 KB check always sees the size.
 2. **What is read.** Only `id`, `status` and `failureReason` (the provider's public reference; the sandbox confirms the
    shape, decision Watch for). The recipient's number the provider sends is never read, stored or logged. `Success` is
    `delivered`; `Failed` and `Rejected` are `undelivered` with the reason when it is a plain word (else `other`); `Sent`,
@@ -471,14 +474,15 @@ Decision 7 is built (migration `V130`, spec section 4.18). Where the build sharp
    message id for it. Two rows with one id move nothing (`ambiguous_id`).
 4. **Counted, never logged by value.** Every outcome is a word of ours counted per Kampala day in the platform table
    `sms_report_counters` (no grant to the application role), kept as long as the delivery rows. The log line names the
-   outcome only.
+   outcome only. Since `V137` (issue #808) the counting function refuses a transaction bound to a business, as the apply
+   function does, and the nightly purge answers the delivery rows it deleted only, as before `V130`.
 5. **Accepted residual.** A report that arrives before the sender's second transaction has recorded the message id finds no
    row: it is counted `unknown_id` and the row stays `sent`. The provider reports seconds later, not milliseconds, and
    nothing money-related reads the status; holding early reports would need a table of unmatched ids for no gain.
 6. **The report.** `core.sms_usage` (chapter 14 section 14.6) reads the delivery log through a new public port `SmsUsage`
    of this module from the reporting module (which already depends on it): messages handed to the provider (`sent`,
    `delivered`, `undelivered`, `unknown`), delivered, not delivered, segments (the provider's when given) and the recorded
-   cost in the business's currency per Kampala month and event, under `core.reports.financial`. It is off by default: the
+   cost in the business's currency per month (calendar months in the business's own time zone, issue #808) and event, under `core.reports.financial`. It is off by default: the
    report framework gains `ReportDefinition.offeredInTenant`, and this report is offered only to a business whose own SMS
    switch is on or that has any message in its log, so a business that switched SMS off still sees what it used. Module
    `core` is a module every business has. It prices nothing and bills nobody (the owner's decision of 2 November 2026: the

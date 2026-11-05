@@ -399,6 +399,62 @@ class RetailCashbookExpensesIT extends IntegrationTest {
                 .doesNotContain("Something new");
     }
 
+    // JUSTIFICATION-A3: issue #810 asks for spaces collapsed on the owner's rename and in the set-up check; no case
+    // covers it.
+    @Test
+    void theOwnersRenameAndTheSetUpCheckCollapseSpacesLikeTheAddInPlace() {
+        String items = "/expense-categories/" + rent + "/items";
+        UUID wash = RetailTestSupport.id(cb.post(items, Map.of("name", "Test wash"), CASHBOOK_ADMIN));
+
+        // The rename is stored with one space between words and none around it.
+        ResponseEntity<JsonNode> renamed =
+                cb.patch(items + "/" + wash, Map.of("name", "  Car   wash\t"), CASHBOOK_ADMIN, 1);
+        assertThat(renamed.getStatusCode()).as("%s", renamed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(renamed.getBody().get("name").asString()).isEqualTo("Car wash");
+        // Set-up refuses a name that differs only in spaces or capitals, and so does another rename.
+        ResponseEntity<JsonNode> again = cb.post(items, Map.of("name", "car  wash"), CASHBOOK_ADMIN);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(again.getBody().get("code").asString()).isEqualTo("duplicate_item");
+        UUID other = RetailTestSupport.id(cb.post(items, Map.of("name", "Test polish"), CASHBOOK_ADMIN));
+        ResponseEntity<JsonNode> clash = cb.patch(items + "/" + other, Map.of("name", "CAR\twash"), CASHBOOK_ADMIN, 1);
+        assertThat(clash.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(clash.getBody().get("code").asString()).isEqualTo("duplicate_item");
+
+        // A name stored before names were tidied (a tab in front, two spaces inside) still counts as the same name.
+        UUID legacy = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("INSERT INTO retail_expense_items (id, tenant_id, category_id, name) VALUES (?, ?, ?, ?)")
+                .params(legacy, t.tenantId(), rent, "\tGenerator  fuel")
+                .update();
+        ResponseEntity<JsonNode> setUp = cb.post(items, Map.of("name", "Generator fuel"), CASHBOOK_ADMIN);
+        assertThat(setUp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(setUp.getBody().get("code").asString()).isEqualTo("duplicate_item");
+        ResponseEntity<JsonNode> reused =
+                cb.post(items, Map.of("name", "generator fuel", "reuse_existing", true), CASHBOOK_SALES);
+        assertThat(reused.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(RetailTestSupport.id(reused)).isEqualTo(legacy);
+        // The owner tidies it by renaming it to its own name written plainly: allowed, as it is the same item.
+        ResponseEntity<JsonNode> tidied =
+                cb.patch(items + "/" + legacy, Map.of("name", "Generator fuel"), CASHBOOK_ADMIN, 1);
+        assertThat(tidied.getStatusCode()).as("%s", tidied.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(tidied.getBody().get("name").asString()).isEqualTo("Generator fuel");
+    }
+
+    // JUSTIFICATION-A3: the review of #861 asks for proof that the server refuses what the screen no longer offers.
+    @Test
+    void addingAnItemInPlaceNeedsTillCloseAsTheScreenAsks() {
+        String items = "/expense-categories/" + rent + "/items";
+        ResponseEntity<JsonNode> refused =
+                cb.post(items, Map.of("name", "Test no till", "reuse_existing", true), "retail.expense.record");
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("permission_denied");
+        ResponseEntity<JsonNode> added = cb.post(
+                items,
+                Map.of("name", "Test no till", "reuse_existing", true),
+                "retail.expense.record,retail.till.close");
+        assertThat(added.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
     @Test
     void theOwnerStillRenamesAnItemAddedInPlaceAndTheNewNameIsTheOneReused() {
         String items = "/expense-categories/" + rent + "/items";

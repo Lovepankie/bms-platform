@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from 'playwright';
+import { chromium, type Browser } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openLayout } from './open';
 
@@ -18,12 +18,6 @@ afterAll(async () => {
 
 const WIDTH = 412;
 
-const fits = async (page: Page, selector: string) => {
-  const box = await page.locator(selector).first().boundingBox();
-  expect(box && box.x >= 0 && box.x + box.width <= WIDTH, selector).toBe(true);
-  return box!;
-};
-
 describe('Add a new item on the expense form at 412px (#802)', () => {
   it.each(['c1', 'c2'])('fits the button and the sheet inside the phone for category %s', async (category) => {
     const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
@@ -35,7 +29,10 @@ describe('Add a new item on the expense form at 412px (#802)', () => {
     // docs/ui-rules.md rule 12: every tap target is at least 48px high.
     expect(button!.height).toBeGreaterThanOrEqual(48);
     await add.click();
-    expect((await fits(page, '[id$="-name"]')).height).toBeGreaterThanOrEqual(48);
+    // The sheet's own field, by its label (issue #810), not the first element whose id ends in -name.
+    const field = await page.getByLabel(/Name of the new item/).boundingBox();
+    expect(field && field.x >= 0 && field.x + field.width <= WIDTH, 'name field').toBe(true);
+    expect(field!.height, 'name field').toBeGreaterThanOrEqual(48);
     for (const name of ['Add to the list', 'Cancel']) {
       const box = await page.getByRole('button', { name }).boundingBox();
       expect(box && box.x >= 0 && box.x + box.width <= WIDTH, name).toBe(true);

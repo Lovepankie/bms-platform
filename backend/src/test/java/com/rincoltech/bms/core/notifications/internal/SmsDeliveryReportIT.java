@@ -282,6 +282,71 @@ class SmsDeliveryReportIT extends IntegrationTest {
         }
     }
 
+    /**
+     * Issue #808: a chunked body has no length, so the 16 KB check could not see its size; it is refused with 411 and counted,
+     * and the row it names does not move. JUSTIFICATION-A3: a new case over real HTTP, which only Tomcat can prove.
+     */
+    @Test
+    void aChunkedBodyIsRefusedBeforeItIsRead() throws Exception {
+        String id = newId();
+        UUID row = sentRow(a, id);
+        long noLength = hits("no_length");
+        byte[] body = recorded("success", id).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(
+                        java.net.URI.create(http.getRootUri() + PATH + TOKEN))
+                .header("Content-Type", MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+                .version(java.net.http.HttpClient.Version.HTTP_1_1)
+                // A stream of unknown length: the client sends it chunked, with no Content-Length.
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofInputStream(
+                        () -> new java.io.ByteArrayInputStream(body)))
+                .build();
+        try (java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient()) {
+            int status = client.send(request, java.net.http.HttpResponse.BodyHandlers.discarding())
+                    .statusCode();
+            assertThat(status).isEqualTo(411);
+        }
+        assertThat(hits("no_length") - noLength).isEqualTo(1);
+        assertThat(status(row)).isEqualTo("sent");
+    }
+
+    /**
+     * V137 (issue #808): the nightly purge answers the delivery rows it deleted, never the counter rows it cleared with them.
+     * Dated in 1999, before anything another test writes, so the count is this test's own. JUSTIFICATION-A3: a new case.
+     */
+    @Test
+    void thePurgeAnswersDeliveryRowsOnlyAndStillClearsTheOldCounters() {
+        UUID old = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO sms_deliveries (id, tenant_id, created_at, updated_at, outbox_id, template_key, category,
+                                                    recipient_masked, recipient_hash, provider, provider_message_id,
+                                                    segments, provider_segments, cost_minor, currency, cost_raw, status)
+                        VALUES (?, ?, TIMESTAMPTZ '1999-06-01 07:00:00Z', TIMESTAMPTZ '1999-06-01 07:00:00Z', ?,
+                                'savings.deposit', 'transactional', '+256*****0101', repeat('a', 64), 'africastalking', ?,
+                                1, 1, 30, 'UGX', 'UGX 30.0000', 'delivered')
+                        """)
+                .params(old, a.tenantId(), UUID.randomUUID(), newId())
+                .update();
+        for (String outcome : java.util.List.of("moved", "repeated", "unknown_id")) {
+            TestDatabase.owner()
+                    .sql("INSERT INTO sms_report_counters (day, outcome, hits) VALUES (DATE '1999-06-01', ?, 3)")
+                    .param(outcome)
+                    .update();
+        }
+
+        int purged = TestDatabase.owner()
+                .sql("SELECT sms_deliveries_purge(TIMESTAMPTZ '2000-01-01 00:00:00Z')")
+                .query(Integer.class)
+                .single();
+
+        assertThat(purged).isEqualTo(1);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM sms_report_counters WHERE day < DATE '2000-01-01'")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     @Test
     void theRecipientsNumberIsNeverLogged(CapturedOutput output) throws Exception {
         String id = newId();

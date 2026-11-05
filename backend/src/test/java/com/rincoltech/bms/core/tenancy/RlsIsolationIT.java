@@ -1821,6 +1821,24 @@ public class RlsIsolationIT {
                     }
                 }))
                 .hasStackTraceContaining("platform only");
+        // Nor write a report counter (V137, #808): the counters are the platform's, as the apply function is.
+        long before = TestDatabase.owner()
+                .sql("SELECT coalesce(sum(hits), 0) FROM sms_report_counters WHERE outcome = 'rls_probe'")
+                .query(Long.class)
+                .single();
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps =
+                            c.prepareStatement("SELECT app_count_sms_report(current_date, 'rls_probe')")) {
+                        ps.execute();
+                        return null;
+                    }
+                }))
+                .hasStackTraceContaining("platform only");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT coalesce(sum(hits), 0) FROM sms_report_counters WHERE outcome = 'rls_probe'")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(before);
     }
 
     /**

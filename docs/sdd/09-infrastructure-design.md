@@ -302,7 +302,11 @@ migration) with status only, no details.
   which the Caddyfile already forwards there (`/api/v1/channels/*`); `BMS_SMS_CALLBACK_TOKEN` (at least 32 random
   characters, a host secret) turns the endpoint on, and unset it answers 404. The application's own limit per address
   and overall (`bms.sms.callback-ip-per-minute`, 3000, and `bms.sms.callback-global-per-minute`, 6000; a wrong token has a
-  bucket a tenth of those) holds without the edge rule.
+  bucket a tenth of those) holds without the edge rule. A report must reach the application with its Content-Length:
+  a body without one (chunked) is refused with 411 and counted `no_length` (issue #808). Caddy's `reverse_proxy`
+  forwards the length the provider sends; any proxy put in front later must keep it (request buffering on, or
+  `request_buffers` in Caddy, and HTTP/1.1 to the application), or real reports become 411s. The `no_length` counter
+  in `docs/runbooks/sms-incident.md` is where that shows.
 - Client extras (issue #210, design): Pesapal `BMS_PESAPAL_PROVIDER`, `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CALLBACK_BASE_URL` (a lender's own account is entered by the lender and
   stored encrypted, so there is no per-lender variable; the consumer key, secret, IPN id, token and tenant id variables of #213 are gone, #233), `BMS_DATA_KEY_PREVIOUS` (retired data keys during a rotation), `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`,
   `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` (an IPN registration belongs to one credential pair); SMS `BMS_SMS_PROVIDER`, `BMS_SMS_MODE` (`off` default, `sink` on staging),

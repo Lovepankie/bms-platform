@@ -938,7 +938,7 @@ review in section 11, a forged delivery report, holds as answered there). Where 
 - **Known gap, accepted.** A report that arrives before the sender has recorded the message id finds no row; it is counted
   `unknown_id` and the row stays `sent`.
 - **The report.** `core.sms_usage` (chapter 14 section 14.6), under `core.reports.financial`: messages handed to the provider,
-  delivered, not delivered, segments and the recorded cost per Kampala month and event, and per month. Off by default: offered only
+  delivered, not delivered, segments and the recorded cost per month (in the business's own time zone) and event, and per month. Off by default: offered only
   to a business whose own SMS switch is on or that has a message in its log, so a business that stops SMS still sees what it used.
   It prices nothing; the price a business sees before switching SMS on is the operator's data (owner's decision, issue #215).
 - **Not in this slice.** The operator's view of the counters (read with SQL as the owner role, runbook `sms-incident.md`), the per

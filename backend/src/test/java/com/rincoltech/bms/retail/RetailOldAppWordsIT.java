@@ -348,6 +348,64 @@ class RetailOldAppWordsIT extends IntegrationTest {
                 .isEqualTo(1);
     }
 
+    // JUSTIFICATION-A3: issue #838 asks for a test of each rule; no existing case sends an edit without its
+    // explanation.
+    @Test
+    void anExpenseEditMustCarryItsOwnExplanationWhenTheItemNeedsOneAndTheLinkComesAfterIt() {
+        UUID[] list = cash.categoryWithItem("Test Gifts", "Test Hamper", true);
+        LocalDate day = CashbookTestSupport.daysAgo(0);
+        Map<String, Object> first = new LinkedHashMap<>();
+        first.put("branch_id", hq);
+        first.put("business_date", day.toString());
+        first.put("category_id", list[0]);
+        first.put("item_id", list[1]);
+        first.put("amount_minor", 3_000);
+        first.put("explanation", "For a fabricated visitor");
+        ResponseEntity<JsonNode> made = cash.post("/expenses", first, CashbookTestSupport.CASHBOOK_ADMIN);
+        assertThat(made.getStatusCode()).as("%s", made.getBody()).isEqualTo(HttpStatus.CREATED);
+        UUID old = RetailTestSupport.id(made);
+        long before = cash.cashOnHand(hq, day);
+
+        // No typed explanation: the link the server adds is not one, so the edit is refused and nothing changes.
+        Map<String, Object> body = new LinkedHashMap<>(first);
+        body.remove("explanation");
+        body.put("amount_minor", 2_500);
+        ResponseEntity<JsonNode> refused =
+                cash.post("/expenses/" + old + "/replace", body, CashbookTestSupport.CASHBOOK_ADMIN);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("explanation_required");
+        body.put("explanation", "  ");
+        assertThat(cash.post("/expenses/" + old + "/replace", body, CashbookTestSupport.CASHBOOK_ADMIN)
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("explanation_required");
+        assertThat(cash.cashOnHand(hq, day)).isEqualTo(before);
+        assertThat(count(
+                        "SELECT count(*) FROM retail_expenses WHERE tenant_id = ? AND voided_at IS NULL", t.tenantId()))
+                .isEqualTo(1);
+
+        // Over 500 characters typed is refused as a field problem before anything changes (the review of #861).
+        body.put("explanation", "x".repeat(501));
+        assertThat(cash.post("/expenses/" + old + "/replace", body, CashbookTestSupport.CASHBOOK_ADMIN)
+                        .getStatusCode()
+                        .is4xxClientError())
+                .isTrue();
+        assertThat(cash.cashOnHand(hq, day)).isEqualTo(before);
+
+        // A typed explanation of 500 characters: the typed part is cut and the link is kept whole.
+        body.put("explanation", "x".repeat(500));
+        ResponseEntity<JsonNode> replaced =
+                cash.post("/expenses/" + old + "/replace", body, CashbookTestSupport.CASHBOOK_ADMIN);
+        assertThat(replaced.getStatusCode()).as("%s", replaced.getBody()).isEqualTo(HttpStatus.CREATED);
+        String explanation = replaced.getBody().get("explanation").asString();
+        assertThat(explanation)
+                .hasSize(500)
+                .startsWith("xxx")
+                .endsWith(" Replaces the Test Hamper entry of " + day + ", edited.");
+        assertThat(cash.cashOnHand(hq, day)).isEqualTo(before + 500);
+    }
+
     /** Switches on the approval of an action from an amount, as RetailApprovalRulesIT does. */
     void approvalRule(String action, long amount) {
         TestDatabase.owner()

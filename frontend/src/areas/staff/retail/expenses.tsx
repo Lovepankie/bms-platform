@@ -13,7 +13,7 @@ import {
 } from './expenses-state';
 import { newIdempotencyKey, usePersistedDraft } from './idempotency';
 import { PartyPicker, useCashParties } from './party-picker';
-import { CASHBOOK_READ, EXPENSE_RECORD, holds, holdsAt, needsOf } from './permissions';
+import { CASHBOOK_READ, EXPENSE_RECORD, holds, holdsAt, needsOf, TILL } from './permissions';
 import { ScreenLink } from './screen-link';
 import { sayDone, useToast } from './toast';
 import { BranchRequired, Gate, Problem, WaitingForApproval, money, useBranchName, useSingleBranch } from './ui';
@@ -110,9 +110,12 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
   // ADR-118 (issue #802): whoever records expenses adds a missing item in place, the same way as a new beneficiary.
   // A name the category has already picks that item; the new one goes into the list at once and is chosen.
   const [addingItem, setAddingItem] = useState(false);
-  const addItem: AddInline<ExpenseItem> | null = draft.categoryId !== '' && holdsAt(me, EXPENSE_RECORD, branchId) ? {
+  // The server also asks for retail.till.close on every cash book route (ADR-055), so the screen never offers less.
+  const addItem: AddInline<ExpenseItem> | null = draft.categoryId !== '' && holdsAt(me, EXPENSE_RECORD, branchId) && holds(me, TILL) ? {
     label: 'Add a new item', name: 'Name of the new item', send: 'Add to the list', maxLength: 100,
-    // The category is the one chosen when the name is sent; the item is picked only if it is still the chosen one.
+    // Issue #810: the category is the one chosen when the name is sent. Changing the category closes the sheet, and an
+    // answer that comes after a change adds the item to the category it was sent for and picks it only if that category
+    // is still the chosen one.
     create: async (name) => {
       const categoryId = draft.categoryId;
       const row = await retail.createExpenseItem(categoryId, { name, reuse_existing: true });
@@ -137,7 +140,7 @@ export function ExpenseForm({ branchId, onSaved, onWaiting, replaces, onCancel }
       ) : (
       <>
       <label htmlFor="expense-category">Category</label>
-      <select id="expense-category" value={draft.categoryId} onChange={(e) => update({ categoryId: e.target.value, itemId: '', explanation: '' })}>
+      <select id="expense-category" value={draft.categoryId} onChange={(e) => { setAddingItem(false); update({ categoryId: e.target.value, itemId: '', explanation: '' }); }}>
         <option value="">Choose a category</option>
         {activeCategories(list).map((c) => (
           <option key={c.id} value={c.id}>{c.name}</option>

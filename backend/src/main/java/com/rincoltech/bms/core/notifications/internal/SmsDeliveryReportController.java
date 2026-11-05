@@ -35,8 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
  *       characters) the route answers 404 for every request. A wrong token is answered 404 and counted
  *       ({@code bad_token}), inside a bucket of its own per address, so a flood of guesses can never use up the
  *       provider's budget and, past its bucket, costs no database write.
- *   <li>A rate limit per address and overall applies before the body is read (429, counted {@code throttled}). The edge
- *       rule and the provider's source address allow-list in the proxy come first (chapter 9 section 9.13).
+ *   <li>A rate limit per address and overall applies before the body is read (429, counted {@code throttled} inside a
+ *       bucket of its own, so past it a flood costs no database write, issue #808). The edge rule and the provider's source
+ *       address allow-list in the proxy come first (chapter 9 section 9.13).
+ *   <li>A body of unknown length (chunked) is refused with 411 before it is read ({@code no_length}, issue #808), so the
+ *       16 KB check always sees the size.
  *   <li>Only the message id, the status and the failure reason are read; the recipient's number the provider sends is
  *       never read, kept or logged. A body without a usable id or status is 400 ({@code malformed}).
  *   <li>The row is found by the provider's message id through a definer function and its status moves forward only;
@@ -94,8 +97,20 @@ class SmsDeliveryReportController {
             throw ApiException.notFound();
         }
         if (!limiter.tryAcquire(Bucket.REPORT, address)) {
-            reports.count("throttled");
+            // Issue #808: counted only inside a bucket of its own, as a wrong token is, so a flood past the limit costs
+            // a counter in memory and no database write.
+            if (limiter.tryAcquire(Bucket.THROTTLED, address)) {
+                reports.count("throttled");
+            }
             return tooMany();
+        }
+        if (request.getContentLengthLong() < 0) {
+            // Issue #808: a body of unknown length (chunked) would skip the size check below and be read up to the
+            // container's form limit, so it is refused before it is read. The provider sends a short form with its
+            // length.
+            reports.count("no_length");
+            throw new ApiException(
+                    HttpStatus.LENGTH_REQUIRED, "length_required", "Length required", "This is not a delivery report.");
         }
         if (request.getContentLengthLong() > MAX_BODY) {
             reports.count("oversized");
@@ -150,7 +165,9 @@ class SmsDeliveryReportController {
     enum Bucket {
         REPORT,
         /** Requests with a wrong path token: they fill their own bucket and nobody else's. */
-        BAD_TOKEN
+        BAD_TOKEN,
+        /** The throttled requests that are still counted: past this bucket a throttled request writes nothing. */
+        THROTTLED
     }
 
     /**
@@ -172,6 +189,7 @@ class SmsDeliveryReportController {
             this.clock = clock;
             limits.put(Bucket.REPORT, new int[] {perAddress, overall});
             limits.put(Bucket.BAD_TOKEN, new int[] {Math.max(1, perAddress / 10), Math.max(1, overall / 10)});
+            limits.put(Bucket.THROTTLED, new int[] {Math.max(1, perAddress / 10), Math.max(1, overall / 10)});
         }
 
         synchronized boolean tryAcquire(Bucket bucket, String address) {

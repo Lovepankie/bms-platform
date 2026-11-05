@@ -3147,6 +3147,40 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V137 (issue #808, ADR-036 decision 7) replaces two function bodies and changes no row: the report counters stored
+     * before it stay as they were, and both functions stay definer functions the application role may run. JUSTIFICATION-A3:
+     * a new test case; no existing case covers V137.
+     */
+    @Test
+    void smsReportFollowUpsMigrationKeepsEveryCounter() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("137") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            owner.sql("INSERT INTO sms_report_counters (day, outcome, hits) VALUES (DATE '2026-10-05', 'moved', 7),"
+                            + " (DATE '2026-10-05', 'throttled', 2)")
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT sum(hits) FROM sms_report_counters WHERE day = DATE '2026-10-05'")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(9);
+            assertThat(owner.sql("SELECT count(*) FROM pg_proc WHERE proname IN ('sms_deliveries_purge',"
+                                    + " 'app_count_sms_report') AND prosecdef"
+                                    + " AND has_function_privilege('bms_app', oid, 'EXECUTE')")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(2);
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

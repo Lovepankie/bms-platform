@@ -151,8 +151,7 @@ class SetupService {
                     "Permission denied",
                     "Asking for an explanation on an item needs permission to manage expenses.");
         }
-        // Spaces inside the name are one space, so "Generator  fuel" is "Generator fuel" (ADR-118 decision 2).
-        String name = r.name().strip().replaceAll("\\s+", " ");
+        String name = itemName(r.name());
         boolean reuse = Boolean.TRUE.equals(r.reuseExisting());
         var same = reuse ? repo.itemNamed(c.id(), name) : java.util.Optional.<ItemRow>empty();
         if (same.isPresent()) {
@@ -182,6 +181,19 @@ class SetupService {
         return new AddedItem(view(repo.item(id, false).orElseThrow()), true);
     }
 
+    /**
+     * An expense item's name as it is stored and compared (ADR-118 decision 2, issue #810): no spaces around it and one space
+     * for every run of spaces or tabs inside it, so "Generator  fuel" is "Generator fuel", on an add and on the owner's rename.
+     */
+    static String itemName(String typed) {
+        // The same characters as CashbookRepository.SPACED_NAME, named one by one: Java's \s and PostgreSQL's
+        // locale-dependent \s do not agree on every Unicode space (the review of #861).
+        return typed.replaceAll(SPACES, " ").replaceAll("^ | $", "");
+    }
+
+    /** Space, tab, line feed, carriage return, form feed and vertical tab, written alike for Java and PostgreSQL. */
+    static final String SPACES = "[ \\t\\n\\r\\f\\x0B]+";
+
     /** An item of the same name, picked again when it is active (200) and refused in plain words when switched off. */
     private AddedItem existing(ItemRow same) {
         if (!same.active()) {
@@ -195,13 +207,17 @@ class SetupService {
     @Transactional
     ExpenseItem patchItem(UUID categoryId, UUID itemId, String ifMatch, ItemPatch p) {
         int expected = Versions.fromIfMatch(ifMatch);
+        // Issue #810: the category lock first, as an add in place takes it, so a rename and an add of one name run
+        // one after the other and the second sees the first; always before the item's lock, so the two never wait
+        // in a circle.
+        repo.category(categoryId, true).orElseThrow(ApiException::notFound);
         ItemRow i = repo.item(itemId, true)
                 .filter(x -> x.categoryId().equals(categoryId))
                 .orElseThrow(ApiException::notFound);
         if (i.version() != expected) {
             throw Versions.conflict(i.version());
         }
-        String name = p.name() == null ? i.name() : p.name().trim();
+        String name = p.name() == null ? i.name() : itemName(p.name());
         if (name.isEmpty()) {
             throw ApiException.validation(List.of(new FieldProblem("name", "required", "A name is required.")));
         }

@@ -88,7 +88,8 @@ Messages stay `sent` and never become `delivered`, or a counter jumps. As `bms_o
 | `not_forward` | A report that would move a row back or sideways, or a report for a row that was never `sent` | Nothing; a few are normal. Many may mean forged reports with known ids: rotate the token |
 | `unknown_id` | No row has that id: another environment's message, a report that beat the sender's own write, or a forged id | A few are normal. Many with no `moved`: check the callback URL in the provider's dashboard is this environment's |
 | `bad_token` | A request with the wrong token (404) | A burst: someone is guessing, or the dashboard has an old token after a rotation. Check the dashboard; if it is right, add the edge rate limit and the source allow-list (chapter 9) |
-| `throttled` | Over the application's limit per address or overall (429) | The provider retries. If real reports are being throttled, raise `bms.sms.callback-ip-per-minute` and `bms.sms.callback-global-per-minute` |
+| `throttled` | Over the application's limit per address or overall (429). Since issue #808 only the first throttled requests of each minute are counted (a tenth of the limit per address), so the figure is a floor, not the number refused | The provider retries. If real reports are being throttled, raise `bms.sms.callback-ip-per-minute` and `bms.sms.callback-global-per-minute` |
+| `no_length` | A body sent without a length (chunked), refused with 411 before it is read (issue #808) | If real reports land here, the provider changed how it sends: tell the developers |
 | `malformed`, `unknown_status`, `oversized` | A body that is not a report, a status word this build does not know, a body over 16 KB | `unknown_status` after a provider change: tell the developers, the reader maps each word on purpose |
 | `store_failed` | The database could not record it (500); the provider retries | Check the API log for the error class and the database health |
 

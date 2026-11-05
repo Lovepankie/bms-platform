@@ -126,6 +126,40 @@ describe('adding an expense item in place', () => {
     expect(screen.getByText('This category has no items yet. Ask the owner to add its items first.')).toBeTruthy();
   });
 
+  // Issue #810 (the PASS review of #803). JUSTIFICATION-A3: tests the review asked for, not new mechanism.
+  it('closes the sheet when the category changes, so choosing a category later never opens it unasked', () => {
+    form();
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add a new item' }));
+    expect(screen.getByLabelText(/Name of the new item/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c2' } });
+    expect(screen.queryByLabelText(/Name of the new item/)).toBeNull();
+    expect(screen.getByText('This category has no items yet.')).toBeTruthy();
+  });
+
+  it('keeps the way to the owner for a user who records expenses at another shop but not this one', () => {
+    const other = (seller.branches ?? []).find((b) => b.id !== branch)?.id ?? 'another-shop';
+    const elsewhere = {
+      ...seller,
+      permission_scopes: { ...(seller.permission_scopes ?? {}), 'retail.expense.record': { all_branches: false, branch_ids: [other] } },
+    };
+    form(elsewhere);
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c2' } });
+    expect(screen.getByText('This category has no items yet. Ask the owner to add its items first.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
+    expect(screen.queryByRole('button', { name: 'Add a new item' })).toBeNull();
+  });
+
+  it('shows no Add a new item to a user who may not close the till, as the server would refuse it', () => {
+    const withoutTill = { ...seller, permissions: (seller.permissions ?? []).filter((p) => p !== 'retail.till.close') };
+    form(withoutTill);
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
+    expect(screen.queryByRole('button', { name: 'Add a new item' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c2' } });
+    expect(screen.queryByRole('button', { name: 'Add a new item' })).toBeNull();
+  });
+
   it('shows no Add a new item to a user without the expense permission', () => {
     const without = { ...seller, permissions: (seller.permissions ?? []).filter((p) => p !== 'retail.expense.record') };
     form(without);
@@ -147,5 +181,32 @@ describe('the mock answers like the API', () => {
     await mock.updateExpenseItem(transport!.id!, added.id!, { active: false }, added.version!);
     const refused = await mock.createExpenseItem(transport!.id!, { name: 'Test Item 01', reuse_existing: true }).catch((e: { code?: string }) => e);
     expect((refused as { code?: string }).code).toBe('item_switched_off');
+  });
+
+  // Issue #810. JUSTIFICATION-A3: the review of #803 asks the mock to apply the server's rules.
+  it('refuses a switched off category and the explanation flag to a session that does not manage the lists', async () => {
+    setMockProfitAccess(true);
+    const mock = createMockRetail();
+    const [transport] = await mock.listExpenseCategories({ activeOnly: true });
+    setMockProfitAccess(false);
+    const flagged = await mock.createExpenseItem(transport!.id!, { name: 'Test Item 02', requires_explanation: true, reuse_existing: true }).catch((e: { status?: number }) => e);
+    expect((flagged as { status?: number }).status).toBe(403);
+    setMockProfitAccess(true);
+    await mock.updateExpenseCategory(transport!.id!, { active: false }, transport!.version!);
+    setMockProfitAccess(false);
+    const off = await mock.createExpenseItem(transport!.id!, { name: 'Test Item 03', reuse_existing: true }).catch((e: { code?: string }) => e);
+    expect((off as { code?: string }).code).toBe('category_inactive');
+    setMockProfitAccess(true);
+  });
+
+  it('stores a rename with one space between words and refuses a name the category has already', async () => {
+    setMockProfitAccess(true);
+    const mock = createMockRetail();
+    const [transport] = await mock.listExpenseCategories({ activeOnly: true });
+    const first = await mock.createExpenseItem(transport!.id!, { name: 'Test Item 04' });
+    const second = await mock.createExpenseItem(transport!.id!, { name: 'Test Item 05' });
+    expect((await mock.updateExpenseItem(transport!.id!, second.id!, { name: ' Test   Item\t06 ' }, second.version!)).name).toBe('Test Item 06');
+    const taken = await mock.updateExpenseItem(transport!.id!, first.id!, { name: 'test  item 06' }, first.version!).catch((e: { code?: string }) => e);
+    expect((taken as { code?: string }).code).toBe('duplicate_item');
   });
 });

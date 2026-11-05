@@ -136,18 +136,27 @@ class CashbookRepository {
                         """).params(name, exceptId, exceptId).query(Long.class).single() > 0;
     }
 
+    /**
+     * A stored item name as it is compared (ADR-118 decision 2, issue #810): every run of spaces, tabs or line breaks is one
+     * space, then the spaces around it go, so a name stored before names were tidied ("\tFuel", "Generator  fuel") still
+     * matches what the caller sends, which {@code SetupService.itemName} tidied the same way. The spaces are named one by
+     * one ({@code SetupService.SPACES}), so Java and PostgreSQL agree. Wrapped in functions, the name no longer uses the
+     * V34 index on {@code lower(name)}; the read is within one category of a business, a short list (issue #810).
+     */
+    static final String SPACED_NAME = "lower(btrim(regexp_replace(name, '[ \\t\\n\\r\\f\\v]+', ' ', 'g')))";
+
     Optional<ItemRow> itemNamed(UUID categoryId, String name) {
-        return jdbc.sql("""
-                        SELECT id, category_id, name, requires_explanation, active, version FROM retail_expense_items
-                         WHERE category_id = ? AND lower(regexp_replace(btrim(name), '\\s+', ' ', 'g')) = lower(?)
-                         ORDER BY active DESC, id LIMIT 1""").params(categoryId, name).query((rs, n) -> item(rs)).optional();
+        return jdbc.sql("SELECT id, category_id, name, requires_explanation, active, version FROM retail_expense_items"
+                        + " WHERE category_id = ? AND " + SPACED_NAME + " = lower(?)"
+                        + " ORDER BY active DESC, id LIMIT 1")
+                .params(categoryId, name)
+                .query((rs, n) -> item(rs))
+                .optional();
     }
 
     boolean itemNameTaken(UUID categoryId, String name, UUID exceptId) {
-        return jdbc.sql("""
-                        SELECT count(*) FROM retail_expense_items
-                         WHERE category_id = ? AND lower(name) = lower(?) AND (CAST(? AS uuid) IS NULL OR id <> ?)
-                        """)
+        return jdbc.sql("SELECT count(*) FROM retail_expense_items WHERE category_id = ? AND " + SPACED_NAME
+                                + " = lower(?) AND (CAST(? AS uuid) IS NULL OR id <> ?)")
                         .params(categoryId, name, exceptId, exceptId)
                         .query(Long.class)
                         .single()

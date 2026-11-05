@@ -19,7 +19,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The report {@code core.sms_usage} (issue #215, FR-NTF-07, FR-NTF-15, chapter 14 section 14.6): its tables equal the
- * hand-computed totals of a fabricated September 2026, months are Kampala months, only messages handed to the provider
+ * hand-computed totals of a fabricated September 2026, months are calendar months in the business's time zone, only messages handed to the provider
  * count, the provider's segments win over ours, a cost in another currency is not added, another business's messages
  * never appear, and the report is offered only to a business with SMS on or SMS history. Every figure is fabricated
  * test data, not a price.
@@ -170,6 +170,29 @@ class SmsUsageReportIT extends ReportsItSupport {
                 .containsExactly(
                         "[\"September 2026\",\"Savings deposit receipt\",1,1,0,1,999,0]",
                         "[\"Total\",null,1,1,0,1,999,0]");
+    }
+
+    /**
+     * Issue #808: the months are the business's own time zone (its profile), not Kampala's. A business in Africa/Lagos
+     * (UTC+1): 22:30 UTC on 30 September is still September there (October in Kampala), and 22:30 UTC on 31 August is
+     * still August there (September in Kampala). No cost is recorded on these rows. JUSTIFICATION-A3: a new case.
+     */
+    @Test
+    void theMonthsAreTheBusinesssOwnTimeZoneNotKampalas() throws Exception {
+        TestDatabase.Fixture lagos = tenant(true);
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET timezone = 'Africa/Lagos' WHERE id = ?")
+                .param(lagos.tenantId())
+                .update();
+        message(lagos, "savings.deposit", "delivered", "2026-09-30T22:30:00Z", 1, 1, null, null);
+        message(lagos, "savings.deposit", "delivered", "2026-08-31T22:30:00Z", 1, 1, null, null);
+
+        JsonNode file = file(lagos, UUID.randomUUID(), RANGE);
+
+        assertThat(rows(file, "usage"))
+                .anyMatch(r -> r.startsWith("[\"September 2026\",\"Savings deposit receipt\",1,1,0,1,"))
+                .noneMatch(r -> r.contains("October 2026"))
+                .noneMatch(r -> r.contains("August 2026"));
     }
 
     @Test
