@@ -15,6 +15,10 @@ sales staff routes, banking, withdrawals, deliveries in Buy stock, Move stock, u
 long as a sale does (8 seconds), with the time to save on a cheap phone on 3G measured. No migration. Edits of a saved entry
 (PR #832) and approval answers stay online only.
 
+Amended by issue #844 (5 Nov 2026, the lead's decision 9 on the third review of #839): decision 14 below. A sale or daily
+entry sent online is written to the outbox at save, before its request goes, so an app closed or killed during the 8 second
+wait still has it on the phone. No migration.
+
 ## Context
 
 A shop on a slow or dropped mobile connection could not ring up a sale: the sale screen searched items on the server and
@@ -42,7 +46,7 @@ left, the branch, the period, the person's roles.
    `customer_id` or `buyer_name`.
    Price lists are not cached: a seller may not read them (`retail.pricelist.manage`), so an offline sale is priced at the
    retail price or the pack price on the device, or a price typed under the rules of decision 11.
-3. **The outbox.** A sale saved offline, or whose answer was lost, is added to the outbox store (never written over: a second
+3. **The outbox.** A sale saved offline, or sent online (written at save, decision 14), is added to the outbox store (never written over: a second
    add under the same client sale id leaves the first as it is) with its whole request, a
    `client_sale_id` (a UUID made when the draft starts), an `Idempotency-Key`, `occurred_at` (the device time of Save),
    `prices_as_of`, the person, the branch and a provisional receipt number (`OFF-` and the first 8 characters of the client
@@ -271,6 +275,32 @@ left, the branch, the period, the person's roles.
     says plainly that it needs the internet and keeps nothing on the phone. (h) **Toasts** (#824): one when an entry is kept
     on the phone, one when it is sent. (i) Other people's entries left on a shared phone wait for them to sign in again; the
     managers' list of waiting sales (decision 9) stays a list of sales.
+14. **Kept on the phone at save (issue #844).** Sell (a cash, mobile money or bank sale) and every daily form of decision 13,
+    when online, write their outbox item to IndexedDB at save, before the online request goes, under the same id,
+    `Idempotency-Key` and body that decisions 12 and 13(c) would keep after a lost answer (so nothing is ever re-keyed, and the
+    shared-phone replay rule of #853, issue #852, is kept as it is: a replay answers only the person who stored the key, and
+    the outbox never offers Fix with a new key for its own entry). "In flight from the form" is two things. In memory, the
+    sync engine of the tab whose form saved it lists the item as held by a form: that engine never sends it, however late
+    the form's answer comes (a tab frozen in the background), and it is not counted as waiting, so the dot never says
+    "1 waiting" during a normal online save. Sign-out still asks first while any item is on the phone, one a form is
+    waiting on too (the lead on the review of #859): signing out ends that wait, and the item is then the outbox's; sign-out
+    never deletes the outbox. Every engine reads an item again just before it sends it and leaves it when a form holds it
+    or has taken it off meanwhile. On the item, `formUntil` (the form's own wait of 8 seconds
+    and 5 seconds more) keeps another tab's engine from sending it before then; a `formUntil` further ahead than 13 seconds
+    (the phone's clock moved back) is not believed, and a read of the outbox clears it, as it clears one that has passed;
+    one still within its time stays, since another tab's form may be waiting on it. While it holds, the sale is not in the summary of other people's sales
+    sent for the managers (decision 9) either, since its request may still be on its way. An app killed during the wait holds nothing in memory any more: on the
+    next start the item counts as waiting at once, so sign-out asks first (decision 9), and it is sent once, under its key,
+    when `formUntil` has passed. Since no engine sends an item a form holds, none is refused and reported for a manager
+    (decision 8) while the form waits. Then: a 2xx takes the item off the phone (the form shows the sale or entry saved, as
+    before); a refusal shows in the form as today and takes the item off the phone, as does a 401 or a session that ended
+    before an answer came; but an item another tab's engine has tried meanwhile (its `attempts` above 0, or no longer
+    queued) is left to the engines, which hold that try's answer. No answer within the wait, or a dropped connection, ends
+    the hold and leaves the item to the sync engine at once, and the form shows it saved on the phone, as before. A phone
+    that cannot write the item at save (a full disk), or an entry that cannot be made for the phone, is still sent online,
+    and kept after a lost answer as before. A form whose item is on the phone already (Try again after a reload) leaves that
+    item as it is, under its own key. The bound: a tab frozen past its 13 seconds while a second tab of the app is open lets
+    that second tab send the item; the key keeps it one record, and a refusal there is reported as any refused sale is.
 
 ## Consequences
 

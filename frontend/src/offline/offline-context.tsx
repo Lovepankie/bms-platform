@@ -7,7 +7,7 @@ import { REFRESH_EVERY_MS, refreshCatalogue, type CatalogueSource } from './cata
 import { browserConnectivity, type Connectivity } from './connectivity';
 import { sayDone } from '../areas/staff/retail/toast';
 import { sentWords } from './entries';
-import { waiting, type OutboxItem } from './outbox';
+import { formMayHold, waiting, type OutboxItem } from './outbox';
 import { accessOf, followConnectivity, forgetInMemory, keepReads, keptUnderOlderForm, restore, usable, type ReadKeeper } from './read-cache';
 import { deviceStore, scopeOf, type Catalogue, type OfflineStore } from './store';
 import { SyncEngine, browserTabLock, type SyncDeps, type SyncSnapshot } from './sync-engine';
@@ -22,9 +22,10 @@ export interface WaitingSummary {
 }
 
 /** The sales other people left waiting on this phone for this business, from every item on the device. */
-export function othersOnPhone(all: OutboxItem[], host: string, scope: string): OutboxItem[] {
-  // Sales only: the managers' list is of sales, by client sale id (an entry waits for its maker, issue #812).
-  return waiting(all.filter((i) => !i.entry && i.scope !== scope && i.scope.startsWith(`${host}|`)));
+export function othersOnPhone(all: OutboxItem[], host: string, scope: string, now: number = Date.now()): OutboxItem[] {
+  // Sales only: the managers' list is of sales, by client sale id (an entry waits for its maker, issue #812). A sale whose
+  // form's request may still be on its way is not told to the managers yet (issue #844).
+  return waiting(all.filter((i) => !i.entry && i.scope !== scope && i.scope.startsWith(`${host}|`) && !formMayHold(i, now)));
 }
 
 /** The short summary of each, for POST /retail/offline-waiting. */
@@ -421,6 +422,8 @@ export function requestPersistence(): void {
 
 /** The number of sales waiting on this device for the signed-in person (queued and failed). */
 export function waitingNow(offline: Offline | null): number {
+  // Sign-out asks first while any item is on the phone, one a form is still waiting on too (the lead on the review of #859):
+  // signing out ends that form's wait, and the item is then the outbox's.
   return offline ? waiting(offline.engine.snapshot().items).length : 0;
 }
 

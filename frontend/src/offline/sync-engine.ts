@@ -1,5 +1,7 @@
-import { applyOutcome, classify, classifyEntry, expired, inOrder, markDiscarded, nextToSend, requeue, type OutboxItem, type SendOutcome } from './outbox';
+import { FORM_SLACK_MS, applyOutcome, formMayHold, classify, classifyEntry, dueAt, expired, inOrder, markDiscarded, nextToSend, requeue, type OutboxItem, type SendOutcome } from './outbox';
 import type { OfflineStore } from './store';
+
+export { FORM_SLACK_MS };
 
 // Sends the outbox (issue #458, ADR-067 decisions 4, 5 and 8): one sale at a time, oldest first, never two requests in
 // flight; a failure of the network or the server backs off and keeps the order; an expired session is refreshed once and
@@ -91,6 +93,8 @@ export interface SyncSnapshot {
   syncing: boolean;
   /** The session expired and could not be refreshed: nothing is sent until the person signs in again. */
   needsSignIn: boolean;
+  /** The items a form of this tab is still waiting on (issue #844): never sent from here, and not counted as waiting. */
+  formHeld?: string[];
 }
 
 export class SyncEngine {
@@ -107,7 +111,9 @@ export class SyncEngine {
   /** The held items went back in the queue for this sign-in of their maker; again only after another person was seen. */
   private released = false;
   private readonly listeners = new Set<() => void>();
-  private snap: SyncSnapshot = { items: [], syncing: false, needsSignIn: false };
+  private snap: SyncSnapshot = { items: [], syncing: false, needsSignIn: false, formHeld: [] };
+  /** The items a form of this tab wrote at save and still waits on (issue #844), known only in memory, so never stale. */
+  private readonly formHeld = new Set<string>();
 
   constructor(private readonly deps: SyncDeps) {}
 
@@ -119,7 +125,7 @@ export class SyncEngine {
   };
 
   private emit(): void {
-    this.snap = { items: inOrder(this.items), syncing: this.syncing, needsSignIn: this.needsSignIn };
+    this.snap = { items: inOrder(this.items), syncing: this.syncing, needsSignIn: this.needsSignIn, formHeld: [...this.formHeld] };
     this.listeners.forEach((l) => l());
   }
 
@@ -129,6 +135,13 @@ export class SyncEngine {
     const all = await this.deps.store.outbox(this.deps.scope);
     for (const old of all.filter((i) => expired(i, now))) await this.deps.store.deleteItem(old.id);
     this.items = all.filter((i) => !expired(i, now));
+    // Issue #844: a form's hold that has passed, or is further ahead than any form holds (the clock moved back), is stale
+    // and goes. One still within its time stays: another tab's form may be waiting on it.
+    for (const stale of this.items.filter((i) => i.formUntil !== undefined && !this.formHeld.has(i.id) && !formMayHold(i, now))) {
+      const cleared = { ...stale, formUntil: undefined };
+      await this.deps.store.putItem(cleared);
+      this.items = this.items.map((i) => (i.id === stale.id ? cleared : i));
+    }
     this.emit();
   }
 
@@ -148,17 +161,60 @@ export class SyncEngine {
    * Puts a sale in the outbox; it is written to the device before this resolves. It is added, never written over: a sale
    * already queued under its client sale id (a second tap, another tab) stays as it is.
    */
-  async queue(item: OutboxItem): Promise<void> {
+  async queue(item: OutboxItem): Promise<boolean> {
     if (item.scope !== this.deps.scope) throw new Error('an outbox item belongs to its own person');
     try {
       await this.deps.store.addItem(item);
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'ConstraintError')) throw e;
       await this.load();
-      return;
+      return false;
     }
     this.items = [...this.items.filter((i) => i.id !== item.id), item];
     this.emit();
+    return true;
+  }
+
+  /**
+   * Issue #844: the form keeps its item on the phone at save, before its own request goes, marked in flight from the form
+   * for `waitMs` and a little more. True when it was added (false: one under its id was there already, and stays).
+   */
+  async hold(item: OutboxItem, waitMs: number): Promise<boolean> {
+    // Held in memory first, so the item never shows as waiting, even for the moment between its write and this.
+    const before = this.formHeld.has(item.id);
+    this.formHeld.add(item.id);
+    let added = false;
+    try {
+      added = await this.queue({ ...item, formUntil: this.deps.now() + waitMs + FORM_SLACK_MS });
+      return added;
+    } finally {
+      if (!added && !before) {
+        this.formHeld.delete(item.id);
+        this.emit();
+      }
+    }
+  }
+
+  /**
+   * The server answered the form (a 2xx, or a refusal the form shows): its item is taken off the phone, but only while no
+   * engine has tried it. One another tab sent meanwhile (the form's tab frozen past its hold) is left to the engines, which
+   * hold its answer: taking it off then could lose a sale sent or a refusal kept.
+   */
+  async formAnswered(id: string): Promise<void> {
+    this.formHeld.delete(id);
+    const now = (await this.deps.store.outbox(this.deps.scope)).find((i) => i.id === id);
+    if (now && now.state === 'queued' && now.attempts === 0) return this.drop(id);
+    this.items = [...this.items.filter((i) => i.id !== id), ...(now ? [now] : [])];
+    this.emit();
+  }
+
+  /** The form got no answer: its item is left to the engine, as one kept on the phone, under the same key. */
+  async formUnanswered(id: string): Promise<void> {
+    this.formHeld.delete(id);
+    // Read from the device, as another tab may have written it since.
+    const item = (await this.deps.store.outbox(this.deps.scope)).find((i) => i.id === id);
+    if (item?.formUntil !== undefined) await this.save({ ...item, formUntil: undefined });
+    else this.emit();
   }
 
   /** A new access token arrived (a sign-in or a refresh): sending may go on, at once, and a held item may be its maker's to send. */
@@ -243,8 +299,16 @@ export class SyncEngine {
       for (;;) {
         if (this.needsSignIn || this.elsewhere) return;
         await this.releaseHeld();
-        const item = nextToSend(this.items, this.deps.now());
+        // An item a form of this tab still waits on never goes from here, however late the form's answer is (issue #844).
+        const item = nextToSend(this.items.filter((i) => !this.formHeld.has(i.id)), this.deps.now());
         if (!item) break;
+        // Read again just before it goes: a form (of this tab or another) may hold it or have taken it off meanwhile.
+        const fresh = (await this.deps.store.outbox(this.deps.scope)).find((i) => i.id === item.id);
+        if (!fresh || this.formHeld.has(item.id) || formMayHold(fresh, this.deps.now()) || (fresh.state !== 'queued' && fresh.state !== 'sending')) {
+          this.items = [...this.items.filter((i) => i.id !== item.id), ...(fresh ? [fresh] : [])];
+          this.emit();
+          continue;
+        }
         this.syncing = true;
         this.emit();
         const outcome = await this.attempt(item);
@@ -357,9 +421,10 @@ export class SyncEngine {
     this.cancelTimer?.();
     this.cancelTimer = null;
     if (this.needsSignIn || this.elsewhere) return;
-    const head = inOrder(this.items).find((i) => i.state === 'queued' || i.state === 'sending');
+    // An item a form holds wakes nothing: the form gives it to the engine when it is done with it.
+    const head = inOrder(this.items).find((i) => (i.state === 'queued' || i.state === 'sending') && !this.formHeld.has(i.id));
     if (!head) return;
-    const wait = Math.max(head.nextAttemptAt - this.deps.now(), 0);
+    const wait = Math.max(dueAt(head, this.deps.now()) - this.deps.now(), 0);
     this.cancelTimer = this.deps.later(() => void this.sync(), wait);
   }
 

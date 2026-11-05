@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '../api/retail';
 import { SALE_ANSWER_MS } from './connectivity';
-import type { OutboxItem } from './outbox';
+import { waiting, type OutboxItem } from './outbox';
 
 /** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
 const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
@@ -50,7 +50,8 @@ vi.mock('../api/retail', async (original) => {
 const { mockMe } = await import('../api/retail-mock');
 const { StaffContext } = await import('../areas/staff/context');
 const { RecordSale } = await import('../areas/staff/retail/sale');
-const { OfflineProvider } = await import('./offline-context');
+const { OfflineProvider, othersOnPhone, waitingNow } = await import('./offline-context');
+const { SyncStatus } = await import('./sync-status');
 const { testOffline } = await import('./test-kit');
 const { setAccessToken } = await import('../auth/session');
 const { RetailError } = await import('../api/retail');
@@ -514,6 +515,108 @@ describe('Record a sale offline', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // JUSTIFICATION-A3: the three tests issue #844 asks for, not a mechanism.
+  it('keeps the sale on the phone before the request goes, and a normal online save leaves nothing waiting (issue #844)', async () => {
+    listProducts.mockResolvedValue([bulb]);
+    const send = vi.fn();
+    const offline = testOffline(seller, { online: true, catalogue, deps: { send } });
+    if (!offline) throw new Error('a seller sells offline');
+    let onPhone: OutboxItem[] = [];
+    let answer = (_: unknown) => {};
+    createSale.mockImplementation(async (_body: unknown, key: string) => {
+      onPhone = await offline.store.outbox(offline.scope);
+      expect(onPhone.map((i) => i.id)).toEqual([key]);
+      return new Promise((resolve) => (answer = resolve));
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me: seller, branch }}>
+          <OfflineProvider value={offline}>
+            <SyncStatus />
+            <RecordSale />
+          </OfflineProvider>
+        </StaffContext.Provider>
+      </QueryClientProvider>,
+    );
+    await addBulbAndRecord();
+    await waitFor(() => expect(createSale).toHaveBeenCalledTimes(1));
+    // In flight from the form: the sync engine leaves it alone and the dot never says it waits.
+    await act(() => offline.engine.syncNow());
+    expect(send).not.toHaveBeenCalled();
+    expect(onPhone[0]?.formUntil).toBeGreaterThan(Date.now());
+    expect(waiting(offline.engine.snapshot().items, offline.engine.snapshot().formHeld)).toEqual([]);
+    // Sign-out still asks first: the sale is on the phone (the lead on the review of #859).
+    expect(waitingNow(offline)).toBe(1);
+    expect(screen.queryByText(/\d+ waiting/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /waiting to sync/ })).toBeNull();
+    expect(othersOnPhone(await offline.store.allOutbox(), 'test.example', 'test.example|someone-else')).toEqual([]);
+
+    await act(async () => answer({ id: 'sale-1', sale_no: 'RS00000081', total_minor: 5000 }));
+    await waitFor(() => expect(offline.engine.snapshot().items).toEqual([]));
+    expect(await offline.store.outbox(offline.scope)).toEqual([]);
+    expect(screen.queryByText(/\d+ waiting/)).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('takes the sale back off the phone when the server refuses it online, and shows the refusal (issue #844)', async () => {
+    listProducts.mockResolvedValue([bulb]);
+    const send = vi.fn();
+    const report = vi.fn();
+    const offline = testOffline(seller, { online: true, catalogue, deps: { send, report } });
+    if (!offline) throw new Error('a seller sells offline');
+    createSale.mockRejectedValue(new RetailError('This branch is closed for sales.', 422, 'branch_closed'));
+    screenWith(offline);
+    await addBulbAndRecord();
+    expect(await screen.findByText(/This branch is closed for sales./)).toBeTruthy();
+    await waitFor(async () => expect(await offline.store.outbox(offline.scope)).toEqual([]));
+    await act(() => offline.engine.syncNow());
+    expect(offline.engine.snapshot().items).toEqual([]);
+    expect(send).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('leaves the sale on the phone when the app is killed during the wait, and the next start sends it once (issue #844)', async () => {
+    listProducts.mockResolvedValue([bulb]);
+    const offline = testOffline(seller, { online: true, catalogue });
+    if (!offline) throw new Error('a seller sells offline');
+    createSale.mockImplementation(() => new Promise(() => {}));
+    screenWith(offline);
+    await addBulbAndRecord();
+    await waitFor(() => expect(createSale).toHaveBeenCalledTimes(1));
+    const [, key] = createSale.mock.calls[0] as [unknown, string];
+    // The app is killed: the screen goes with no answer.
+    cleanup();
+    // JUSTIFICATION-A3: the restart-within-the-wait test the review of #859 asks for (item 7), not a mechanism.
+    // Started again within the wait: the sale shows as waiting at once (so sign-out would ask first), and is not sent yet.
+    const early = vi.fn();
+    const soon = testOffline(seller, { store: offline.store, online: true, deps: { send: early } });
+    if (!soon) throw new Error('a seller sells offline');
+    await soon.engine.load();
+    await soon.engine.sync();
+    expect(early).not.toHaveBeenCalled();
+    expect(waitingNow(soon)).toBe(1);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OfflineProvider value={soon}>
+          <SyncStatus />
+        </OfflineProvider>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('button', { name: /1 waiting to sync/ })).toBeTruthy();
+    cleanup();
+    // The next start after the wait, its own engine on the same phone.
+    const send = vi.fn(async (i: OutboxItem) => ({ status: 201, body: { id: 'sale-1', sale_no: 'RS00000082', key: i.key } }));
+    const next = testOffline(seller, { store: offline.store, online: true, deps: { send, now: () => Date.now() + SALE_ANSWER_MS + 60_000 } });
+    if (!next) throw new Error('a seller sells offline');
+    await next.engine.load();
+    await next.engine.sync();
+    await next.engine.sync();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ id: key, key, request: { client_sale_id: key, recorded_offline: true } });
+    expect(next.engine.snapshot().items[0]).toMatchObject({ id: key, state: 'sent', sale: { saleNo: 'RS00000082' } });
   });
 
   it('keeps a sale whose answer was lost before a reload with the same client sale id and a new key', async () => {

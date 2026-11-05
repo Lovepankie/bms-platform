@@ -53,7 +53,7 @@ export function SyncStatus() {
   const outbox = useOutbox();
   const sheet = useRef<HTMLDialogElement>(null);
   if (!offline) return null;
-  const list = waiting(outbox.items);
+  const list = waiting(outbox.items, outbox.formHeld);
   const failed = failedCount(outbox.items);
   const state = dotState(online, outbox.syncing);
   const words = statusWords(state, list.length, failed);
@@ -107,7 +107,7 @@ export function OthersWaitingNote() {
 function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }) {
   const offline = useOffline();
   const outbox = useOutbox();
-  const list = waiting(outbox.items);
+  const list = waiting(outbox.items, outbox.formHeld);
   const gone = discarded(outbox.items);
   const sent = sentEntries(outbox.items);
   if (!offline) return null;

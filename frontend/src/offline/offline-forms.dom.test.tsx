@@ -4,7 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '../api/retail';
-import type { OutboxItem } from './outbox';
+import { ENTRY_ANSWER_MS } from './connectivity';
+import { waiting, type OutboxItem } from './outbox';
+import { memoryStore } from './store';
 
 // The daily forms with no network (issue #812, ADR-067 decision 13): an expense, savings, banking, a withdrawal, a delivery
 // (Buy stock), a stock move and usage or damage are each kept on the phone with their form's key while offline, the form
@@ -35,7 +37,7 @@ vi.mock('../api/retail', async (original) => {
   };
 });
 
-const { businessToday } = await import('../api/retail');
+const { businessToday, RetailError } = await import('../api/retail');
 const { mockMe } = await import('../api/retail-mock');
 const { StaffContext } = await import('../areas/staff/context');
 const { ExpenseForm } = await import('../areas/staff/retail/expenses');
@@ -117,6 +119,8 @@ const FORMS = [
     kind: 'banking', save: 'Save banking', path: '/api/v1/retail/bankings',
     seed: () => seed(`banking:${uid}:${branch}`, 'k-banking', { date: today, amount: '30000', reference: 'Test slip 1' }),
     form: () => <BankingForm branchId={branch} />,
+    // Online the form waits for the cash expected before it saves.
+    prime: (client: QueryClient) => client.setQueryData(['retail', 'banking-expected', branch, today], { business_date: today, cash_expected_minor: 30000, banked_so_far_minor: 0 }),
     dateField: 'business_date',
   },
   {
@@ -324,6 +328,81 @@ describe('a daily form with no network', () => {
     expect(screen.getByText('Not recorded: Check the amount.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Fix' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Discard' })).toBeTruthy();
+  });
+
+  // JUSTIFICATION-A3: the three tests issue #844 asks for, for every daily form, not a mechanism.
+  it.each(FORMS)('online, keeps the $kind on the phone before its request goes and leaves nothing waiting once answered (issue #844)', async (f) => {
+    f.seed();
+    const send = vi.fn();
+    const offline = testOffline(admin, { online: true, deps: { send } });
+    if (!offline) throw new Error('an administrator keeps entries');
+    let onPhone: OutboxItem[] = [];
+    online.mockImplementation(async () => {
+      onPhone = await offline.store.outbox(offline.scope);
+      // In flight from the form: the sync engine sends nothing and nothing is counted as waiting.
+      await offline.engine.syncNow();
+      expect(waiting(offline.engine.snapshot().items, offline.engine.snapshot().formHeld)).toEqual([]);
+      return { id: 'rec-1' };
+    });
+    mount(f.form(), offline, 'prime' in f ? f.prime : undefined);
+    fireEvent.click(screen.getAllByRole('button', { name: f.save }).find((b) => b.getAttribute('type') === 'submit') as HTMLButtonElement);
+    await waitFor(() => expect(online).toHaveBeenCalledTimes(1));
+    await waitFor(async () => expect(await offline.store.outbox(offline.scope)).toEqual([]));
+    expect(onPhone.map((i) => [i.key, i.entry?.kind])).toEqual([[`k-${f.kind}`, f.kind]]);
+    expect(onPhone[0]?.formUntil).toBeGreaterThan(Date.now());
+    expect(offline.engine.snapshot().items).toEqual([]);
+    expect(send).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('kept-on-phone')).toBeNull();
+  });
+
+  it.each(FORMS)('online, takes the $kind back off the phone when the server refuses it (issue #844)', async (f) => {
+    f.seed();
+    const send = vi.fn();
+    const offline = testOffline(admin, { online: true, deps: { send } });
+    if (!offline) throw new Error('an administrator keeps entries');
+    online.mockRejectedValue(new RetailError('Test refusal: the amount is not allowed.', 422, 'validation_failed'));
+    mount(f.form(), offline, 'prime' in f ? f.prime : undefined);
+    fireEvent.click(screen.getAllByRole('button', { name: f.save }).find((b) => b.getAttribute('type') === 'submit') as HTMLButtonElement);
+    expect(await screen.findByText(/Test refusal: the amount is not allowed./)).toBeTruthy();
+    await waitFor(async () => expect(await offline.store.outbox(offline.scope)).toEqual([]));
+    await act(() => offline.engine.syncNow());
+    expect(send).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('kept-on-phone')).toBeNull();
+  });
+
+  it.each(FORMS)('leaves the $kind on the phone when the app is killed during the wait, and the next start sends it once (issue #844)', async (f) => {
+    f.seed();
+    const offline = testOffline(admin, { online: true });
+    if (!offline) throw new Error('an administrator keeps entries');
+    online.mockImplementation(() => new Promise(() => {}));
+    mount(f.form(), offline, 'prime' in f ? f.prime : undefined);
+    fireEvent.click(screen.getAllByRole('button', { name: f.save }).find((b) => b.getAttribute('type') === 'submit') as HTMLButtonElement);
+    await waitFor(() => expect(online).toHaveBeenCalledTimes(1));
+    cleanup();
+    const api = server();
+    const next = testOffline(admin, { store: offline.store, online: true, deps: { send: api.send, now: () => Date.now() + ENTRY_ANSWER_MS + 60_000 } });
+    await next?.engine.load();
+    await next?.engine.sync();
+    await next?.engine.sync();
+    expect(api.sends.map((s) => [s.key, s.entry?.kind, s.entry?.lost])).toEqual([[`k-${f.kind}`, f.kind, true]]);
+    expect(next?.engine.snapshot().items[0]?.state).toBe('sent');
+  });
+
+  it('still sends an entry online when the phone cannot write it at save, and keeps it after no answer (issue #844)', async () => {
+    seed(`withdrawal:${uid}:${branch}`, 'k-full', { date: today, amount: '10000', purpose: 'Test float' });
+    const store = memoryStore();
+    const add = store.addItem;
+    let fails = 1;
+    store.addItem = (item) => (fails-- > 0 ? Promise.reject(new DOMException('The phone is full.', 'QuotaExceededError')) : add(item));
+    const offline = testOffline(admin, { online: true, store });
+    if (!offline) throw new Error('an administrator keeps entries');
+    const { markDropped } = await import('../api/client');
+    online.mockImplementation(() => Promise.reject(markDropped(new TypeError('Failed to fetch'))));
+    mount(<WithdrawalForm branchId={branch} />, offline);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save withdrawal' })[0] as HTMLButtonElement);
+    await screen.findByTestId('kept-on-phone');
+    expect(online).toHaveBeenCalledTimes(1);
+    expect((await store.outbox(offline.scope)).map((i) => [i.key, i.entry?.lost, i.formUntil])).toEqual([['k-full', true, undefined]]);
   });
 
   it('keeps an entry whose answer was lost online under the same key and body, so the server records it once', async () => {

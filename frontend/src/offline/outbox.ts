@@ -1,4 +1,5 @@
 import type { SalePayment, SaleRequest } from '../api/retail';
+import { SALE_ANSWER_MS } from './connectivity';
 
 // The outbox of sales made offline (issue #458, ADR-067): what one queued sale holds, the order they go in, the backoff
 // between tries, and how an answer from the server changes an item. Pure, so the sync engine and the tests share it.
@@ -77,6 +78,13 @@ export interface OutboxItem {
   sentAt?: number;
   /** When the phone learnt that a manager discarded it (epoch ms). */
   discardedAt?: number;
+  /**
+   * In flight from the form (issue #844): the form wrote the item at save and its own request waits for an answer until
+   * about this time (epoch ms), so no engine, of this tab or another, sends it before then. The form that holds it is known
+   * only in memory (the engine's own list): a form that got no answer clears this at once, and an app killed during the
+   * wait leaves it to pass, so the next start counts the item as waiting and sends it once this time is over.
+   */
+  formUntil?: number;
 }
 
 /** 5 s, 15 s, 1 min, 5 min, then every 15 min (ADR-067 decision 4). */
@@ -113,12 +121,36 @@ export function inOrder(items: OutboxItem[]): OutboxItem[] {
  */
 export function nextToSend(items: OutboxItem[], now: number): OutboxItem | undefined {
   const head = inOrder(items).find((i) => i.state === 'queued' || i.state === 'sending');
-  return head && head.nextAttemptAt <= now ? head : undefined;
+  return head && dueAt(head, now) <= now ? head : undefined;
 }
 
-/** What waits to sync: queued, failed and held items (a failed one waits for a manager or another try, a held one for its maker). */
-export function waiting(items: OutboxItem[]): OutboxItem[] {
-  return inOrder(items).filter((i) => i.state !== 'sent' && i.state !== 'discarded');
+/** How long past the form's own wait an item stays the form's (issue #844): the time the form takes to settle it. */
+export const FORM_SLACK_MS = 5_000;
+
+/** The longest a form ever holds an item (issue #844): the 8 second wait of a sale or an entry, and the slack. */
+export const FORM_HOLD_MAX_MS = SALE_ANSWER_MS + FORM_SLACK_MS;
+
+/**
+ * When an item may go: its backoff, and not before its form's hold ends (issue #844). A hold further ahead than any form
+ * ever holds (the phone's clock was moved back since) is not believed, so an item is never kept from sending for hours.
+ */
+export function dueAt(item: OutboxItem, now: number): number {
+  return formMayHold(item, now) ? Math.max(item.nextAttemptAt, item.formUntil ?? 0) : item.nextAttemptAt;
+}
+
+/** A form's request for it may still be on its way (issue #844): its hold has not passed, and is no further ahead than any form holds. */
+export function formMayHold(item: OutboxItem, now: number): boolean {
+  const until = item.formUntil ?? 0;
+  return until > now && until - now <= FORM_HOLD_MAX_MS;
+}
+
+/**
+ * What waits to sync: queued, failed and held items (a failed one waits for a manager or another try, a held one for its
+ * maker). An item a form of this app is still waiting on (`formHeld`, the engine's own list, issue #844) is not, so a
+ * normal online save never shows "1 waiting"; one left by an app that was killed is, at once, whatever its `formUntil`.
+ */
+export function waiting(items: OutboxItem[], formHeld: readonly string[] = []): OutboxItem[] {
+  return inOrder(items).filter((i) => i.state !== 'sent' && i.state !== 'discarded' && !formHeld.includes(i.id));
 }
 
 /** The items a manager discarded, shown as such until they go after a day. */

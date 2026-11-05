@@ -294,21 +294,34 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   const save = useMutation({
     meta: { success: (r: { sale: Sale } | { kept: OutboxItem }) => (r && 'kept' in r ? 'Sale saved on this phone' : r?.sale?.total_minor !== undefined ? `Sale of ${money(r.sale.total_minor)} saved` : 'Sale saved') },
     mutationFn: async ({ body, at, pricesAt }: { body: SaleRequest; at: string; pricesAt?: string }): Promise<{ sale: Sale } | { kept: OutboxItem }> => {
-      const asked = retail.createSale(body, key);
-      if (!offline || !mayKeepOnPhone({ body })) return { sale: await asked };
+      if (!offline || !mayKeepOnPhone({ body })) return { sale: await retail.createSale(body, key) };
+      // Priced online from the items as they were read (`pricesAt`), never from Save's time or the copy on the phone; absent
+      // when not known, and the server then holds each price to today's.
+      const item = offlineSale({ draft: shown, clientSaleId: key, sent: { body, at }, key, scope: offline.scope, branchName, pricesAsOf: pricesAt, now: new Date() });
+      // Issue #844: the sale is on the phone before its request goes, in flight from this form, so the sync engine leaves it
+      // alone, the dot does not count it, and a phone that dies during the wait sends it on its next start. A phone that
+      // cannot write it now still sends it online.
+      const held = await offline.engine.hold(item, SALE_ANSWER_MS).catch(() => false);
+      const answered = () => (held ? offline.engine.formAnswered(item.id).catch(() => undefined) : Promise.resolve());
       try {
-        return { sale: await answerWithin(asked, SALE_ANSWER_MS) };
+        const sale = await answerWithin(retail.createSale(body, key), SALE_ANSWER_MS);
+        await answered();
+        return { sale };
       } catch (e) {
-        // Only no answer in time or a network failure (fetch's TypeError); a 401 or any refusal is a RetailError and stays here.
+        // Only no answer in time or a network failure (fetch's TypeError); a 401 or any refusal is a RetailError and stays here,
+        // shown in the form as today, and the sale is taken off the phone.
         // A write is never refreshed and sent again inside the client (only reads are), so the race is the sale request alone.
-        if (!(e instanceof NoAnswer || e instanceof TypeError)) throw e;
+        if (!(e instanceof NoAnswer || e instanceof TypeError)) {
+          await answered();
+          throw e;
+        }
         // With no session left (a refused refresh, a sign-out) the sale is never kept as saved: the person is told to sign in.
         // The request may still have been recorded, so the form stays locked (`sent` kept) and Try again sends the same sale.
-        if (!getAccessToken()) throw new Error(`${retailMessage({ code: 'unauthenticated' }, 401)} Then tap Try again: the same sale is sent, never twice.`);
-        // Priced online from the items as they were read (`pricesAt`), never from Save's time or the copy on the phone; absent
-        // when not known, and the server then holds each price to today's.
-        const item = offlineSale({ draft: shown, clientSaleId: key, sent: { body, at }, key, scope: offline.scope, branchName, pricesAsOf: pricesAt, now: new Date() });
-        await offline.engine.queue(item);
+        if (!getAccessToken()) {
+          await answered();
+          throw new Error(`${retailMessage({ code: 'unauthenticated' }, 401)} Then tap Try again: the same sale is sent, never twice.`);
+        }
+        await (held ? offline.engine.formUnanswered(item.id) : offline.engine.queue(item));
         return { kept: item };
       }
     },

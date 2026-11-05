@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GIVE_UP_AFTER_MS, KEEP_SENT_MS, MAX_SERVER_TRIES, provisionalNumber, type OutboxItem } from './outbox';
+import { GIVE_UP_AFTER_MS, KEEP_SENT_MS, MAX_SERVER_TRIES, provisionalNumber, waiting, type OutboxItem } from './outbox';
 import { memoryStore } from './store';
-import { SyncEngine, type Answer, type Decision, type SyncDeps } from './sync-engine';
+import { FORM_SLACK_MS, SyncEngine, type Answer, type Decision, type SyncDeps } from './sync-engine';
 
 // The sync engine (issue #458, ADR-067 decisions 4, 5 and 8; NFR-OFF-07): one at a time, oldest first, backoff, a refusal
 // kept and reported, an expired session that stops it, a manager's decision followed, and never two sends of one sale at
@@ -439,5 +439,120 @@ describe('the sync engine', () => {
   it("never sends another person's outbox", async () => {
     const { engine } = setup(async (i) => ok(i));
     await expect(engine.queue(item('a', 1, { scope: 'test.example|someone-else' }))).rejects.toThrow();
+  });
+});
+
+// JUSTIFICATION-A3: issue #844 asks for these tests of the new hold; they need their own setup.
+describe('an item kept at save, in flight from its form (issue #844)', () => {
+  it('is never sent, reported or counted as waiting while the form waits, and goes once when the form gets no answer', async () => {
+    const { engine, sent, deps } = setup(async () => ({ status: 422, body: { code: 'branch_closed', detail: 'Closed.' } }));
+    // JUSTIFICATION-A3: the tests the review of #859 asks for (items 1, 2 and 7), not a mechanism.
+    const counted = () => waiting(engine.snapshot().items, engine.snapshot().formHeld).map((i) => i.id);
+    expect(await engine.hold(item('a', 1), 8_000)).toBe(true);
+    await engine.syncNow();
+    expect(sent).toEqual([]);
+    expect(counted()).toEqual([]);
+    // The form's tab was frozen past the hold (the seller switched app): still the form's, never sent or reported from here.
+    deps.now = () => 1_000_000 + 60_000;
+    await engine.syncNow();
+    expect(sent).toEqual([]);
+    expect(deps.report).not.toHaveBeenCalled();
+    expect(counted()).toEqual([]);
+    await engine.formUnanswered('a');
+    expect(counted()).toEqual(['a']);
+    expect(engine.snapshot().items[0]?.formUntil).toBeUndefined();
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a']);
+  });
+
+  it('leaves an item on the phone as it is when a form holds it already (Try again after a reload)', async () => {
+    const { engine, store } = setup(async (i) => ok(i));
+    await engine.queue(item('a', 1));
+    expect(await engine.hold(item('a', 1, { key: 'key-other' }), 8_000)).toBe(false);
+    expect(engine.snapshot().formHeld).toEqual([]);
+    expect((await store.outbox(SCOPE)).map((i) => [i.key, i.formUntil])).toEqual([['key-a', undefined]]);
+  });
+
+  it("leaves to the engines an item another tab sent while the form's tab was frozen past its hold", async () => {
+    const tab = setup(async (i) => ok(i));
+    await tab.engine.hold(item('a', 1), 8_000);
+    // A second tab of the app on the same phone, its clock past the hold: it sends the item under its key.
+    const other = new SyncEngine({ ...tab.deps, now: () => tab.now() + 60_000 });
+    await other.load();
+    await other.sync();
+    expect(tab.sent).toEqual(['a:key-a']);
+    // The frozen form gets its answer at last: the item the other tab sent stays, with the server's number.
+    await tab.engine.formAnswered('a');
+    expect((await tab.store.outbox(SCOPE)).map((i) => [i.id, i.state, i.sale?.saleNo])).toEqual([['a', 'sent', 'RS-a']]);
+    expect(tab.engine.snapshot().items.map((i) => i.state)).toEqual(['sent']);
+  });
+
+  it('does not believe a hold further ahead than any form holds, as after the clock was moved back, and clears it on load', async () => {
+    const { engine, store, sent } = setup(async (i) => ok(i));
+    await store.addItem(item('a', 1, { formUntil: 1_000_000 + 3 * 60 * 60 * 1000 }));
+    await store.addItem(item('b', 2, { formUntil: 1_000_000 - 1 }));
+    await store.addItem(item('c', 3, { formUntil: 1_000_000 + 5_000 }));
+    await engine.load();
+    // A passed or impossible hold is stale and goes; one within its time stays, as another tab's form may wait on it.
+    expect((await store.outbox(SCOPE)).map((i) => [i.id, i.formUntil])).toEqual([['a', undefined], ['b', undefined], ['c', 1_005_000]]);
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a', 'b:key-b']);
+  });
+
+  it('reads an item again just before it goes, and leaves it when a form holds it or took it off meanwhile', async () => {
+    const { engine, store, sent } = setup(async (i) => ok(i));
+    await engine.queue(item('b', 1));
+    await engine.queue(item('a', 2));
+    // Another tab's form took b off, and holds a, since this engine read the outbox.
+    await store.deleteItem('b');
+    await store.putItem(item('a', 2, { formUntil: 1_000_000 + 8_000 }));
+    await engine.sync();
+    expect(sent).toEqual([]);
+    expect(engine.snapshot().items.map((i) => [i.id, i.formUntil])).toEqual([['a', 1_008_000]]);
+  });
+
+  it('is taken off the phone when the form gets its answer, a 2xx or a refusal', async () => {
+    const { engine, store, sent } = setup(async (i) => ok(i));
+    await engine.hold(item('a', 1), 8_000);
+    await engine.hold(item('b', 2), 8_000);
+    await engine.formAnswered('a');
+    await engine.formAnswered('b');
+    await engine.sync();
+    expect(sent).toEqual([]);
+    expect(await store.outbox(SCOPE)).toEqual([]);
+    expect(engine.snapshot().items).toEqual([]);
+  });
+
+  it('stays on the phone when the app is killed during the wait, and the next start sends it once', async () => {
+    const first = setup(async (i) => ok(i));
+    await first.engine.hold(item('a', 1), 8_000);
+    // The app is killed: no answer, no release. A new start on the same phone, its own engine on the same store.
+    let now = first.now();
+    const woken: number[] = [];
+    const sent: string[] = [];
+    const next = new SyncEngine({
+      ...first.deps,
+      send: async (i) => {
+        sent.push(`${i.id}:${i.key}`);
+        return ok(i);
+      },
+      now: () => now,
+      later: (_fn, ms) => {
+        woken.push(ms);
+        return () => {};
+      },
+    });
+    await next.load();
+    await next.sync();
+    // Started within the wait: counted as waiting at once (no form holds it now, so sign-out asks first), not sent yet, and
+    // woken when the form's time is over.
+    expect(waiting(next.snapshot().items, next.snapshot().formHeld).map((i) => i.id)).toEqual(['a']);
+    expect(sent).toEqual([]);
+    expect(woken.at(-1)).toBe(8_000 + FORM_SLACK_MS);
+    now += 8_000 + FORM_SLACK_MS;
+    await next.sync();
+    await next.sync();
+    expect(sent).toEqual(['a:key-a']);
+    expect(next.snapshot().items[0]).toMatchObject({ id: 'a', key: 'key-a', state: 'sent' });
   });
 });
