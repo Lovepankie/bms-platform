@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AdvisorSettings } from '../../api/advisor';
 import type { Me } from '../../api/client';
 import type { InsightsPortfolio, InsightsRevenue } from '../../api/insights';
+import type { MerchantAccount } from '../../api/payments';
 import { mockMe } from '../../api/retail-mock';
 import { router as appRouter } from '../../app/router';
 import { StaffContext } from './context';
@@ -28,6 +29,7 @@ vi.mock('../../api/lending', async (original) => {
 const { StaffHome } = await import('./home');
 const { AssistantCaps } = await import('./assistant/page');
 const { PortfolioView, RevenueView } = await import('./insights/page');
+const { CredentialsForm } = await import('./payments/page');
 
 afterEach(cleanup);
 
@@ -65,6 +67,15 @@ describe('rule 3 on the screens of #798', () => {
     expect(brand()).toHaveLength(0);
     cleanup();
     show(<AssistantCaps saved={settings(true)} busy={false} error={null} onSave={() => undefined} />);
+    expect(brand()).toHaveLength(1);
+  });
+
+  it('keeps Save the key and secret plain while a saved key waits for its test', () => {
+    const account = (status: string, saved: boolean) => ({ status, credentials_saved: saved, key_hint: saved ? 'AB12' : null, last_checked_at: null, failure_reason: null, host_ready: true }) as unknown as MerchantAccount;
+    show(<CredentialsForm account={account('unverified', true)} busy={false} error={null} onSave={() => undefined} />);
+    expect(brand()).toHaveLength(0);
+    cleanup();
+    show(<CredentialsForm account={account('unverified', false)} busy={false} error={null} onSave={() => undefined} />);
     expect(brand()).toHaveLength(1);
   });
 

@@ -97,6 +97,9 @@ describe('recording an existing loan', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check' }));
     await screen.findByText(warning);
     expect(screen.getByRole('button', { name: 'Record and send for approval' })).toBeTruthy();
+    // One brand button once checked (issue #798): Record is the primary, Check a plain button.
+    expect(screen.getByRole('button', { name: 'Record and send for approval' }).className).toContain('rt-primary');
+    expect(screen.getByRole('button', { name: 'Check' }).className).not.toContain('rt-primary');
   });
 
   it('checks first, shows the true position from the real date, then records it once with an Idempotency-Key', async () => {
@@ -196,7 +199,11 @@ describe('importing existing loans from a file', () => {
     expect(screen.getByRole('link', { name: 'Download the template' }).getAttribute('href')).toMatch(/^data:text\/csv/);
     type('Or paste the rows here', `${header}\nloan,REG-001,M000201,LOAN1,1000000,2026-01-15,3,,,,,,\nrepayment,REG-001,,,,,,,,2026-02-15,400000,cash,\n`);
     fireEvent.click(screen.getByRole('button', { name: 'Check the file' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Record 1 loans and send them for approval' }));
+    const record = await screen.findByRole('button', { name: 'Record 1 loans and send them for approval' });
+    // One brand button once there is something to record (issue #798).
+    expect(document.querySelectorAll('.rt-primary')).toHaveLength(1);
+    expect(record.className).toContain('rt-primary');
+    fireEvent.click(record);
     await screen.findByText(/Recorded 1 loans and skipped 0 already in/);
     await waitFor(() => expect(importCsv).toHaveBeenLastCalledWith(expect.any(String), false, expect.any(String)));
     expect(importCsv).toHaveBeenCalledTimes(2);
