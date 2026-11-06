@@ -11,7 +11,8 @@ import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 import { CreditNoteView } from './credit-note';
-import { ToStock } from './analytics-ui';
+import { ToItems, ToStock } from './analytics-ui';
+import { ProductsPage } from './catalogue-products';
 import { AllSales, CreditSales } from './sales';
 import { SaleLink } from './screen-link';
 import { StockPage } from './stock';
@@ -49,6 +50,21 @@ function show(ui: ReactElement, url: string, opts: { me?: Me; branch?: string; c
   );
   return router;
 }
+
+describe('a category opens its items (#798)', () => {
+  const LIGHTING = '00000000-0000-4000-8000-0000000c0002';
+
+  it('links a category name to Items with the category in the address', () => {
+    show(<ToItems category={LIGHTING}>Lighting</ToItems>, '/staff');
+    expect(screen.getByRole('link', { name: 'Lighting' }).getAttribute('href')).toBe(`/staff/retail/catalogue/products?category=${LIGHTING}`);
+  });
+
+  it('opens Items on that category and leaves the address', async () => {
+    const router = show(<ProductsPage />, `/staff/retail/catalogue/products?category=${LIGHTING}`);
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Lighting/, pressed: true })).toBeTruthy());
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
+  });
+});
 
 describe('a sale number opens that sale (#336)', () => {
   it('links to All sales with the sale in the address', () => {

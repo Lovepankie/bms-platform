@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -20,7 +20,7 @@ import { planVariants, variantKey, variantLabel } from '../../../api/retail-vari
 import { unitWord } from './units-state';
 import { ItemPhoto, PhotoChoice, PhotoEditor, sendNewPhoto, shownPhoto } from './item-photo';
 import { ItemAddedNext, NextSteps } from './next-steps';
-import { ScreenLink } from './screen-link';
+import { ScreenLink, useAddress } from './screen-link';
 import { UNITS, canUse, capabilityOn, holds, holdsAt } from './permissions';
 import { NewItemPackages, UsualLevel, answeredPieces, forSmallest, newPackageRow, packErrorOf, packageAsUnit, oneOf, packsToSend, piecePriceOf, rowPieces, rowProblem, withPackages, type PackageRow, type UsualAnswer } from './new-item-packs';
 import { StockMinimumEditor } from './stock-minimum';
@@ -552,6 +552,14 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
   const [activeFilter, setActiveFilter] = useState<'active' | 'off' | 'all'>('active');
   const categories = useQuery({ queryKey: ['retail', 'catalogue', 'categories'], queryFn: () => retail.listCategories() });
   const [categoryId, setCategoryId, chipReady] = useChosenChip('items', categories.data, categories.isError);
+  // Issue #798: `?category=<id>` chooses that category's chip once, then leaves the address, so a category elsewhere opens its items.
+  const { search: asked, go } = useAddress();
+  const fromAddress = typeof asked.category === 'string' ? asked.category : '';
+  useEffect(() => {
+    if (fromAddress === '') return;
+    setCategoryId(fromAddress);
+    go('/staff/retail/catalogue/products', {}, true);
+  }, [fromAddress, setCategoryId, go]);
   const active = activeFilter === 'all' ? undefined : activeFilter === 'active';
   const page = useInfiniteQuery({
     queryKey: ['retail', 'catalogue', 'products', query, categoryId, activeFilter, stockAt],
@@ -569,7 +577,7 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
     : listed;
   const canPrice = (me.permissions ?? []).includes(PRICE);
   const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query !== '', pending: page.isPlaceholderData });
-  const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<><ScreenLink screen="stock" to="/staff/retail/stock" label={`See the stock of ${p.description}`}>Stock</ScreenLink> <ItemPageLink productId={p.id} name={p.description} /></>} />;
+  const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<><ScreenLink screen="stock" to="/staff/retail/stock" search={p.id ? { item: p.id } : undefined} label={`See the stock of ${p.description}`}>Stock</ScreenLink> <ItemPageLink productId={p.id} name={p.description} /></>} />;
   const chosenName = (categories.data ?? []).find((c) => c.id === categoryId)?.name;
   const sizes = (
     <>

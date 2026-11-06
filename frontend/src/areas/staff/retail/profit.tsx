@@ -5,7 +5,7 @@ import { businessToday, daysBefore, retail, type DailyProfit, type DailyProfitRo
 import { showDate, showPercent, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
 import { KeyFigure, KeyFigureRow } from '../../../app/ui/KeyFigure';
-import { ToSales, ToStock } from './analytics-ui';
+import { ToItems, ToSales, ToStock } from './analytics-ui';
 import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { needsOf } from './permissions';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
@@ -73,7 +73,7 @@ function SummaryRows({ label, rows, withCost }: { label: string; rows: { key: st
       <tbody>
         {rows.map(({ key, name, sums }) => (
           <tr key={key}>
-            <td>{label === 'Branch' ? <ToStock branch={key}>{name}</ToStock> : name}</td>
+            <td>{label === 'Branch' ? <ToStock branch={key}>{name}</ToStock> : label === 'Category' ? <ToItems category={key}>{name}</ToItems> : name}</td>
             {withCost && <td className="num">{sums.cost !== undefined ? money(sums.cost) : ''}</td>}
             <td className="num">{money(sums.sales ?? 0)}</td>
             {withCost && <td className="num">{sums.profit !== undefined ? money(sums.profit) : ''}</td>}

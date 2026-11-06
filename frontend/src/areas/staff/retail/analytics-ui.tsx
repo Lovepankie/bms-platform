@@ -22,6 +22,13 @@ export function ToStock({ children, item, branch }: { children: ReactNode; /** O
   return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/stock" search={search as never}>{children}</Link> : <>{children}</>;
 }
 
+/** A category name that opens the Items page on that category (issue #798), for a session that may open Items; plain text otherwise. */
+export function ToItems({ children, category }: { children: ReactNode; category: string | undefined }) {
+  const staff = useContext(StaffContext);
+  const router = useRouter({ warn: false });
+  return router && staff && category && canUse(staff.me, 'products') ? <Link className="figure-link" to="/staff/retail/catalogue/products" search={{ category } as never}>{children}</Link> : <>{children}</>;
+}
+
 /** A total that opens the All sales page (or Credit sales with `credit`), for a session that may read sales; plain text otherwise (issue #336). */
 export function ToSales({ children, credit = false }: { children: ReactNode; credit?: boolean }) {
   const staff = useContext(StaffContext);
