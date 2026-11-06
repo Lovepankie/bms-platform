@@ -3435,6 +3435,241 @@
           }
         }
       },
+      "ImportAskCustomerRequest" : {
+        "properties" : {
+          "ask_customer" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "ask_customer", "version" ]
+      },
+      "ImportBulkResolveOutcome" : {
+        "properties" : {
+          "bulk_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "resolved" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows_validated" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportBulkResolveRequest" : {
+        "properties" : {
+          "batch_id" : {
+            "description" : "One batch of the run, or every batch",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "maxLength" : 60,
+            "minLength" : 2,
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "resolution" : {
+            "description" : "edit_value, exclude_row, accept_suggestion, override or ask_customer",
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 32767,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "resolution" ]
+      },
+      "ImportIssue" : {
+        "description" : "One issue of the review queue; its message never holds a value of a row",
+        "properties" : {
+          "ask_customer" : {
+            "type" : "boolean"
+          },
+          "batch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "field" : {
+            "description" : "The template's field, or null for the whole row",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line" : {
+            "description" : "The line of the file",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "resolution" : {
+            "description" : "The kind of the resolution that resolved it",
+            "type" : "string"
+          },
+          "resolution_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "row_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "severity" : {
+            "description" : "info, warning or blocking",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "open or resolved",
+            "type" : "string"
+          },
+          "suggestion" : {
+            "additionalProperties" : {
+              "description" : "The engine's suggestion, never personal: {\"value\": \"1501\"}, or {\"review\": \"as_uploaded\"} for a row that changed",
+              "type" : "object"
+            },
+            "description" : "The engine's suggestion, never personal: {\"value\": \"1501\"}, or {\"review\": \"as_uploaded\"} for a row that changed",
+            "type" : "object"
+          },
+          "version" : {
+            "description" : "Name it when resolving; another resolver's version is version_conflict",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportIssuePage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportIssue"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportQuestion" : {
+        "description" : "One question for the customer, without any value of a row",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "file" : {
+            "type" : "string"
+          },
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "number" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportQuestionList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportQuestion"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ImportResolveOutcome" : {
+        "properties" : {
+          "issues" : {
+            "description" : "The issues of the row as they now are",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportIssue"
+            },
+            "type" : "array"
+          },
+          "mapping_version" : {
+            "description" : "The mapping version a map_value made",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "resolution" : {
+            "type" : "string"
+          },
+          "resolution_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rows_validated" : {
+            "description" : "Rows validated again",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportResolveRequest" : {
+        "properties" : {
+          "link_member_id" : {
+            "description" : "link_member: a record the business holds",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "link_row_id" : {
+            "description" : "link_row: another row of the run",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "Required for override and exclude_row",
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "resolution" : {
+            "description" : "edit_value, exclude_row, accept_suggestion, link_row, link_member, override or map_value",
+            "type" : "string"
+          },
+          "value" : {
+            "description" : "edit_value: the text in place of the cell (empty leaves the field empty); map_value: the value the cell stands for",
+            "maxLength" : 32767,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The issue's version as read",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "resolution", "version" ]
+      },
       "ImportSmsOptOutsRequest" : {
         "properties" : {
           "dry_run" : {
@@ -28727,6 +28962,248 @@
         },
         "summary" : "Whether the setup helper can read a list, a photo or a file for this business",
         "tags" : [ "help" ]
+      }
+    },
+    "/api/v1/imports/issues/{issue_id}/ask-customer" : {
+      "put" : {
+        "operationId" : "askCustomerAboutImportIssue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "issue_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportAskCustomerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportIssue"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark an issue as a question for the customer, or no longer one",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/issues/{issue_id}/resolve" : {
+      "post" : {
+        "operationId" : "resolveImportIssue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "issue_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportResolveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportResolveOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resolve one issue: edit, leave the row out, accept the suggestion, link, override a warning or map the value (FR-IMP-05)",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/issues" : {
+      "get" : {
+        "operationId" : "listImportIssues",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "code",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "batch_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "ask_customer",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportIssuePage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The review queue of an import run, in commit order, open issues by default (FR-IMP-05)",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/issues/bulk-resolve" : {
+      "post" : {
+        "operationId" : "bulkResolveImportIssues",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportBulkResolveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportBulkResolveOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resolve every open issue of one code in the run, or in one of its files, the same way (FR-IMP-05)",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/questions" : {
+      "get" : {
+        "operationId" : "listImportQuestions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportQuestionList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The numbered questions for the customer, with file and line and no value of a row",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/questions.csv" : {
+      "get" : {
+        "operationId" : "exportImportQuestions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The same questions as a CSV file to send to the customer; audited",
+        "tags" : [ "imports" ]
       }
     },
     "/api/v1/ledger/payment-methods" : {

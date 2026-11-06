@@ -11,6 +11,7 @@ import com.rincoltech.bms.core.imports.ImportTemplates;
 import com.rincoltech.bms.kernel.NationalIds;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -101,8 +102,22 @@ final class RowValidator {
     /** A cell as read: its value (text, number, boolean or JSON) and the reader's type of it. */
     record RawCell(Object value, String type) {}
 
-    /** One staged row: its id, its line in the source and its kept cells by header name. */
-    record SourceRow(UUID rowId, int line, Map<String, RawCell> cells) {}
+    /**
+     * One staged row: its id, its line in the source, its kept cells by header name, and the review's edits in force by
+     * field (issue #131): the text an operator gave a field in place of its cell, or null to leave it empty. The cells are
+     * never changed; an edit is read in place of its field's cell, and the row's {@code source_ref} is always made from the
+     * cells as stored.
+     */
+    record SourceRow(UUID rowId, int line, Map<String, RawCell> cells, Map<String, String> edits) {
+
+        SourceRow {
+            edits = edits == null ? Map.of() : Collections.unmodifiableMap(new HashMap<>(edits));
+        }
+
+        SourceRow(UUID rowId, int line, Map<String, RawCell> cells) {
+            this(rowId, line, cells, Map.of());
+        }
+    }
 
     /**
      * One issue: its code, the code's severity, the field (null for the whole row), the message, and the original cell text
@@ -401,7 +416,9 @@ final class RowValidator {
         Typed t = new Typed();
         for (Field f : p.set.fields()) {
             String column = p.columnOf.get(f.name());
-            String text = text(column == null ? null : cells.get(column));
+            String text = row.edits().containsKey(f.name())
+                    ? edited(row.edits().get(f.name()))
+                    : text(column == null ? null : cells.get(column));
             if (text == null) {
                 if (f.required()) {
                     t.add("REQUIRED_MISSING", f.name(), Map.of(), null);
@@ -628,6 +645,63 @@ final class RowValidator {
                         .append('\u001e'));
         return "row:" + p.sourceKey + ":" + line + ":"
                 + sha256(canonical.toString()).substring(0, 16);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // What the review queue needs (issue #131). JUSTIFICATION-A3: three engine answers the queue needs, beside the
+    // engine.
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * The row's identity across validations and uploads: its reference without the content hash. With the rule
+     * {@code column}, the reference itself ({@code col:<source>:<value>}); with {@code row_hash}, or a reference column left
+     * empty, the source and the line ({@code row:<source>:<line>}). Made from the cells as stored, never from an edit.
+     */
+    String rowKey(BatchInput batch, SourceRow row) {
+        Plan p = plan(batch);
+        Map<String, RawCell> cells = new HashMap<>();
+        new TreeMap<>(row.cells()).forEach((header, cell) -> cells.putIfAbsent(Parsing.key(header), cell));
+        return rowKeyOf(sourceRef(p, cells, row.line(), new Typed()), p.sourceKey, row.line());
+    }
+
+    /** The same from a row's stored {@code source_ref}, its batch's source and its line. */
+    static String rowKeyOf(String sourceRef, String source, int line) {
+        return sourceRef != null && sourceRef.startsWith("col:") ? sourceRef : "row:" + source + ":" + line;
+    }
+
+    /** {@code ROW_CHANGED_SINCE_REVIEW} on a row whose cells changed since it was resolved (spec section 10.1). */
+    Finding rowChanged(BatchInput batch, int line) {
+        return render(batch.file(), line, new Pending("ROW_CHANGED_SINCE_REVIEW", null, Map.of(), null));
+    }
+
+    /**
+     * The value the engine proposes for a finding, or null: a fraction of a shilling rounded to whole shillings, a quantity
+     * rounded to three places, both half up (chapter 13 section 13.7, {@code AMOUNT_NOT_INTEGER}). Only for a field that is
+     * not personal, so a suggestion never holds a personal value.
+     */
+    String suggestion(BatchInput batch, Finding f) {
+        if (f.field() == null || f.original() == null) {
+            return null;
+        }
+        Field field = plan(batch).set.fields().stream()
+                .filter(x -> x.name().equals(f.field()))
+                .findFirst()
+                .orElse(null);
+        BigDecimal d = field == null || field.isPersonal() ? null : decimal(f.original());
+        if (d == null) {
+            return null;
+        }
+        return switch (f.code()) {
+            case "MONEY_FRACTION" -> d.setScale(0, RoundingMode.HALF_UP).toPlainString();
+            case "QTY_PRECISION" ->
+                d.setScale(3, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+            default -> null;
+        };
+    }
+
+    /** An edit's text as a cell's: blank is empty. */
+    private static String edited(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 
     // ---------------------------------------------------------------------------------------------

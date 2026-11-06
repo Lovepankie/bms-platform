@@ -108,8 +108,11 @@ All tenant-owned, RLS as chapter 6 section 6.3.
 | `field` | `text` | Target field, or NULL for row-level issues. |
 | `message` | `varchar(500) NOT NULL` | Plain language from the code's template with field, file and line; never a personal value (13.7, #130). |
 | `original_value` | `jsonb` | The cell text the issue concerns; shown only to a holder of `core.imports.view_raw`. |
-| `suggested_value` | `jsonb` | Only when a rule in this chapter produces one; not built yet (#131 holds suggestions with the resolutions). |
+| `suggested_value` | `jsonb` | As built (V141, #131): `{"value": ...}` for a rounded amount or quantity the engine proposes, `{"review": "as_uploaded"}` on `ROW_CHANGED_SINCE_REVIEW`; never a personal value. The rules of 13.6 add theirs with their template. |
 | `status` | `text NOT NULL` | [`open`, `resolved`] (`info` issues are created `resolved`). |
+| `version` | `integer NOT NULL DEFAULT 1` | As built (V141): a resolution names it; a second resolver of the same version gets `version_conflict`. An issue found again on its row with the same code and field keeps its id with the next version. |
+| `ask_customer` | `boolean NOT NULL DEFAULT false` | As built (V141): a question for the customer (spec section 3.5). |
+| `resolution_id` | `uuid` | As built (V141): the resolution that resolved it. |
 
 As built (V140), `import_rows` carries `normalised` and `source_ref`, written by the validation, and not yet `row_class`,
 `status`, `excluded_reason`, `linked_row_id`, `member_key` or the created ids, which come with the steps that need them.
@@ -120,6 +123,13 @@ As built (V140), `import_rows` carries `normalised` and `source_ref`, written by
 [`accept_suggestion`, `edit_value`, `override`, `exclude_row`, `link_row`, `link_member`,
 `reclassify`], `value jsonb`, `note text`, `resolved_by uuid NOT NULL`. `override` is
 allowed for warnings only and requires a note.
+
+As built (V141, #131, section 13.14.1 5/16): `value` is `before_value` and `after_value`; the row also carries `seq`, `run_id`,
+`batch_id`, `row_key` and `raw_sha256` (the row it was made on, so it is found again after a new validation or upload),
+`source_row_no`, `code`, `field` and `bulk_id`; `issue_id` has no foreign key, since a validation replaces a batch's issues;
+the kinds are those above without `reclassify` (which comes with the row classes of 13.5) and with `map_value` and
+`ask_customer`; `exclude_row` requires a note too. `import_rows` gains `excluded_by`, `linked_row_id` and `linked_member_id`
+in place of the planned `status`, `excluded_reason` and `linked_row_id`.
 
 ## 13.5 Row classification
 
@@ -939,7 +949,8 @@ operator's tooling calls the services, as it calls the upload and the commit.
   message is cut to the 500 its column holds. Section 13.7 sets the rules of the catalogue; the golden run proves them.
 - **Not in this step.** The row rules a mapping switches on (the sub-header rows, totals row and placeholder rows of
   section 13.5) are not applied yet: a totals row is checked as a data row. `ROW_CHANGED_SINCE_REVIEW` (#131) and
-  `CHANGED_SINCE_IMPORT` (#133) are pending the steps that hold a row's reviewed and imported content.
+  `CHANGED_SINCE_IMPORT` (#133) are pending the steps that hold a row's reviewed and imported content (the first is produced
+  since 5/16, below).
 - **Proven by** `ImportCatalogueTest` (the golden files of `fixtures/imports/golden/` give exactly `expected-issues.txt`;
   the same rows give identical issues, originals and values; every normaliser change is an `info` with its original;
   every code of the catalogue is produced by a fixture row, by the named test of its stage, or is pending or retired; the
@@ -954,3 +965,80 @@ operator's tooling calls the services, as it calls the upload and the commit.
   the guard; and, in `ImportCatalogueTest`, each code of another stage is asserted in its named test method, two long file
   names fit a message, ambiguous commas are refused and a rule's personal parameter is refused), `RlsIsolationIT` (forced RLS on `import_issues`),
   `MigrationOrderIT` (V140 keeps every staged row) and `ModularityTest`.
+
+**5/16, the review queue (#131, migration `V141`, FR-IMP-05, spec section 3.5).** `core.imports` gains the public API
+`ImportReview` and the first routes of the pipeline, under `/imports` (chapter 7 section 7.11.9), all with
+`core.imports.manage` and on the business of the host only. The queue works for every template; the rules below are the
+template's catalogue and severities, nothing per template.
+
+- **The resolutions.** `edit_value` (the text in place of the field's cell; the row is validated again with it), `exclude_row`
+  (a reason required; the row stays in the batch and in the report, every open issue of it resolved and the row marked
+  `excluded_by`), `accept_suggestion` (the engine's suggestion: for now a fraction of a shilling rounded half up to whole
+  shillings for `MONEY_FRACTION` and a quantity rounded half up to three places for `QTY_PRECISION`, never on a personal field;
+  accepted as an edit), `link_row` (to another parsed row of the run; `linked_row_id`), `link_member` (to a record the
+  business holds, which the template confirms through the new SPI `ImportTemplate.recordExists`, false by default, so no
+  template links yet; `linked_member_id`), `override` (a warning only, with a note: 422 `override_not_allowed` on a blocking
+  issue, as 13.7 says) and the new `map_value`. Each is checked against its issue (422 `resolution_not_available` for an
+  edit of a row-level issue, `no_suggestion`, `link_target_unknown`), and one issue open (409 `issue_not_open`). Bulk per code
+  (`/imports/runs/{run_id}/issues/bulk-resolve`): every open issue of one code in the run, or in one batch of it, with
+  `edit_value`, `exclude_row`, `accept_suggestion`, `override` or `ask_customer`, one resolution row each under one
+  `bulk_id`, refused as a whole when one issue refuses.
+- **The trail.** Every resolution is one append-only `import_issue_resolutions` row (who, when, the kind, `before_value`,
+  `after_value`, the note) and one audit row `core.import_issue.resolved` (the spec's `imports.*`, written `core.import_*` in
+  this module since #127) that names the run, batch, line, code, field, kind and resolution and never a value or the note. The
+  value before and after an edit may be personal: it is kept only in the resolution row, which follows the retention of
+  `import_rows` (the quarantine; the generic purge of a closed business; its hash only after #139). An issue on an edited
+  field keeps no `original_value`, since its text is the operator's, and its message never holds it.
+- **`map_value`.** On an issue of a field that is not personal (422 `field_is_personal`: a mapping never holds a cell of a
+  customer's records, spec section 4.2) with cell text (422 `nothing_to_map`): the text becomes a label of the field's value
+  map (its enum map for an enum) in a new version of the batch's mapping, saved through `ImportMappings.save` (validated,
+  audited `core.import_mapping.saved`, append-only as #129), which must be the newest version of its name (409
+  `mapping_not_latest`). A label the mapping already maps to another value, in any spelling the parse compares alike, is 409
+  `label_already_mapped`, never replaced. Every parsed batch of the run read with the old version records the new one, and exactly the rows of
+  that source whose field reads the label, as stored or as edited, are validated again. The resolution records both versions,
+  the label and the value.
+- **Concurrency.** A change takes the run `FOR UPDATE` (as a validation's write does) and then the issue `FOR UPDATE`, and
+  names the issue's `version`: another resolver's version is 409 `version_conflict`, and so is an issue a resolution was made on
+  and an edit or a validation has since replaced. A validation that meets a resolution made after its first pass writes
+  nothing (409 `review_changed`).
+- **Applied by the validation.** A resolution applies to a row while its cells are those it was made on: it is found again by
+  `row_key` (the row's reference without the content hash: `col:<source>:<value>` for a reference column, `row:<source>:<line>`
+  for `row_hash`) and `raw_sha256` (the SHA-256 of the cells as stored), with its code and field, among every resolution of the
+  run. So it carries across a new validation, a new parse and a new upload of the file into the run (the old batch cancelled).
+  A line repeated verbatim has its twin's identity and cells, so a resolution also records its `occurrence`, the n-th row of
+  that identity and those cells in the run's order (batch, then line), and `copies`, how many there were: a decision on
+  one copy never reaches another, and a link names the exact copy it points at (review of #868). A new upload that holds
+  another number of such copies is never matched by guess: the old decision applies to none of them and each comes back
+  as `ROW_CHANGED_SINCE_REVIEW` (Lead ruling on #868). The copies are counted before pass 1 (the rows are then read once
+  more, only when the run has a resolution). A row left out is not indexed by pass 1, so it is no other row's duplicate
+  and no reference reaches it.
+  Both passes read the edits in force in place of their fields' cells, so duplicates and references see them; an issue is
+  resolved by the resolution in force for its code and field, or by the row's exclusion; `ask_customer` is kept the same way.
+  A row whose identity had a deciding resolution on other cells and none on its own cells gets `ROW_CHANGED_SINCE_REVIEW`
+  (blocking, first on its row, suggestion `{"review": "as_uploaded"}`) and its old resolutions no longer apply, so it comes
+  back to the queue; accepting the suggestion reviews it as it now is. With `row_hash`, a row moved to another line is a
+  changed row. A partial validation (one row for an edit, the rows a map reaches) reads the whole run in pass 1 and writes
+  only its rows; an edit that changes another row's duplicate or reference is seen by the next full validation.
+- **Ordinals per row.** An issue's `ordinal` counts within its row (`UNIQUE (batch_id, source_row_no, ordinal)`), so the
+  order of a batch (line, then the engine's order) is unchanged and one row's issues are written again alone.
+- **Questions for the customer.** `PUT /imports/issues/{issue_id}/ask-customer` marks an issue (an `ask_customer` resolution
+  row, which decides nothing about the row); `GET /imports/runs/{run_id}/questions` and `.../questions.csv` give the open
+  ones, numbered in batch then line order, with file (cut to 100 characters), line, field, code and message, never a cell's
+  value or a note; the CSV, the file sent to the customer, is audited `core.import_run.questions_exported` with the count.
+  A resolution is made only on an issue of a parsed batch (409 `batch_not_parsed`, `batch_committed`), and a bulk resolution
+  that names a batch not of its run is 404.
+- **Not in this step.** `reclassify` and the row classes of 13.5; the raw values and the resolution history for a holder of
+  `core.imports.view_raw` (the permission is not catalogued yet) come with the operator screens of #141.
+- **Proven by** `ImportReviewIT` (every kind writes one resolution row with who, when, before, after and note and one audit
+  row without a value or a note, and nothing personal reaches a message, an original, an audit row or a log line; the trail
+  is append-only for every role; a full validation keeps every decision; a bulk resolution writes one row each and a blocking
+  code is never overridden; an override of a blocking issue and one without a note are refused; `map_value` makes mapping
+  version 2, moves the run's batches to it and validates exactly the one row it reaches, every other issue keeping its id,
+  version and status; two resolvers at once, the second gets `version_conflict`, and so does a second edit of an issue an
+  edit replaced; after a new upload a changed row comes back with `ROW_CHANGED_SINCE_REVIEW` and an unchanged one keeps its
+  exclusion; of three lines repeated verbatim, an exclusion, an override or an edit of the second reaches neither other copy
+  through a full validation, and a new upload with two copies sends both back as changed; the questions, as JSON and CSV, are numbered with file and line and hold no personal value; another business
+  reaches none of the routes; an unknown property is refused), `ImportCatalogueTest` (`ROW_CHANGED_SINCE_REVIEW` leaves the
+  pending list, produced by `ImportReviewIT#aChangedRowComesBackToTheQueueAndAnUnchangedRowKeepsItsResolution`),
+  `RlsIsolationIT` (forced RLS and append-only on `import_issue_resolutions`), `MigrationOrderIT` (V141 keeps every issue),
+  `PermissionMatrixIT` and `RoutePermissionIT` (each route refuses a caller without `core.imports.manage`).

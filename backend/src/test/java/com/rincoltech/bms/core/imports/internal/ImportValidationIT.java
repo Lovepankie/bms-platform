@@ -126,10 +126,10 @@ class ImportValidationIT extends IntegrationTest {
                         """).param(runId).query(String.class).list());
         out.addAll(
                 TestDatabase.owner().sql("""
-                        SELECT b.seq || '|' || i.ordinal || '|' || i.code || '|' || coalesce(i.original_value::text, '-')
-                               || '|' || i.status
+                        SELECT b.seq || '|' || i.source_row_no || '|' || i.ordinal || '|' || i.code || '|'
+                               || coalesce(i.original_value::text, '-') || '|' || i.status
                           FROM import_issues i JOIN import_batches b ON b.id = i.batch_id
-                         WHERE b.run_id = ? ORDER BY b.seq, i.ordinal
+                         WHERE b.run_id = ? ORDER BY b.seq, i.source_row_no, i.ordinal
                         """).param(runId).query(String.class).list());
         return out;
     }

@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /**
@@ -255,6 +256,16 @@ public interface ImportTemplate {
      */
     default Set<String> existingKeys(String entitySet, Set<String> keys) {
         return Set.of();
+    }
+
+    /**
+     * Whether the business holds the record of one entity set with this id (issue #131): the target of the review's
+     * {@code link_member}, which links a staged row to a record the business already has instead of creating one. Called
+     * inside the resolution's transaction, bound to the business. None by default, so a template that does not answer
+     * refuses every link to a record.
+     */
+    default boolean recordExists(String entitySet, UUID id) {
+        return false;
     }
 
     /**

@@ -37,8 +37,11 @@ public interface ImportValidation {
     List<Issue> issues(UUID batchId);
 
     /**
-     * One issue as anyone with {@code core.imports.manage} may read it: its code, severity, field, line and message. The
-     * original value is not here; it is shown only in the review screen to a holder of {@code core.imports.view_raw}.
+     * One issue as anyone with {@code core.imports.manage} may read it: its code, severity, field, line and message, and
+     * since #131 its review: the version a resolution must name, whether it is a question for the customer, the value the
+     * engine suggests (never a personal one: a rounded amount or quantity, or {@code {"review": "as_uploaded"}} for a row
+     * that changed), and the resolution that resolved it with its kind. The original value is not here; it is shown only in
+     * the review screen to a holder of {@code core.imports.view_raw}.
      */
     record Issue(
             UUID id,
@@ -49,7 +52,12 @@ public interface ImportValidation {
             String severity,
             String field,
             String message,
-            String status) {}
+            String status,
+            int version,
+            boolean askCustomer,
+            Map<String, Object> suggestion,
+            UUID resolutionId,
+            String resolution) {}
 
     /** What one batch's validation found: rows read, and issues by severity and by code, each sorted by name. */
     record BatchReport(UUID batchId, int seq, int rows, Map<String, Integer> bySeverity, Map<String, Integer> byCode) {

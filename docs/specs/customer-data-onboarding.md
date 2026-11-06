@@ -200,6 +200,10 @@ Every resolution is an append-only `import_issue_resolutions` row with who, when
 and note, and is listed in the reconciliation. Questions for the customer are a filter of the
 queue (issues tagged `ask_customer`), exported as a numbered list without personal values.
 
+Built in #131 (SDD chapter 13 section 13.14.1, 5/16; routes in chapter 7 section 7.11.9): every kind above, bulk per code,
+optimistic versions on issues (`version_conflict`), the resolutions carried to the identical rows of a new upload and
+`ROW_CHANGED_SINCE_REVIEW` on a changed one, and the question list as JSON and CSV. `reclassify` comes with the row classes.
+
 ### 3.6 Preview and dry run
 
 The preview computes what commit will create: records by type, rows by outcome per batch, and the

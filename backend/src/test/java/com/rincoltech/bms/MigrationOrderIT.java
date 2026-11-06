@@ -3443,6 +3443,90 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V141 (issue #131) is expand only: an issue stored before it keeps its code and message and reads as version 1, not a
+     * question and not resolved by a resolution; its row reads as neither excluded nor linked; the new resolution table is
+     * under forced row-level security and append-only; and the application role may change only the review columns of an
+     * issue and a row, never its code, message or cells. JUSTIFICATION-A3: a new test case; no existing case covers V141.
+     */
+    @Test
+    void importReviewQueueMigrationKeepsEveryIssue() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("141") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v141', 'Test Tenant V141',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+            UUID batch = UUID.randomUUID();
+            owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq, status, row_count) VALUES (?, ?, ?, 1,"
+                            + " 'parsed', 1)")
+                    .params(batch, tenant, run)
+                    .update();
+            UUID row = UUID.randomUUID();
+            owner.sql("INSERT INTO import_rows (id, tenant_id, batch_id, source_row_no, raw) VALUES (?, ?, ?, 2,"
+                            + " '{\"Fab Item\": {\"value\": \"Fabricated item\", \"type\": \"text\"}}')")
+                    .params(row, tenant, batch)
+                    .update();
+            UUID issue = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO import_issues (id, tenant_id, batch_id, row_id, source_row_no, ordinal, code, severity,"
+                                    + " field, message, status) VALUES (?, ?, ?, ?, 2, 1, 'REQUIRED_MISSING', 'blocking', 'code',"
+                                    + " 'code is empty on fab-items.csv line 2.', 'open')")
+                    .params(issue, tenant, batch, row)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql(
+                                    "SELECT code = 'REQUIRED_MISSING' AND message = 'code is empty on fab-items.csv line 2.'"
+                                            + " AND status = 'open' AND version = 1 AND NOT ask_customer AND suggested_value IS NULL"
+                                            + " AND resolution_id IS NULL FROM import_issues WHERE id = ?")
+                            .param(issue)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql(
+                                    "SELECT raw -> 'Fab Item' ->> 'value' = 'Fabricated item' AND excluded_by IS NULL AND"
+                                            + " linked_row_id IS NULL AND linked_member_id IS NULL FROM import_rows WHERE id = ?")
+                            .param(row)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE relname ="
+                                    + " 'import_issue_resolutions'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname = 'reject_mutation'"
+                                    + " AND tgrelid = 'import_issue_resolutions'::regclass")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(1);
+            assertThat(owner.sql("SELECT has_column_privilege('bms_app', 'import_issues', 'status', 'UPDATE')"
+                                    + " AND has_column_privilege('bms_app', 'import_issues', 'version', 'UPDATE')"
+                                    + " AND NOT has_column_privilege('bms_app', 'import_issues', 'code', 'UPDATE')"
+                                    + " AND NOT has_column_privilege('bms_app', 'import_issues', 'message', 'UPDATE')"
+                                    + " AND has_column_privilege('bms_app', 'import_rows', 'excluded_by', 'UPDATE')"
+                                    + " AND NOT has_column_privilege('bms_app', 'import_rows', 'raw', 'UPDATE')"
+                                    + " AND NOT has_table_privilege('bms_app', 'import_issue_resolutions', 'UPDATE')"
+                                    + " AND NOT has_table_privilege('bms_app', 'import_issue_resolutions', 'DELETE')")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

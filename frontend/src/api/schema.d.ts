@@ -726,6 +726,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/issues/{issue_id}/ask-customer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark an issue as a question for the customer, or no longer one */
+        put: operations["askCustomerAboutImportIssue"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/issues/{issue_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve one issue: edit, leave the row out, accept the suggestion, link, override a warning or map the value (FR-IMP-05) */
+        post: operations["resolveImportIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The review queue of an import run, in commit order, open issues by default (FR-IMP-05) */
+        get: operations["listImportIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/issues/bulk-resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve every open issue of one code in the run, or in one of its files, the same way (FR-IMP-05) */
+        post: operations["bulkResolveImportIssues"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The numbered questions for the customer, with file and line and no value of a row */
+        get: operations["listImportQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/questions.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same questions as a CSV file to send to the customer; audited */
+        get: operations["exportImportQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger/payment-methods": {
         parameters: {
             query?: never;
@@ -10223,6 +10325,125 @@ export interface components {
             http_status?: number;
             /** @description answers: this app answered /version there; not_found: the name has no DNS record; no_answer: the name exists but nothing answered in time or the connection failed; wrong_answer: something answered, but not this app (http_status says what) */
             outcome?: string;
+        };
+        ImportAskCustomerRequest: {
+            ask_customer: boolean;
+            /** Format: int32 */
+            version: number;
+        };
+        ImportBulkResolveOutcome: {
+            /** Format: uuid */
+            bulk_id?: string;
+            /** Format: int32 */
+            resolved?: number;
+            /** Format: int32 */
+            rows_validated?: number;
+        };
+        ImportBulkResolveRequest: {
+            /**
+             * Format: uuid
+             * @description One batch of the run, or every batch
+             */
+            batch_id?: string;
+            code: string;
+            note?: string;
+            /** @description edit_value, exclude_row, accept_suggestion, override or ask_customer */
+            resolution: string;
+            value?: string;
+        };
+        /** @description One issue of the review queue; its message never holds a value of a row */
+        ImportIssue: {
+            ask_customer?: boolean;
+            /** Format: uuid */
+            batch_id?: string;
+            code?: string;
+            /** @description The template's field, or null for the whole row */
+            field?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int32
+             * @description The line of the file
+             */
+            line?: number;
+            message?: string;
+            /** @description The kind of the resolution that resolved it */
+            resolution?: string;
+            /** Format: uuid */
+            resolution_id?: string;
+            /** Format: uuid */
+            row_id?: string;
+            /** @description info, warning or blocking */
+            severity?: string;
+            /** @description open or resolved */
+            status?: string;
+            /** @description The engine's suggestion, never personal: {"value": "1501"}, or {"review": "as_uploaded"} for a row that changed */
+            suggestion?: {
+                [key: string]: Record<string, never>;
+            };
+            /**
+             * Format: int32
+             * @description Name it when resolving; another resolver's version is version_conflict
+             */
+            version?: number;
+        };
+        ImportIssuePage: {
+            items?: components["schemas"]["ImportIssue"][];
+            next_cursor?: string;
+        };
+        /** @description One question for the customer, without any value of a row */
+        ImportQuestion: {
+            code?: string;
+            field?: string;
+            file?: string;
+            /** Format: int32 */
+            line?: number;
+            message?: string;
+            /** Format: int32 */
+            number?: number;
+        };
+        ImportQuestionList: {
+            items?: components["schemas"]["ImportQuestion"][];
+        };
+        ImportResolveOutcome: {
+            /** @description The issues of the row as they now are */
+            issues?: components["schemas"]["ImportIssue"][];
+            /**
+             * Format: int32
+             * @description The mapping version a map_value made
+             */
+            mapping_version?: number;
+            resolution?: string;
+            /** Format: uuid */
+            resolution_id?: string;
+            /**
+             * Format: int32
+             * @description Rows validated again
+             */
+            rows_validated?: number;
+        };
+        ImportResolveRequest: {
+            /**
+             * Format: uuid
+             * @description link_member: a record the business holds
+             */
+            link_member_id?: string;
+            /**
+             * Format: uuid
+             * @description link_row: another row of the run
+             */
+            link_row_id?: string;
+            /** @description Required for override and exclude_row */
+            note?: string;
+            /** @description edit_value, exclude_row, accept_suggestion, link_row, link_member, override or map_value */
+            resolution: string;
+            /** @description edit_value: the text in place of the cell (empty leaves the field empty); map_value: the value the cell stands for */
+            value?: string;
+            /**
+             * Format: int32
+             * @description The issue's version as read
+             */
+            version: number;
         };
         ImportSmsOptOutsRequest: {
             /** @description Default true: report what would happen and change nothing */
@@ -23190,6 +23411,157 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupHelperStatus"];
+                };
+            };
+        };
+    };
+    askCustomerAboutImportIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportAskCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportIssue"];
+                };
+            };
+        };
+    };
+    resolveImportIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResolveOutcome"];
+                };
+            };
+        };
+    };
+    listImportIssues: {
+        parameters: {
+            query?: {
+                status?: string;
+                code?: string;
+                batch_id?: string;
+                ask_customer?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportIssuePage"];
+                };
+            };
+        };
+    };
+    bulkResolveImportIssues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBulkResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportBulkResolveOutcome"];
+                };
+            };
+        };
+    };
+    listImportQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportQuestionList"];
+                };
+            };
+        };
+    };
+    exportImportQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
         };

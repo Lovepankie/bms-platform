@@ -811,6 +811,22 @@ convention of #127 and #128: a code that is also an issue code of the onboarding
 `SOURCE_UNKNOWN`) is written in capitals, so a screen shows the same code in a refusal and in a report; every other code is
 lower case, as elsewhere in the API.
 
+As built (the review queue, #131, FR-IMP-05, chapter 13 section 13.14.1 5/16): the first routes of the pipeline. They take a
+run's and an issue's own ids in place of the planned `/imports/{batch_id}/rows/...` routes, which the operator screens of
+#141 replace with the run's. Every route needs `core.imports.manage` and works on the business of the host only (another
+business's run or issue is 404); no answer holds a cell's value, a value before or after a resolution, or a note.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/imports/runs/{run_id}/issues` | `core.imports.manage` | The queue in batch, line and engine order. `?status=open` (default), `resolved` or `all`; `code`, `batch_id`, `ask_customer`; `limit` (1 to 500, default 100) and `cursor`. Each issue: `id`, `batch_id`, `row_id`, `line`, `code`, `severity`, `field`, `message`, `status`, `version`, `ask_customer`, `suggestion` (`{"value": ...}` or `{"review": "as_uploaded"}`, never personal), `resolution_id`, `resolution` |
+| POST | `/imports/issues/{issue_id}/resolve` | `core.imports.manage` | `{resolution, version, value?, link_row_id?, link_member_id?, note?}`; `resolution` one of `edit_value`, `exclude_row`, `accept_suggestion`, `link_row`, `link_member`, `override`, `map_value`. 200 `{resolution_id, resolution, rows_validated, mapping_version, issues}` (the row's issues as they now are). 409 `version_conflict`, `issue_not_open`, `run_not_open`, `batch_committed`, `mapping_not_latest`, `label_already_mapped`, `batch_not_parsed` (the issue's file is not read and checked now); 422 `override_not_allowed` (a blocking issue), `validation_failed` (a note is required for `override` and `exclude_row`), `resolution_not_available`, `no_suggestion`, `link_target_unknown`, `field_is_personal`, `nothing_to_map`, `mapping_invalid` |
+| POST | `/imports/runs/{run_id}/issues/bulk-resolve` | `core.imports.manage` | `{code, batch_id?, resolution, value?, note?}` with `edit_value`, `exclude_row`, `accept_suggestion`, `override` or `ask_customer`: every open issue of the code, one resolution row each under one `bulk_id`, refused as a whole when one refuses. 200 `{bulk_id, resolved, rows_validated}`; 404 for a `batch_id` not of the run |
+| PUT | `/imports/issues/{issue_id}/ask-customer` | `core.imports.manage` | `{ask_customer, version}`: a question for the customer, or no longer one; the issue as it now is. 409 `version_conflict`, `issue_not_open` |
+| GET | `/imports/runs/{run_id}/questions` | `core.imports.manage` | The open questions for the customer, numbered: `{items: [{number, file, line, field, code, message}]}`, never a value of a row or a note. Not audited (reading a list) |
+| GET | `/imports/runs/{run_id}/questions.csv` | `core.imports.manage` | The same as a CSV attachment (`number,file,line,field,code,question`), a leading formula character made plain: the file sent to the customer, audited `core.import_run.questions_exported` |
+
+`docs/api/openapi.json` and `frontend/src/api/schema.d.ts` carry these routes (`make openapi`).
+
 ### 7.11.10 Payments
 
 | Method | Path | Permission | Notes |

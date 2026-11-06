@@ -14,10 +14,15 @@ import com.rincoltech.bms.core.imports.internal.RowValidator.RowResult;
 import com.rincoltech.bms.core.imports.internal.RowValidator.SourceRow;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.TenantContext;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +30,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,12 +46,19 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@link ImportValidation} over {@code import_rows} and {@code import_issues} (migration V140). It reads a run's batches in
- * commit order, 1,000 rows at a time, through {@link RowValidator} in two passes, and writes every parsed batch's results
- * in one transaction that holds the run {@code FOR UPDATE}, after checking that the run is open and every batch is as pass
- * 1 read it, so either all of the run's results are written from one consistent view or none. A committed batch is read for its codes and references and never
- * written; the triggers of V140 refuse it as well. Every query runs under the business's row-level security, so only its
- * own rows are read. Logs and the audit row carry ids and counts by code only, never a cell, a name or a file name.
+ * {@link ImportValidation} over {@code import_rows} and {@code import_issues} (migrations V140 and V141). It reads a run's
+ * batches in commit order, 1,000 rows at a time, through {@link RowValidator} in two passes, and writes every parsed batch's
+ * results in one transaction that holds the run {@code FOR UPDATE}, after checking that the run is open, every batch is as
+ * pass 1 read it and no resolution was made meanwhile, so either all of the run's results are written from one consistent
+ * view or none. A committed batch is read for its codes and references and never written; the triggers of V140 refuse it
+ * as well. Every query runs under the business's row-level security, so only its own rows are read. Logs and the audit row
+ * carry ids and counts by code only, never a cell, a name or a file name.
+ *
+ * <p>Since #131 the review is applied on both passes ({@link ReviewState}): a row reads the edits in force for its cells in
+ * place of their fields' cells, its issues are resolved by the resolutions in force (an exclusion resolves them all), a row
+ * whose cells changed since it was resolved gets {@code ROW_CHANGED_SINCE_REVIEW}, and an issue found again on the same row
+ * with the same code and field keeps its id with the next version. {@link #revalidate} writes the results of some rows of
+ * a run only, for the review queue, inside its transaction.
  */
 @Service
 class ValidationService implements ImportValidation {
@@ -56,11 +69,21 @@ class ValidationService implements ImportValidation {
     static final Set<String> OPEN = Set.of(RunStates.UPLOADED, RunStates.IN_REVIEW);
 
     private static final TypeReference<Map<String, Map<String, Object>>> RAW = new TypeReference<>() {};
+    private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() {};
 
     /** Decimals as BigDecimal, so a quantity of 1.1 is read as written. */
     private static final JsonMapper JSON = JsonMapper.builder()
             .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
             .build();
+
+    /** The SHA-256 of a row's cells as stored, in lower-case hex: what a resolution was made on (V141). */
+    static final String RAW_SHA256 = "encode(sha256(convert_to(raw::text, 'UTF8')), 'hex')";
+
+    /** The columns {@link #issue} reads, from {@code import_issues i} and its resolution {@code r}. */
+    static final String ISSUE_COLUMNS = """
+            i.id, i.batch_id, i.row_id, i.source_row_no, i.code, i.severity, i.field, i.message, i.status, i.version,
+            i.ask_customer, i.suggested_value::text AS suggested_value, i.resolution_id, r.resolution
+            """;
 
     private final JdbcClient jdbc;
     private final JdbcTemplate batchJdbc;
@@ -112,6 +135,27 @@ class ValidationService implements ImportValidation {
         }
     }
 
+    /** A staged row and the SHA-256 of its cells as stored. */
+    private record Staged(SourceRow row, String sha) {}
+
+    /**
+     * Everything pass 1 learns of a run: the run, its batches and their stamps, the template and the engine with its index,
+     * the batches in commit order with their inputs, the review, the row of each copy (for a link), the cells each identity
+     * has in the run (to tell a changed row), and each row's occurrence among the rows of its identity and cells.
+     */
+    private record Prepared(
+            RunRow run,
+            Map<UUID, String> seen,
+            ImportTemplate template,
+            RowValidator engine,
+            List<BatchRow> ordered,
+            List<BatchInput> inputs,
+            ReviewState review,
+            Map<String, UUID> rowsByCopy,
+            Map<String, Set<String>> shasByKey,
+            Map<UUID, Integer> occurrences,
+            Map<String, Integer> copies) {}
+
     private static final String BATCHES = """
             SELECT id, seq, status, source_filename, mapping_id, mapping_source, template_key, template_version,
                    parsed_at, row_count
@@ -161,16 +205,53 @@ class ValidationService implements ImportValidation {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("validation takes its own transactions");
         }
-        RunRow run = readOnly.execute(s -> jdbc.sql("SELECT status, cutover_at FROM import_runs WHERE id = ?")
-                .param(runId)
-                .query((rs, n) -> {
-                    Timestamp cutover = rs.getTimestamp("cutover_at");
-                    return new RunRow(rs.getString("status"), cutover == null ? null : cutover.toInstant());
-                })
-                .optional()
-                .orElseThrow(ApiException::notFound));
+        Prepared p = prepare(runId, false);
+        List<BatchReport> reports = finish(runId, p);
+        return p.template() == null
+                ? new RunReport(runId, null, 0, List.of())
+                : new RunReport(runId, p.template().key(), p.template().version(), reports);
+    }
+
+    /**
+     * Validates again only the given rows of a run (issue #131: a resolution's row, or the rows a new value map reaches),
+     * inside the caller's transaction, which must already hold the run {@code FOR UPDATE}. Pass 1 reads the whole run, so
+     * a row is checked against every other row as a full validation would check it; pass 2 writes those rows only. Returns
+     * the number of rows written.
+     */
+    int revalidate(UUID runId, Collection<UUID> rowIds) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("a partial validation joins the resolution's transaction");
+        }
+        Prepared p = prepare(runId, true);
+        int rows = 0;
+        Set<UUID> only = Set.copyOf(rowIds);
+        for (int i = 0; i < p.ordered().size(); i++) {
+            if ("parsed".equals(p.ordered().get(i).status())) {
+                rows += write(p.ordered().get(i), p.inputs().get(i), p, only).rows();
+            }
+        }
+        return rows;
+    }
+
+    /** Runs {@code work} in a short read-only transaction, or in the caller's when {@code here}. */
+    private <T> T read(boolean here, Supplier<T> work) {
+        return here ? work.get() : readOnly.execute(s -> work.get());
+    }
+
+    /** The checks before any row is read, and pass 1: what the run holds. */
+    private Prepared prepare(UUID runId, boolean here) {
+        RunRow run = read(
+                here,
+                () -> jdbc.sql("SELECT status, cutover_at FROM import_runs WHERE id = ?")
+                        .param(runId)
+                        .query((rs, n) -> {
+                            Timestamp cutover = rs.getTimestamp("cutover_at");
+                            return new RunRow(rs.getString("status"), cutover == null ? null : cutover.toInstant());
+                        })
+                        .optional()
+                        .orElseThrow(ApiException::notFound));
         requireOpen(run.status());
-        List<BatchRow> all = readOnly.execute(s -> batches(runId));
+        List<BatchRow> all = read(here, () -> batches(runId));
         Map<UUID, String> seen = stamps(all);
         // A file stored and not yet read would be left out while the run moves on (review of #867).
         if (all.stream().anyMatch(b -> "uploaded".equals(b.status()))) {
@@ -180,8 +261,7 @@ class ValidationService implements ImportValidation {
                     "File not read yet",
                     "A file of this import is not read yet; wait for it, or cancel it, before checking the rows.");
         }
-        List<BatchRow> batches = all;
-        if (batches.stream().anyMatch(b -> b.mappingId() == null && "parsed".equals(b.status()))) {
+        if (all.stream().anyMatch(b -> b.mappingId() == null && "parsed".equals(b.status()))) {
             throw new ApiException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "BATCH_HAS_NO_MAPPING",
@@ -190,7 +270,7 @@ class ValidationService implements ImportValidation {
         }
         // A committed batch stored before #129 has no mapping: its records are the business's now, and the template
         // answers for them through existingKeys.
-        batches = batches.stream().filter(b -> b.mappingId() != null).toList();
+        List<BatchRow> batches = all.stream().filter(b -> b.mappingId() != null).toList();
         if (batches.stream()
                         .map(b -> b.templateKey() + "_v" + b.templateVersion())
                         .distinct()
@@ -202,9 +282,10 @@ class ValidationService implements ImportValidation {
                     "Templates differ",
                     "The files of this import were read with mappings of different templates; a run keeps one.");
         }
+        ReviewState review = read(here, () -> ReviewState.load(jdbc, runId));
         if (batches.isEmpty()) {
-            finish(runId, seen, null, List.of(), List.of(), null);
-            return new RunReport(runId, null, 0, List.of());
+            return new Prepared(
+                    run, seen, null, null, List.of(), List.of(), review, Map.of(), Map.of(), Map.of(), Map.of());
         }
         ImportTemplate template = templates.require(
                 batches.getFirst().templateKey(), batches.getFirst().templateVersion());
@@ -220,46 +301,90 @@ class ValidationService implements ImportValidation {
                     documents.get(b.mappingId()),
                     b.source()));
         }
-        // Pass 1: what the run holds.
+        // Each copy of a line repeated verbatim is counted in the run's order (batch, then line), so a decision on one
+        // copy never reaches another, and the run's number of such copies is known before any decision is applied (Lead
+        // ruling on #868). With no resolution in the run this is pass 1 itself; with some, the rows are read once more.
+        Map<String, UUID> rowsByCopy = new HashMap<>();
+        Map<String, Set<String>> shasByKey = new HashMap<>();
+        Map<String, Integer> copies = new HashMap<>();
+        Map<UUID, Integer> occurrences = new HashMap<>();
         for (BatchInput input : inputs) {
-            readRows(input.batchId(), row -> engine.index(input, row));
+            readRows(input.batchId(), here, staged -> {
+                String key = engine.rowKey(input, staged.row());
+                int occurrence = copies.merge(key + "|" + staged.sha(), 1, Integer::sum);
+                occurrences.put(staged.row().rowId(), occurrence);
+                rowsByCopy.put(
+                        ReviewState.copy(key, staged.sha(), occurrence),
+                        staged.row().rowId());
+                shasByKey.computeIfAbsent(key, k -> new HashSet<>()).add(staged.sha());
+                if (review.isEmpty()) {
+                    engine.index(input, staged.row());
+                }
+            });
+        }
+        // Pass 1 with a review: what the run holds, with the edits in force. A row the review left out is not indexed,
+        // so it is no other row's duplicate and no reference reaches it (review of #868, item 5).
+        if (!review.isEmpty()) {
+            for (BatchInput input : inputs) {
+                readRows(input.batchId(), here, staged -> {
+                    String key = engine.rowKey(input, staged.row());
+                    ReviewState.Row decided = review.row(
+                            key,
+                            staged.sha(),
+                            occurrences.get(staged.row().rowId()),
+                            copies.get(key + "|" + staged.sha()));
+                    if (decided.excludedBy() == null) {
+                        engine.index(input, reviewed(staged, decided));
+                    }
+                });
+            }
         }
         // The codes references name that no row of the run holds: does the business hold them?
-        readOnly.executeWithoutResult(s -> engine.missingReferences()
-                .forEach((set, keys) -> engine.addExisting(set, template.existingKeys(set, keys))));
-        List<BatchReport> reports = finish(runId, seen, template.id(), ordered, inputs, engine);
-        return new RunReport(runId, template.key(), template.version(), reports);
+        read(here, () -> {
+            engine.missingReferences()
+                    .forEach((set, keys) -> engine.addExisting(set, template.existingKeys(set, keys)));
+            return null;
+        });
+        return new Prepared(
+                run, seen, template, engine, ordered, inputs, review, rowsByCopy, shasByKey, occurrences, copies);
+    }
+
+    /** The row with the review's edits read in place of their fields' cells. */
+    private static SourceRow reviewed(Staged staged, ReviewState.Row decided) {
+        SourceRow r = staged.row();
+        return decided.edits().isEmpty() ? r : new SourceRow(r.rowId(), r.line(), r.cells(), decided.edits());
     }
 
     /**
      * Pass 2 and the end of a validation, in one transaction that holds the run {@code FOR UPDATE}, as an upload does, so no
      * file of the run is added, read again or cancelled while it runs (the parse and the cancel take the run
      * {@code FOR SHARE}). Every batch must still be as pass 1 saw it, or 409 {@code batch_changed} and nothing is written
-     * (second review of #867: a batch written before another changed kept issues built from the old index). Then each
-     * parsed batch's issues and typed values are replaced, an {@code uploaded} run moves to {@code in_review} (the run's own
-     * transition joins this transaction, so a second validation that finishes later finds it in review), and the
-     * validation is audited.
+     * (second review of #867: a batch written before another changed kept issues built from the old index), and no
+     * resolution may have been made meanwhile, or 409 {@code review_changed}. Then each parsed batch's issues and typed
+     * values are replaced, an {@code uploaded} run moves to {@code in_review} (the run's own transition joins this
+     * transaction, so a second validation that finishes later finds it in review), and the validation is audited.
      */
-    private List<BatchReport> finish(
-            UUID runId,
-            Map<UUID, String> seen,
-            String templateId,
-            List<BatchRow> ordered,
-            List<BatchInput> inputs,
-            RowValidator engine) {
+    private List<BatchReport> finish(UUID runId, Prepared p) {
         List<BatchReport> reports = tx.execute(s -> {
             String status = jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR UPDATE")
                     .param(runId)
                     .query(String.class)
                     .single();
             requireOpen(status);
-            if (!stamps(batches(runId)).equals(seen)) {
+            if (!stamps(batches(runId)).equals(p.seen())) {
                 throw changed();
             }
+            if (ReviewState.last(jdbc, runId) != p.review().last()) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "review_changed",
+                        "Review changed",
+                        "An issue of this import was resolved while it was checked; check it again.");
+            }
             List<BatchReport> out = new ArrayList<>();
-            for (int i = 0; i < ordered.size(); i++) {
-                if ("parsed".equals(ordered.get(i).status())) {
-                    out.add(write(ordered.get(i), inputs.get(i), engine));
+            for (int i = 0; i < p.ordered().size(); i++) {
+                if ("parsed".equals(p.ordered().get(i).status())) {
+                    out.add(write(p.ordered().get(i), p.inputs().get(i), p, null));
                 }
             }
             if (RunStates.UPLOADED.equals(status)) {
@@ -268,7 +393,7 @@ class ValidationService implements ImportValidation {
             Map<String, Integer> byCode = new TreeMap<>();
             out.forEach(r -> r.byCode().forEach((code, n) -> byCode.merge(code, n, Integer::sum)));
             Map<String, Object> after = new LinkedHashMap<>();
-            after.put("template", templateId == null ? "none" : templateId);
+            after.put("template", p.template() == null ? "none" : p.template().id());
             after.put("batches", out.size());
             after.put("issues_by_code", byCode);
             audit.record(AuditLog.Entry.created("core.import_run.validated", "import_run", runId, null, after));
@@ -302,102 +427,186 @@ class ValidationService implements ImportValidation {
                 .toList();
     }
 
-    /** Pass 2 of one parsed batch, inside {@link #finish}: its rows' typed values and references, and its issues, replaced. */
-    private BatchReport write(BatchRow b, BatchInput input, RowValidator engine) {
-        jdbc.sql("DELETE FROM import_issues WHERE batch_id = ?").param(b.id()).update();
+    /** An issue as it stood before it was written again: its id and version, kept when it is found again. */
+    private record Kept(UUID id, int version) {}
+
+    /**
+     * Pass 2 of one parsed batch, inside the caller's transaction: its rows' typed values, references and review columns,
+     * and its issues, replaced; every row of the batch, or only the rows in {@code only}. An issue found again on its row with
+     * the same code and field (the n-th of them) keeps its id with the next version, so a resolver holding it sees a conflict
+     * rather than a missing issue.
+     */
+    private BatchReport write(BatchRow b, BatchInput input, Prepared p, Set<UUID> only) {
+        RowValidator engine = p.engine();
+        UUID[] ids = only == null ? null : only.toArray(UUID[]::new);
+        Map<String, Kept> kept = new HashMap<>();
+        Map<String, Integer> seenKey = new HashMap<>();
+        jdbc.sql("SELECT id, row_id, code, field, version FROM import_issues WHERE batch_id = ? AND severity <> 'info'"
+                        + (only == null ? "" : " AND row_id = ANY(?)")
+                        + " ORDER BY source_row_no, ordinal")
+                .params(only == null ? List.of(b.id()) : List.of(b.id(), ids))
+                .query((rs, n) -> {
+                    String key = rs.getObject("row_id", UUID.class) + "|"
+                            + ReviewState.key(rs.getString("code"), rs.getString("field"));
+                    int nth = seenKey.merge(key, 1, Integer::sum);
+                    kept.put(key + "|" + nth, new Kept(rs.getObject("id", UUID.class), rs.getInt("version")));
+                    return null;
+                })
+                .list();
+        if (only == null) {
+            jdbc.sql("DELETE FROM import_issues WHERE batch_id = ?")
+                    .param(b.id())
+                    .update();
+        } else {
+            jdbc.sql("DELETE FROM import_issues WHERE batch_id = ? AND row_id = ANY(?)")
+                    .params(b.id(), ids)
+                    .update();
+        }
         Map<String, Integer> bySeverity = new TreeMap<>();
         Map<String, Integer> byCode = new TreeMap<>();
-        int[] ordinal = {0};
         int[] rows = {0};
         List<Object[]> updates = new ArrayList<>();
         List<Object[]> issues = new ArrayList<>();
-        readRowsHere(b.id(), row -> {
-            RowResult result = engine.validate(input, row);
+        Consumer<Staged> each = staged -> {
+            SourceRow row = staged.row();
+            String rowKey = engine.rowKey(input, row);
+            ReviewState.Row decided = p.review()
+                    .row(
+                            rowKey,
+                            staged.sha(),
+                            p.occurrences().getOrDefault(row.rowId(), 1),
+                            p.copies().getOrDefault(rowKey + "|" + staged.sha(), 1),
+                            p.shasByKey().getOrDefault(rowKey, Set.of(staged.sha())));
+            RowResult result = engine.validate(input, reviewed(staged, decided));
             rows[0]++;
-            updates.add(new Object[] {JSON.writeValueAsString(result.normalised()), result.sourceRef(), row.rowId()});
-            for (Finding f : result.findings()) {
-                ordinal[0]++;
+            updates.add(new Object[] {
+                JSON.writeValueAsString(result.normalised()),
+                result.sourceRef(),
+                decided.excludedBy(),
+                decided.linkedRowKey() == null ? null : p.rowsByCopy().get(decided.linkedRowKey()),
+                decided.linkedMemberId(),
+                row.rowId()
+            });
+            List<Finding> findings = new ArrayList<>(result.findings().size() + 1);
+            if (decided.changed()) {
+                findings.add(engine.rowChanged(input, row.line()));
+            }
+            findings.addAll(result.findings());
+            Map<String, Integer> nthOnRow = new HashMap<>();
+            int ordinal = 0;
+            for (Finding f : findings) {
+                ordinal++;
                 bySeverity.merge(f.severity(), 1, Integer::sum);
                 byCode.merge(f.code(), 1, Integer::sum);
+                boolean info = "info".equals(f.severity());
+                UUID resolution = info
+                        ? null
+                        : decided.excludedBy() != null ? decided.excludedBy() : decided.resolution(f.code(), f.field());
+                String key = row.rowId() + "|" + ReviewState.key(f.code(), f.field());
+                Kept before = info ? null : kept.get(key + "|" + nthOnRow.merge(key, 1, Integer::sum));
+                String suggestion = engine.suggestion(input, f);
+                Map<String, Object> suggested = "ROW_CHANGED_SINCE_REVIEW".equals(f.code())
+                        ? Map.of("review", "as_uploaded")
+                        : suggestion == null ? null : Map.of("value", suggestion);
                 issues.add(new Object[] {
-                    UUID.randomUUID(),
+                    before == null ? UUID.randomUUID() : before.id(),
                     b.id(),
                     row.rowId(),
                     row.line(),
-                    ordinal[0],
+                    ordinal,
                     f.code(),
                     f.severity(),
                     f.field(),
                     f.message(),
-                    f.original() == null ? null : JSON.writeValueAsString(f.original()),
-                    "info".equals(f.severity()) ? "resolved" : "open"
+                    // An edited field's text is the operator's, kept only in its resolution row (issue #131).
+                    f.original() == null
+                                    || (f.field() != null && decided.edits().containsKey(f.field()))
+                            ? null
+                            : JSON.writeValueAsString(f.original()),
+                    info || resolution != null ? "resolved" : "open",
+                    before == null ? 1 : before.version() + 1,
+                    !info && decided.asked(f.code(), f.field()),
+                    suggested == null ? null : JSON.writeValueAsString(suggested),
+                    resolution
                 });
             }
             if (updates.size() >= RowValidator.CHUNK) {
                 flush(updates, issues);
             }
-        });
+        };
+        if (only == null) {
+            readRows(b.id(), true, each);
+        } else {
+            readRowsIn(b.id(), ids, each);
+        }
         flush(updates, issues);
         return new BatchReport(b.id(), b.seq(), rows[0], bySeverity, byCode);
     }
 
     private void flush(List<Object[]> updates, List<Object[]> issues) {
         if (!updates.isEmpty()) {
-            batchJdbc.batchUpdate(
-                    "UPDATE import_rows SET normalised = CAST(? AS jsonb), source_ref = ? WHERE id = ?", updates);
+            batchJdbc.batchUpdate("""
+                    UPDATE import_rows SET normalised = CAST(? AS jsonb), source_ref = ?, excluded_by = ?, linked_row_id = ?,
+                                           linked_member_id = ?
+                     WHERE id = ?
+                    """, updates);
             updates.clear();
         }
         if (!issues.isEmpty()) {
             batchJdbc.batchUpdate("""
                     INSERT INTO import_issues (id, tenant_id, batch_id, row_id, source_row_no, ordinal, code, severity,
-                                               field, message, original_value, status)
-                    VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?)
+                                               field, message, original_value, status, version, ask_customer,
+                                               suggested_value, resolution_id)
+                    VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?,
+                            CAST(? AS jsonb), ?)
                     """, issues);
             issues.clear();
         }
     }
 
-    /** Every row of a batch in line order, 1,000 at a time, each chunk in a short read-only transaction. */
-    private void readRows(UUID batchId, Consumer<SourceRow> each) {
+    /**
+     * Every row of a batch in line order, 1,000 at a time: each chunk in a short read-only transaction, or in the caller's
+     * when {@code here}.
+     */
+    private void readRows(UUID batchId, boolean here, Consumer<Staged> each) {
         int after = 0;
         while (true) {
             int from = after;
-            List<SourceRow> chunk = readOnly.execute(s -> chunk(batchId, from));
+            List<Staged> chunk = read(here, () -> chunk(batchId, from));
             chunk.forEach(each);
             if (chunk.size() < RowValidator.CHUNK) {
                 return;
             }
-            after = chunk.getLast().line();
+            after = chunk.getLast().row().line();
         }
     }
 
-    /** The same, inside the caller's transaction. */
-    private void readRowsHere(UUID batchId, Consumer<SourceRow> each) {
-        int after = 0;
-        while (true) {
-            List<SourceRow> chunk = chunk(batchId, after);
-            chunk.forEach(each);
-            if (chunk.size() < RowValidator.CHUNK) {
-                return;
-            }
-            after = chunk.getLast().line();
-        }
+    /** The named rows of a batch in line order, inside the caller's transaction. */
+    private void readRowsIn(UUID batchId, UUID[] ids, Consumer<Staged> each) {
+        jdbc.sql("SELECT id, source_row_no, raw::text AS raw, " + RAW_SHA256 + " AS sha FROM import_rows"
+                        + " WHERE batch_id = ? AND id = ANY(?) ORDER BY source_row_no")
+                .params(batchId, ids)
+                .query(ValidationService::staged)
+                .list()
+                .forEach(each);
     }
 
-    private List<SourceRow> chunk(UUID batchId, int afterLine) {
-        return jdbc.sql("""
-                        SELECT id, source_row_no, raw::text AS raw FROM import_rows
-                         WHERE batch_id = ? AND source_row_no > ?
-                         ORDER BY source_row_no
-                         LIMIT ?
-                        """)
+    private List<Staged> chunk(UUID batchId, int afterLine) {
+        return jdbc.sql("SELECT id, source_row_no, raw::text AS raw, " + RAW_SHA256 + " AS sha FROM import_rows"
+                        + " WHERE batch_id = ? AND source_row_no > ? ORDER BY source_row_no LIMIT ?")
                 .params(batchId, afterLine, RowValidator.CHUNK)
-                .query((rs, n) -> new SourceRow(
-                        rs.getObject("id", UUID.class), rs.getInt("source_row_no"), cells(rs.getString("raw"))))
+                .query(ValidationService::staged)
                 .list();
     }
 
-    private static Map<String, RawCell> cells(String raw) {
+    private static Staged staged(ResultSet rs, int n) throws SQLException {
+        return new Staged(
+                new SourceRow(rs.getObject("id", UUID.class), rs.getInt("source_row_no"), cells(rs.getString("raw"))),
+                rs.getString("sha"));
+    }
+
+    /** A row's stored cells as the engine reads them. */
+    static Map<String, RawCell> cells(String raw) {
         Map<String, RawCell> out = new LinkedHashMap<>();
         JSON.readValue(raw, RAW)
                 .forEach((header, cell) -> out.put(
@@ -417,28 +626,39 @@ class ValidationService implements ImportValidation {
                     .query(UUID.class)
                     .optional()
                     .orElseThrow(ApiException::notFound);
-            return jdbc.sql("""
-                            SELECT id, batch_id, row_id, source_row_no, code, severity, field, message, status
-                              FROM import_issues WHERE batch_id = ? ORDER BY ordinal
+            return jdbc.sql("SELECT " + ISSUE_COLUMNS + """
+                              FROM import_issues i LEFT JOIN import_issue_resolutions r ON r.id = i.resolution_id
+                             WHERE i.batch_id = ? ORDER BY i.source_row_no, i.ordinal
                             """)
                     .param(batchId)
-                    .query((rs, n) -> new Issue(
-                            rs.getObject("id", UUID.class),
-                            rs.getObject("batch_id", UUID.class),
-                            rs.getObject("row_id", UUID.class),
-                            rs.getInt("source_row_no"),
-                            rs.getString("code"),
-                            rs.getString("severity"),
-                            rs.getString("field"),
-                            rs.getString("message"),
-                            rs.getString("status")))
+                    .query(ValidationService::issue)
                     .list();
         });
     }
 
+    /** One issue from the columns of {@link #ISSUE_COLUMNS}. */
+    static Issue issue(ResultSet rs, int n) throws SQLException {
+        String suggested = rs.getString("suggested_value");
+        return new Issue(
+                rs.getObject("id", UUID.class),
+                rs.getObject("batch_id", UUID.class),
+                rs.getObject("row_id", UUID.class),
+                rs.getInt("source_row_no"),
+                rs.getString("code"),
+                rs.getString("severity"),
+                rs.getString("field"),
+                rs.getString("message"),
+                rs.getString("status"),
+                rs.getInt("version"),
+                rs.getBoolean("ask_customer"),
+                suggested == null ? null : JSON.readValue(suggested, OBJECT),
+                rs.getObject("resolution_id", UUID.class),
+                rs.getString("resolution"));
+    }
+
     private record RunRow(String status, Instant cutoverAt) {}
 
-    private static void requireOpen(String status) {
+    static void requireOpen(String status) {
         if (!OPEN.contains(status)) {
             throw new ApiException(
                     HttpStatus.CONFLICT,

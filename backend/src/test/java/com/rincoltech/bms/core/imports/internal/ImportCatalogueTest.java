@@ -100,16 +100,18 @@ class ImportCatalogueTest {
                     "internal/ImportMappingsIT.java#aBatchRecordsItsMappingVersionAndEveryUnmappedColumnIsReported"),
             Map.entry(
                     "REQUIRED_COLUMN_MISSING",
-                    "internal/MappingValidatorTest.java#aRequiredFieldWithNoColumnIsReportedAndSoIsItsColumnMissingFromTheFile"));
+                    "internal/MappingValidatorTest.java#aRequiredFieldWithNoColumnIsReportedAndSoIsItsColumnMissingFromTheFile"),
+            // The review queue (#131): a row whose cells changed since it was resolved, after a new upload.
+            Map.entry(
+                    "ROW_CHANGED_SINCE_REVIEW",
+                    "internal/ImportReviewIT.java#aChangedRowComesBackToTheQueueAndAnUnchangedRowKeepsItsResolution"));
 
     /**
-     * Codes whose producer is a later build step of spec section 9: they compare a row with its reviewed or imported
-     * content, which only the review queue and the commit's {@code import_refs} hold. Each step adds its fixture row and
-     * moves its code out of this list.
+     * Codes whose producer is a later build step of spec section 9: they compare a row with its imported content, which only
+     * the commit's {@code import_refs} hold. Each step adds its fixture row or its named test and moves its code out of this
+     * list; {@code ROW_CHANGED_SINCE_REVIEW} left it with the review queue of #131.
      */
-    static final Map<String, String> PENDING = Map.of(
-            "ROW_CHANGED_SINCE_REVIEW", "#131",
-            "CHANGED_SINCE_IMPORT", "#133");
+    static final Map<String, String> PENDING = Map.of("CHANGED_SINCE_IMPORT", "#133");
 
     static Map<String, Object> mapping() {
         return JsonMapper.builder()
@@ -488,10 +490,13 @@ class ImportCatalogueTest {
      */
     @Test
     void aPendingCodeHasNoProducerYet() throws IOException {
-        assertThat(PENDING).containsOnlyKeys("ROW_CHANGED_SINCE_REVIEW", "CHANGED_SINCE_IMPORT");
-        assertThat(PENDING)
-                .containsEntry("ROW_CHANGED_SINCE_REVIEW", "#131")
-                .containsEntry("CHANGED_SINCE_IMPORT", "#133");
+        assertThat(PENDING).containsOnlyKeys("CHANGED_SINCE_IMPORT");
+        assertThat(PENDING).containsEntry("CHANGED_SINCE_IMPORT", "#133");
+        // The review queue produces ROW_CHANGED_SINCE_REVIEW (#131), proven by its named test.
+        assertThat(PRODUCED_ELSEWHERE)
+                .containsEntry(
+                        "ROW_CHANGED_SINCE_REVIEW",
+                        "internal/ImportReviewIT.java#aChangedRowComesBackToTheQueueAndAnUnchangedRowKeepsItsResolution");
         // Every main file, Java, SQL or other, by the code as a word; the catalogue itself may name it once only, so a
         // constant or a second use there counts too (second review of #867).
         Path catalogue = Path.of("src/main/java/com/rincoltech/bms/core/imports/ImportTemplates.java");

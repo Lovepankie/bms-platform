@@ -70,7 +70,7 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_repayment_allocations`, `lending_collateral_events`,
 `lending_collection_actions` (except `promise_status`), `lending_savings_transactions`,
 `lending_savings_daily_balances`, `lending_savings_interest_postings`,
-`lending_investment_transactions`, `import_issue_resolutions`, `import_mappings` (V139, #129).
+`lending_investment_transactions`, `import_issue_resolutions` (V141, #131), `import_mappings` (V139, #129).
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
 `reject_mutation()` raises on `UPDATE` or `DELETE` for every role, `bms_owner` included,
@@ -1336,6 +1336,34 @@ Added by `V140__import_validation.sql` (issue #130, chapter 13 sections 13.4, 13
   its issues and writes them again; the trigger `import_issues_batch_kept` refuses an insert or delete for a `committed`
   batch, a delete cascaded from its rows included (the purge of #139 brings its own way past it). Both triggers keep V102's bypass for a migration and for the removal and purge of a closed business.
 
+Added by `V141__import_review_queue.sql` (issue #131, FR-IMP-05, chapter 13 sections 13.4 and 13.14.1), expand only:
+
+- **`import_issue_resolutions`** (RLS forced, `SELECT, INSERT`, append-only by `reject_mutation`): one row per resolution of
+  the review queue. `id`, `tenant_id`, `created_at`, `seq` (identity: the order resolutions were made in), `run_id` (FK
+  `(tenant_id, run_id)`), `batch_id` (FK `(tenant_id, batch_id)`), `issue_id` (the issue it was made on, with no foreign key:
+  a validation replaces a batch's issues and the resolution stays), `row_key varchar(400)` (the row's identity: its reference
+  without the content hash, `col:<source>:<value>` or `row:<source>:<line>`), `raw_sha256 char(64)` (the SHA-256 of the row's
+  cells as stored), `occurrence integer NOT NULL DEFAULT 1` (which copy, when the run holds that identity with those cells
+  more than once: a line repeated verbatim), `copies integer NOT NULL DEFAULT 1` (how many such copies the run held then,
+  `CHECK (copies >= occurrence)`; another number in a new upload sends the copies back as changed), `source_row_no`, `code`, `field`, `resolution` [`edit_value`, `exclude_row`, `accept_suggestion`,
+  `link_row`, `link_member`, `override`, `map_value`, `ask_customer`], `before_value jsonb`, `after_value jsonb`,
+  `note varchar(500)` (required, 3 characters or more, for `override` and `exclude_row`, a CHECK), `resolved_by uuid NOT NULL`,
+  `bulk_id` (the bulk resolution it was one of). Plain indexes `import_issue_resolutions_by_row (tenant_id, run_id, row_key)`
+  and `import_issue_resolutions_by_issue (tenant_id, issue_id)`. `before_value` and `after_value` of an edit may hold personal
+  data, like `import_rows.raw`: the quarantine, deleted with a closed business by the generic purge and replaced by their hash
+  by #139.
+- **`import_issues`** gains `version integer NOT NULL DEFAULT 1` (optimistic concurrency), `ask_customer boolean NOT NULL
+  DEFAULT false`, `suggested_value jsonb` (`{"value": ...}` or `{"review": "as_uploaded"}`, never personal) and `resolution_id`
+  (FK `(tenant_id, resolution_id)` to `import_issue_resolutions`, added `NOT VALID` like V139's batch key, and so is
+  `import_rows_excluded_fk` below: no earlier row has one, the validation scan is a query under forced row security that an
+  owner without BYPASSRLS cannot run, and every row written afterwards is checked). `bms_app` gets `UPDATE` on `status`, `version`,
+  `ask_customer` and `resolution_id` only. `UNIQUE (batch_id, source_row_no, ordinal)` replaces `UNIQUE (batch_id, ordinal)`:
+  the ordinal now counts within the row, so one row's issues are written again without renumbering the batch, in the same
+  order. The trigger `import_issues_batch_kept` now refuses an update for a `committed` batch too.
+- **`import_rows`** gains `excluded_by` (FK `(tenant_id, excluded_by)` to `import_issue_resolutions`), `linked_row_id` and
+  `linked_member_id` (no foreign key: rewritten by each validation, and the record linked is the vertical's), with `UPDATE`
+  for `bms_app` on these three only; `import_rows_validation_kept` refuses a change to them once the batch is `committed`.
+
 ## 6.6 General ledger (RLS)
 
 ### 6.6.1 Tables
@@ -2213,7 +2241,9 @@ form of `import_batches` (section 6.5, Import tables). `V139__import_mappings.sq
 `V138`, claimed by #767) is expand only: `import_mappings`, the mapping columns of `import_batches` and the guard trigger
 `import_batches_mapping_kept` (section 6.5, Import tables). `V140__import_validation.sql` (#130; directly after `V139`) is expand
 only: `import_issues`, the validation columns of `import_rows` with their column grant, and the guard triggers
-`import_issues_batch_kept` and `import_rows_validation_kept` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
+`import_issues_batch_kept` and `import_rows_validation_kept` (section 6.5, Import tables). `V141__import_review_queue.sql` (#131;
+directly after `V140`) is expand only: `import_issue_resolutions`, the review columns of `import_issues` and `import_rows` with
+their column grants, the per-row ordinal key and the two guards widened (section 6.5, Import tables). The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
