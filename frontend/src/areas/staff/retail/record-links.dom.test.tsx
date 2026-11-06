@@ -11,7 +11,8 @@ import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 import { CreditNoteView } from './credit-note';
-import { ToItems, ToStock } from './analytics-ui';
+import { ToItems, ToStock, ToUsage } from './analytics-ui';
+import { UsageHistoryPage } from './usage-history';
 import { ProductsPage } from './catalogue-products';
 import { AllSales, CreditSales } from './sales';
 import { SaleLink } from './screen-link';
@@ -63,6 +64,20 @@ describe('a category opens its items (#798)', () => {
     const router = show(<ProductsPage />, `/staff/retail/catalogue/products?category=${LIGHTING}`);
     await waitFor(() => expect(screen.getByRole('button', { name: /^Lighting/, pressed: true })).toBeTruthy());
     await waitFor(() => expect(router.state.location.search).toEqual({}));
+  });
+});
+
+describe('a used or damaged count on Stock health opens the records behind it (#798)', () => {
+  it('links to Past usage and damage with the branch and the days', () => {
+    show(<ToUsage branch={BRANCH_B} from="2026-10-01" to="2026-10-31">2 reports</ToUsage>, '/staff');
+    expect(screen.getByRole('link', { name: '2 reports' }).getAttribute('href')).toBe(`/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31`);
+  });
+
+  it('opens Past usage and damage on those days, switched to that branch', async () => {
+    const chooseBranch = vi.fn();
+    const router = show(<UsageHistoryPage />, `/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31`, { chooseBranch });
+    await waitFor(() => expect(chooseBranch).toHaveBeenCalledWith(BRANCH_B));
+    await waitFor(() => expect(router.state.location.search).toEqual({ from: '2026-10-01', to: '2026-10-31' }));
   });
 });
 

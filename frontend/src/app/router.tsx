@@ -147,7 +147,8 @@ const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(
 // One purchase, opened from a supplier's deliveries (issue #820).
 const retailPurchaseRoute = retailScreen('/restocks/$purchaseId', 'Purchase').lazy(() => import('../areas/staff/retail/restocks').then((m) => m.PurchaseRoute));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
-const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage').lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
+// Issue #798: `branch`, `from` and `to` open the usage and damage behind a count on Stock health.
+const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage', textParams('branch', 'from', 'to')).lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock', 'Stock', textParams('item', 'branch')).lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
 // The item page (issue #813): one item's stock in each shop and every movement of it with the balance after each.
 const retailItemPageRoute = retailScreen('/items/$productId', 'Item').lazy(() => import('../areas/staff/retail/item-page').then((m) => m.Route));

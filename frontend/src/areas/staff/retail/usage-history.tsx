@@ -17,6 +17,7 @@ import { useEntryDistances, whereWords } from './entry-location';
 import { UndoUsageAction, UndoneMark, undoneWords } from './usage-undo';
 import { showDate, showQty } from './maths';
 import { Gate, Money, Problem, useBranchName, useBranchView } from './ui';
+import { useAddress, useBranchFromAddress } from './screen-link';
 
 // Past usage and damage (issue #145, AppSheet "Damaged or used stock not sold"): every item taken out of stock as used in the
 // shop or damaged, newest first, in the days chosen, at the branch chosen at the top of the page (or every branch), and for
@@ -134,8 +135,13 @@ function UsageRows({ sel, all, nameOf }: { sel: ListSelection; all: boolean; nam
 
 export function UsageHistoryPage() {
   const today = businessToday();
-  const [from, setFrom] = useState(daysBefore(today, 30));
-  const [to, setTo] = useState(today);
+  // Issue #798: a count on Stock health opens this page on its days and its branch (`?from=&to=&branch=`).
+  const { search: asked, go } = useAddress();
+  const day = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+  const [from, setFrom] = useState(day(asked.from) ?? daysBefore(today, 30));
+  const [to, setTo] = useState(day(asked.to) ?? today);
+  const askedBranch = typeof asked.branch === 'string' && asked.branch !== '' ? asked.branch : undefined;
+  const unknownBranch = useBranchFromAddress(askedBranch, go, '/staff/retail/usage-history', { from, to });
   const { me } = useStaff();
   const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
@@ -178,6 +184,7 @@ export function UsageHistoryPage() {
           </>
         )}
       </div>
+      {unknownBranch !== null && <p className="hint" data-testid="branch-not-yours">That branch cannot be opened here (it is closed, or not one you work at), so this is the branch you are using.</p>}
       {from > to && <p className="hint" role="status">The first day is after the last day. Choose the days again.</p>}
       <ViewSwitch view={view.view} onChange={view.setView} />
       {grouped && ready && (

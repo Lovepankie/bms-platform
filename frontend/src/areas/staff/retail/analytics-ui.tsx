@@ -22,6 +22,14 @@ export function ToStock({ children, item, branch }: { children: ReactNode; /** O
   return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/stock" search={search as never}>{children}</Link> : <>{children}</>;
 }
 
+/** A count of used or damaged stock that opens Past usage and damage for that branch and those days (issue #798); plain text without a stock read. */
+export function ToUsage({ children, branch, from, to }: { children: ReactNode; branch?: string; from?: string; to?: string }) {
+  const staff = useContext(StaffContext);
+  const router = useRouter({ warn: false });
+  const search = { ...(branch ? { branch } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) };
+  return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/usage-history" search={search as never}>{children}</Link> : <>{children}</>;
+}
+
 /** A category name that opens the Items page on that category (issue #798), for a session that may open Items; plain text otherwise. */
 export function ToItems({ children, category }: { children: ReactNode; category: string | undefined }) {
   const staff = useContext(StaffContext);

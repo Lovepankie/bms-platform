@@ -20,7 +20,7 @@ import { STOCK_NAMES, STOCK_ORDER, listUser, withoutShop, type ListSelection } f
 import { GroupedStock, type StockFilter } from './stock-grouped';
 import { keptWords } from './orders-state';
 import { CategoryChips, FindBar, NoItem, onlyMatch, useChosenChip, useFindTerm } from './phone-find';
-import { ScreenLink, useAddress } from './screen-link';
+import { ScreenLink, useAddress, useBranchFromAddress } from './screen-link';
 import { Hint } from '../../../app/ui/Hint';
 import { HelpTip } from '../../../app/ui/HelpTip';
 import { WORDS } from '../../../app/glossary';
@@ -335,16 +335,8 @@ function StockRows({ sel, filter, all, branchId }: { sel: ListSelection; filter:
  * Issue #336: `?branch=<id>` opens that branch's stock by switching to it, once, when this person works there; then the address
  * keeps only `item`. Returns the branch asked for that this person cannot switch to, so the page can say so.
  */
-function useBranchFromAddress(branch: string | undefined, item: string | undefined, go: ReturnType<typeof useAddress>['go']): string | null {
-  const { me, branch: current, chooseBranch } = useStaff();
-  // A branch this session cannot switch to (not one of its branches, or no switcher where the page is drawn) is said, never dropped in silence.
-  const known = branch !== undefined && chooseBranch !== undefined && (me.branches ?? []).some((b) => b.id === branch);
-  useEffect(() => {
-    if (branch === undefined || !known) return;
-    if (branch !== current) chooseBranch?.(branch);
-    go('/staff/retail/stock', item ? { item } : {}, true);
-  }, [branch, known, current, chooseBranch, go, item]);
-  return branch !== undefined && !known ? branch : null;
+function useStockBranchFromAddress(branch: string | undefined, item: string | undefined, go: ReturnType<typeof useAddress>['go']): string | null {
+  return useBranchFromAddress(branch, go, '/staff/retail/stock', item ? { item } : {});
 }
 
 /** Issue #336: the note over Stock opened for one item from a link, with the way back to every item (a 48px button on a neutral note). */
@@ -368,7 +360,7 @@ function useItemFromAddress(item: string | undefined) {
 export function StockPage() {
   const { me } = useStaff();
   const address = useAddress();
-  const unknownBranch = useBranchFromAddress(textOf(address.search.branch), textOf(address.search.item), address.go);
+  const unknownBranch = useStockBranchFromAddress(textOf(address.search.branch), textOf(address.search.item), address.go);
   const fromAddress = useItemFromAddress(textOf(address.search.item));
   const oneItem = fromAddress.item !== undefined;
   const { all, branchId } = useBranchView();
