@@ -572,7 +572,8 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
     placeholderData: keepPreviousData,
-    enabled: chipReady,
+    // While a `?category=` waits to be applied, nothing is asked, so the saved chip's list is never fetched first (review of #862).
+    enabled: chipReady && fromAddress === '',
   });
   const finding = page.isPlaceholderData || (page.isFetching && !page.isFetchingNextPage);
   const listed = onlyMatch((page.data?.pages ?? []).flatMap((p) => p.items ?? []), match, (p) => p.id) ?? [];

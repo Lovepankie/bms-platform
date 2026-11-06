@@ -143,6 +143,16 @@ export function UsageHistoryPage() {
   const askedBranch = typeof asked.branch === 'string' && asked.branch !== '' ? asked.branch : undefined;
   // `?kind=used|damaged` (a count on Stock health) shows only that kind, in the flat list, until Show used and damaged.
   const [kind, setKind] = useState<'usage' | 'damage' | undefined>(asked.kind === 'used' ? 'usage' : asked.kind === 'damaged' ? 'damage' : undefined);
+  // A new address while the page stays open (another count on Stock health, back and forward) moves the page to it, not only
+  // the first one (review of #862). The page's own writes put the same values back, so they change nothing here.
+  const addressFrom = day(asked.from);
+  const addressTo = day(asked.to);
+  const addressKind = asked.kind === 'used' ? 'usage' : asked.kind === 'damaged' ? 'damage' : undefined;
+  useEffect(() => {
+    if (addressFrom) setFrom(addressFrom);
+    if (addressTo) setTo(addressTo);
+    if (addressKind) setKind(addressKind);
+  }, [addressFrom, addressTo, addressKind]);
   const unknownBranch = useBranchFromAddress(askedBranch, go, '/staff/retail/usage-history', { from, to, ...(kind ? { kind: kind === 'usage' ? 'used' : 'damaged' } : {}) });
   const { me } = useStaff();
   const { all, branchId } = useBranchView();

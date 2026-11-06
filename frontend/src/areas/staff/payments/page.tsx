@@ -64,6 +64,12 @@ export function CodeField({ id, value, onChange, problem }: { id: string; value:
   );
 }
 
+/**
+ * A saved key not yet tested: Test connection is the one brand button (rule 3, issue #798). After a failed test the next step is
+ * to put the key right, so Save the key and secret is the brand button and Test connection is plain (review of #862).
+ */
+export const waitsForTest = (account: MerchantAccount) => account.credentials_saved && account.status !== 'verified' && account.status !== 'failed';
+
 export function CredentialsForm({ account, busy, error, onSave }: {
   account: MerchantAccount;
   busy: boolean;
@@ -115,8 +121,7 @@ export function CredentialsForm({ account, busy, error, onSave }: {
         <CodeField id="receive-code" value={code} onChange={setCode} problem={codeBad} />
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
         <p>
-          {/* A saved key not yet checked: Test connection is the one brand button (rule 3, issue #798). */}
-          <BusyButton type="submit" className={account.credentials_saved && account.status !== 'verified' ? undefined : 'rt-primary'} busy={busy} notReady={!ready}>Save the key and secret</BusyButton>
+          <BusyButton type="submit" className={waitsForTest(account) ? undefined : 'rt-primary'} busy={busy} notReady={!ready}>Save the key and secret</BusyButton>
         </p>
       </form>
     </section>
@@ -228,7 +233,7 @@ export function ReceivePaymentsPage() {
           <Hint>We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</Hint>
           {test.error && <p role="alert" className="alert alert-danger">{messageOf(test.error)}</p>}
           <p>
-            <BusyButton type="button" className="rt-primary" busy={test.isPending} disabled={busy || !account.host_ready} onClick={() => test.mutate()}>
+            <BusyButton type="button" className={waitsForTest(account) ? 'rt-primary' : undefined} busy={test.isPending} disabled={busy || !account.host_ready} onClick={() => test.mutate()}>
               Test connection
             </BusyButton>
           </p>

@@ -1280,11 +1280,14 @@ section too), slow movers, Business evaluation and a saved stock move open that 
 `retail/links-retail-reports.dom.test.tsx`. Still plain: category and unit rows, Insights drill-down rows, the used, damaged
 and found-missing counts on Stock health, and the allocations on an account's payments (listed in the follow-up issue #798).
 
-**Closed by #798.** `/staff/retail/catalogue/products?category=<id>` chooses that category's chip once and leaves the address
+**Closed by #798.** `/staff/retail/catalogue/products?category=<id>` chooses that category's chip for that visit only (the
+chip Items remembers changes only on a tap; an id not in the list is said and every category shown) and leaves the address
 (`ToItems` in `analytics-ui.tsx` draws the link), so the category names on Stock value's By category and on Business
-evaluation open their items; the Stock link of an item row opens that item. `/staff/retail/usage-history?branch=<id>&from=&to=`
-opens Past usage and damage on those days, switched to that branch the way Stock is (`useBranchFromAddress` in
-`screen-link.tsx`), and `ToUsage` makes Stock health's Used and Damaged counts open it. The allocations of a payment on account
+evaluation, and Items on each row of Categories, open their items; the Stock link of an item row opens that item.
+`/staff/retail/usage-history?branch=<id>&from=&to=&kind=used|damaged` opens Past usage and damage on those days and that kind
+only (with Show used and damaged), switched to that branch the way Stock is (`useBranchFromAddress` in `screen-link.tsx`), and
+`ToUsage` makes Stock health's Used and Damaged counts open it, each on its own kind (a count of none stays plain). The
+address follows the days chosen there. The allocations of a payment on account
 and the sales before system start on the statement carry the sale id already, so `SaleLink` opens them. Tested in
 `retail/record-links.dom.test.tsx`. Left for #863, each needing the server or a new screen: unit rows (the items list takes no
 unit filter), Insights drill-down ids, and a list for Found missing.

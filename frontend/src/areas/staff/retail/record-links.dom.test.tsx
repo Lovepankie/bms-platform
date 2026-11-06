@@ -90,9 +90,13 @@ describe('a category opens its items (#798)', () => {
 
   it('chooses the category for that visit only: the saved Items chip is unchanged, and a tap still saves (Lead, #862)', async () => {
     localStorage.setItem(SAVED, CABLES);
+    const list = vi.spyOn(retail, 'listCatalogue');
     show(<ProductsPage />, `/staff/retail/catalogue/products?category=${LIGHTING}`);
     await waitFor(() => expect(screen.getByRole('button', { name: /^Lighting/, pressed: true })).toBeTruthy());
     expect(localStorage.getItem(SAVED)).toBe(CABLES);
+    // The saved chip's list is never asked for on the way in: only Lighting's.
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    expect(list.mock.calls.map(([q]) => q.categoryId)).not.toContain(CABLES);
     fireEvent.click(screen.getByRole('button', { name: /^Fittings/ }));
     expect(localStorage.getItem(SAVED)).toBe(FITTINGS);
   });
@@ -118,6 +122,18 @@ describe('a used or damaged count on Stock health opens the records behind it (#
     cleanup();
     show(<UsageHistoryPage />, '/staff/retail/usage-history', { me });
     expect(screen.getByText(/You do not have access/)).toBeTruthy();
+  });
+
+  it('is plain text for a count of none, which has nothing behind it', () => {
+    show(<ToUsage branch={BRANCH_B} kind="damaged" count={0}>0 reports</ToUsage>, '/staff');
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('follows a new address while the page stays open', async () => {
+    const router = show(<UsageHistoryPage />, '/staff/retail/usage-history?from=2026-10-01&to=2026-10-31&kind=used');
+    expect((await screen.findByTestId('one-kind')).textContent).toContain('used stock only');
+    await router.navigate({ to: '/staff/retail/usage-history', search: { from: '2026-09-01', to: '2026-09-30', kind: 'damaged' } as never });
+    await waitFor(() => expect(screen.getByTestId('one-kind').textContent).toContain('damaged stock only'));
   });
 
   it('keeps the days chosen in the address, so a reload keeps them', async () => {

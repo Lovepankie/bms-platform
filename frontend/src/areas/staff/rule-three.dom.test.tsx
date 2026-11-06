@@ -29,7 +29,7 @@ vi.mock('../../api/lending', async (original) => {
 const { StaffHome } = await import('./home');
 const { AssistantCaps } = await import('./assistant/page');
 const { PortfolioView, RevenueView } = await import('./insights/page');
-const { CredentialsForm } = await import('./payments/page');
+const { CredentialsForm, waitsForTest } = await import('./payments/page');
 
 afterEach(cleanup);
 
@@ -72,11 +72,17 @@ describe('rule 3 on the screens of #798', () => {
 
   it('keeps Save the key and secret plain while a saved key waits for its test', () => {
     const account = (status: string, saved: boolean) => ({ status, credentials_saved: saved, key_hint: saved ? 'AB12' : null, last_checked_at: null, failure_reason: null, host_ready: true }) as unknown as MerchantAccount;
-    show(<CredentialsForm account={account('unverified', true)} busy={false} error={null} onSave={() => undefined} />);
+    show(<CredentialsForm account={account('not_connected', true)} busy={false} error={null} onSave={() => undefined} />);
     expect(brand()).toHaveLength(0);
     cleanup();
-    show(<CredentialsForm account={account('unverified', false)} busy={false} error={null} onSave={() => undefined} />);
+    show(<CredentialsForm account={account('not_connected', false)} busy={false} error={null} onSave={() => undefined} />);
     expect(brand()).toHaveLength(1);
+    cleanup();
+    // After a failed test the key needs putting right: Save is the brand button again, and Test connection is plain.
+    show(<CredentialsForm account={account('failed', true)} busy={false} error={null} onSave={() => undefined} />);
+    expect(brand()).toHaveLength(1);
+    expect(waitsForTest(account('failed', true))).toBe(false);
+    expect(waitsForTest(account('not_connected', true))).toBe(true);
   });
 
   it('puts a tip on Portfolio at risk and on From posted journal lines only', () => {

@@ -26,11 +26,11 @@ export function ToStock({ children, item, branch }: { children: ReactNode; /** O
  * A count of used or damaged stock that opens Past usage and damage for that branch, those days and that `kind` only (issue #798).
  * That page's gate is the `stock` screen, so the same check decides the link: plain text for a session that may not open it.
  */
-export function ToUsage({ children, branch, from, to, kind }: { children: ReactNode; branch?: string; from?: string; to?: string; kind: 'used' | 'damaged' }) {
+export function ToUsage({ children, branch, from, to, kind, count }: { children: ReactNode; branch?: string; from?: string; to?: string; kind: 'used' | 'damaged'; /** A count of none opens nothing: plain text. */ count?: number }) {
   const staff = useContext(StaffContext);
   const router = useRouter({ warn: false });
   const search = { ...(branch ? { branch } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), kind };
-  return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/usage-history" search={search as never}>{children}</Link> : <>{children}</>;
+  return router && staff && count !== 0 && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/usage-history" search={search as never}>{children}</Link> : <>{children}</>;
 }
 
 /** A category name that opens the Items page on that category (issue #798), for a session that may open Items; plain text otherwise. */
