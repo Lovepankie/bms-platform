@@ -143,10 +143,17 @@ class StockController {
             @Parameter(description = "Only these movement kinds, for example usage and damage (#145)")
                     @RequestParam(name = "kind", required = false)
                     List<String> kinds,
+            @Parameter(
+                            description =
+                                    "Only the short lines of committed stock counts, the rows behind Stock health's Found"
+                                            + " missing (issue #863)")
+                    @RequestParam(name = "found_missing", required = false, defaultValue = "false")
+                    boolean foundMissing,
             @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.movements(branchIds, productId, from, to, kinds, newestFirst, limit, cursor);
+        return service.movements(
+                branchIds, productId, from, to, kinds, newestFirst, limit, cursor, false, foundMissing);
     }
 
     // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issue #816).

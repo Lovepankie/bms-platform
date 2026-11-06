@@ -50,6 +50,9 @@ class InsightsTables {
     /** Columns that hold a person's name: masked in an export for a caller without member read access. */
     static final Set<String> NAME_COLUMNS = Set.of("member_name");
 
+    /** The kind of a column that holds a record id: not drawn, not exported (issue #863). */
+    static final String ID = "id";
+
     private final JdbcClient jdbc;
     private final Positions positions;
     private final InsightsQueries queries;
@@ -69,6 +72,11 @@ class InsightsTables {
     private static final Column LOAN = col("loan_no", "Loan", "text");
     private static final Column MEMBER = col("member_no", "Member", "text");
     private static final Column NAME = col("member_name", "Name", "text");
+    // Issue #863: the record ids, so a loan or member number opens its record. Kind "id": the screen does not draw
+    // them and the CSV leaves them out. They come from the same rows as the numbers, under the same tenant and branch
+    // filter.
+    private static final Column LOAN_ID = col("loan_id", "Loan id", ID);
+    private static final Column MEMBER_ID = col("member_id", "Member id", ID);
 
     TableResponse table(String key, Scope s, Map<String, String> params, ZoneId zone, int limit) {
         if (!KEYS.contains(key)) {
@@ -91,10 +99,12 @@ class InsightsTables {
                                         col("product", "Product", "text"),
                                         col("branch", "Branch", "text"),
                                         col("officer", "Officer", "text"),
-                                        col("principal_minor", "Principal", "money"))),
+                                        col("principal_minor", "Principal", "money"),
+                                        LOAN_ID,
+                                        MEMBER_ID)),
                         """
                     SELECT t.value_date, l.loan_no, m.member_no, pr.name AS product, b.name AS branch,
-                           u.full_name AS officer, t.amount_minor AS principal_minor
+                           u.full_name AS officer, t.amount_minor AS principal_minor, l.id AS loan_id, m.id AS member_id
                       FROM lending_loan_transactions t
                       JOIN lending_loans l ON l.id = t.loan_id
                       JOIN lending_members m ON m.id = l.member_id
@@ -120,10 +130,12 @@ class InsightsTables {
                                         MEMBER,
                                         col("txn_type", "Type", "text"),
                                         col("method", "Method", "text"),
-                                        col("amount_minor", "Amount", "money"))),
+                                        col("amount_minor", "Amount", "money"),
+                                        LOAN_ID,
+                                        MEMBER_ID)),
                         """
                     SELECT t.value_date, t.receipt_no, l.loan_no, m.member_no, t.txn_type,
-                           t.payment_method_key AS method, t.amount_minor
+                           t.payment_method_key AS method, t.amount_minor, l.id AS loan_id, m.id AS member_id
                       FROM lending_loan_transactions t
                       JOIN lending_loans l ON l.id = t.loan_id
                       JOIN lending_members m ON m.id = l.member_id
@@ -147,9 +159,11 @@ class InsightsTables {
                                         col("item_no", "Item", "count"),
                                         col("due_minor", "Due", "money"),
                                         col("collected_minor", "Collected on due", "money"),
-                                        col("unpaid_minor", "Unpaid now", "money"))),
+                                        col("unpaid_minor", "Unpaid now", "money"),
+                                        LOAN_ID,
+                                        MEMBER_ID)),
                         """
-                    SELECT si.due_date, l.loan_no, m.member_no, si.item_no,
+                    SELECT si.due_date, l.loan_no, m.member_no, si.item_no, l.id AS loan_id, m.id AS member_id,
                            si.principal_due_minor + si.interest_due_minor + si.fees_due_minor AS due_minor,
                            coalesce((SELECT sum(a.amount_minor) FROM lending_repayment_allocations a
                                        JOIN lending_loan_transactions t ON t.id = a.applies_to_txn_id
@@ -182,9 +196,12 @@ class InsightsTables {
                                         col("status", "Status", "text"),
                                         col("product", "Product", "text"),
                                         col("branch", "Branch", "text"),
-                                        col("principal_minor", "Principal", "money"))),
+                                        col("principal_minor", "Principal", "money"),
+                                        LOAN_ID,
+                                        MEMBER_ID)),
                         """
                         SELECT l.loan_no, m.member_no, l.status, pr.name AS product, b.name AS branch,
+                               l.id AS loan_id, m.id AS member_id,
                                coalesce(l.approved_principal_minor, l.requested_principal_minor) AS principal_minor
                           FROM lending_loans l
                           JOIN lending_members m ON m.id = l.member_id
@@ -208,9 +225,12 @@ class InsightsTables {
                                         LOAN,
                                         MEMBER,
                                         NAME,
-                                        col("unpaid_minor", "Expected", "money"))),
+                                        col("unpaid_minor", "Expected", "money"),
+                                        LOAN_ID,
+                                        MEMBER_ID)),
                         """
                         SELECT si.due_date, l.loan_no, m.member_no, m.full_name AS member_name,
+                               l.id AS loan_id, m.id AS member_id,
                                (si.principal_due_minor - si.principal_paid_minor)
                                    + (si.interest_due_minor - si.interest_paid_minor - si.interest_waived_minor)
                                    + (si.fees_due_minor - si.fees_paid_minor - si.fees_waived_minor) AS unpaid_minor
@@ -237,9 +257,12 @@ class InsightsTables {
                                         col("value_date", "Date", "date"),
                                         LOAN,
                                         MEMBER,
-                                        col("principal_minor", "Principal", "money"))),
+                                        col("principal_minor", "Principal", "money"),
+                                        LOAN_ID,
+                                        MEMBER_ID)),
                         """
-                    SELECT t.value_date, l.loan_no, m.member_no, t.amount_minor AS principal_minor
+                    SELECT t.value_date, l.loan_no, m.member_no, t.amount_minor AS principal_minor,
+                           l.id AS loan_id, m.id AS member_id
                       FROM lending_loan_transactions t
                       JOIN lending_loans l ON l.id = t.loan_id
                       JOIN lending_members m ON m.id = l.member_id
@@ -263,9 +286,10 @@ class InsightsTables {
                                         col("entry_no", "Entry", "text"),
                                         LOAN,
                                         col("account", "Account", "text"),
-                                        col("amount_minor", "Amount", "money"))),
+                                        col("amount_minor", "Amount", "money"),
+                                        LOAN_ID)),
                         """
-                        SELECT je.entry_date, je.entry_no, l.loan_no, ga.name AS account,
+                        SELECT je.entry_date, je.entry_no, l.loan_no, ga.name AS account, l.id AS loan_id,
                                CASE WHEN ga.account_type = 'expense' THEN jl.debit - jl.credit
                                     ELSE jl.credit - jl.debit END AS amount_minor
                           FROM journal_entries je
@@ -291,10 +315,11 @@ class InsightsTables {
                                         MEMBER,
                                         col("registered_on", "Registered", "date"),
                                         col("branch", "Branch", "text"),
-                                        col("kyc_status", "KYC", "text"))),
+                                        col("kyc_status", "KYC", "text"),
+                                        MEMBER_ID)),
                         """
                     SELECT m.member_no, (m.created_at AT TIME ZONE :zone)::date AS registered_on, b.name AS branch,
-                           m.kyc_status
+                           m.kyc_status, m.id AS member_id
                       FROM lending_members m
                       JOIN branches b ON b.id = m.branch_id
                      WHERE m.created_at >= :fromTs AND m.created_at < :toTs""",
@@ -321,10 +346,12 @@ class InsightsTables {
                                         MEMBER,
                                         col("submitted_on", "Submitted", "date"),
                                         col("status", "Status", "text"),
-                                        col("principal_minor", "Requested", "money"))),
+                                        col("principal_minor", "Requested", "money"),
+                                        LOAN_ID,
+                                        MEMBER_ID)),
                         """
                         SELECT l.loan_no, m.member_no, (l.submitted_at AT TIME ZONE :zone)::date AS submitted_on, l.status,
-                               l.requested_principal_minor AS principal_minor
+                               l.requested_principal_minor AS principal_minor, l.id AS loan_id, m.id AS member_id
                           FROM lending_loans l
                           JOIN lending_members m ON m.id = l.member_id
                          WHERE l.submitted_at >= :fromTs AND l.submitted_at < :toTs""" + condition,
@@ -341,9 +368,10 @@ class InsightsTables {
                                 List.of(
                                         MEMBER,
                                         col("first_in_range", "Disbursed in range", "date"),
-                                        col("earlier_loans", "Earlier loans", "count"))),
+                                        col("earlier_loans", "Earlier loans", "count"),
+                                        MEMBER_ID)),
                         """
-                    SELECT m.member_no, min(t.value_date) AS first_in_range,
+                    SELECT m.member_no, l.member_id, min(t.value_date) AS first_in_range,
                            (SELECT count(*) FROM lending_loans e
                              WHERE e.member_id = l.member_id AND e.status <> 'cancelled'
                                AND e.disbursed_on < min(t.value_date)) AS earlier_loans
@@ -367,9 +395,10 @@ class InsightsTables {
                                         MEMBER,
                                         NAME,
                                         col("branch", "Branch", "text"),
-                                        col("last_activity", "Last loan activity", "date"))),
+                                        col("last_activity", "Last loan activity", "date"),
+                                        MEMBER_ID)),
                         """
-                    SELECT m.member_no, m.full_name AS member_name, b.name AS branch,
+                    SELECT m.member_no, m.full_name AS member_name, b.name AS branch, m.id AS member_id,
                            (SELECT max(dt.value_date) FROM lending_loan_transactions dt
                               JOIN lending_loans dl ON dl.id = dt.loan_id WHERE dl.member_id = m.id) AS last_activity
                       FROM lending_members m
@@ -484,7 +513,9 @@ class InsightsTables {
                         col("bucket", "Bucket", "text"),
                         col("arrears_minor", "Arrears", "money"),
                         col("principal_outstanding_minor", "Principal outstanding", "money"),
-                        col("officer", "Officer", "text"))
+                        col("officer", "Officer", "text"),
+                        LOAN_ID,
+                        MEMBER_ID)
                 : List.of(
                         LOAN,
                         MEMBER,
@@ -493,7 +524,9 @@ class InsightsTables {
                         col("officer", "Officer", "text"),
                         col("principal_outstanding_minor", "Principal outstanding", "money"),
                         col("interest_outstanding_minor", "Interest receivable", "money"),
-                        col("days_past_due", "Days past due", "days"));
+                        col("days_past_due", "Days past due", "days"),
+                        LOAN_ID,
+                        MEMBER_ID);
         Function<Positions.Position, List<String>> render = p -> {
             String[] m = members.getOrDefault(p.memberId(), new String[] {"", ""});
             String officer = officers.getOrDefault(p.officerUserId(), InsightsService.staffLabel(p.officerUserId()));
@@ -506,7 +539,9 @@ class InsightsTables {
                             p.bucket(),
                             String.valueOf(p.arrearsMinor()),
                             String.valueOf(p.principalOutstandingMinor()),
-                            officer)
+                            officer,
+                            String.valueOf(p.loanId()),
+                            String.valueOf(p.memberId()))
                     : List.of(
                             p.loanNo(),
                             m[0],
@@ -515,7 +550,9 @@ class InsightsTables {
                             officer,
                             String.valueOf(p.principalOutstandingMinor()),
                             String.valueOf(p.interestOutstandingMinor()),
-                            String.valueOf(p.daysPastDue()));
+                            String.valueOf(p.daysPastDue()),
+                            String.valueOf(p.loanId()),
+                            String.valueOf(p.memberId()));
         };
         return new TableResponse(
                 key,

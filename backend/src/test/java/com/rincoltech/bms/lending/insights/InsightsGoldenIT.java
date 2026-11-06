@@ -399,6 +399,64 @@ class InsightsGoldenIT extends IntegrationTest {
         assertThat(atRisk).isEqualTo(GoldenModel.parAmount(ma.live(today, l -> true), 30));
     }
 
+    /**
+     * Issue #863: each drill-down row carries the ids of its own loan and member, read under the same tenant and branch
+     * filter as the numbers, so a user scoped to one branch gets only that branch's records of this tenant.
+     */
+    // JUSTIFICATION-A3: issue #863 asks for proof that the new id columns are tenant and branch scoped.
+    @Test
+    void drillDownIdsAreTheRowsOwnRecordsInScope() {
+        LocalDate from = today.minusDays(120);
+        // The branch with the most active loans, so the scoped tables have rows to check.
+        UUID branch = TestDatabase.owner()
+                .sql("SELECT branch_id FROM lending_loans WHERE tenant_id = ? AND status = 'active'"
+                        + " GROUP BY branch_id ORDER BY count(*) DESC, branch_id LIMIT 1")
+                .param(a.tenantId())
+                .query(UUID.class)
+                .single();
+        HttpHeaders scoped = headers(a, UUID.randomUUID(), ALL, branch.toString());
+        int checked = 0;
+        for (String path : List.of(
+                "/tables/disbursements?from=" + from + "&to=" + today, "/tables/arrears", "/tables/active_loans")) {
+            JsonNode table = get(a, path, scoped);
+            int loanNo = column(table, "loan_no");
+            int loanId = column(table, "loan_id");
+            int memberId = column(table, "member_id");
+            int memberNo = column(table, "member_no");
+            for (JsonNode row : table.get("rows")) {
+                String loan = TestDatabase.owner()
+                        .sql("SELECT loan_no FROM lending_loans WHERE tenant_id = ? AND branch_id = ? AND id = ?::uuid")
+                        .params(a.tenantId(), branch, row.get(loanId).asString())
+                        .query(String.class)
+                        .single();
+                assertThat(loan).isEqualTo(row.get(loanNo).asString());
+                String member = TestDatabase.owner()
+                        .sql("SELECT member_no FROM lending_members WHERE tenant_id = ? AND id = ?::uuid")
+                        .params(a.tenantId(), row.get(memberId).asString())
+                        .query(String.class)
+                        .single();
+                assertThat(member).isEqualTo(row.get(memberNo).asString());
+                checked++;
+            }
+        }
+        assertThat(checked).isPositive();
+        // The id columns are of kind id, so the screen does not draw them and the export leaves them out.
+        JsonNode table = owner(a, "/tables/disbursements?from=" + from + "&to=" + today);
+        assertThat(table.get("columns")
+                        .get(column(table, "loan_id"))
+                        .get("kind")
+                        .asString())
+                .isEqualTo("id");
+        ResponseEntity<String> csv = http.exchange(
+                BASE + "/tables/disbursements/export?from=" + from + "&to=" + today,
+                HttpMethod.GET,
+                new HttpEntity<>(headers(a, UUID.randomUUID(), ALL, "*")),
+                String.class);
+        assertThat(csv.getBody().lines().findFirst().orElseThrow())
+                .doesNotContain("Loan id")
+                .doesNotContain("Member id");
+    }
+
     static int column(JsonNode table, String key) {
         JsonNode columns = table.get("columns");
         for (int i = 0; i < columns.size(); i++) {

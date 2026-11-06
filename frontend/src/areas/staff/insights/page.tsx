@@ -13,12 +13,13 @@ import {
 import { businessToday } from '../../../api/retail';
 import { branchFilter } from '../../../auth/branch';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { useStaff } from '../context';
+import { useOptionalStaff, useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { BarList, ColumnChart, LineChart, type BarRow } from './charts';
 import { formatValue, presetRange, words } from './format';
 import { AdvisorCard } from './advisor';
 import { showLending } from '../lending/permissions';
+import { showMembers } from '../lending/member-permissions';
 import { showInvestments } from '../lending/investment-state';
 import { canExport, canManageDigest, canUseAdvisor, ownPortfolioOnly, showInsights } from './permissions';
 import { MetricCard, MetricGrid, drillOf, type DrillTarget } from './ui';
@@ -566,8 +567,23 @@ export function MembersView({ query, onDrill }: { query: Query<InsightsMembers>;
 
 /** The rows behind a number, with a CSV export for those who may export. */
 export function DrillTable({ table }: { table: InsightsTable }) {
-  const columns = table.columns ?? [];
+  const me = useOptionalStaff()?.me;
+  const all = table.columns ?? [];
+  // Issue #863: columns of kind id carry the record ids; they are not drawn, they make the loan and member numbers links, each
+  // only for a person who may open that screen (the loan page's own key and the member page's own key), plain text otherwise.
+  const at = (key: string) => all.findIndex((c) => c.key === key && c.kind === 'id');
+  const loanAt = me && showLending(me) ? at('loan_id') : -1;
+  const memberAt = me && showMembers(me) ? at('member_id') : -1;
+  const drawn = all.map((c, j) => ({ c, j })).filter(({ c }) => c.kind !== 'id');
+  const columns = drawn.map(({ c }) => c);
   const cur = table.currency ?? 'UGX';
+  const linked = (row: string[], key: string | undefined, cell: string) => {
+    const loanId = loanAt >= 0 ? row[loanAt] : '';
+    const memberId = memberAt >= 0 ? row[memberAt] : '';
+    if (key === 'loan_no' && loanId) return <Link to="/staff/lending/loans/$loanId" params={{ loanId }}>{cell}</Link>;
+    if (key === 'member_no' && memberId) return <Link to="/staff/lending/members/$memberId" params={{ memberId }}>{cell}</Link>;
+    return cell;
+  };
   return (
     <div className="table-wrap" role="region" tabIndex={0} aria-label={table.title}>
       <table>
@@ -583,12 +599,13 @@ export function DrillTable({ table }: { table: InsightsTable }) {
         <tbody>
           {(table.rows ?? []).map((row, i) => (
             <tr key={i}>
-              {row.map((cell, j) => {
-                const kind = columns[j]?.kind ?? 'text';
+              {drawn.map(({ c, j }) => {
+                const cell = row[j] ?? '';
+                const kind = c.kind ?? 'text';
                 const numeric = ['money', 'count', 'days', 'basis_points'].includes(kind);
                 return (
                   <td key={j} className={numeric ? 'num' : undefined}>
-                    {numeric && cell !== '' ? formatValue(Number(cell), kind, cur) : cell}
+                    {numeric && cell !== '' ? formatValue(Number(cell), kind, cur) : linked(row, c.key, cell)}
                   </td>
                 );
               })}

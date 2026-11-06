@@ -42,6 +42,9 @@ link never leads to "not allowed". A screen that opens one record has a stable a
 | A branch's stock | `/staff/retail/stock?branch=<id>` (switches to that branch when the person may use it) |
 | A category's items | `/staff/retail/catalogue/products?category=<id>` (`ToItems`, issue #798) |
 | Used and damaged stock of a branch | `/staff/retail/usage-history?branch=<id>&from=<day>&to=<day>` (`ToUsage`, issue #798) |
+| What stock counts found missing at a branch | `/staff/retail/usage-history?branch=<id>&from=<day>&to=<day>&kind=missing` (`ToUsage`, issue #863) |
+| A unit's items | `/staff/retail/catalogue/products?unit=<id>` (for that visit only, issue #863) |
+| A loan, a member (from an Insights drill-down) | `/staff/lending/loans/<id>`, `/staff/lending/members/<id>` (issue #863) |
 | A buyer's account, a credit note, a delivery, an order | their own routes with the id in the path |
 
 ## Rule 3. No training needed

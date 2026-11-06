@@ -352,11 +352,13 @@ class StockRepository {
             Instant afterCreated,
             UUID afterId,
             int limit) {
-        return movements(branchIds, productId, from, to, kinds, zone, newestFirst, afterCreated, afterId, limit, false);
+        return movements(
+                branchIds, productId, from, to, kinds, zone, newestFirst, afterCreated, afterId, limit, false, false);
     }
 
     /**
-     * As above; with {@code withBalance} (the item page, issue #813, which always names the product) each row also carries
+     * As above; {@code foundMissing} keeps only the short lines of committed stock counts, the rows Stock health counts as
+     * Found missing (issue #863). With {@code withBalance} (the item page, issue #813, which always names the product) each row also carries
      * the branch's balance of the item just after it and, on a sale, the sale line's profit. The balance is a running sum
      * over the item's whole history in each branch, taken before the dates, kinds and cursor narrow the rows, so the page
      * stays one query whatever it holds.
@@ -372,7 +374,8 @@ class StockRepository {
             Instant afterCreated,
             UUID afterId,
             int limit,
-            boolean withBalance) {
+            boolean withBalance,
+            boolean foundMissing) {
         if (branchIds != null && branchIds.isEmpty()) {
             return List.of();
         }
@@ -428,6 +431,9 @@ class StockRepository {
         if (kinds != null) {
             sql.append(" AND kind IN (:kinds)");
             params.put("kinds", kinds);
+        }
+        if (foundMissing) {
+            sql.append(" AND kind = 'adjustment' AND source_type = 'retail.stocktake' AND qty < 0");
         }
         // The local-date test decides; the instant range around it, a day wider than any zone offset,
         // only lets the (tenant_id, occurred_at, id) index narrow the scan (issue #107).

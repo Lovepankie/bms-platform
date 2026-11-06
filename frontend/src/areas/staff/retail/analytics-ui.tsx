@@ -23,10 +23,11 @@ export function ToStock({ children, item, branch }: { children: ReactNode; /** O
 }
 
 /**
- * A count of used or damaged stock that opens Past usage and damage for that branch, those days and that `kind` only (issue #798).
+ * A count of used or damaged stock that opens Past usage and damage for that branch, those days and that `kind` only (issue #798);
+ * `missing` (issue #863) opens the short lines of the stock counts there, the rows behind Found missing.
  * That page's gate is the `stock` screen, so the same check decides the link: plain text for a session that may not open it.
  */
-export function ToUsage({ children, branch, from, to, kind }: { children: ReactNode; branch?: string; from?: string; to?: string; kind: 'used' | 'damaged' }) {
+export function ToUsage({ children, branch, from, to, kind }: { children: ReactNode; branch?: string; from?: string; to?: string; kind: 'used' | 'damaged' | 'missing' }) {
   const staff = useContext(StaffContext);
   const router = useRouter({ warn: false });
   const search = { ...(branch ? { branch } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), kind };

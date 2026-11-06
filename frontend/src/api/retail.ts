@@ -437,7 +437,8 @@ export interface RetailApi {
   listCategories(): Promise<Category[]>;
   /** Catalogue management (#146): one page of products, with the filters of the Products screen. */
   /** With `branchId` each item carries its stock there (`qty`), for a session that may read that branch's stock. */
-  listCatalogue(q: { query?: string; categoryId?: string; active?: boolean; branchId?: string; cursor?: string; signal?: AbortSignal }): Promise<ProductPage>;
+  /** `unitId` (issue #863): the items counted in that unit or with an active package of it. */
+  listCatalogue(q: { query?: string; categoryId?: string; unitId?: string; active?: boolean; branchId?: string; cursor?: string; signal?: AbortSignal }): Promise<ProductPage>;
   getProduct(id: string): Promise<Product>;
   /** Before saving a new or renamed item: the products with this name or a close one (issue #352). */
   similarProducts(q: { description: string; unitId?: string; excludeId?: string }): Promise<SimilarProducts>;
@@ -512,7 +513,8 @@ export interface RetailApi {
   stockHistory(q: { productId: string; branchId: string; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   /** Stock used and damaged, newest first, in the days given and the caller's branch scope (#145); a blank branch or item means all. */
   /** `kind` narrows to used or damaged stock only (issue #798); both without it. */
-  usageHistory(q: { from: string; to: string; branchId?: string; productId?: string; kind?: 'usage' | 'damage'; cursor?: string; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
+  /** `kind: 'missing'` (issue #863): the short lines of committed stock counts, Stock health's Found missing. */
+  usageHistory(q: { from: string; to: string; branchId?: string; productId?: string; kind?: 'usage' | 'damage' | 'missing'; cursor?: string; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   /** Undo a usage or damage entry with a reason (issue #818): the stock goes back, the entry is kept and marked undone. */
   undoUsage(reportId: string, reason: string): Promise<UsageUndone>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeInactive?: boolean; signal?: AbortSignal }): Promise<StockRow[]>;
@@ -822,10 +824,10 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/categories')).items ?? [];
   },
 
-  async listCatalogue({ query, categoryId, active, branchId, cursor, signal }) {
+  async listCatalogue({ query, categoryId, unitId, active, branchId, cursor, signal }) {
     return unwrap(
       await api.GET('/api/v1/retail/products', {
-        params: { query: { query: query || undefined, category_id: categoryId || undefined, active, branch_id: branchId || undefined, limit: 50, cursor } },
+        params: { query: { query: query || undefined, category_id: categoryId || undefined, unit_id: unitId || undefined, active, branch_id: branchId || undefined, limit: 50, cursor } },
         signal,
       }),
     );
@@ -1037,7 +1039,7 @@ const realRetail: RetailApi = {
   async usageHistory({ from, to, branchId, productId, kind, cursor, signal }) {
     const page = unwrap(
       await api.GET('/api/v1/retail/stock/movements', {
-        params: { query: { from, to, kind: kind ? [kind] : ['usage', 'damage'], newest_first: true, ...(branchId ? { branch_id: [branchId] } : {}), ...(productId ? { product_id: productId } : {}), ...(cursor ? { cursor } : {}) } },
+        params: { query: { from, to, ...(kind === 'missing' ? { found_missing: true } : { kind: kind ? [kind] : ['usage', 'damage'] }), newest_first: true, ...(branchId ? { branch_id: [branchId] } : {}), ...(productId ? { product_id: productId } : {}), ...(cursor ? { cursor } : {}) } },
         signal,
       }),
     );

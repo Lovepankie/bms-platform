@@ -57,7 +57,8 @@ client.setQueryData(['retail', 'catalogue', 'categories'], []);
 client.setQueryData(['retail', 'catalogue', 'units'], [{ id: 'u1', name: 'Piece', active: true, product_count: 0, version: 1 }]);
 // The Items list, read for the whole business and for the branch in use alike.
 const listed = { pages: [{ items: [item, { ...item, id: 'p2', code: 'BL-1', description: 'Test LED bulb 9W screw' }] }], pageParams: [''] };
-for (const at of ['', branch]) client.setQueryData(['retail', 'catalogue', 'products', '', '', 'active', at], listed);
+// ?screen=items-unit (issue #863): opened from a unit row on Units, the list of that unit with Show every unit.
+for (const at of ['', branch]) for (const unit of ['', 'u1']) client.setQueryData(['retail', 'catalogue', 'products', '', '', unit, 'active', at], listed);
 
 const SCREENS: Record<string, { path: string; body: ReactNode }> = {
   sell: { path: '/staff/retail/sale', body: <Gate screen="sale" title="Record a sale"><SaleForm branchId={branch} /></Gate> },
@@ -70,6 +71,10 @@ const SCREENS: Record<string, { path: string; body: ReactNode }> = {
   // The catalogue Items list: on a phone the ways to add sizes and colours follow its last row (#825).
   items: {
     path: '/staff/retail/catalogue/products',
+    body: <Gate screen="products" title="Items"><ProductList onEdit={() => undefined} onPrice={() => undefined} onAdd={() => undefined} /></Gate>,
+  },
+  'items-unit': {
+    path: '/staff/retail/catalogue/products?unit=u1',
     body: <Gate screen="products" title="Items"><ProductList onEdit={() => undefined} onPrice={() => undefined} onAdd={() => undefined} /></Gate>,
   },
   // Not a daily screen: the one ActionBar with two buttons, Print and Make the labels.

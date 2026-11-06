@@ -17,22 +17,27 @@ final class Csv {
     static String render(TableResponse t, boolean names) {
         StringBuilder out = new StringBuilder();
         List<Column> columns = t.columns();
-        for (int i = 0; i < columns.size(); i++) {
+        // Issue #863: the record ids are for the screen's links only; the export leaves them out.
+        List<Integer> shown = java.util.stream.IntStream.range(0, columns.size())
+                .filter(i -> !columns.get(i).kind().equals(InsightsTables.ID))
+                .boxed()
+                .toList();
+        for (int i : shown) {
             Column c = columns.get(i);
             String header = c.kind().equals("money") && t.currency() != null
                     ? c.label() + " (" + t.currency() + " minor units)"
                     : c.label();
-            out.append(i == 0 ? "" : ",").append(cell(header));
+            out.append(i == shown.getFirst() ? "" : ",").append(cell(header));
         }
         out.append("\r\n");
         for (List<String> row : t.rows()) {
-            for (int i = 0; i < row.size(); i++) {
+            for (int i : shown) {
                 String v = row.get(i);
                 if (!names
                         && InsightsTables.NAME_COLUMNS.contains(columns.get(i).key())) {
                     v = initials(v);
                 }
-                out.append(i == 0 ? "" : ",").append(cell(v));
+                out.append(i == shown.getFirst() ? "" : ",").append(cell(v));
             }
             out.append("\r\n");
         }

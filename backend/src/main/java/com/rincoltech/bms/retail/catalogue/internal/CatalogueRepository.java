@@ -531,6 +531,7 @@ class CatalogueRepository {
     List<Search.Ranked<Product>> page(
             Search.Query query,
             UUID categoryId,
+            UUID unitId,
             Boolean active,
             UUID branchId,
             int afterRank,
@@ -561,6 +562,13 @@ class CatalogueRepository {
         if (categoryId != null) {
             sql.append(" AND p.category_id = :categoryId");
             params.put("categoryId", categoryId);
+        }
+        // Issue #863: a unit's items are those counted in it and those with an active package of it (Box, Dozen); the
+        // package table is read under its own row-level security, so another tenant's unit matches nothing.
+        if (unitId != null) {
+            sql.append(" AND (p.unit_id = :unitId OR EXISTS (SELECT 1 FROM retail_product_units pu"
+                    + " WHERE pu.product_id = p.id AND pu.unit_id = :unitId AND pu.active))");
+            params.put("unitId", unitId);
         }
         if (active != null) {
             sql.append(" AND p.active = :active");

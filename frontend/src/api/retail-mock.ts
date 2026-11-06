@@ -620,9 +620,11 @@ export function createMockRetail(): RetailApi {
 
     listCategories: () => delay(cats.map(categoryRow)),
 
-    listCatalogue: ({ query, categoryId: category, active, branchId, cursor }) => {
+    listCatalogue: ({ query, categoryId: category, unitId, active, branchId, cursor }) => {
+      // Issue #863: as the server, a unit's items are those counted in it and those with an active package of it.
+      const inUnit = (p: MockProduct) => { const r = asProduct(p); return r.unit_id === unitId || (r.packs ?? []).some((k) => k.unit_id === unitId); };
       const wanted = [...products.values()]
-        .filter((p) => matches(p, query) && (!category || categoryId(p.category) === category) && (active === undefined || (p.active !== false) === active))
+        .filter((p) => matches(p, query) && (!category || categoryId(p.category) === category) && (!unitId || inUnit(p)) && (active === undefined || (p.active !== false) === active))
         .sort((a, b) => a.code.localeCompare(b.code));
       const start = cursor ? Number(cursor) : 0;
       const row = (p: MockProduct): Product => (branchId ? { ...asProduct(p), qty: fromMilli(bal(branchId, p.id)), negative: bal(branchId, p.id) < 0 } : asProduct(p));
@@ -1382,7 +1384,7 @@ export function createMockRetail(): RetailApi {
       run(() => ({
         items: stockLog
           // The business day, as the server's from and to (StockService.movements, the tenant's time zone), never the UTC day.
-          .filter((m) => (kind ? m.kind === kind : m.kind === 'usage' || m.kind === 'damage') && businessToday(new Date(m.at ?? '')) >= from && businessToday(new Date(m.at ?? '')) <= to
+          .filter((m) => (kind === 'missing' ? m.kind === 'adjustment' && m.source_type === 'retail.stocktake' && (m.qty ?? '').startsWith('-') : kind ? m.kind === kind : m.kind === 'usage' || m.kind === 'damage') && businessToday(new Date(m.at ?? '')) >= from && businessToday(new Date(m.at ?? '')) <= to
             && (!branchId || m.branch_id === branchId) && (!productId || m.product_id === productId))
           // Issue #818: the entry's whole line count, as the server counts it, whatever the filter.
           .map((m) => (m.source_type === 'retail.usage' ? { ...m, entry_lines: stockLog.filter((x) => x.source_type === 'retail.usage' && x.source_id === m.source_id).length } : m))

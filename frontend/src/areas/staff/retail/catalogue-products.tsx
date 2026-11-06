@@ -558,30 +558,40 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
   const fromAddress = typeof asked.category === 'string' ? asked.category : '';
   // The id asked for, kept so a category that is not in the list (removed, or never there) is said, not dropped in silence.
   const [askedCategory, setAskedCategory] = useState('');
+  // Issue #863: `?unit=<id>` (a unit row on Units) shows that unit's items for this visit, every category, as a visit too: the
+  // remembered chip is left as it was, and the unit is kept only on this screen until Show every unit.
+  const fromUnit = typeof asked.unit === 'string' ? asked.unit : '';
+  const [unitId, setUnitId] = useState('');
   useEffect(() => {
-    if (fromAddress === '') return;
+    if (fromAddress === '' && fromUnit === '') return;
     visitCategory(fromAddress);
     setAskedCategory(fromAddress);
+    setUnitId(fromUnit);
     go('/staff/retail/catalogue/products', {}, true);
-  }, [fromAddress, visitCategory, go]);
+  }, [fromAddress, fromUnit, visitCategory, go]);
   const unknownCategory = askedCategory !== '' && categories.data !== undefined && !categories.data.some((c) => c.id === askedCategory);
+  const units = useQuery({ queryKey: ['retail', 'catalogue', 'units'], queryFn: () => retail.listUnits(), enabled: unitId !== '' });
+  const unitName = (units.data ?? []).find((u) => u.id === unitId)?.name;
+  const unknownUnit = unitId !== '' && units.data !== undefined && unitName === undefined;
+  const shownUnit = unknownUnit ? '' : unitId;
   const active = activeFilter === 'all' ? undefined : activeFilter === 'active';
   const page = useInfiniteQuery({
-    queryKey: ['retail', 'catalogue', 'products', query, categoryId, activeFilter, stockAt],
-    queryFn: ({ pageParam, signal }) => retail.listCatalogue({ query, categoryId, branchId: stockAt, ...(active === undefined ? {} : { active }), ...(pageParam ? { cursor: pageParam } : {}), signal }),
+    queryKey: ['retail', 'catalogue', 'products', query, categoryId, shownUnit, activeFilter, stockAt],
+    queryFn: ({ pageParam, signal }) => retail.listCatalogue({ query, categoryId, unitId: shownUnit, branchId: stockAt, ...(active === undefined ? {} : { active }), ...(pageParam ? { cursor: pageParam } : {}), signal }),
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
     placeholderData: keepPreviousData,
-    enabled: chipReady,
+    // A unit from the address waits for the unit list, so one that is gone never shows an empty list first.
+    enabled: chipReady && (unitId === '' || units.data !== undefined || units.isError),
   });
   const finding = page.isPlaceholderData || (page.isFetching && !page.isFetchingNextPage);
   const listed = onlyMatch((page.data?.pages ?? []).flatMap((p) => p.items ?? []), match, (p) => p.id) ?? [];
   // Issue #689: the item just added leads the unfiltered list, wherever it would fall in the pages, as the list last read it.
-  const items = added && page.data && query === '' && categoryId === '' && activeFilter !== 'off'
+  const items = added && page.data && query === '' && categoryId === '' && shownUnit === '' && activeFilter !== 'off'
     ? [listed.find((p) => p.id === added.id) ?? added, ...listed.filter((p) => p.id !== added.id)]
     : listed;
   const canPrice = (me.permissions ?? []).includes(PRICE);
-  const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query !== '', pending: page.isPlaceholderData });
+  const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, shownUnit, activeFilter].join('|'), searching: query !== '', pending: page.isPlaceholderData });
   const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<><ScreenLink screen="stock" to="/staff/retail/stock" search={p.id ? { item: p.id } : undefined} label={`See the stock of ${p.description}`}>Stock</ScreenLink> <ItemPageLink productId={p.id} name={p.description} /></>} />;
   const chosenName = (categories.data ?? []).find((c) => c.id === categoryId)?.name;
   const sizes = (
@@ -598,6 +608,13 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
         <CategoryChips categories={categories.data ?? []} value={categoryId} onChange={setCategoryId} />
       </FindBar>
       {unknownCategory && <p className="hint" role="status" data-testid="category-not-found">That category could not be found, so every category is shown.</p>}
+      {unknownUnit && <p className="hint" role="status" data-testid="unit-not-found">That unit could not be found, so the items of every unit are shown.</p>}
+      {shownUnit !== '' && (unitName !== undefined || units.isError) && (
+        <div role="status" className="alert alert-info" data-testid="one-unit">
+          <p>Showing only the items whose single unit or package is {unitName ?? 'this unit'}.</p>
+          <button type="button" className="btn-sm" onClick={() => setUnitId('')}>Show every unit</button>
+        </div>
+      )}
       <p className="cluster">
         {/* Not a second primary action (rule 6): Quick add sits with the other ways to add, as a plain button. */}
         {canUse(me, 'quickAdd') && <Link className="btn" to={'/staff/retail/quick-add' as never}>Quick add</Link>}
@@ -628,7 +645,9 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
           onSearchAll={() => { setCategoryId(''); setActiveFilter('all'); }}
           filtered={activeFilter === 'off'}
         />
-      ) : <p className="empty-state">No items found. Add one with Add an item, or choose another category.</p>)}
+      ) : shownUnit !== ''
+        ? <p className="empty-state">No items use this unit. Choose Show every unit, or give an item this unit with Change.</p>
+        : <p className="empty-state">No items found. Add one with Add an item, or choose another category.</p>)}
       <div data-tour="product-list">
         <SearchResults fetching={finding}>
           {phone ? (

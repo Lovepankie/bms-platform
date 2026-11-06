@@ -202,7 +202,10 @@ final class InsightsApi {
             String key,
             String label,
 
-            @Schema(description = "text, money, count, date, days or basis_points")
+            @Schema(
+                    description =
+                            "text, money, count, date, days, basis_points, or id: a record id (loan_id, member_id)"
+                                    + " for a link, not drawn as a column and left out of the CSV (issue #863)")
             String kind) {}
 
     @Schema(name = "InsightsTable")

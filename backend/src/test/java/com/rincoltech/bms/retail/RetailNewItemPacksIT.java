@@ -435,4 +435,38 @@ class RetailNewItemPacksIT extends IntegrationTest {
                         .getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);
     }
+
+    List<String> itemsIn(RetailTestSupport on, UUID unit) {
+        ResponseEntity<JsonNode> r = on.get("/products?unit_id=" + unit, ADMIN);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        return r.getBody()
+                .get("items")
+                .valueStream()
+                .map(p -> p.get("description").asString())
+                .toList();
+    }
+
+    /** Issue #863: the Units page opens one unit's items, those counted in it and those with an active package of it. */
+    // JUSTIFICATION-A3: issue #863 asks for tests of the new unit_id filter, tenant scoping included.
+    @Test
+    void theItemsListShowsOneUnitsItems() {
+        assertThat(api.post("/products", item("Test Bulb 60W", bulb, List.of(pack(carton, "10", "both", null))), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        UUID roll = api.unit("Roll");
+        assertThat(api.post("/products", item("Test Insulation Tape", roll, null), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        assertThat(itemsIn(api, bulb)).containsExactly("Test Bulb 60W");
+        assertThat(itemsIn(api, carton)).containsExactly("Test Bulb 60W");
+        assertThat(itemsIn(api, roll)).containsExactly("Test Insulation Tape");
+        assertThat(itemsIn(api, box)).isEmpty();
+        assertThat(itemsIn(api, UUID.randomUUID())).isEmpty();
+        // Tenant scoped: another business's unit finds none of these items, and this unit finds none of theirs.
+        TestDatabase.Fixture other = TestDatabase.tenant("retail-new-item-packs-other", false, true);
+        RetailTestSupport there = new RetailTestSupport(http, other);
+        UUID theirs = there.unit("Roll");
+        assertThat(itemsIn(api, theirs)).isEmpty();
+        assertThat(itemsIn(there, roll)).isEmpty();
+    }
 }

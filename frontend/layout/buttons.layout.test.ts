@@ -48,6 +48,8 @@ const SCREENS: { screen: string; ready: string; main?: string; secondary?: strin
   { screen: 'savings', ready: '.action-bar .rt-primary', main: '.action-bar .rt-primary' },
   { screen: 'setup', ready: 'main fieldset label', main: '.action-bar .rt-primary' },
   { screen: 'items', ready: 'main [data-tour="product-list"] :is(.list-row, li)', sized: 'main a[href*="/sizes/"]' },
+  // Issue #863: one unit's items, with Show every unit in its status line.
+  { screen: 'items-unit', ready: 'main [data-testid="one-unit"] button', sized: 'main [data-testid="one-unit"] button' },
   { screen: 'labels', ready: '.action-bar .rt-primary', main: '.action-bar .rt-primary' },
   { screen: 'period', ready: '.period-picker' },
   { screen: 'signout', ready: '.sheet-actions button' },

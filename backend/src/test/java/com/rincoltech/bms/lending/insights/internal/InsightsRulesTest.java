@@ -196,10 +196,15 @@ class InsightsRulesTest {
                 List.of(
                         new Column("loan_no", "Loan", "text"),
                         new Column("member_name", "Name", "text"),
-                        new Column("arrears_minor", "Arrears", "money")),
-                List.of(List.of("=HYPERLINK(1)", "Test Borrower 01", "-5000"), List.of("LN1", "A, B", "100")),
+                        new Column("arrears_minor", "Arrears", "money"),
+                        // Issue #863: an id column is for the screen's links; the export leaves it out.
+                        new Column("loan_id", "Loan id", "id")),
+                List.of(
+                        List.of("=HYPERLINK(1)", "Test Borrower 01", "-5000", "00000000-0000-4000-8000-0000000000a1"),
+                        List.of("LN1", "A, B", "100", "00000000-0000-4000-8000-0000000000a2")),
                 false);
         String masked = Csv.render(t, false);
+        assertThat(masked).doesNotContain("Loan id").doesNotContain("0000000000a1");
         assertThat(masked).startsWith("Loan,Name,Arrears (UGX minor units)\r\n");
         assertThat(masked).contains("'=HYPERLINK(1),T. B. 0.,-5000\r\n");
         assertThat(masked).contains("LN1,A. B.,100\r\n");

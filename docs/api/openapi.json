@@ -3567,7 +3567,7 @@
             "type" : "string"
           },
           "kind" : {
-            "description" : "text, money, count, date, days or basis_points",
+            "description" : "text, money, count, date, days, basis_points, or id: a record id (loan_id, member_id) for a link, not drawn as a column and left out of the CSV (issue #863)",
             "type" : "string"
           },
           "label" : {
@@ -42449,6 +42449,15 @@
             "type" : "string"
           }
         }, {
+          "description" : "Only items in this unit: their own unit, or an active package of it (issue #863)",
+          "in" : "query",
+          "name" : "unit_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
           "in" : "query",
           "name" : "active",
           "required" : false,
@@ -47323,6 +47332,15 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        }, {
+          "description" : "Only the short lines of committed stock counts, the rows behind Stock health's Found missing (issue #863)",
+          "in" : "query",
+          "name" : "found_missing",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
           }
         }, {
           "in" : "query",

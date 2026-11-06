@@ -246,7 +246,8 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false, sec
         )
         : (
           <>
-            <ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>
+            {/* Issue #863: the unit's items in the Items list, for this visit only, by the address. */}
+            <ScreenLink screen="products" to="/staff/retail/catalogue/products" search={r.id ? { unit: r.id } : undefined} label={`See the items of ${r.name}`}>Items</ScreenLink>
             {/* A dozen always holds 12 (ADR-110): there is nothing to change. */}
             {isPackageRow(r) && !(r as Unit).fixed_count && ('usual_pack' in r && r.usual_pack || mayHaveUsualPack(r as Unit, all as Unit[])) && (
               <button type="button" className="btn-sm" onClick={() => setPackFor(r.id ?? null)} aria-label={`What one ${r.name} usually holds`}>

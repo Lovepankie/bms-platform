@@ -155,7 +155,7 @@ export function StockHealthView({ data, nameOf, range = {} }: { data: StockHealt
                 <strong>{nameOf(x.branch_id)}</strong>
                 <div className="rt-row"><span>Used</span><span className="num"><ToUsage branch={x.branch_id} {...range} kind="used">{plural(x.used_reports, 'report')}</ToUsage></span></div>
                 <div className="rt-row"><span>Damaged</span><span className="num"><ToUsage branch={x.branch_id} {...range} kind="damaged">{plural(x.damaged_reports, 'report')}</ToUsage></span></div>
-                <div className="rt-row"><span>Found missing</span><span className="num">{plural(x.short_lines, 'line')}</span></div>
+                <div className="rt-row"><span>Found missing</span><span className="num"><ToUsage branch={x.branch_id} {...range} kind="missing">{plural(x.short_lines, 'line')}</ToUsage></span></div>
                 {x.net_cost_minor !== undefined && <div className="rt-row"><span>At buying price</span><span className="num">{money(x.net_cost_minor)}</span></div>}
               </li>
             ))}
@@ -177,7 +177,7 @@ export function StockHealthView({ data, nameOf, range = {} }: { data: StockHealt
                   <td>{nameOf(x.branch_id)}</td>
                   <td className="num"><ToUsage branch={x.branch_id} {...range} kind="used">{plural(x.used_reports, 'report')}</ToUsage></td>
                   <td className="num"><ToUsage branch={x.branch_id} {...range} kind="damaged">{plural(x.damaged_reports, 'report')}</ToUsage></td>
-                  <td className="num">{plural(x.short_lines, 'line')}</td>
+                  <td className="num"><ToUsage branch={x.branch_id} {...range} kind="missing">{plural(x.short_lines, 'line')}</ToUsage></td>
                   {shrinkCost && <td className="num">{moneyOrNone(x.net_cost_minor)}</td>}
                 </tr>
               ))}

@@ -10276,7 +10276,7 @@ export interface components {
         };
         InsightsColumn: {
             key?: string;
-            /** @description text, money, count, date, days or basis_points */
+            /** @description text, money, count, date, days, basis_points, or id: a record id (loan_id, member_id) for a link, not drawn as a column and left out of the CSV (issue #863) */
             kind?: string;
             label?: string;
         };
@@ -32391,6 +32391,8 @@ export interface operations {
             query?: {
                 query?: string;
                 category_id?: string;
+                /** @description Only items in this unit: their own unit, or an active package of it (issue #863) */
+                unit_id?: string;
                 active?: boolean;
                 branch_id?: string;
                 limit?: number;
@@ -35206,6 +35208,8 @@ export interface operations {
                 to?: string;
                 /** @description Only these movement kinds, for example usage and damage (#145) */
                 kind?: string[];
+                /** @description Only the short lines of committed stock counts, the rows behind Stock health's Found missing (issue #863) */
+                found_missing?: boolean;
                 newest_first?: boolean;
                 limit?: number;
                 cursor?: string;

@@ -1154,7 +1154,8 @@ credit note, a return, an account statement or a credit control row stays plain;
 item parameter; a branch name opens Stock for the session's branch, not the named one, so branch names in the cash records stay plain (the branch roles page opens
 Stores and shops, which lists every branch); category and unit rows open the unfiltered items list, because the items page keeps its category in local
 state; Insights drill-down rows carry no ids; the used, damaged and found-missing counts on Stock health have no list screen (since #798 Items takes
-`?category=` and the used and damaged counts open Past usage and damage; unit rows, Insights ids and found missing are #863). A product opening "its stock and history" is
+`?category=` and the used and damaged counts open Past usage and damage; since #863 unit rows, Insights ids and found missing
+open their records too). A product opening "its stock and history" is
 therefore as far as the existing routes go: Stock, and Past restocks and Stock moves for the history.
 
 | Route | Breadcrumb | Page tour | Cross links added (#336) |
@@ -1286,8 +1287,25 @@ evaluation open their items; the Stock link of an item row opens that item. `/st
 opens Past usage and damage on those days, switched to that branch the way Stock is (`useBranchFromAddress` in
 `screen-link.tsx`), and `ToUsage` makes Stock health's Used and Damaged counts open it. The allocations of a payment on account
 and the sales before system start on the statement carry the sale id already, so `SaleLink` opens them. Tested in
-`retail/record-links.dom.test.tsx`. Left for #863, each needing the server or a new screen: unit rows (the items list takes no
-unit filter), Insights drill-down ids, and a list for Found missing.
+`retail/record-links.dom.test.tsx`. Left for #863, each needing the server or a new screen, all closed there:
+
+- [x] Unit rows: `GET /retail/products` takes `unit_id` (the items whose own unit is that unit or that have an active package
+  of it), and the Items link of a unit row on Units opens `/staff/retail/catalogue/products?unit=<id>`. Items shows that
+  unit's items for the visit only, every category, the saved chip untouched (`useChosenChip.visit('')`), with Show every unit;
+  a unit that is gone is said, and every unit shown. The link is drawn for a session that may open Items (`products`).
+- [x] Insights drill-down ids: every table with a loan or member number carries `loan_id` and `member_id` as columns of
+  kind `id`, from the same rows under the same filter; the screen does not draw them, and the CSV leaves them out. A loan
+  number opens `/staff/lending/loans/<id>` for `lending.loans.read` (the gate of Loans), a member number
+  `/staff/lending/members/<id>` for `lending.members.read` (the gate of Members, `showMembers`); plain text otherwise.
+- [x] Found missing: a filter on an existing list fits, so no new screen. `GET /retail/stock/movements` takes
+  `found_missing` (the short lines of committed stock counts, the rows Stock health counts), and Stock health's Found
+  missing count opens `/staff/retail/usage-history?branch=<id>&from=&to=&kind=missing` (`ToUsage`, gated on `stock`, the
+  gate of Past usage and damage), which lists those lines with Show used and damaged. Each line's item opens its stock at
+  that branch (`ToStock` with `item` and `branch`); the cost shows only with `retail.profit.read`, as the server sends it.
+
+Tested in `retail/record-links.dom.test.tsx`, `insights/screens.test.tsx`, `api/retail.test.ts`, at 412px in
+`layout/usage-history.layout.test.ts` and `layout/buttons.layout.test.ts` (`items-unit`), and on the server in
+`RetailNewItemPacksIT`, `InsightsGoldenIT`, `InsightsRulesTest` and `RetailStockHealthIT`.
 
 ## The three rules, screen by screen (issue #336, task #794)
 
@@ -1301,7 +1319,7 @@ shop owner would not use has a help tip), one primary action per view, and an em
 **Result.** Rule 1: 133 of 139 pass, 6 break. Rule 3: 101 of 139 passed before this change and 38 broke; this change fixes
 27 of them (the empty states, and three screens with a second brand button), so 128 pass and 11 are left. `/staff` is in both tables below: its empty state is fixed, but its KYC heading still breaks
 rule 3, so it counts among the 11 left. Issue #798 (2026-11-06) fixed the 6 rule 1 screens and the 11 rule 3 lines left, so
-both rules now pass on all 139 routes (the lines are ticked below); the rule 2 links that need the server or a new screen are #863. Every route not
+both rules now pass on all 139 routes (the lines are ticked below); the rule 2 links that needed the server or a new screen are closed by #863 (ticked in "Navigation and tour coverage" above). Every route not
 named below passes both rules: the sales, stock, restock, controls and cash record lists are grouped; members, loans,
 collateral, documents, opt-outs, the purchasing lists, buyers and suppliers are paged; the reports are bounded by a date
 range or a top count.

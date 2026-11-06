@@ -6,6 +6,11 @@ import type { InsightsBrief, InsightsMembers, InsightsTable } from '../../../api
 import { BarList, ColumnChart, LineChart, niceMax, showLabel } from './charts';
 import { BriefCards, DrillTable, MembersView } from './page';
 import { MetricCard } from './ui';
+import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
+import type { Me } from '../../../api/client';
+import { mockMe } from '../../../api/retail-mock';
+import { router as appRouter } from '../../../app/router';
+import { StaffContext } from '../context';
 
 const renderToString = (node: ReactElement) =>
   render(<QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>).replaceAll('<!-- -->', '');
@@ -108,6 +113,46 @@ describe('insights screens', () => {
     expect(html).toContain('LN000001');
     expect(html).toContain('45 days');
     expect(html).toContain('UGX 120,000');
+  });
+
+  // JUSTIFICATION-A3: issue #863 asks that a loan or member number open its record only for a person who may open it.
+  it('opens a loan and a member from their numbers, only for a person who may open them, and never draws the ids (#863)', () => {
+    const LOAN = '00000000-0000-4000-8000-0000000f0001';
+    const MEMBER = '00000000-0000-4000-8000-0000000f0002';
+    const table: InsightsTable = {
+      key: 'disbursements',
+      title: 'Disbursements',
+      currency: 'UGX',
+      columns: [
+        { key: 'loan_no', label: 'Loan', kind: 'text' },
+        { key: 'member_no', label: 'Member', kind: 'text' },
+        { key: 'loan_id', label: 'Loan id', kind: 'id' },
+        { key: 'member_id', label: 'Member id', kind: 'id' },
+      ],
+      rows: [['LN000001', 'M000001', LOAN, MEMBER]],
+      truncated: false,
+    };
+    const as = (permissions: string[]) => {
+      const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff/insights'] }) });
+      const me = { ...mockMe('admin'), modules: ['lending'], permissions } as Me;
+      return renderToString(
+        <RouterContextProvider router={router}>
+          <StaffContext.Provider value={{ me, branch: null }}><DrillTable table={table} /></StaffContext.Provider>
+        </RouterContextProvider>,
+      );
+    };
+    const both = as(['lending.insights.read', 'lending.loans.read', 'lending.members.read']);
+    expect(both).toContain(`href="/staff/lending/loans/${LOAN}"`);
+    expect(both).toContain(`href="/staff/lending/members/${MEMBER}"`);
+    expect(both).not.toContain('Loan id');
+    expect(both).not.toContain(`>${LOAN}<`);
+    const loansOnly = as(['lending.insights.read', 'lending.loans.read']);
+    expect(loansOnly).toContain(`href="/staff/lending/loans/${LOAN}"`);
+    expect(loansOnly).not.toContain('/staff/lending/members/');
+    expect(loansOnly).toContain('M000001');
+    const neither = as(['lending.insights.read']);
+    expect(neither).not.toContain('<a ');
+    expect(neither).toContain('LN000001');
   });
 
   it('shows the funnel with conversions and the staff table', () => {

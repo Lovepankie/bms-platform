@@ -291,20 +291,7 @@ class StockService {
         return out.size() > 1 ? out : List.of();
     }
 
-    @Transactional(readOnly = true)
-    MovementPage movements(
-            List<UUID> branchIds,
-            UUID productId,
-            LocalDate from,
-            LocalDate to,
-            List<String> kinds,
-            boolean newestFirst,
-            Integer limit,
-            String cursor) {
-        return movements(branchIds, productId, from, to, kinds, newestFirst, limit, cursor, false);
-    }
-
-    /** As above; {@code withBalance} adds each row's running balance and a sale's profit (the item page, issue #813). */
+    /** With {@code withBalance}, each row's running balance and a sale's profit (the item page, issue #813). */
     @Transactional(readOnly = true)
     MovementPage movements(
             List<UUID> branchIds,
@@ -316,6 +303,22 @@ class StockService {
             Integer limit,
             String cursor,
             boolean withBalance) {
+        return movements(branchIds, productId, from, to, kinds, newestFirst, limit, cursor, withBalance, false);
+    }
+
+    /** As above; {@code foundMissing} keeps only the short lines of committed stock counts (issue #863). */
+    @Transactional(readOnly = true)
+    MovementPage movements(
+            List<UUID> branchIds,
+            UUID productId,
+            LocalDate from,
+            LocalDate to,
+            List<String> kinds,
+            boolean newestFirst,
+            Integer limit,
+            String cursor,
+            boolean withBalance,
+            boolean foundMissing) {
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.stock.read", branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
@@ -331,7 +334,8 @@ class StockService {
                 after == null ? null : after.at(),
                 after == null ? null : after.id(),
                 size + 1,
-                withBalance);
+                withBalance,
+                foundMissing);
         boolean more = rows.size() > size;
         List<MovementRow> items = more ? rows.subList(0, size) : rows;
         String next = more

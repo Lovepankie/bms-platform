@@ -48,10 +48,17 @@ if (query.get('grouped') === '1') {
     usageHistory: (q: { productId?: string; branchId?: string }) => Promise.resolve({ items: shown.filter((m) => (!q.productId || m.product_id === q.productId) && (!q.branchId || m.branch_id === q.branchId)) }),
   });
 }
+// ?missing=1 (issue #863): opened from Found missing on Stock health, the short lines of a stock count, with a long item name
+// and code; ?seller=1 again leaves out the cost.
+const missing = query.get('missing') === '1';
+const short: StockMovement[] = [
+  { id: 'm4', at, branch_id: branch, product_id: 'p1', code: 'EXT-CABLE-4WAY-10M-HEAVY', description: 'Test extension cable four way ten metre heavy duty with surge guard', unit: 'piece', kind: 'adjustment', qty: '-1250.000', source_type: 'retail.stocktake', source_id: 's1', historical: false, ...(query.get('seller') === '1' ? {} : { unit_cost_minor: 125000000, line_cost_minor: 156250000000 }) },
+];
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 client.setQueryData(['retail', 'usage-history', daysBefore(today, 30), today, branch, '', 'both'], { pages: [{ items: rows }], pageParams: [''] });
+client.setQueryData(['retail', 'usage-history', daysBefore(today, 30), today, branch, '', 'missing'], { pages: [{ items: short }], pageParams: [''] });
 client.setQueryData(['retail', 'products', 'all', 'Test'], products);
-const router = layoutRouter('/staff/retail/usage-history');
+const router = layoutRouter(missing ? '/staff/retail/usage-history?kind=missing' : '/staff/retail/usage-history');
 
 createRoot(document.getElementById('root') as HTMLElement).render(
   <RouterContextProvider router={router}>

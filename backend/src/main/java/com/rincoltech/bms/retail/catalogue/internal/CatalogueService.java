@@ -725,7 +725,8 @@ class CatalogueService {
     }
 
     @Transactional(readOnly = true)
-    ProductPage list(String query, UUID categoryId, Boolean active, UUID branchId, Integer limit, String cursor) {
+    ProductPage list(
+            String query, UUID categoryId, UUID unitId, Boolean active, UUID branchId, Integer limit, String cursor) {
         if (branchId != null && !CurrentPrincipal.require().may("retail.stock.read", branchId)) {
             throw ApiException.validation(
                     List.of(new FieldProblem("branch_id", "unknown_branch", "No such branch in your scope.")));
@@ -741,7 +742,7 @@ class CatalogueService {
             afterId = after.id();
         }
         List<Search.Ranked<Product>> rows =
-                repo.page(search, categoryId, active, branchId, position.rank(), afterCode, afterId, size + 1);
+                repo.page(search, categoryId, unitId, active, branchId, position.rank(), afterCode, afterId, size + 1);
         boolean more = rows.size() > size;
         List<Search.Ranked<Product>> items = more ? rows.subList(0, size) : rows;
         String next = more

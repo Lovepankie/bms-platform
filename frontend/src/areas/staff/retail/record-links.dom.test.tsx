@@ -5,7 +5,10 @@ import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing
 import { useEffect, useState, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import { businessToday, retail, type AccountPayment, type Statement, type Valuation } from '../../../api/retail';
+import { businessToday, retail, type AccountPayment, type Statement, type StockMovement, type Valuation } from '../../../api/retail';
+import type { StockHealth } from '../../../api/retail-analytics';
+import { UnitsPage } from './catalogue-lists';
+import { StockHealthView } from './stock-health';
 import { ValuationTable } from './profit';
 import { ReceiptList, StatementView } from './account';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
@@ -138,6 +141,88 @@ describe('a used or damaged count on Stock health opens the records behind it (#
     await waitFor(() => expect(history).toHaveBeenCalledWith(expect.objectContaining({ kind: 'damage' })));
     fireEvent.click(screen.getByRole('button', { name: 'Show used and damaged' }));
     await waitFor(() => expect(screen.queryByTestId('one-kind')).toBeNull());
+    await waitFor(() => expect(history).toHaveBeenLastCalledWith(expect.not.objectContaining({ kind: expect.anything() })));
+  });
+});
+
+// JUSTIFICATION-A3: issue #863 asks for proof of the unit link, the visit only chip and the Found missing list.
+describe('a unit opens its items (#863)', () => {
+  // The mock's first unit, roll: the two cable rolls are counted in it.
+  const ROLL = '00000000-0000-4000-8000-0000000d0001';
+  const SAVED = 'bms.findChip.items';
+  afterEach(() => localStorage.removeItem(SAVED));
+
+  it('links a unit row on Units to Items with the unit in the address', async () => {
+    show(<UnitsPage />, '/staff/retail/catalogue/units');
+    const link = await screen.findByRole('link', { name: 'See the items of roll' });
+    expect(link.getAttribute('href')).toBe(`/staff/retail/catalogue/products?unit=${ROLL}`);
+  });
+
+  it('is plain text on Units for a session that may not open Items', async () => {
+    const me = { ...mockMe('admin'), permissions: ['retail.catalogue.manage'] } as Me;
+    show(<UnitsPage />, '/staff/retail/catalogue/units', { me });
+    await waitFor(() => expect(screen.queryByText('Loading')).toBeNull());
+    expect(screen.queryByRole('link', { name: 'See the items of roll' })).toBeNull();
+  });
+
+  it('shows that unit\'s items for this visit, every category, and leaves the saved chip and the address', async () => {
+    const CABLES = '00000000-0000-4000-8000-0000000c0001';
+    localStorage.setItem(SAVED, CABLES);
+    const list = vi.spyOn(retail, 'listCatalogue');
+    const router = show(<ProductsPage />, `/staff/retail/catalogue/products?unit=${ROLL}`);
+    expect((await screen.findByTestId('one-unit')).textContent).toContain('roll');
+    await waitFor(() => expect(list).toHaveBeenCalledWith(expect.objectContaining({ unitId: ROLL, categoryId: '' })));
+    expect(list).not.toHaveBeenCalledWith(expect.objectContaining({ unitId: '' }));
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
+    expect(screen.getByRole('button', { name: /^All/, pressed: true })).toBeTruthy();
+    expect(localStorage.getItem(SAVED)).toBe(CABLES);
+    fireEvent.click(screen.getByRole('button', { name: 'Show every unit' }));
+    await waitFor(() => expect(screen.queryByTestId('one-unit')).toBeNull());
+    await waitFor(() => expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ unitId: '' })));
+  });
+
+  it('says so when the unit in the address is not in the list, and shows every unit', async () => {
+    const GONE = '00000000-0000-4000-8000-0000000d00ff';
+    const list = vi.spyOn(retail, 'listCatalogue');
+    show(<ProductsPage />, `/staff/retail/catalogue/products?unit=${GONE}`);
+    expect(await screen.findByTestId('unit-not-found')).toBeTruthy();
+    expect(screen.queryByTestId('one-unit')).toBeNull();
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    expect(list).not.toHaveBeenCalledWith(expect.objectContaining({ unitId: GONE }));
+  });
+});
+
+describe('Found missing on Stock health opens the count lines behind it (#863)', () => {
+  // A fabricated short line of a committed stock count: a quantity only, no figure of money.
+  const SHORT: StockMovement = {
+    id: '00000000-0000-4000-8000-0000000e0001', at: '2026-10-12T09:00:00Z', branch_id: BRANCH_B, product_id: ITEM_3, code: 'P003',
+    description: 'Test Bulb Short', unit: 'piece', kind: 'adjustment', qty: '-2.000', source_type: 'retail.stocktake',
+    source_id: '00000000-0000-4000-8000-0000000e0002', historical: false,
+  };
+
+  it('links the count to Past usage and damage with the branch, the days and kind missing', () => {
+    show(<ToUsage branch={BRANCH_B} from="2026-10-01" to="2026-10-31" kind="missing">1 line</ToUsage>, '/staff');
+    expect(screen.getByRole('link', { name: '1 line' }).getAttribute('href')).toBe(`/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31&kind=missing`);
+  });
+
+  it('is the Found missing count of a branch on Stock health', () => {
+    const data = { shrinkage: [{ branch_id: BRANCH_B, used_reports: 0, damaged_reports: 0, short_lines: 1, over_lines: 0 }] } as unknown as StockHealth;
+    show(<StockHealthView data={data} nameOf={() => 'Test Branch Two'} range={{ from: '2026-10-01', to: '2026-10-31' }} />, '/staff');
+    const links = screen.getAllByRole('link', { name: '1 line' });
+    expect(links.length).toBeGreaterThan(0);
+    for (const l of links) expect(l.getAttribute('href')).toBe(`/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31&kind=missing`);
+  });
+
+  it('lists the short count lines only, each item opening its stock at that branch, until Show used and damaged', async () => {
+    const history = vi.spyOn(retail, 'usageHistory').mockResolvedValue({ items: [SHORT] });
+    show(<UsageHistoryPage />, `/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31&kind=missing`, { chooseBranch: vi.fn() });
+    expect((await screen.findByTestId('one-kind')).textContent).toContain('Showing what stock counts found missing only.');
+    await waitFor(() => expect(history).toHaveBeenCalledWith(expect.objectContaining({ kind: 'missing', from: '2026-10-01', to: '2026-10-31' })));
+    const row = await screen.findByTestId('missing-row');
+    expect(row.textContent).toContain('2 piece missing at the stock count on');
+    expect(row.textContent).not.toContain('Worth');
+    expect(screen.getByRole('link', { name: 'Test Bulb Short' }).getAttribute('href')).toBe(`/staff/retail/stock?item=${ITEM_3}&branch=${BRANCH_B}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Show used and damaged' }));
     await waitFor(() => expect(history).toHaveBeenLastCalledWith(expect.not.objectContaining({ kind: expect.anything() })));
   });
 });

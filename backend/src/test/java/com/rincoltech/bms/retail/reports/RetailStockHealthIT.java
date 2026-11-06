@@ -187,6 +187,36 @@ class RetailStockHealthIT extends IntegrationTest {
         assertThat(AnalyticsData.hasKey(plain, "gain")).isFalse();
     }
 
+    /**
+     * Issue #863: Found missing opens the stock movements with found_missing, which lists the same short count lines the
+     * report counts, by branch, with no cost for a caller without profit read and none of a branch out of scope.
+     */
+    // JUSTIFICATION-A3: issue #863 asks that the list behind Found missing match the count, scoped like the report.
+    @Test
+    void foundMissingListsTheShortCountLinesTheReportCounts() {
+        String path = "/stock/movements?found_missing=true&branch_id=" + t.headOffice();
+        JsonNode lines = api.get(path, ADMIN).getBody().get("items");
+        int counted = 0;
+        for (JsonNode s : report("", ADMIN).get("shrinkage")) {
+            if (s.get("branch_id").asString().equals(t.headOffice().toString())) {
+                counted = s.get("short_lines").asInt();
+            }
+        }
+        assertThat(lines).hasSize(counted).hasSize(1);
+        assertThat(lines.get(0).get("product_id").asString()).isEqualTo(d.p3.toString());
+        assertThat(lines.get(0).get("source_type").asString()).isEqualTo("retail.stocktake");
+        assertThat(lines.get(0).get("qty").asString()).startsWith("-");
+        assertThat(lines.get(0).has("line_cost_minor")).isTrue();
+        JsonNode plain = api.get(path, SALES).getBody().get("items");
+        assertThat(plain).hasSize(1);
+        assertThat(AnalyticsData.hasKey(plain, "cost")).isFalse();
+        JsonNode elsewhere = api.call(
+                        HttpMethod.GET, path, null, ADMIN, t.secondBranch().toString(), Map.of())
+                .getBody()
+                .get("items");
+        assertThat(elsewhere).isEmpty();
+    }
+
     @Test
     void aCallerWithoutProfitReadNeverSeesCostAnywhereAndAuditIsUntouched() {
         long audit = AnalyticsData.auditRows();

@@ -54,6 +54,34 @@ describe.each([1, 2])('Past usage and damage at 412px, font scale %i', (font) =>
     await page.close();
   });
 
+  // JUSTIFICATION-A3: the 412px case of the Found missing list issue #863 adds to this page.
+  it.each([false, true])('Found missing (#863), seller %s: the count line stays inside the phone, Show used and damaged is a 48px target', async (seller) => {
+    const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
+    await openLayout(page, `layout/usage-history.html?font=${font}&missing=1${seller ? '&seller=1' : ''}`, page.locator('[data-testid="missing-row"]').first());
+    expect(await pageWidth(page), 'page width').toBeLessThanOrEqual(WIDTH);
+    const card = await page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('[data-testid="missing-row"]') as HTMLElement;
+      const box = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        right: box.right,
+        over: [...el.querySelectorAll<HTMLElement>('*')].filter((e) => e.getBoundingClientRect().right > box.right + 0.5).map((e) => e.tagName),
+        edges: new Set([style.borderLeftWidth, style.borderRightWidth, style.borderTopWidth, style.borderBottomWidth]).size,
+        tabular: style.fontVariantNumeric.includes('tabular-nums'),
+        text: el.textContent ?? '',
+      };
+    });
+    expect(card.right, 'card inside the phone').toBeLessThanOrEqual(WIDTH);
+    expect(card.over, 'nothing past the card').toEqual([]);
+    expect(card.edges, 'no side or top stripe: one border width all round').toBe(1);
+    expect(card.tabular, 'tabular figures').toBe(true);
+    expect(card.text.includes('at buying price'), 'the cost only with profit read').toBe(!seller);
+    const back = await page.getByRole('button', { name: 'Show used and damaged' }).boundingBox();
+    expect(back?.height ?? 0, 'a 48px target').toBeGreaterThanOrEqual(48);
+    expect((back?.x ?? 0) + (back?.width ?? 0)).toBeLessThanOrEqual(WIDTH);
+    await page.close();
+  });
+
   it('keeps the page inside the phone with the item list open on long names', async () => {
     const page = await open(font);
     await page.getByLabel('Item (type part of its name or code)').fill('Test');

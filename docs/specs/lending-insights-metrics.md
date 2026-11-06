@@ -174,6 +174,13 @@ A member is identified by member number; a name appears only in the action lists
 `dormant_members`) and is reduced to initials in an export for a caller without `lending.members.read`. No table
 carries a phone number or an ID number.
 
+Every table with a loan number carries `loan_id`, and every table with a member number `member_id`, as columns of
+kind `id` (issue #863; `revenue_lines` has a loan only, `staff_activity` neither). They come from the same rows under
+the same filter as the rest of the table. The screen does not draw them: it makes the loan number open
+`/staff/lending/loans/<loan_id>` for a person with `lending.loans.read`, and the member number open
+`/staff/lending/members/<member_id>` for a person with `lending.members.read`, and leaves the number plain otherwise.
+The CSV export leaves them out.
+
 | Table | Rows | Parameters |
 |---|---|---|
 | `disbursements` | Disbursements in the range | `date` |

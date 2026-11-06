@@ -18,6 +18,7 @@ import { UndoUsageAction, UndoneMark, undoneWords } from './usage-undo';
 import { showDate, showQty } from './maths';
 import { Gate, Money, Problem, useBranchName, useBranchView } from './ui';
 import { useAddress, useBranchFromAddress } from './screen-link';
+import { ToStock } from './analytics-ui';
 
 // Past usage and damage (issue #145, AppSheet "Damaged or used stock not sold"): every item taken out of stock as used in the
 // shop or damaged, newest first, in the days chosen, at the branch chosen at the top of the page (or every branch), and for
@@ -77,6 +78,35 @@ function UsageRow({ m, branch, where, first }: { m: StockMovement; branch?: stri
       {/* Issue #819: the entry's receipt photo, once per entry, on its first line. */}
       {first && <ReceiptPhoto kind="usage" recordId={m.source_id} has={m.has_receipt_photo} canAdd={!m.undone && holdsAt(me, USAGE_REPORT, m.branch_id)} />}
       {first && <UndoUsageAction m={m} />}
+    </li>
+  );
+}
+
+type UsageKind = 'usage' | 'damage' | 'missing';
+
+/** The kinds the address may ask for: the server's kind, the word in the address and what the page says while it shows. */
+const KINDS: { kind: UsageKind; word: string; shown: string }[] = [
+  { kind: 'usage', word: 'used', shown: 'Showing used stock only.' },
+  { kind: 'damage', word: 'damaged', shown: 'Showing damaged stock only.' },
+  { kind: 'missing', word: 'missing', shown: 'Showing what stock counts found missing only.' },
+];
+
+/**
+ * Issue #863: a line a stock count found short, the rows behind Stock health's Found missing. The item opens its stock at
+ * that branch; the cost is the server's, present only with retail.profit.read.
+ */
+function MissingRow({ m, branch }: { m: StockMovement; branch?: string }) {
+  const cost = costOf(m);
+  return (
+    <li className="rt-card" data-testid="missing-row">
+      <p>
+        <strong><ToStock item={m.product_id} branch={m.branch_id}>{m.description}</ToStock></strong> {m.code && <span className="hint">({m.code})</span>}{' '}
+        <span className="badge badge-info">Found missing</span>
+      </p>
+      <p>
+        <span className="num">{takenOut(m)}</span> missing at the stock count on {showDate(dayOf(m))}{branch ? ` at ${branch}` : ''}.
+        {cost !== null && <> Worth <Money minor={cost} /> at buying price.</>}
+      </p>
     </li>
   );
 }
@@ -141,9 +171,11 @@ export function UsageHistoryPage() {
   const [from, setFrom] = useState(day(asked.from) ?? daysBefore(today, 30));
   const [to, setTo] = useState(day(asked.to) ?? today);
   const askedBranch = typeof asked.branch === 'string' && asked.branch !== '' ? asked.branch : undefined;
-  // `?kind=used|damaged` (a count on Stock health) shows only that kind, in the flat list, until Show used and damaged.
-  const [kind, setKind] = useState<'usage' | 'damage' | undefined>(asked.kind === 'used' ? 'usage' : asked.kind === 'damaged' ? 'damage' : undefined);
-  const unknownBranch = useBranchFromAddress(askedBranch, go, '/staff/retail/usage-history', { from, to, ...(kind ? { kind: kind === 'usage' ? 'used' : 'damaged' } : {}) });
+  // `?kind=used|damaged|missing` (a count on Stock health) shows only that kind, in the flat list, until Show used and damaged.
+  // Issue #863: missing is the short lines of committed stock counts, the rows behind Found missing.
+  const [kind, setKind] = useState<UsageKind | undefined>(KINDS.find((k) => k.word === asked.kind)?.kind);
+  const kindWord = KINDS.find((k) => k.kind === kind)?.word;
+  const unknownBranch = useBranchFromAddress(askedBranch, go, '/staff/retail/usage-history', { from, to, ...(kindWord ? { kind: kindWord } : {}) });
   const { me } = useStaff();
   const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
@@ -177,7 +209,7 @@ export function UsageHistoryPage() {
           setFrom(range.from);
           setTo(range.to);
           // Opened from a link (issue #798): the address follows the days chosen, so a reload keeps them and not the old ones.
-          if (asked.from !== undefined || asked.to !== undefined || asked.kind !== undefined) go('/staff/retail/usage-history', { from: range.from, to: range.to, ...(kind ? { kind: kind === 'usage' ? 'used' : 'damaged' } : {}) }, true);
+          if (asked.from !== undefined || asked.to !== undefined || asked.kind !== undefined) go('/staff/retail/usage-history', { from: range.from, to: range.to, ...(kindWord ? { kind: kindWord } : {}) }, true);
         }} />
         <SearchBox id="usage-history-item-search" label="Item (type part of its name or code)" search={itemBox} fetching={products.isPlaceholderData || products.isFetching} count={itemSearch !== '' && products.data ? products.data.length : undefined} />
         {itemSearch !== '' && (
@@ -195,7 +227,7 @@ export function UsageHistoryPage() {
       {from > to && <p className="hint" role="status">The first day is after the last day. Choose the days again.</p>}
       {kind !== undefined && (
         <div role="status" className="alert alert-info" data-testid="one-kind">
-          <p>{kind === 'damage' ? 'Showing damaged stock only.' : 'Showing used stock only.'}</p>
+          <p>{KINDS.find((k) => k.kind === kind)?.shown}</p>
           <button type="button" className="btn-sm" onClick={() => { setKind(undefined); go('/staff/retail/usage-history', { from, to }, true); }}>Show used and damaged</button>
         </div>
       )}
@@ -210,14 +242,17 @@ export function UsageHistoryPage() {
       {!grouped && <>
       {ready && page.isPending && <p className="loading">Loading</p>}
       <Problem error={page.error} />
-      {page.data && items.length === 0 && (
+      {page.data && items.length === 0 && kind === 'missing' && <p className="empty-state">No stock count found anything missing in these dates. Choose other dates, or Show used and damaged.</p>}
+      {page.data && items.length === 0 && kind !== 'missing' && (
         <EmptyState
           text="Nothing was used or damaged in these dates."
           action={canUse(me, 'usage') ? { label: 'Record usage or damage', to: '/staff/retail/usage' } : { label: 'Show the last year', onClick: () => { setFrom(daysBefore(today, 365)); setTo(today); } }}
         />
       )}
       <ul style={{ listStyle: 'none', padding: 0 }} data-tour="usage-history-list">
-        {items.map((m) => <UsageRow key={m.id} m={m} branch={all ? nameOf(m.branch_id) : undefined} where={where.get(usage(m))} first={first.has(m.id ?? '')} />)}
+        {items.map((m) => (m.source_type === 'retail.stocktake'
+          ? <MissingRow key={m.id} m={m} branch={all ? nameOf(m.branch_id) : undefined} />
+          : <UsageRow key={m.id} m={m} branch={all ? nameOf(m.branch_id) : undefined} where={where.get(usage(m))} first={first.has(m.id ?? '')} />))}
       </ul>
       {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older records'}</button>}
       </>}

@@ -141,11 +141,14 @@ class CatalogueController {
     ProductPage products(
             @RequestParam(name = "query", required = false) String query,
             @RequestParam(name = "category_id", required = false) UUID categoryId,
+            @Parameter(description = "Only items in this unit: their own unit, or an active package of it (issue #863)")
+                    @RequestParam(name = "unit_id", required = false)
+                    UUID unitId,
             @RequestParam(name = "active", required = false) Boolean active,
             @RequestParam(name = "branch_id", required = false) UUID branchId,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.list(query, categoryId, active, branchId, limit, cursor);
+        return service.list(query, categoryId, unitId, active, branchId, limit, cursor);
     }
 
     @PostMapping("/products")

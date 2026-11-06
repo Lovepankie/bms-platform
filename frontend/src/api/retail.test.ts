@@ -52,6 +52,18 @@ describe('real retail client', () => {
     expect(urls[2]?.pathname).toBe('/api/v1/retail/reports/profit/daily');
   });
 
+  it('asks for one unit\'s items and for the found missing lines with the real query parameters (#863)', async () => {
+    network.mockImplementation(async () => json(200, { items: [] }));
+    await retail.listCatalogue({ unitId: 'u1' });
+    await retail.usageHistory({ from: '2026-10-01', to: '2026-10-31', kind: 'missing' });
+    const urls = network.mock.calls.map((c) => new URL((c[0] as Request).url));
+    expect(urls[0]?.pathname).toBe('/api/v1/retail/products');
+    expect(urls[0]?.searchParams.get('unit_id')).toBe('u1');
+    expect(urls[1]?.pathname).toBe('/api/v1/retail/stock/movements');
+    expect(urls[1]?.searchParams.get('found_missing')).toBe('true');
+    expect(urls[1]?.searchParams.getAll('kind')).toEqual([]);
+  });
+
   it('turns a stock refusal into a plain message and keeps the code', async () => {
     network.mockImplementation(async () => json(422, { status: 422, code: 'insufficient_stock', detail: 'Product 0000 has 2 in stock at this branch.' }));
     const error = await retail.createSale({ payment_method: 'cash', lines: [{ product_id: 'p1', qty: '9' }] }, 'key-0000-0002').catch((e: unknown) => e);
