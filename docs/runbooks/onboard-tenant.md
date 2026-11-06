@@ -157,7 +157,11 @@ The `BMS_SMTP_*` values can stay on the host; they are not used while the provid
   copy its Signing secret (`whsec_...`) into `/opt/bms/.env` as `BMS_RESEND_WEBHOOK_SECRET`, then
   `docker compose up -d api`. The platform host must be reachable from the internet on that path (no access gate in
   front of it). Resend's "Send test event" must show 200 (a test event carries no `env` tag, so it is acknowledged and
-  not recorded); a 401 means the secret differs, a 404 that it is unset. Staging and production share the Resend
+  not recorded); a 401 means the secret differs or the host clock is more than five minutes off, a 503
+  (`webhook_not_configured`) that the secret is unset on the host (the API logs one warning saying so, and Resend keeps
+  retrying, so set the secret and restart within Resend's retry period and those events still arrive). Check the
+  variable name with `docker compose exec api printenv BMS_RESEND_WEBHOOK_SECRET | cut -c1-6` (it prints only
+  `whsec_`, never the secret). Staging and production share the Resend
   account, so each endpoint receives the other's events too: each records only the events whose `env` tag is its own,
   and answers the others 200 with a debug line in the log and nothing recorded. Each bounce,
   complaint and suppressed send then shows on "Messages not sent" under **Bounced and complained** (a suppressed send
@@ -165,7 +169,12 @@ The `BMS_SMTP_*` values can stay on the host; they are not used while the provid
   complained before), with the message, the
   recipient's domain only and the time; the full address is never stored. Match it to its outbox row by the row id
   (in the platform audit log, action `platform.email.bounced`, `platform.email.complained` or
-  `platform.email.suppressed`), or in Resend under Emails by the tag `outbox_id`.
+  `platform.email.suppressed`), or in Resend under Emails by the tag `outbox_id`. Since #767 a bounce or a complaint
+  also marks that outbox row itself: it moves from `sent` to failed, with the reason `bounced` or `complained`, and
+  shows in the failed list of "Messages not sent". It cannot be sent again from there (its link was cleared when it
+  was sent): after a complaint, or a hard bounce, the address is also suppressed; ask the person for a working address,
+  fix it, clear the suppression only if the old address is right after all, and start the flow again (a new reset or
+  activation). A suppressed event (`email.suppressed`) marks no row.
 - **Email that goes by SMTP is not tracked or suppressed (ADR-117 decision 8).** Only email sent through the Resend API
   carries the tags (`env`, `outbox_id`); Resend's SMTP documentation names no header for tags. So with
   `BMS_MAIL_PROVIDER=smtp` (even when the SMTP host is Resend's), and for every email sent by the fallback (`via=smtp`),

@@ -1,9 +1,11 @@
 package com.rincoltech.bms.core.notifications.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Session;
 import java.nio.charset.StandardCharsets;
@@ -14,12 +16,16 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -372,4 +378,105 @@ class ResendWebhookIT extends IntegrationTest {
 
     @Autowired
     io.micrometer.core.instrument.MeterRegistry meters;
+
+    // JUSTIFICATION-A3: issue #767's cases (the row itself marked, tenant bound; the unset secret), none existed.
+    /** A sent email row of this business to this fabricated address, as the dispatcher leaves it. */
+    static UUID sentRow(UUID tenantId, String to) {
+        UUID id = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("INSERT INTO notification_outbox (id, channel, recipient, template_key, idempotency_key,"
+                        + " tenant_id, status, attempts, sent_at)"
+                        + " VALUES (?, 'email', ?, 'identity.password_changed', ?, ?, 'sent', 1, now())")
+                .params(id, to, "test.767:" + id, tenantId)
+                .update();
+        return id;
+    }
+
+    /** The row's status and last error, as "failed/bounced". */
+    static String state(UUID outboxId) {
+        return TestDatabase.owner()
+                .sql("SELECT status || '/' || coalesce(last_error, '') FROM notification_outbox WHERE id = ?")
+                .param(outboxId)
+                .query(String.class)
+                .single();
+    }
+
+    /** Posts one signed event of this environment about this row and business; answers the status code. */
+    int deliverFor(String type, UUID outboxId, UUID tenantId, String to) throws Exception {
+        long now = Instant.now().getEpochSecond();
+        String id = "msg_" + UUID.randomUUID().toString().replace("-", "");
+        String body = event(type, outboxId, tenantId, "local", to, "Permanent");
+        return post(id, now, sign(KEY, id, now, body), body).getStatusCode().value();
+    }
+
+    @Test
+    void aBounceMarksItsOwnRowFailedAndNeverAnotherBusinesssRow() throws Exception {
+        TestDatabase.Fixture first = TestDatabase.tenant("test-767-first", false);
+        TestDatabase.Fixture second = TestDatabase.tenant("test-767-second", false);
+        String to = address();
+        UUID firstRow = sentRow(first.tenantId(), to);
+        UUID secondRow = sentRow(second.tenantId(), to);
+
+        assertThat(deliverFor("email.bounced", firstRow, first.tenantId(), to)).isEqualTo(204);
+        assertThat(state(firstRow)).isEqualTo("failed/bounced");
+        assertThat(state(secondRow))
+                .as("the other business's row to the same address")
+                .isEqualTo("sent/");
+
+        // Tags that name the first business with the second business's row id: the row is not found, nothing moves.
+        assertThat(deliverFor("email.bounced", secondRow, first.tenantId(), to)).isEqualTo(204);
+        assertThat(state(secondRow)).isEqualTo("sent/");
+
+        // The same bounce again under a new message id leaves the row as it is.
+        assertThat(deliverFor("email.bounced", firstRow, first.tenantId(), to)).isEqualTo(204);
+        assertThat(state(firstRow)).isEqualTo("failed/bounced");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT failed_at IS NOT NULL AND sent_at IS NOT NULL"
+                                + " FROM notification_outbox WHERE id = ?")
+                        .param(firstRow)
+                        .query(Boolean.class)
+                        .single())
+                .as("failed now, and the time it was sent is kept")
+                .isTrue();
+    }
+
+    @Test
+    void aComplaintMarksItsRowAndStopsLaterSendsToTheAddress() throws Exception {
+        TestDatabase.Fixture business = TestDatabase.tenant("test-767-complaint", false);
+        String to = address();
+        UUID row = sentRow(business.tenantId(), to);
+
+        assertThat(deliverFor("email.complained", row, business.tenantId(), to)).isEqualTo(204);
+
+        assertThat(state(row)).isEqualTo("failed/complained");
+        assertThat(suppressions.suppressed(to)).isTrue();
+        NotificationProperties properties = new NotificationProperties(
+                new NotificationProperties.Smtp(null, null, null, null, "no-reply@example.test"),
+                null,
+                "",
+                new NotificationProperties.Mail("resend", "re_fabricated_test_key_0767", "http://127.0.0.1:1", null));
+        SmtpEmailChannel smtp = new SmtpEmailChannel(
+                properties, new OutboxTemplates(), EmailLayoutTest.HOSTS, null, null, null, null, suppressions, "");
+        assertThat(smtp.send(new OutboxChannel.Delivery(to, "s", "t", "k")))
+                .as("a later email to the address is refused before it is sent")
+                .isEqualTo(OutboxChannel.Result.refused("recipient_suppressed"));
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void withTheSecretUnsetTheRouteAnswers503AndLogsOnce(CapturedOutput output) {
+        ResendWebhookController off = new ResendWebhookController(null, null, null, null, null, "", "");
+        for (int i = 0; i < 3; i++) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/platform/webhooks/resend");
+            request.setContent(
+                    event("email.bounced", UUID.randomUUID(), UUID.randomUUID()).getBytes(StandardCharsets.UTF_8));
+            assertThatThrownBy(() -> off.receive(request))
+                    .isInstanceOfSatisfying(
+                            ApiException.class,
+                            e -> assertThat(e.status().value()).isEqualTo(503));
+        }
+        assertThat(output.getAll().split("BMS_RESEND_WEBHOOK_SECRET is unset", -1))
+                .as("one warning, not one per retry")
+                .hasSize(2);
+    }
 }

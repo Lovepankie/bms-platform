@@ -158,3 +158,23 @@ Resend on each host; a business name a mail client shows oddly; Resend's limits 
 workbook (ADR-074); the bounce on the outbox row itself (issue #767, a migration); the cost of the suppression check if
 the platform audit log ever grows large, timed per email as `bms.email.suppression.check` (issue #777): a time that
 keeps rising is the cue for an index on the hash, which is a migration.
+
+## Amendment of 2026-11-06 (issue #767): the bounce on the outbox row itself, and 503 while the secret is unset
+
+Decision 8 left the bounced row reading `sent`, with the bounce beside it in the platform audit log. Migration `V138`
+adds the one function decision 8 named, `notification_outbox_mark_undelivered`, and no column. After the webhook has
+checked the signature, the replay window and the `env` tag, and written the audit row as before, a bounce
+(`email.bounced`, hard or soft) or a complaint (`email.complained`) moves its outbox row from `sent` to `failed` with
+`last_error` `bounced` or `complained` (`failed_at` set, `sent_at` kept), so it shows on "Messages not sent" with the
+other failures. The row is found by the `outbox_id` and `tenant_id` tags together (a platform row only by a null
+tenant), so an event whose tags name one business can never mark another business's row; a row that is not `sent`
+keeps its first outcome. The function is a platform step: it refuses a transaction bound to a business, as
+`sms_delivery_report_apply` does. An `email.suppressed` event marks no row: the email it names is a later one Resend
+refused, and the suppression of decision 9 already refuses such sends before they leave. Stopping later sends after a
+complaint is decision 9, unchanged.
+
+With `BMS_RESEND_WEBHOOK_SECRET` unset, or not a `whsec_` secret, the route now answers 503 `webhook_not_configured`
+instead of 404, and logs one warning the first time it is called (not one per retry). It still never accepts an unsigned
+event; a 503 makes Resend keep retrying, so events sent before the operator sets the secret are not lost if it is set
+within Resend's retry period. The body is still read as a JSON tree rather than a strict request type, because Resend's
+events carry fields BMS does not map and the API refuses unknown properties on its own request types.

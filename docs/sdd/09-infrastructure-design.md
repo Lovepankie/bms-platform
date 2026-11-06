@@ -285,7 +285,7 @@ migration) with status only, no details.
   other value stops the start) with `BMS_RESEND_API_KEY`, a send-only key the operator puts on the host, and
   `BMS_MAIL_FROM`; production then needs those two instead of the SMTP values. Outbound traffic is then HTTPS to
   `api.resend.com`, and inbound HTTPS from Resend to `POST /api/v1/platform/webhooks/resend` on the platform host for
-  bounces and complaints, signed with `BMS_RESEND_WEBHOOK_SECRET` (both compose files pass it; unset turns the route off).
+  bounces and complaints, signed with `BMS_RESEND_WEBHOOK_SECRET` (both compose files pass it; unset, the route answers 503 and Resend keeps retrying).
   On staging (`BMS_ENVIRONMENT=staging`), or wherever the list is set, both senders send only to `BMS_MAIL_ALLOWLIST` (addresses or
   `@domain`, comma separated; empty sends nothing). Both compose files pass the provider and the key; only the staging
   file passes the allow-list.

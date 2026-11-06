@@ -398,7 +398,10 @@ deferral move the expiry later, to at most 2 days after the row was queued, neve
 (with the tenant and the category from `V50`; `V53` hides the rows a reversal cancelled), `notification_outbox_cancel_unclaimed` (`V53`: marks the bound tenant's pending SMS rows of one event reference that no sender holds under a live lease, whatever their attempt count, failed `cancelled_reversed` with the parameters cleared; `V53` also adds `notification_outbox.leased_until`, set by the claim and released by `notification_outbox_record_result`, and `lending_investments.notify_member`, default true, false for an investment recorded without telling its investor, backfilled false for any funded by a non-staff source or more than 3 days ago), and `notification_outbox_is_pending` (`V53`: whether a row is still pending, for the channel's last look before the provider call; the lease is on the database's clock), `notification_outbox_counts`,
 `notification_outbox_retry` (only a failed row younger than 7 days, with its link not expired and
 its parameters kept; for an SMS whose delivery log row is `unknown` it also moves that row back to `failed`, the operator's
-deliberate resend) and
+deliberate resend), `notification_outbox_mark_undelivered` (`V138`, issue #767, ADR-117 decision 8: the Resend
+webhook's platform step, refused in a transaction bound to a business; it moves one `email` row found by its id and its
+tenant together, a platform row matching only a null tenant, from `sent` to `failed` with `last_error` `bounced` or
+`complained`, keeping `sent_at`; answers `marked`, `repeated`, `not_sent` or `unknown_id`; no new column) and
 `notification_outbox_purge` (sent rows deleted after 30 days, and from `V50` failed SMS rows 30 days after they failed, because their
 `recipient` holds a phone number; any unsent row older than 7 days
 or past its `expires_at` loses its parameters, a pending one becoming `failed`, `expired`). The claim (`V50` changes it) takes

@@ -134,7 +134,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         paymentGateway -> mobileMoney "Collects from the payer's wallet"
         smsAggregator  -> bms.proxy "Delivery reports and USSD sessions on the callback host" "HTTPS"
         paymentGateway -> bms.proxy "Payment callbacks on the callback host" "HTTPS"
-        emailService   -> bms.proxy "Signed bounce and complaint events on the platform host, recorded in the platform audit log (ADR-117)" "HTTPS"
+        emailService   -> bms.proxy "Signed bounce and complaint events on the platform host, recorded in the platform audit log and on the email's own outbox row (ADR-117)" "HTTPS"
         uptimeMonitor  -> bms.proxy "Checks /healthz and a tenant sign-in page every minute" "HTTPS"
         uptimeMonitor  -> telegram "Posts down and recovery alerts to the operator chat" "HTTPS"
 

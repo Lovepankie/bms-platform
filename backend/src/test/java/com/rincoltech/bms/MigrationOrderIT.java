@@ -3263,6 +3263,65 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V138 (issue #767, ADR-117 decision 8) adds one definer function and changes no row: an email row sent before it
+     * still reads sent, the application role may run the function, it marks only the row of the business named, and it
+     * refuses a transaction bound to a business. JUSTIFICATION-A3: a new test case; no existing case covers V138.
+     */
+    @Test
+    void bounceOnOutboxRowMigrationKeepsEveryRowAndBindsTheBusiness() throws Exception {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("138") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v138-bounce', 'Test Tenant V138',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID row = UUID.randomUUID();
+            owner.sql("INSERT INTO notification_outbox (id, channel, recipient, template_key, idempotency_key,"
+                            + " tenant_id, status, attempts, sent_at)"
+                            + " VALUES (?, 'email', 'staff-v138@example.test', 'identity.password_changed', ?, ?,"
+                            + " 'sent', 1, now())")
+                    .params(row, "test.v138:" + row, tenant)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            String state = "SELECT status || '/' || coalesce(last_error, '') FROM notification_outbox WHERE id = ?";
+            assertThat(owner.sql(state).param(row).query(String.class).single()).isEqualTo("sent/");
+            JdbcClient app = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_app", TestDatabase.APP_PASSWORD));
+            // A null tenant looks for a platform row of that id, and there is none.
+            assertThat(mark(app, row, null, "bounced")).isEqualTo("unknown_id");
+            assertThat(mark(app, row, tenant, "bounced")).isEqualTo("marked");
+            assertThat(owner.sql(state).param(row).query(String.class).single()).isEqualTo("failed/bounced");
+            assertThat(mark(app, row, tenant, "bounced")).isEqualTo("repeated");
+            assertThat(mark(app, row, tenant, "complained")).isEqualTo("not_sent");
+            String url = postgres.getJdbcUrl();
+            try (Connection bound = DriverManager.getConnection(url, "bms_app", TestDatabase.APP_PASSWORD)) {
+                Statement statement = bound.createStatement();
+                statement.execute("SELECT set_config('app.tenant_id', '" + tenant + "', false)");
+                String call = "SELECT notification_outbox_mark_undelivered('%s', '%s', 'bounced', now())";
+                assertThatThrownBy(() -> statement.execute(call.formatted(row, tenant)))
+                        .hasMessageContaining("platform only");
+            }
+        }
+    }
+
+    /** V138's function run by the application role, as the Resend webhook runs it. */
+    private static String mark(JdbcClient app, UUID row, UUID tenant, String reason) {
+        return app.sql("SELECT notification_outbox_mark_undelivered(?, CAST(? AS uuid), ?, now())")
+                .params(row, tenant, reason)
+                .query(String.class)
+                .single();
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")
