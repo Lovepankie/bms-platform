@@ -10,6 +10,7 @@ import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, use
 import { needsOf } from './permissions';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 import { Hint } from '../../../app/ui/Hint';
+import { GroupControls, GroupedBodies, useCategoryGroups } from './category-groups';
 
 // Stock value (FR-RET-09) is a stock read; its cost columns arrive only with retail.profit.read.
 // Daily profit (FR-RET-10) needs retail.profit.read (the Gate), and the server refuses it otherwise.
@@ -94,6 +95,35 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
   const categories = valuation.categories ?? [];
   const withCost = hasCost(valuation) || categories.some(hasCost) || (valuation.rows ?? []).some(hasCost);
   const phone = useIsPhone();
+  const rows = valuation.rows ?? [];
+  // By item sits under one header per category with its count and stock at selling price (rule 1, issue #798): only the
+  // selling price total, so the header never shows a cost.
+  const g = useCategoryGroups({
+    screen: 'valuation', items: rows, categoryOf: (r) => r.category, resetKey: nameOf ? 'all' : 'one', searching: false, minGroups: 2,
+    subtotalOf: (items) => `${money(items.reduce((sum, r) => sum + (r.expected_sales_minor ?? 0), 0))} at selling price`,
+  });
+  const columns = 2 + (phone ? 0 : 1) + (withCost ? (phone ? 1 : 3) : 0);
+  // One stock row of By item, drawn the same in the grouped and the flat body.
+  const row = (r: (typeof rows)[number]) => (
+    <tr key={`${r.branch_id}-${r.product_id}`}>
+      <td>
+        <ToStock item={r.product_id} branch={r.branch_id}>{r.description}</ToStock>
+        {!g.active && <><br /><CategoryLabel category={r.category} /></>}
+        {nameOf && <><br /><span className="hint">{nameOf(r.branch_id)}</span></>}
+        {phone && <><br /><span className="hint">{showQty(r.qty ?? '0')} in stock{withCost && r.value_at_cost_minor !== undefined ? `, cost ${money(r.value_at_cost_minor)}` : ''}</span></>}
+      </td>
+      {!phone && <td className="num">{showQty(r.qty ?? '0')}</td>}
+      {withCost && !phone && <td className="num">{r.value_at_cost_minor !== undefined ? money(r.value_at_cost_minor) : ''}</td>}
+      <td className="num">{money(r.expected_sales_minor ?? 0)}</td>
+      {withCost && (
+        <td className="num">
+          {r.expected_profit_minor !== undefined ? money(r.expected_profit_minor) : ''}
+          {phone && r.expected_profit_minor !== undefined && <><br /><span className="hint">{showPercent(r.expected_profit_bp)}</span></>}
+        </td>
+      )}
+      {withCost && !phone && <td className="num">{r.expected_profit_minor !== undefined ? showPercent(r.expected_profit_bp) : ''}</td>}
+    </tr>
+  );
   return (
     <>
       <Headline sums={sumsOf(valuation)} />
@@ -104,6 +134,7 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
         </>
       )}
       <h2>By item</h2>
+      <GroupControls state={g} />
       <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
@@ -115,27 +146,7 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
             {withCost && !phone && <th className="num">Profit %</th>}
           </tr>
         </thead>
-        <tbody>
-          {(valuation.rows ?? []).map((r) => (
-            <tr key={`${r.branch_id}-${r.product_id}`}>
-              <td>
-                <ToStock item={r.product_id} branch={r.branch_id}>{r.description}</ToStock><br /><CategoryLabel category={r.category} />
-                {nameOf && <><br /><span className="hint">{nameOf(r.branch_id)}</span></>}
-                {phone && <><br /><span className="hint">{showQty(r.qty ?? '0')} in stock{withCost && r.value_at_cost_minor !== undefined ? `, cost ${money(r.value_at_cost_minor)}` : ''}</span></>}
-              </td>
-              {!phone && <td className="num">{showQty(r.qty ?? '0')}</td>}
-              {withCost && !phone && <td className="num">{r.value_at_cost_minor !== undefined ? money(r.value_at_cost_minor) : ''}</td>}
-              <td className="num">{money(r.expected_sales_minor ?? 0)}</td>
-              {withCost && (
-                <td className="num">
-                  {r.expected_profit_minor !== undefined ? money(r.expected_profit_minor) : ''}
-                  {phone && r.expected_profit_minor !== undefined && <><br /><span className="hint">{showPercent(r.expected_profit_bp)}</span></>}
-                </td>
-              )}
-              {withCost && !phone && <td className="num">{r.expected_profit_minor !== undefined ? showPercent(r.expected_profit_bp) : ''}</td>}
-            </tr>
-          ))}
-        </tbody>
+        {g.active ? <GroupedBodies state={g} colSpan={columns} renderRow={row} /> : <tbody>{rows.map(row)}</tbody>}
       </table></div>
     </>
   );
