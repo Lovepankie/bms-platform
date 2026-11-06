@@ -17,6 +17,7 @@ import { useEntryDistances, whereWords } from './entry-location';
 import { UndoUsageAction, UndoneMark, undoneWords } from './usage-undo';
 import { showDate, showQty } from './maths';
 import { Gate, Money, Problem, useBranchName, useBranchView } from './ui';
+import { useAddress, useBranchFromAddress } from './screen-link';
 
 // Past usage and damage (issue #145, AppSheet "Damaged or used stock not sold"): every item taken out of stock as used in the
 // shop or damaged, newest first, in the days chosen, at the branch chosen at the top of the page (or every branch), and for
@@ -134,8 +135,15 @@ function UsageRows({ sel, all, nameOf }: { sel: ListSelection; all: boolean; nam
 
 export function UsageHistoryPage() {
   const today = businessToday();
-  const [from, setFrom] = useState(daysBefore(today, 30));
-  const [to, setTo] = useState(today);
+  // Issue #798: a count on Stock health opens this page on its days and its branch (`?from=&to=&branch=`).
+  const { search: asked, go } = useAddress();
+  const day = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+  const [from, setFrom] = useState(day(asked.from) ?? daysBefore(today, 30));
+  const [to, setTo] = useState(day(asked.to) ?? today);
+  const askedBranch = typeof asked.branch === 'string' && asked.branch !== '' ? asked.branch : undefined;
+  // `?kind=used|damaged` (a count on Stock health) shows only that kind, in the flat list, until Show used and damaged.
+  const [kind, setKind] = useState<'usage' | 'damage' | undefined>(asked.kind === 'used' ? 'usage' : asked.kind === 'damaged' ? 'damage' : undefined);
+  const unknownBranch = useBranchFromAddress(askedBranch, go, '/staff/retail/usage-history', { from, to, ...(kind ? { kind: kind === 'usage' ? 'used' : 'damaged' } : {}) });
   const { me } = useStaff();
   const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
@@ -148,10 +156,10 @@ export function UsageHistoryPage() {
   const ready = (all || branchId !== null) && from <= to;
   // Issue #816: Flat list as it always was, or Grouped by shop, month, category and item with the server's totals.
   const view = useListView<UsageLevel>(listUser(me), 'usage', USAGE_ORDER);
-  const grouped = view.view === 'grouped';
+  const grouped = view.view === 'grouped' && kind === undefined;
   const page = useInfiniteQuery({
-    queryKey: ['retail', 'usage-history', from, to, branch ?? 'all', productId],
-    queryFn: ({ pageParam, signal }) => retail.usageHistory({ from, to, ...(branch ? { branchId: branch } : {}), ...(productId ? { productId } : {}), ...(pageParam ? { cursor: pageParam } : {}), signal }),
+    queryKey: ['retail', 'usage-history', from, to, branch ?? 'all', productId, kind ?? 'both'],
+    queryFn: ({ pageParam, signal }) => retail.usageHistory({ from, to, ...(branch ? { branchId: branch } : {}), ...(productId ? { productId } : {}), ...(kind ? { kind } : {}), ...(pageParam ? { cursor: pageParam } : {}), signal }),
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
     enabled: ready && !grouped,
@@ -165,7 +173,12 @@ export function UsageHistoryPage() {
     <Gate screen="stock" title="Past usage and damage">
       <Hint>Every item taken out of stock as used in the shop or damaged. Choose the days, the branch at the top of the page, or one item. An entry undone stays here marked Undone and counts in no total.</Hint>
       <div data-tour="usage-history-filters">
-        <PeriodPicker from={from} to={to} onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
+        <PeriodPicker from={from} to={to} onChange={(range) => {
+          setFrom(range.from);
+          setTo(range.to);
+          // Opened from a link (issue #798): the address follows the days chosen, so a reload keeps them and not the old ones.
+          if (asked.from !== undefined || asked.to !== undefined || asked.kind !== undefined) go('/staff/retail/usage-history', { from: range.from, to: range.to, ...(kind ? { kind: kind === 'usage' ? 'used' : 'damaged' } : {}) }, true);
+        }} />
         <SearchBox id="usage-history-item-search" label="Item (type part of its name or code)" search={itemBox} fetching={products.isPlaceholderData || products.isFetching} count={itemSearch !== '' && products.data ? products.data.length : undefined} />
         {itemSearch !== '' && (
           <>
@@ -178,8 +191,15 @@ export function UsageHistoryPage() {
           </>
         )}
       </div>
+      {unknownBranch !== null && <p className="hint" data-testid="branch-not-yours">That branch cannot be opened here (it is closed, or not one you work at), so this is the branch you are using.</p>}
       {from > to && <p className="hint" role="status">The first day is after the last day. Choose the days again.</p>}
-      <ViewSwitch view={view.view} onChange={view.setView} />
+      {kind !== undefined && (
+        <div role="status" className="alert alert-info" data-testid="one-kind">
+          <p>{kind === 'damage' ? 'Showing damaged stock only.' : 'Showing used stock only.'}</p>
+          <button type="button" className="btn-sm" onClick={() => { setKind(undefined); go('/staff/retail/usage-history', { from, to }, true); }}>Show used and damaged</button>
+        </div>
+      )}
+      {kind === undefined && <ViewSwitch view={view.view} onChange={view.setView} />}
       {grouped && ready && (
         <ListChain<UsageLevel, UsageSummaryGroup>
           kind={usageKind({ productId })} filterKey={{ productId }} chain={[...USAGE_ORDER]} enabled={ready} view={view} rootLabel="Past usage and damage"

@@ -49,7 +49,7 @@ if (query.get('grouped') === '1') {
   });
 }
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-client.setQueryData(['retail', 'usage-history', daysBefore(today, 30), today, branch, ''], { pages: [{ items: rows }], pageParams: [''] });
+client.setQueryData(['retail', 'usage-history', daysBefore(today, 30), today, branch, '', 'both'], { pages: [{ items: rows }], pageParams: [''] });
 client.setQueryData(['retail', 'products', 'all', 'Test'], products);
 const router = layoutRouter('/staff/retail/usage-history');
 

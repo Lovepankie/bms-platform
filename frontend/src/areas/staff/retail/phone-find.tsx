@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { retail, type Category, type Product } from '../../../api/retail';
 import { WORDS } from '../../../app/glossary';
 import { ListRow } from '../../../app/ui/ListRow';
@@ -14,21 +14,29 @@ import { chipsOf, itemStock, knownChip, looksLikeBarcode, noItemCase, noItemText
 
 /**
  * The page's chosen chip, remembered per page. `ready` is false while a remembered chip waits for the categories, so the list
- * never asks with a category that has gone; one that has gone reads as All and is forgotten.
+ * never asks with a category that has gone; one that has gone reads as All and is forgotten. `visit` (issue #798, a category
+ * link) chooses a chip for this visit only: the remembered chip changes only when the person taps one, so it is left as it was.
  */
-export function useChosenChip(page: FindPage, categories: Category[] | undefined, failed = false): [string, (id: string) => void, boolean] {
+export function useChosenChip(page: FindPage, categories: Category[] | undefined, failed = false): [string, (id: string) => void, boolean, (id: string) => void] {
   const [id, setId] = useState(() => readChip(page));
+  // True while the chip on screen came from a link, not from a tap: nothing about it is written.
+  const visiting = useRef(false);
   const choose = (next: string) => {
+    visiting.current = false;
     setId(next);
     writeChip(page, next);
   };
+  const visit = useCallback((next: string) => {
+    visiting.current = true;
+    setId(next);
+  }, []);
   const known = knownChip(id, categories);
   useEffect(() => {
-    if (categories && id && !known) writeChip(page, '');
+    if (categories && id && !known && !visiting.current) writeChip(page, '');
   }, [categories, id, known, page]);
   // Categories that cannot load (offline, a server error) never hold the list back: it shows All (review of #703).
-  if (failed && categories === undefined) return ['', choose, true];
-  return [known, choose, id === '' || categories !== undefined];
+  if (failed && categories === undefined) return ['', choose, true, visit];
+  return [known, choose, id === '' || categories !== undefined, visit];
 }
 
 /**

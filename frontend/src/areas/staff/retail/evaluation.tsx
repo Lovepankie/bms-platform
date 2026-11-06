@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retailAnalytics, type Evaluation } from '../../../api/retail-analytics';
 import { SkeletonList } from '../../../components/states';
-import { Choice, DateRange, Empty, Section, ToStock, defaultRange, percentOrNone, rangeProblem } from './analytics-ui';
+import { Choice, DateRange, Empty, Section, ToItems, ToStock, defaultRange, percentOrNone, rangeProblem } from './analytics-ui';
 import { showQty } from './maths';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { Hint } from '../../../app/ui/Hint';
@@ -53,7 +53,7 @@ export function EvaluationView({ data, nameOf }: { data: Evaluation; nameOf: (id
           <PositionTable p={b} />
           {(b.categories ?? []).map((c) => (
             <div key={c.category_id} className="an-category">
-              <h3>{c.category}</h3>
+              <h3><ToItems category={c.category_id}>{c.category}</ToItems></h3>
               <p className="hint">
                 Profit {money(c.period?.profit_minor ?? 0)}; stock at cost {money(c.stock?.at_cost_minor ?? 0)}, at price {money(c.stock?.at_price_minor ?? 0)};
                 expected profit {money(c.stock?.expected_profit_minor ?? 0)} ({percentOrNone(c.stock?.over_cost_bp) || 'n/a'} over cost)

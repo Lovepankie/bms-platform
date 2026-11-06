@@ -511,7 +511,8 @@ export interface RetailApi {
   /** The stock history of an item at a branch, newest first (issue #351). */
   stockHistory(q: { productId: string; branchId: string; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   /** Stock used and damaged, newest first, in the days given and the caller's branch scope (#145); a blank branch or item means all. */
-  usageHistory(q: { from: string; to: string; branchId?: string; productId?: string; cursor?: string; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
+  /** `kind` narrows to used or damaged stock only (issue #798); both without it. */
+  usageHistory(q: { from: string; to: string; branchId?: string; productId?: string; kind?: 'usage' | 'damage'; cursor?: string; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   /** Undo a usage or damage entry with a reason (issue #818): the stock goes back, the entry is kept and marked undone. */
   undoUsage(reportId: string, reason: string): Promise<UsageUndone>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeInactive?: boolean; signal?: AbortSignal }): Promise<StockRow[]>;
@@ -1033,10 +1034,10 @@ const realRetail: RetailApi = {
     return { items: page.items ?? [], ...(page.next_cursor ? { next_cursor: page.next_cursor } : {}) };
   },
 
-  async usageHistory({ from, to, branchId, productId, cursor, signal }) {
+  async usageHistory({ from, to, branchId, productId, kind, cursor, signal }) {
     const page = unwrap(
       await api.GET('/api/v1/retail/stock/movements', {
-        params: { query: { from, to, kind: ['usage', 'damage'], newest_first: true, ...(branchId ? { branch_id: [branchId] } : {}), ...(productId ? { product_id: productId } : {}), ...(cursor ? { cursor } : {}) } },
+        params: { query: { from, to, kind: kind ? [kind] : ['usage', 'damage'], newest_first: true, ...(branchId ? { branch_id: [branchId] } : {}), ...(productId ? { product_id: productId } : {}), ...(cursor ? { cursor } : {}) } },
         signal,
       }),
     );

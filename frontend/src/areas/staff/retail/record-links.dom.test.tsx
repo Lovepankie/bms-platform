@@ -5,12 +5,16 @@ import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing
 import { useEffect, useState, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import { retail } from '../../../api/retail';
+import { businessToday, retail, type AccountPayment, type Statement, type Valuation } from '../../../api/retail';
+import { ValuationTable } from './profit';
+import { ReceiptList, StatementView } from './account';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 import { CreditNoteView } from './credit-note';
-import { ToStock } from './analytics-ui';
+import { ToItems, ToStock, ToUsage } from './analytics-ui';
+import { UsageHistoryPage } from './usage-history';
+import { ProductsPage } from './catalogue-products';
 import { AllSales, CreditSales } from './sales';
 import { SaleLink } from './screen-link';
 import { StockPage } from './stock';
@@ -49,6 +53,95 @@ function show(ui: ReactElement, url: string, opts: { me?: Me; branch?: string; c
   return router;
 }
 
+describe('a category opens its items (#798)', () => {
+  const CABLES = '00000000-0000-4000-8000-0000000c0001';
+  const LIGHTING = '00000000-0000-4000-8000-0000000c0002';
+  const FITTINGS = '00000000-0000-4000-8000-0000000c0003';
+  // Where Items remembers the chip the person chose (phone-find-state.ts).
+  const SAVED = 'bms.findChip.items';
+  afterEach(() => localStorage.removeItem(SAVED));
+
+  it('links a category name to Items with the category in the address', () => {
+    show(<ToItems category={LIGHTING}>Lighting</ToItems>, '/staff');
+    expect(screen.getByRole('link', { name: 'Lighting' }).getAttribute('href')).toBe(`/staff/retail/catalogue/products?category=${LIGHTING}`);
+  });
+
+  it('opens Items on that category and leaves the address', async () => {
+    const router = show(<ProductsPage />, `/staff/retail/catalogue/products?category=${LIGHTING}`);
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Lighting/, pressed: true })).toBeTruthy());
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
+    expect(screen.queryByTestId('category-not-found')).toBeNull();
+  });
+
+  it('says so when the category in the address is not in the list, and shows every category', async () => {
+    const list = vi.spyOn(retail, 'listCatalogue');
+    localStorage.setItem(SAVED, CABLES);
+    show(<ProductsPage />, '/staff/retail/catalogue/products?category=00000000-0000-4000-8000-0000000c00ff');
+    expect(await screen.findByTestId('category-not-found')).toBeTruthy();
+    // The unknown id is dropped (useChosenChip's knownChip): the list asks for no category, so items of every category show.
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    for (const [q] of list.mock.calls) expect(q.categoryId ?? '').toBe('');
+    expect(await screen.findAllByText(/2\.5mm twin cable 100m roll/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/Solar panel 100W/)).not.toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^All/, pressed: true })).toBeTruthy();
+    // The saved chip is the person's own: a link that names a missing category leaves it alone.
+    expect(localStorage.getItem(SAVED)).toBe(CABLES);
+  });
+
+  it('chooses the category for that visit only: the saved Items chip is unchanged, and a tap still saves (Lead, #862)', async () => {
+    localStorage.setItem(SAVED, CABLES);
+    show(<ProductsPage />, `/staff/retail/catalogue/products?category=${LIGHTING}`);
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Lighting/, pressed: true })).toBeTruthy());
+    expect(localStorage.getItem(SAVED)).toBe(CABLES);
+    fireEvent.click(screen.getByRole('button', { name: /^Fittings/ }));
+    expect(localStorage.getItem(SAVED)).toBe(FITTINGS);
+  });
+
+  it('is the category row of Stock value, by its id', () => {
+    const valuation = { as_of: '2026-10-05', currency: 'UGX', rows: [], categories: [{ category_id: LIGHTING, category: 'Lighting', expected_sales_minor: 12000 }], expected_sales_minor: 12000 } as Valuation;
+    show(<ValuationTable valuation={valuation} />, '/staff');
+    expect(screen.getByRole('link', { name: 'Lighting' }).getAttribute('href')).toBe(`/staff/retail/catalogue/products?category=${LIGHTING}`);
+  });
+});
+
+describe('a used or damaged count on Stock health opens the records behind it (#798)', () => {
+  it('links to Past usage and damage with the branch, the days and the kind', () => {
+    show(<ToUsage branch={BRANCH_B} from="2026-10-01" to="2026-10-31" kind="damaged">2 reports</ToUsage>, '/staff');
+    expect(screen.getByRole('link', { name: '2 reports' }).getAttribute('href')).toBe(`/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31&kind=damaged`);
+  });
+
+  it('is plain text for a session that lacks the stock screen, the gate of Past usage and damage', () => {
+    const me = { ...mockMe('admin'), permissions: ['retail.sale.read'] } as Me;
+    show(<ToUsage branch={BRANCH_B} kind="used">2 reports</ToUsage>, '/staff', { me });
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText('2 reports')).toBeTruthy();
+    cleanup();
+    show(<UsageHistoryPage />, '/staff/retail/usage-history', { me });
+    expect(screen.getByText(/You do not have access/)).toBeTruthy();
+  });
+
+  it('keeps the days chosen in the address, so a reload keeps them', async () => {
+    const router = show(<UsageHistoryPage />, '/staff/retail/usage-history?from=2026-10-01&to=2026-10-31&kind=used');
+    await screen.findByTestId('one-kind');
+    fireEvent.click(screen.getByRole('radio', { name: 'Today' }));
+    const today = businessToday();
+    await waitFor(() => expect(router.state.location.search).toEqual({ from: today, to: today, kind: 'used' }));
+  });
+
+  it('opens Past usage and damage on those days and that kind, switched to that branch', async () => {
+    const chooseBranch = vi.fn();
+    const history = vi.spyOn(retail, 'usageHistory');
+    const router = show(<UsageHistoryPage />, `/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31&kind=damaged`, { chooseBranch });
+    await waitFor(() => expect(chooseBranch).toHaveBeenCalledWith(BRANCH_B));
+    await waitFor(() => expect(router.state.location.search).toEqual({ from: '2026-10-01', to: '2026-10-31', kind: 'damaged' }));
+    expect((await screen.findByTestId('one-kind')).textContent).toContain('Showing damaged stock only.');
+    await waitFor(() => expect(history).toHaveBeenCalledWith(expect.objectContaining({ kind: 'damage' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Show used and damaged' }));
+    await waitFor(() => expect(screen.queryByTestId('one-kind')).toBeNull());
+    await waitFor(() => expect(history).toHaveBeenLastCalledWith(expect.not.objectContaining({ kind: expect.anything() })));
+  });
+});
+
 describe('a sale number opens that sale (#336)', () => {
   it('links to All sales with the sale in the address', () => {
     show(<SaleLink saleId={SALE_2}>S-900002</SaleLink>, '/staff');
@@ -64,6 +157,19 @@ describe('a sale number opens that sale (#336)', () => {
 
   it('is the sale row of a credit note', () => {
     show(<CreditNoteView note={{ id: 'r1', credit_note_no: 'CN-HQ-000001', sale_id: SALE_2, sale_no: 'S-900002', returned_on: '2026-10-01', lines: [] }} nameOf={() => 'Test Branch A'} />, '/staff');
+    expect(screen.getByRole('link', { name: 'S-900002' }).getAttribute('href')).toBe(`/staff/retail/sales?sale=${SALE_2}`);
+  });
+
+  it('is each sale an account payment paid, under its month (#798)', () => {
+    const receipt = { id: 'p1', receipt_no: 'AP-000001', status: 'posted', amount_minor: 5000, method: 'cash', paid_on: '2026-10-03', branch_id: BRANCH_A, allocations: [{ sale_id: SALE_2, sale_no: 'S-900002', amount_minor: 5000 }] } as AccountPayment;
+    show(<ReceiptList items={[receipt]} canReverse={() => false} nameOf={() => 'Test Branch A'} onReverse={() => undefined} />, '/staff');
+    expect(screen.getByRole('button', { name: /October 2026/ }).textContent).toContain('1 payment');
+    expect(screen.getByRole('link', { name: 'S-900002' }).getAttribute('href')).toBe(`/staff/retail/sales?sale=${SALE_2}`);
+  });
+
+  it('is each sale brought in from the old records on a statement (#798)', () => {
+    const statement = { from: '2026-10-01', to: '2026-10-31', lines: [], before_system_start: { sales: [{ sale_id: SALE_2, sale_no: 'S-900002', sale_date: '2026-01-05', total_minor: 9000 }] } } as Statement;
+    show(<StatementView statement={statement} />, '/staff');
     expect(screen.getByRole('link', { name: 'S-900002' }).getAttribute('href')).toBe(`/staff/retail/sales?sale=${SALE_2}`);
   });
 

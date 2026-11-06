@@ -107,7 +107,7 @@ export function CategoryPage({ categoryId }: { categoryId: string }) {
       canPrice={canPrice}
       onEdit={() => open(p.id ?? '')}
       onPrice={() => setView({ mode: 'price', id: p.id ?? '' })}
-      extra={<ScreenLink screen="stock" to="/staff/retail/stock" label={`See the stock of ${p.description}`}>Stock</ScreenLink>}
+      extra={<ScreenLink screen="stock" to="/staff/retail/stock" search={p.id ? { item: p.id } : undefined} label={`See the stock of ${p.description}`}>Stock</ScreenLink>}
     />
   );
   const list = items.data?.items ?? [];

@@ -39,6 +39,11 @@ const ELSEWHERE: Partial<Record<HelpTipKey, string>> = {
   // Issue #709 (ADR-110): on the Units page's two parts, and on the item forms and the ladder.
   singleUnit: 'areas/staff/retail/units-sections.dom.test.tsx',
   package: 'areas/staff/retail/units-sections.dom.test.tsx',
+  // Issue #798: the words the rule 3 audit of #336 left without a tip.
+  tokensADay: 'areas/staff/rule-three.dom.test.tsx',
+  kyc: 'areas/staff/rule-three.dom.test.tsx',
+  portfolioAtRisk: 'areas/staff/rule-three.dom.test.tsx',
+  postedLinesOnly: 'areas/staff/rule-three.dom.test.tsx',
 };
 const HERE: HelpTipKey[] = ['averageBuyingPrice', 'sellingPrice', 'priceList', 'appraisal', 'outstanding', 'collateral'];
 

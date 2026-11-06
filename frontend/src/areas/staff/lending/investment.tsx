@@ -70,7 +70,7 @@ export function InvestmentBalances({ inv }: { inv: Investment }) {
         <dd>{money(inv.principal_held_minor, c)}</dd>
         <dt>Agreed return</dt>
         <dd>{money(inv.agreed_return_minor, c)}</dd>
-        <dt>Return accrued</dt>
+        <dt>Return earned so far</dt>
         <dd>{money(inv.return_accrued_minor, c)}</dd>
         <dt>Return paid</dt>
         <dd>{money(inv.return_paid_minor, c)}</dd>

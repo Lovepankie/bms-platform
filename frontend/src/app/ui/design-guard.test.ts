@@ -484,7 +484,8 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     // A step of a Next row (issue #700) is a plain button too.
     expect(code('areas/staff/retail/screen-link.tsx')).toMatch(/action \? 'btn btn-primary' : step \? 'btn' : 'link-row'/);
     for (const sel of [/^\s*\.link-row\s*$/, /^\s*\.figure-link\s*$/]) expect(rulesFor(sel)[0]?.body).toMatch(/text-decoration: none/);
-    expect(code('areas/staff/retail/analytics-ui.tsx').match(/<Link className="figure-link"/g)).toHaveLength(2);
+    // ToStock, ToSales, and since issue #798 ToItems and ToUsage.
+    expect(code('areas/staff/retail/analytics-ui.tsx').match(/<Link className="figure-link"/g)).toHaveLength(4);
     expect(code('areas/staff/home-cards.tsx')).not.toMatch(/<Link to="[^"]*">Open the/);
   });
 

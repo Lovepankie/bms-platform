@@ -1,5 +1,5 @@
 import { Link, useRouter } from '@tanstack/react-router';
-import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import type { Me } from '../../../api/client';
 import type { ChoiceAdd } from '../../../app/ui/EmptyChoice';
 import { useOptionalStaff, useStaff } from '../context';
@@ -49,6 +49,23 @@ export function useAddress(): { routed: boolean; search: Record<string, unknown>
   const search = useSyncExternalStore((changed) => (router ? router.subscribe('onResolved', changed) : () => undefined), read, read);
   const go = useCallback((to: string, next: Record<string, string>, replace = false) => void router?.navigate({ to, search: next as never, replace }), [router]);
   return { routed: router !== undefined && router !== null, search, go };
+}
+
+/**
+ * `?branch=<id>` on a screen that shows the branch in use (Stock, issue #336; Past usage and damage, issue #798): switches to that
+ * branch once, when this person works there, then rewrites the address to `path` with `keep`. Returns the branch asked for that
+ * this person cannot switch to, so the screen can say so, never dropping it in silence.
+ */
+export function useBranchFromAddress(branch: string | undefined, go: ReturnType<typeof useAddress>['go'], path: string, keep: Record<string, string> = {}): string | null {
+  const { me, branch: current, chooseBranch } = useStaff();
+  const known = branch !== undefined && chooseBranch !== undefined && (me.branches ?? []).some((b) => b.id === branch);
+  const kept = JSON.stringify(keep);
+  useEffect(() => {
+    if (branch === undefined || !known) return;
+    if (branch !== current) chooseBranch?.(branch);
+    go(path, JSON.parse(kept) as Record<string, string>, true);
+  }, [branch, known, current, chooseBranch, go, path, kept]);
+  return branch !== undefined && !known ? branch : null;
 }
 
 /** The way an empty choice (issue #619) adds what is missing on another screen, which comes back once it is added: only for a session that may open it. */

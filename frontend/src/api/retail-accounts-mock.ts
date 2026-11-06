@@ -136,10 +136,13 @@ export function createAccountsMock(env: AccountsEnv): AccountsMock {
         return { customer_id: id, currency: 'UGX', balance_minor: owed(id), open_sales: rows.map(asOpen) };
       }),
 
-    listAccountPayments: (id) =>
+    listAccountPayments: (id, q) =>
       gate(() => {
         customer(id);
-        return { items: receipts.filter((r) => r.customer === id).reverse().map(view) };
+        // Pages of 50, newest first, as the server sends them (issue #798: the account says when there are more).
+        const all = receipts.filter((r) => r.customer === id).reverse();
+        const start = Number(q?.cursor ?? 0) || 0;
+        return { items: all.slice(start, start + 50).map(view), ...(start + 50 < all.length ? { next_cursor: String(start + 50) } : {}) };
       }),
 
     payOnAccount: (id, body, key) =>

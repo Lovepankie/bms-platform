@@ -210,6 +210,13 @@ describe('the member page', () => {
     cleanup();
     mount(<MemberView member={{ ...holder, kyc_status: 'pending_verification' }} />, { me: officer(['lending.members.verify_kyc']) });
     expect(screen.getByRole('button', { name: 'Details are correct' })).toBeTruthy();
+    // One brand button for the checker (issue #798): Details are correct, and Change details is plain.
+    expect(document.querySelectorAll('.rt-primary')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Change details' }).className).not.toContain('rt-primary');
+    cleanup();
+    mount(<MemberView member={{ ...holder, kyc_status: 'pending_verification' }} />);
+    // Someone who may not check keeps Change details as the one brand button.
+    expect(screen.getByRole('link', { name: 'Change details' }).className).toContain('rt-primary');
     cleanup();
     mount(<MemberView member={{ ...holder, kyc_status: 'verified' }} />, { me: officer(['lending.members.verify_kyc']) });
     expect(screen.queryByRole('button', { name: 'Details are correct' })).toBeNull();

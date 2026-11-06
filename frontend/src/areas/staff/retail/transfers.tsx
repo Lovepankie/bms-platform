@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Transfer } from '../../../api/retail';
@@ -10,6 +10,8 @@ import { TransferDocument } from './documents-ui';
 import { TransferSummary, useBranchLabel } from './transfer';
 import { Gate, Problem, useSingleBranch } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { GroupedCards, useCategoryGroups } from './category-groups';
+import { monthLabel } from './cash-state';
 
 // Stock moves (FR-RET-16): transfers from or to the branch chosen at the top of the page (every
 // branch the session may read with "All branches"), newest first. Tapping one shows its items, and
@@ -66,14 +68,18 @@ export function ShortageWarning({ from }: { from: string }) {
 }
 
 // The API gives a transfer no number of its own yet, so a row shows the date, the route, what moved
-// and, for the user's own moves, "by you" (#112 item 1).
-export function TransferList({ items, onOpen }: { items: Transfer[]; onOpen: (id: string) => void }) {
+// and, for the user's own moves, "by you" (#112 item 1). The moves sit under one header per month with
+// how many there are (rule 1, issue #798), open when the list is short; `resetKey` is the branch shown, and
+// `more` (another page exists) makes the last month say "so far", since its count is of the loaded moves only.
+export function TransferList({ items, onOpen, resetKey = '', more = false }: { items: Transfer[]; onOpen: (id: string) => void; resetKey?: string; more?: boolean }) {
   const label = useBranchLabel();
   const { me } = useStaff();
+  const months = useCategoryGroups({ screen: 'transfers', items, categoryOf: (t) => monthLabel(t.transfer_date) || 'No date', resetKey, searching: false, keepOrder: true, noun: ['move', 'moves'], more });
   if (items.length === 0) return <p className="empty-state">No stock has been moved yet. Use Move stock to another branch.</p>;
   return (
-    <ul style={{ listStyle: 'none', padding: 0 }}>
-      {items.map((t) => (
+    <GroupedCards
+      state={months}
+      renderItem={(t) => (
         <li key={t.id} className="rt-card">
           <button type="button" className="btn-ghost" style={{ width: '100%', textAlign: 'left', display: 'block' }} onClick={() => onOpen(t.id ?? '')}>
             <strong style={{ display: 'block', whiteSpace: 'nowrap' }}>
@@ -87,8 +93,8 @@ export function TransferList({ items, onOpen }: { items: Transfer[]; onOpen: (id
             </span>
           </button>
         </li>
-      ))}
-    </ul>
+      )}
+    />
   );
 }
 
@@ -132,10 +138,13 @@ export function StockMoves() {
   const { me } = useStaff();
   const { branchId } = useSingleBranch();
   const [open, setOpen] = useState<string | null>(null);
-  const page = useQuery({
+  const page = useInfiniteQuery({
     queryKey: ['retail', 'transfers', branchId],
-    queryFn: () => retail.listTransfers({ branchId: branchId ?? undefined }),
+    queryFn: ({ pageParam }) => retail.listTransfers({ branchId: branchId ?? undefined, ...(pageParam ? { cursor: pageParam } : {}) }),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.next_cursor || undefined,
   });
+  const items = page.data?.pages.flatMap((p) => p.items ?? []) ?? [];
   return (
     <Gate screen="transfers" title="Stock moves">
       {!open && canUse(me, 'transfer') && <p data-tour="transfers-new"><Link className="btn btn-primary" to="/staff/retail/transfer">Move stock to another branch</Link></p>}
@@ -145,7 +154,12 @@ export function StockMoves() {
       ) : (
         <>
           {page.isError && <Problem error={page.error} />}
-          {page.data && <TransferList items={page.data.items ?? []} onOpen={setOpen} />}
+          {page.data && <TransferList items={items} onOpen={setOpen} resetKey={branchId ?? ''} more={page.hasNextPage} />}
+          {page.hasNextPage && (
+            <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>
+              {page.isFetchingNextPage ? 'Loading' : 'Show more moves'}
+            </button>
+          )}
         </>
       )}
       </div>

@@ -256,7 +256,8 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
 
         {canManage && (
           <p className="cluster">
-            <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={!submitted}>
+            {/* While SMS is off, Switch SMS on is the one brand button (rule 3, issue #798). */}
+            <BusyButton type="submit" className={saved.enabled ? 'rt-primary' : undefined} busy={save.isPending} disabled={!submitted}>
               Save changes
             </BusyButton>
             {isChange(change) && (

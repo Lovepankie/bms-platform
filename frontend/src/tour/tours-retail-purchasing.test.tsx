@@ -72,7 +72,7 @@ const seed: Seed = (client) => {
   client.setQueryData(['retail', 'return', RETURN], credit);
   client.setQueryData(['retail', 'account', CUSTOMER], account);
   client.setQueryData(['retail', 'account-balance', CUSTOMER], { open_sales: [] });
-  client.setQueryData(['retail', 'account-payments', CUSTOMER], { items: [] });
+  client.setQueryData(['retail', 'account-payments', CUSTOMER], { pages: [{ items: [] }], pageParams: [''] });
   // A sent order is the one goods are received against and the one whose actions show; a draft is the one that can be changed.
   client.setQueryData(['retail', 'purchase-order', ORDER], order(ORDER, 'sent'));
   client.setQueryData(['retail', 'purchase-order', DRAFT], order(DRAFT, 'draft'));

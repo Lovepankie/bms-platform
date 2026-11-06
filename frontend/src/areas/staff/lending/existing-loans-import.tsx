@@ -176,7 +176,8 @@ export function ExistingLoansImport({ api = existingLoans, helperApi = setupHelp
       <textarea id="exl-text" data-tour="existing-import-text" rows={8} value={text} spellCheck={false} onChange={(e) => { setText(e.target.value); setDraft(null); setDone(null); setWarning(null); }} />
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="existing-import-check" notReady={text.trim() === '' || (draft !== null && (productCode === '' || needsConfirming(draft)))} onClick={() => check.mutate()}>
+      {/* One brand button at a time (rule 3, issue #798): once there are loans to record, Record is the primary. */}
+      <BusyButton busy={check.isPending} type="button" className={current && current.errors === 0 && readyLoans > 0 ? undefined : 'rt-primary'} data-tour="existing-import-check" notReady={text.trim() === '' || (draft !== null && (productCode === '' || needsConfirming(draft)))} onClick={() => check.mutate()}>
         {draft ? 'Check these loans' : 'Check the file'}
       </BusyButton>
       {current && <LoanImportReport result={current} />}

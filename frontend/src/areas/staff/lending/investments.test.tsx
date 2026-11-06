@@ -153,7 +153,7 @@ describe('investment page', () => {
     expect(html).toContain('VC-BR1-000001');
     expect(html).toContain('After it: principal UGX 1,000,000, return payable UGX 0');
     expect(html).toContain('aria-label="Reverse Return paid VC-BR1-000001"');
-    expect(html).not.toContain('aria-label="Reverse Return accrued');
+    expect(html).not.toContain('aria-label="Reverse Return earned');
     expect(html).toContain('Certificate and statement to print');
     expect(html).not.toContain('style=');
   });

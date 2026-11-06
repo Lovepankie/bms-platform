@@ -1378,11 +1378,11 @@ export function createMockRetail(): RetailApi {
         day: (m) => businessToday(new Date(m.at ?? '')),
       })),
 
-    usageHistory: ({ from, to, branchId, productId }) =>
+    usageHistory: ({ from, to, branchId, productId, kind }) =>
       run(() => ({
         items: stockLog
           // The business day, as the server's from and to (StockService.movements, the tenant's time zone), never the UTC day.
-          .filter((m) => (m.kind === 'usage' || m.kind === 'damage') && businessToday(new Date(m.at ?? '')) >= from && businessToday(new Date(m.at ?? '')) <= to
+          .filter((m) => (kind ? m.kind === kind : m.kind === 'usage' || m.kind === 'damage') && businessToday(new Date(m.at ?? '')) >= from && businessToday(new Date(m.at ?? '')) <= to
             && (!branchId || m.branch_id === branchId) && (!productId || m.product_id === productId))
           // Issue #818: the entry's whole line count, as the server counts it, whatever the filter.
           .map((m) => (m.source_type === 'retail.usage' ? { ...m, entry_lines: stockLog.filter((x) => x.source_type === 'retail.usage' && x.source_id === m.source_id).length } : m))
@@ -1724,8 +1724,12 @@ export function createMockRetail(): RetailApi {
         return visibleTransfer(t);
       })),
 
-    listTransfers: ({ branchId, status }) =>
-      delay({ items: transfers.filter((t) => (!branchId || t.from_branch_id === branchId || t.to_branch_id === branchId) && (!status || t.status === status)).map(visibleTransfer) }),
+    listTransfers: ({ branchId, status, cursor }) => {
+      // Pages of 50, as the server sends them (issue #798: Stock moves shows more on request).
+      const wanted = transfers.filter((t) => (!branchId || t.from_branch_id === branchId || t.to_branch_id === branchId) && (!status || t.status === status));
+      const start = Number(cursor ?? 0) || 0;
+      return delay({ items: wanted.slice(start, start + 50).map(visibleTransfer), ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });
+    },
 
     getTransfer: (id) => {
       const t = transfers.find((x) => x.id === id);

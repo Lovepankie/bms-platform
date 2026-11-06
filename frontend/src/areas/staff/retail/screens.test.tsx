@@ -273,6 +273,16 @@ describe('valuation and profit', () => {
     expect((html.match(/71\.43%/g) ?? []).length).toBe(3);
   });
 
+  it('groups By item by category with the count and the stock at selling price on each header, never a cost (#798)', () => {
+    const second = { branch_id: branch, product_id: 'p2', description: 'Socket', qty: '1.000', expected_sales_minor: 3000, value_at_cost_minor: 1999, category: 'Wiring' };
+    const html = renderToString(<ValuationTable valuation={{ ...v, rows: [...(v.rows ?? []), second] }} />);
+    expect(html).toContain('Lighting');
+    expect(html).toContain('1 item, UGX 12,000 at selling price');
+    expect(html).toContain('1 item, UGX 3,000 at selling price');
+    expect(html).not.toContain('at selling price, UGX 1,999');
+    expect(html).toContain('Group by category');
+  });
+
   it('shows no cost column when the server sent no cost (no retail.profit.read)', () => {
     const noCost: Valuation = {
       ...v, value_at_cost_minor: undefined, expected_profit_minor: undefined, expected_profit_bp: undefined,

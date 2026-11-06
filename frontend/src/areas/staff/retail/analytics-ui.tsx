@@ -22,6 +22,24 @@ export function ToStock({ children, item, branch }: { children: ReactNode; /** O
   return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/stock" search={search as never}>{children}</Link> : <>{children}</>;
 }
 
+/**
+ * A count of used or damaged stock that opens Past usage and damage for that branch, those days and that `kind` only (issue #798).
+ * That page's gate is the `stock` screen, so the same check decides the link: plain text for a session that may not open it.
+ */
+export function ToUsage({ children, branch, from, to, kind }: { children: ReactNode; branch?: string; from?: string; to?: string; kind: 'used' | 'damaged' }) {
+  const staff = useContext(StaffContext);
+  const router = useRouter({ warn: false });
+  const search = { ...(branch ? { branch } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), kind };
+  return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/usage-history" search={search as never}>{children}</Link> : <>{children}</>;
+}
+
+/** A category name that opens the Items page on that category (issue #798), for a session that may open Items; plain text otherwise. */
+export function ToItems({ children, category }: { children: ReactNode; category: string | undefined }) {
+  const staff = useContext(StaffContext);
+  const router = useRouter({ warn: false });
+  return router && staff && category && canUse(staff.me, 'products') ? <Link className="figure-link" to="/staff/retail/catalogue/products" search={{ category } as never}>{children}</Link> : <>{children}</>;
+}
+
 /** A total that opens the All sales page (or Credit sales with `credit`), for a session that may read sales; plain text otherwise (issue #336). */
 export function ToSales({ children, credit = false }: { children: ReactNode; credit?: boolean }) {
   const staff = useContext(StaffContext);

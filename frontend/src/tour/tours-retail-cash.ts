@@ -316,14 +316,14 @@ export const expensesReportPage: Tour = {
 
 export const expenseListsPage: Tour = {
   id: 'page-expense-lists',
-  version: 1,
+  version: 2,
   title: 'This page: expense lists',
   audience: (me) => held(me, EXPENSE_MANAGE) && held(me, CASHBOOK_READ),
   autoStart: false,
   page: '/staff/retail/expense-lists',
   steps: [
     step({ id: 'help', target: 'expense-lists-help', title: 'What these lists are', body: 'The expense form offers these categories and the items inside them. Nothing is deleted. A switched off one stays on old records.' }),
-    step({ id: 'body', target: 'expense-lists-body', title: 'Add and change', body: 'Type a new category and tap Add category. Inside a category you can add items, rename them or switch them off.' }),
+    step({ id: 'body', target: 'expense-lists-body', title: 'Add and change', body: 'Type a new category and tap Add category. Tap a category to open it. Inside it you can add items, rename them or switch them off.' }),
   ],
 };
 
@@ -355,14 +355,14 @@ export const advancesPage: Tour = {
 
 export const cashSummaryPage: Tour = {
   id: 'page-cash-summary',
-  version: 1,
+  version: 2,
   title: 'This page: cash summary',
   audience: (me) => held(me, CASHBOOK_READ),
   autoStart: false,
   page: '/staff/retail/cash-summary',
   steps: [
     step({ id: 'window', target: 'cash-window', title: 'Choose the dates', body: 'It starts with the last seven days. Change the first and the last day to see more.' }),
-    step({ id: 'days', target: 'cash-days', title: 'One card for each shop and day', body: 'The card walks from the opening cash to the closing cash. Tap a name, such as Expenses or Banked, to see the rows behind it.' }),
+    step({ id: 'days', target: 'cash-days', title: 'One card for each shop and day', body: 'Each card shows the closing cash and the cash expected. Tap Show every line for the rest. Tap a name, such as Expenses, to see its rows.' }),
   ],
 };
 

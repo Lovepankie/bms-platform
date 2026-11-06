@@ -147,7 +147,8 @@ const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(
 // One purchase, opened from a supplier's deliveries (issue #820).
 const retailPurchaseRoute = retailScreen('/restocks/$purchaseId', 'Purchase').lazy(() => import('../areas/staff/retail/restocks').then((m) => m.PurchaseRoute));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
-const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage').lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
+// Issue #798: `branch`, `from`, `to` and `kind` (used or damaged) open the records behind a count on Stock health.
+const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage', textParams('branch', 'from', 'to', 'kind')).lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock', 'Stock', textParams('item', 'branch')).lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
 // The item page (issue #813): one item's stock in each shop and every movement of it with the balance after each.
 const retailItemPageRoute = retailScreen('/items/$productId', 'Item').lazy(() => import('../areas/staff/retail/item-page').then((m) => m.Route));
@@ -168,7 +169,8 @@ const retailCreditControlRoute = retailScreen('/credit-control', 'Credit control
 const retailEvaluationRoute = retailScreen('/evaluation', 'Business evaluation').lazy(() => import('../areas/staff/retail/evaluation').then((m) => m.Route));
 const retailControlsRoute = retailScreen('/controls', 'Controls').lazy(() => import('../areas/staff/retail/controls').then((m) => m.Route));
 const retailCatalogueRoute = retailScreen('/catalogue', 'Catalogue').lazy(() => import('../areas/staff/retail/catalogue').then((m) => m.Route));
-const retailProductsRoute = retailScreen('/catalogue/products', 'Items').lazy(() => import('../areas/staff/retail/catalogue-products').then((m) => m.ProductsRoute));
+// Issue #798: `category` opens the items of one category, so a category name elsewhere links to them.
+const retailProductsRoute = retailScreen('/catalogue/products', 'Items', textParams('category')).lazy(() => import('../areas/staff/retail/catalogue-products').then((m) => m.ProductsRoute));
 // Items with sizes and colours (issue #384): under Items, so the trail reads Catalogue, Items, then the item.
 const retailSizesNewRoute = retailScreen('/catalogue/products/sizes/new', 'Add an item with sizes and colours').lazy(() => import('../areas/staff/retail/catalogue-variants').then((m) => m.NewFamilyRoute));
 const retailSizesJoinRoute = retailScreen('/catalogue/products/sizes/join', 'Put items together as sizes').lazy(() => import('../areas/staff/retail/catalogue-variants').then((m) => m.JoinRoute));

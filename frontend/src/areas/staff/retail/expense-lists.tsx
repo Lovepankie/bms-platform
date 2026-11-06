@@ -83,16 +83,23 @@ function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: 
   );
 }
 
-export function CategoryCard({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: Change }) {
+/** A category, closed to its name and item count until tapped (rule 1, issue #798); `open` starts it open. */
+export function CategoryCard({ category, busy, change, open = false }: { category: ExpenseCategory; busy: boolean; change: Change; open?: boolean }) {
   const version = category.version ?? 0;
+  const bodyId = useId();
+  const [shown, setShown] = useState(open);
+  const count = (category.items ?? []).length;
   const words = (body: { name?: string; active?: boolean }) =>
     body.name !== undefined ? `Category ${category.name} renamed to ${body.name}` : `Category ${category.name} switched ${body.active ? 'on' : 'off'}`;
   const update = (body: { name?: string; active?: boolean }) => change(() => retail.updateExpenseCategory(category.id ?? '', body, version), words(body));
   return (
     <section className="rt-card" aria-label={category.name}>
-      <strong>
-        {category.name} {category.active === false && <span className="badge badge-warning">Switched off</span>}
-      </strong>
+      <button type="button" className="cat-head" aria-expanded={shown} aria-controls={bodyId} onClick={() => setShown(!shown)}>
+        <span className="cat-name">{category.name} {category.active === false && <span className="badge badge-warning">Switched off</span>}</span>
+        <span className="cat-meta">{count} {count === 1 ? 'item' : 'items'}</span>
+      </button>
+      {/* Always in the page, so aria-controls names an element; its contents are drawn only while open. */}
+      <div id={bodyId} hidden={!shown}>{shown && <>
       <RenameField label={`Rename ${category.name}`} value={category.name ?? ''} disabled={busy} onSave={(name) => update({ name })} />
       <BusyButton busy={busy} type="button" className="btn-sm" onClick={() => update({ active: category.active === false })}>
         {category.active === false ? `Switch ${category.name} on` : `Switch ${category.name} off`}
@@ -102,6 +109,7 @@ export function CategoryCard({ category, busy, change }: { category: ExpenseCate
         {(category.items ?? []).map((i) => <ItemRow key={i.id} category={category} item={i} busy={busy} change={change} />)}
       </ul>
       <AddItem category={category} busy={busy} change={change} />
+      </>}</div>
     </section>
   );
 }

@@ -6,7 +6,7 @@ import type { Me } from '../../../api/client';
 import type { InFlightReport, StockByLocation, Transfer } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
-import { InTransitList } from './in-transit';
+import { InTransitCard, InTransitList } from './in-transit';
 import { canUse, screensFor } from './permissions';
 import { LocationList, LocationTable, LocationTotals, groupsOf } from './stock-by-location';
 import { TransferSummary } from './transfer';
@@ -192,14 +192,24 @@ describe('stock on its way', () => {
     expect(page(mockMe('admin'), <InTransitList report={flight([])} />)).toContain('Nothing is on the way.');
   });
 
-  it('offers the receive form where the user may act on the destination and the take-back where they may act on the source', () => {
+  it('opens each move on its summary, with Check what arrived and Take this back as plain buttons (issue #798)', () => {
     const html = page(mockMe('admin'), <InTransitList report={flight([open])} />);
     expect(html).toContain('on its way for 2 days');
     expect(html).toContain('Check what arrived');
-    expect(html).toContain('Mark as received');
     expect(html).toContain('Take this back');
+    expect(html).not.toContain('Mark as received');
+    expect(html).not.toContain('btn-primary');
     expect(html).toContain('Value at cost: UGX 14,000');
     expect(html).toContain('The books agree with this list.');
+  });
+
+  it('shows the receive form once Check what arrived is open, and the take-back once that is', () => {
+    const receive = page(mockMe('admin'), <ul><InTransitCard transfer={open} mayReceive mayTakeBack opened="receive" /></ul>);
+    expect(receive).toContain('Mark as received');
+    expect(receive).not.toContain('Reason to take this back');
+    const back = page(mockMe('admin'), <ul><InTransitCard transfer={open} mayReceive mayTakeBack opened="takeBack" /></ul>);
+    expect(back).toContain('Reason to take this back');
+    expect(back).not.toContain('Mark as received');
   });
 
   it('shows a seller the list without any form and without cost', () => {

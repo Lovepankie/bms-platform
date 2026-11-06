@@ -202,6 +202,8 @@ describe('the categories list', () => {
     expect(screen.getByText(/next BLB-0002/)).toBeTruthy();
     const open = screen.getByRole('link', { name: 'Open Bulbs and its items' });
     expect(open.getAttribute('href')).toBe('/staff/retail/catalogue/categories/c1');
+    // Issue #798: the row's Items opens the Items list on that category, not the whole list.
+    expect(screen.getByRole('link', { name: 'See the items of Bulbs' }).getAttribute('href')).toBe('/staff/retail/catalogue/products?category=c1');
   });
 
   it('shows the code start the app makes from the name and asks for none', async () => {
