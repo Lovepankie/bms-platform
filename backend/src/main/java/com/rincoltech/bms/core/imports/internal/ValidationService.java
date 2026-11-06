@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.imports.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.imports.ImportMappings;
+import com.rincoltech.bms.core.imports.ImportRefs;
 import com.rincoltech.bms.core.imports.ImportRuns;
 import com.rincoltech.bms.core.imports.ImportTemplate;
 import com.rincoltech.bms.core.imports.ImportTemplate.EntitySet;
@@ -93,6 +94,7 @@ class ValidationService implements ImportValidation {
     private final ImportTemplates templates;
     private final ImportMappings mappings;
     private final ImportRuns runs;
+    private final RefService refs;
 
     ValidationService(
             JdbcClient jdbc,
@@ -101,7 +103,9 @@ class ValidationService implements ImportValidation {
             AuditLog audit,
             ImportTemplates templates,
             ImportMappings mappings,
-            ImportRuns runs) {
+            ImportRuns runs,
+            RefService refs) {
+        this.refs = refs;
         this.jdbc = jdbc;
         this.batchJdbc = new JdbcTemplate(dataSource);
         this.tx = new TransactionTemplate(transactions);
@@ -128,7 +132,8 @@ class ValidationService implements ImportValidation {
             String templateKey,
             Integer templateVersion,
             Instant parsedAt,
-            Integer rowCount) {
+            Integer rowCount,
+            String sha) {
 
         String stamp() {
             return status + "|" + mappingId + "|" + parsedAt + "|" + rowCount;
@@ -158,7 +163,7 @@ class ValidationService implements ImportValidation {
 
     private static final String BATCHES = """
             SELECT id, seq, status, source_filename, mapping_id, mapping_source, template_key, template_version,
-                   parsed_at, row_count
+                   parsed_at, row_count, source_sha256
               FROM import_batches
              WHERE run_id = ? AND status IN ('uploaded', 'parsed', 'committed')
              ORDER BY seq
@@ -180,7 +185,8 @@ class ValidationService implements ImportValidation {
                             rs.getString("template_key"),
                             (Integer) rs.getObject("template_version"),
                             parsed == null ? null : parsed.toInstant(),
-                            (Integer) rs.getObject("row_count"));
+                            (Integer) rs.getObject("row_count"),
+                            rs.getString("source_sha256"));
                 })
                 .list();
     }
@@ -462,6 +468,10 @@ class ValidationService implements ImportValidation {
                     .params(b.id(), ids)
                     .update();
         }
+        // The keys of this source file and tab the business already imported (issue #133): a row whose key is held with
+        // another content hash is CHANGED_SINCE_IMPORT, blocking, so it is never written twice (spec section 10.1).
+        PreviewService.BatchSource from = PreviewService.sourceOf(input.mapping(), input.sourceKey(), null, b.sha());
+        Map<String, Set<String>> imported = refs.imported(from.file(), from.tab());
         Map<String, Integer> bySeverity = new TreeMap<>();
         Map<String, Integer> byCode = new TreeMap<>();
         int[] rows = {0};
@@ -490,6 +500,13 @@ class ValidationService implements ImportValidation {
             List<Finding> findings = new ArrayList<>(result.findings().size() + 1);
             if (decided.changed()) {
                 findings.add(engine.rowChanged(input, row.line()));
+            }
+            if (!imported.isEmpty()) {
+                String ref = RefService.sourceRef(from, result.sourceRef(), row.line(), result.normalised());
+                Set<String> held = imported.get(ImportRefs.keyOf(ref));
+                if (held != null && !held.contains(ref)) {
+                    findings.add(engine.changedSinceImport(input, row.line()));
+                }
             }
             findings.addAll(result.findings());
             Map<String, Integer> nthOnRow = new HashMap<>();

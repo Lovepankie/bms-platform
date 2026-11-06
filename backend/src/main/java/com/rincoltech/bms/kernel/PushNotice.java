@@ -21,14 +21,23 @@ import java.util.UUID;
  *     transfer, the approval; unique per template
  * @param audience who is told
  * @param params the template values
+ * @param imported whether the cause is an imported record (issue #133): a notice made inside an import batch's
+ *     transaction ({@link ImportedRecords}) is marked, and the handler sends nothing for it
  */
-public record PushNotice(String template, String eventRef, Audience audience, Map<String, String> params) {
+public record PushNotice(
+        String template, String eventRef, Audience audience, Map<String, String> params, boolean imported)
+        implements ImportedRecords.Marked {
 
     public PushNotice {
         if (template == null || template.isBlank() || eventRef == null || eventRef.isBlank() || audience == null) {
             throw new IllegalArgumentException("a push notice needs a template, an event reference and an audience");
         }
         params = Map.copyOf(params);
+    }
+
+    /** A notice of the cause in this transaction, marked imported when an import batch writes it. */
+    public PushNotice(String template, String eventRef, Audience audience, Map<String, String> params) {
+        this(template, eventRef, audience, params, ImportedRecords.inImport());
     }
 
     /** Who is told. */

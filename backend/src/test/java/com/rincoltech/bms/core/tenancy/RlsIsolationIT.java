@@ -1244,6 +1244,12 @@ public class RlsIsolationIT {
                         """)
                 .params(importIssue, t.tenantId(), importBatch, importRow, importResolution)
                 .update();
+        // The commit (migration V143, #133): one fabricated reference of a record the batch created.
+        owner.sql("INSERT INTO import_refs (id, tenant_id, run_id, batch_id, source_key, source_ref, target_type,"
+                        + " target_id) VALUES (?, ?, ?, ?, 'fab-items.csv|-|ref:FAB-001',"
+                        + " 'fab-items.csv|-|ref:FAB-001#0123456789abcdef', 'test.record', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), importRun, importBatch, UUID.randomUUID())
+                .update();
     }
 
     /**
@@ -2024,7 +2030,9 @@ public class RlsIsolationIT {
                 // A business's import mapping versions (#129).
                 "import_mappings",
                 // The resolutions of the review queue (#131).
-                "import_issue_resolutions")) {
+                "import_issue_resolutions",
+                // The references of imported records (#133).
+                "import_refs")) {
             assertThatThrownBy(() -> asApp(
                             a.tenantId(),
                             c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))

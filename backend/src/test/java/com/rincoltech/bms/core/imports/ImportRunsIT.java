@@ -31,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -56,8 +57,15 @@ class ImportRunsIT extends IntegrationTest {
     @Autowired
     LedgerPosting ledger;
 
+    /** The application's client: inside a batch, it writes in the batch's own transaction. */
+    @Autowired
+    JdbcClient jdbc;
+
     @Autowired
     PlatformTransactionManager transactionManager;
+
+    @Autowired
+    TestRestTemplate http;
 
     TestDatabase.Fixture t;
     UUID operator = UUID.randomUUID();
@@ -110,8 +118,18 @@ class ImportRunsIT extends IntegrationTest {
         return TenantContext.callAs(f.tenantId(), work);
     }
 
-    /** A run with {@code batches} pending batches, moved to ready with its dump recorded. */
+    /**
+     * A run with {@code batches} pending batches, moved to ready with its dump recorded and checked, and its commit approved
+     * by a second person (issue #133).
+     */
     Run readyRun(int batches) {
+        Run run = unapprovedRun(batches);
+        CommitApproval.readyToCommit(http, t, runs, run.id(), SHA);
+        return as(t, () -> runs.get(run.id()));
+    }
+
+    /** A run as {@link #readyRun} without the dump's check and the commit's approval. */
+    Run unapprovedRun(int batches) {
         return as(t, () -> {
             Run run = runs.open(operator);
             for (int seq = 1; seq <= batches; seq++) {
@@ -127,20 +145,18 @@ class ImportRunsIT extends IntegrationTest {
         });
     }
 
-    /** Posts one balanced journal for the business, the visible effect of a batch. */
-    void postJournal(String sourceModule) {
-        ledger.post(new EntryRequest(
-                t.headOffice(),
-                DAY,
-                "IMP-TEST",
-                null,
-                sourceModule,
-                "test_import",
-                UUID.randomUUID(),
-                null,
-                List.of(
-                        Line.debit(t.account("loans_receivable"), Money.of(100_000, "UGX")),
-                        Line.credit(t.account("cash_on_hand"), Money.of(100_000, "UGX")))));
+    /**
+     * Posts the batch's balanced journal, the visible effect of a batch, as the batch's opening journal: since issue #133
+     * a batch posts no journal but its opening journals (Lead ruling 6 and the review of 8e570b0 on #872).
+     */
+    void postJournal(UUID batchId, BatchWriter.Checkpoint checkpoint) {
+        checkpoint.openingJournal(
+                new ImportRefs.Opening(t.headOffice(), null, "test_batch", DAY, "loans_receivable", true, 100_000));
+    }
+
+    /** Posts one balanced journal for the business. */
+    UUID postJournal(String sourceModule) {
+        return postJournal(sourceModule, "test_import");
     }
 
     long journals() {
@@ -216,7 +232,7 @@ class ImportRunsIT extends IntegrationTest {
                 t,
                 () -> runs.commit(script(run.id(), (runId, batchId, seq, checkpoint) -> {
                     order.add(seq);
-                    postJournal("lending");
+                    postJournal(batchId, checkpoint);
                     checkpoint.rowWritten();
                     return Map.of("written", 1);
                 })));
@@ -323,7 +339,7 @@ class ImportRunsIT extends IntegrationTest {
         Run run = readyRun(1);
         AtomicBoolean switchedOff = new AtomicBoolean();
         BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
-            postJournal("lending");
+            postJournal(batchId, checkpoint);
             for (int row = 1; row <= 1_500; row++) {
                 if (row == 500 && switchedOff.compareAndSet(false, true)) {
                     // First pass only: the operator switches commits off while the batch runs.
@@ -358,7 +374,7 @@ class ImportRunsIT extends IntegrationTest {
         List<Integer> written = new CopyOnWriteArrayList<>();
         BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
             written.add(seq);
-            postJournal("lending");
+            postJournal(batchId, checkpoint);
             if (seq == 1 && written.size() == 1) {
                 TestDatabase.owner()
                         .sql("UPDATE import_runs SET halt_requested = true WHERE id = ?")
@@ -390,7 +406,7 @@ class ImportRunsIT extends IntegrationTest {
         Run run = readyRun(1);
         AtomicBoolean failed = new AtomicBoolean();
         BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
-            postJournal("lending");
+            postJournal(batchId, checkpoint);
             for (int row = 1; row <= 1_000; row++) {
                 if (row == 700 && failed.compareAndSet(false, true)) {
                     // First pass only: a row the business's tables refuse, as a constraint would.
@@ -412,11 +428,102 @@ class ImportRunsIT extends IntegrationTest {
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committed");
     }
 
+    /** Posts a journal of the given source, debit loans and credit cash: no line on opening balance equity. */
+    UUID postJournal(String sourceModule, String sourceType) {
+        return ledger.post(new EntryRequest(
+                        t.headOffice(),
+                        DAY,
+                        "IMP-TEST",
+                        null,
+                        sourceModule,
+                        sourceType,
+                        UUID.randomUUID(),
+                        null,
+                        List.of(
+                                Line.debit(t.account("loans_receivable"), Money.of(100_000, "UGX")),
+                                Line.credit(t.account("cash_on_hand"), Money.of(100_000, "UGX")))))
+                .entryId();
+    }
+
+    /** Registers a journal in import_refs by the writer's own SQL, past the checkpoint, as a careless writer could. */
+    void registerBehindTheCheckpoint(UUID runId, UUID batchId, UUID entry) {
+        String ref = ImportRefs.sourceRef("test-journal", null, "batch:" + batchId, "0");
+        jdbc.sql("""
+                        INSERT INTO import_refs (id, tenant_id, run_id, batch_id, source_key, source_ref, target_type,
+                                                 target_id)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, 'ledger.journal_entry', ?)
+                        """)
+                .params(UUID.randomUUID(), runId, batchId, ImportRefs.keyOf(ref), ref, entry)
+                .update();
+    }
+
+    // JUSTIFICATION-A3: the review of 8e570b0 and the Lead's note on #872: each journal a batch may not post, refused.
+    @Test
+    void aBatchThatPostsAnyJournalButItsOpeningJournalsFailsAndRollsBack() {
+        Run run = readyRun(1);
+        // A disbursement-like journal (debit loans, credit cash), left unregistered: the end-of-batch check refuses it.
+        BatchWriter unregistered = (runId, batchId, seq, checkpoint) -> {
+            postJournal("lending");
+            return Map.of();
+        };
+        assertThatThrownBy(() -> as(t, () -> runs.commit(script(run.id(), unregistered))))
+                .hasStackTraceContaining("not its opening journals");
+        // The same journal offered to the checkpoint as a record: a writer never registers a journal.
+        BatchWriter asRecord = (runId, batchId, seq, checkpoint) -> {
+            checkpoint.register(
+                    ImportRefs.sourceRef("test-journal", null, "batch:" + batchId, "0"),
+                    "ledger.journal_entry",
+                    postJournal("lending"));
+            return Map.of();
+        };
+        assertThatThrownBy(() -> as(t, () -> runs.resume(script(run.id(), asRecord))))
+                .hasStackTraceContaining("registered only as an opening journal");
+        // The same journal registered by the writer's own SQL: registered, but not an opening journal by the ledger.
+        BatchWriter registered = (runId, batchId, seq, checkpoint) -> {
+            registerBehindTheCheckpoint(runId, batchId, postJournal("lending"));
+            return Map.of();
+        };
+        assertThatThrownBy(() -> as(t, () -> runs.resume(script(run.id(), registered))))
+                .hasStackTraceContaining("not its opening journals");
+        // Named as the framework's opening journal, registered, but with no line on opening balance equity.
+        BatchWriter misnamed = (runId, batchId, seq, checkpoint) -> {
+            registerBehindTheCheckpoint(runId, batchId, postJournal("core.imports", "opening_balance"));
+            return Map.of();
+        };
+        assertThatThrownBy(() -> as(t, () -> runs.resume(script(run.id(), misnamed))))
+                .hasStackTraceContaining("not its opening journals");
+        // Named as the import-retail command's opening journal, with no line on opening balance equity.
+        BatchWriter posing = (runId, batchId, seq, checkpoint) -> {
+            postJournal("retail", "retail.cash_opening");
+            return Map.of();
+        };
+        assertThatThrownBy(() -> as(t, () -> runs.resume(script(run.id(), posing))))
+                .hasStackTraceContaining("not its opening journals");
+        // Every refused batch rolled back whole: no journal, no reference, the batch still to write.
+        assertThat(journals()).isZero();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM import_refs WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(batchStatus(run.id(), 1)).isEqualTo("pending");
+        assertThat(audits("core.import_run.batch_failed")).isEqualTo(5);
+
+        // The batch's own opening journal goes through.
+        BatchWriter opening = (runId, batchId, seq, checkpoint) -> {
+            postJournal(batchId, checkpoint);
+            return Map.of();
+        };
+        assertThat(as(t, () -> runs.resume(script(run.id(), opening)))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(journals()).isEqualTo(1);
+    }
+
     @Test
     void aHaltPressedDuringTheLastBatchIsClearedWhenTheRunEnds() {
         Run run = readyRun(1);
         BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
-            postJournal("lending");
+            postJournal(batchId, checkpoint);
             // The halt lands after the batch's last checkpoint: fewer than 1,000 rows follow it.
             TestDatabase.owner()
                     .sql("UPDATE import_runs SET halt_requested = true WHERE id = ?")
@@ -487,7 +594,7 @@ class ImportRunsIT extends IntegrationTest {
         List<Integer> written = new CopyOnWriteArrayList<>();
         BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
             written.add(seq);
-            postJournal("lending");
+            postJournal(batchId, checkpoint);
             if (seq == 1) {
                 // Runs once batch 1 has committed and its business lock is gone: the loop waits here, before batch 2.
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -545,7 +652,7 @@ class ImportRunsIT extends IntegrationTest {
         AtomicBoolean killed = new AtomicBoolean();
         BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
             written.add(seq);
-            postJournal("lending");
+            postJournal(batchId, checkpoint);
             if (seq == 1 && killed.compareAndSet(false, true)) {
                 // As bms_app, the role of the loop's own connections: end the session that holds the loop key.
                 List<Boolean> ended = JdbcClient.create(TestDatabase.appDataSource())
@@ -631,8 +738,11 @@ class ImportRunsIT extends IntegrationTest {
             assertCode(() -> runs.approveTradingTenant(run.id(), maker), "self_approval_forbidden");
             assertThat(runs.approveTradingTenant(run.id(), checker).tradingOverrideApproved())
                     .isTrue();
+            // The override changed the run after its commit was approved (issue #133): the approval is asked again.
+            assertCode(() -> runs.commit(script(run.id(), NOTHING)), "commit_not_approved");
             return null;
         });
+        CommitApproval.approved(http, t, runs, run.id());
         assertThat(as(t, () -> runs.commit(script(run.id(), NOTHING)))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(audits("core.import_run.trading_override_set")).isEqualTo(1);
         assertThat(audits("core.import_run.trading_override_approved")).isEqualTo(1);

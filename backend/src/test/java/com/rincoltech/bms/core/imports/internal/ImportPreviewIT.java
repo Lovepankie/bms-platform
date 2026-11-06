@@ -9,6 +9,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.core.documents.internal.StoredObjects;
 import com.rincoltech.bms.core.imports.BatchWriter;
+import com.rincoltech.bms.core.imports.CommitApproval;
 import com.rincoltech.bms.core.imports.CommitReport;
 import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportMappings;
@@ -349,7 +350,9 @@ class ImportPreviewIT extends IntegrationTest {
                         "IMP-OPEN",
                         "Opening balance from the fabricated import",
                         "retail",
-                        "test_import",
+                        // As the import-retail command posts its opening stock (until #135): the only journal besides
+                        // the framework's own that a batch may post, recognised and registered by the framework.
+                        "retail.import_opening",
                         null,
                         null,
                         List.of(
@@ -570,6 +573,7 @@ class ImportPreviewIT extends IntegrationTest {
         // The real run on the same input, with the same writer.
         as(t, () -> runs.transition(run.runId(), "ready"));
         as(t, () -> runs.recordPreImportDump(run.runId(), "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, run.runId(), SHA);
         assertThat(as(t, () -> runs.commit(run.runId()))).isEqualTo(CommitOutcome.COMMITTED);
         CommitReport real = as(t, () -> runs.commitReport(run.runId()));
 
@@ -749,6 +753,7 @@ class ImportPreviewIT extends IntegrationTest {
         as(t, () -> runs.dryRun(scripted(second, NOTHING), operator));
         as(t, () -> runs.transition(second, "ready"));
         as(t, () -> runs.recordPreImportDump(second, "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, second, SHA);
         assertThat(as(t, () -> runs.commit(second))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(current(run.runId())).isFalse();
         as(t, () -> runs.dryRun(scripted(run.runId(), writer), operator));
@@ -780,6 +785,7 @@ class ImportPreviewIT extends IntegrationTest {
                         "3 fixture_shop_v1 " + FixtureShopTemplate.class.getName() + " sales " + loader);
         as(t, () -> runs.transition(run.runId(), "ready"));
         as(t, () -> runs.recordPreImportDump(run.runId(), "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, run.runId(), SHA);
         // As if the dry run had rehearsed another template's loader: the commit refuses before it writes anything.
         TestDatabase.owner()
                 .sql("UPDATE import_runs SET dry_run_writer = replace(dry_run_writer, ' sales ', ' fabricated_set ')"
@@ -805,6 +811,7 @@ class ImportPreviewIT extends IntegrationTest {
         as(t, () -> runs.dryRun(scripted(run, NOTHING), operator));
         as(t, () -> runs.transition(run, "ready"));
         as(t, () -> runs.recordPreImportDump(run, "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, run, SHA);
         // The commit stops at its only batch, so the run is committing with that batch left to write.
         BatchWriter failing = (r, b, s, c) -> {
             throw new IllegalStateException("a fabricated failure");
@@ -866,6 +873,7 @@ class ImportPreviewIT extends IntegrationTest {
         as(t, () -> runs.dryRun(scripted(ready, NOTHING), operator));
         as(t, () -> runs.transition(ready, "ready"));
         as(t, () -> runs.recordPreImportDump(ready, "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, ready, SHA);
         // As a server built without build-info and started without BMS_GIT_SHA: no identity at all.
         String had = service.buildIdentity(ImportRunService.codeVersion(null, null, ""));
         try {
@@ -934,9 +942,19 @@ class ImportPreviewIT extends IntegrationTest {
         } finally {
             service.tradingDryRunLimit(Duration.ofSeconds(60));
         }
-        DryRun dry = as(t, () -> runs.dryRun(scripted(run, NOTHING), operator));
+        // Inside the trading dry run's batch, each statement has the dry run's own 60 second limit, not the commit's 10
+        // minutes (Lead ruling 4 and the Lead's note on the review of 8e570b0, #872). PostgreSQL shows 60s as 1min.
+        List<String> timeouts = new ArrayList<>();
+        BatchWriter reads = (r, b, s, c) -> {
+            timeouts.add(jdbc.sql("SELECT current_setting('statement_timeout')")
+                    .query(String.class)
+                    .single());
+            return Map.of();
+        };
+        DryRun dry = as(t, () -> runs.dryRun(scripted(run, reads), operator));
         assertThat(dry.report().failure()).isNull();
         assertThat(dry.current()).isTrue();
+        assertThat(timeouts).isNotEmpty().containsOnly("1min");
     }
 
     // JUSTIFICATION-A3: the Lead's ruling 5 on #869: a dry run and a commit are answered at once, never kept waiting.
@@ -946,6 +964,7 @@ class ImportPreviewIT extends IntegrationTest {
         as(t, () -> runs.dryRun(scripted(ready, NOTHING), operator));
         as(t, () -> runs.transition(ready, "ready"));
         as(t, () -> runs.recordPreImportDump(ready, "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, ready, SHA);
         UUID reviewed = emptyRun(t);
         ExecutorService pool = Executors.newSingleThreadExecutor();
         try {
@@ -1083,6 +1102,7 @@ class ImportPreviewIT extends IntegrationTest {
         as(t, () -> runs.dryRun(scripted(run.runId(), writer), operator));
         as(t, () -> runs.transition(run.runId(), "ready"));
         as(t, () -> runs.recordPreImportDump(run.runId(), "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, run.runId(), SHA);
         as(t, () -> runs.commit(run.runId()));
 
         as(other, () -> {

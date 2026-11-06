@@ -1,6 +1,8 @@
 package com.rincoltech.bms.core.imports;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -51,10 +53,46 @@ public interface BatchWriter {
         return hidden < 0 ? name : name.substring(0, hidden);
     }
 
-    /** The guard the writer calls after each row, and the report it tells what it did (issue #132). */
+    // JUSTIFICATION-A3: issue #133 gives the writer its rows, import_refs, the opening journals and the run's policy.
+    /**
+     * The guard the writer calls after each row, the report it tells what it did (issue #132), and, since issue #133, the
+     * framework's side of the commit: the batch's rows with their {@code source_ref}, the registration of every record the
+     * writer creates in {@code import_refs}, the opening journals and the run's policy decisions. Everything it does runs in
+     * the batch's transaction, so a batch that fails leaves no reference and no journal behind.
+     */
     interface Checkpoint extends CommitReport.Sink {
 
         /** Counts one row; every 1,000 rows re-reads the kill switch and the run's halt flag and stops the batch if set. */
         void rowWritten();
+
+        /**
+         * The batch's rows the commit writes (not excluded, not blank, not held back by an open blocking issue), after
+         * {@code afterLine}, in line order, at most {@code limit}: each with its typed values, its {@code source_ref} and
+         * whether the business's imports already hold it. A row already imported with other content stops the batch.
+         */
+        List<ImportRefs.StagedRow> rows(int afterLine, int limit);
+
+        /**
+         * Registers a record the writer created for a row in {@code import_refs}, in the batch's transaction: a re-run, or
+         * a resume, of the same row then finds it {@link ImportRefs.Status#EXISTING} and writes nothing for it again.
+         * {@code targetType} is a code such as {@code retail.product}. A source_ref whose key the business already holds
+         * with another content hash is refused ({@code CHANGED_SINCE_IMPORT}), and so the batch. A journal is refused
+         * here: a writer never vouches for a journal; it posts one only through {@link #openingJournal} (Lead's note on
+         * the review of 8e570b0, #872).
+         */
+        void register(String sourceRef, String targetType, UUID targetId);
+
+        /**
+         * Posts one opening journal (spec section 3.7) through {@code post_entry} against {@code opening_balance_equity},
+         * registers it in {@code import_refs} in the same transaction, once per batch, branch and kind (two batches that
+         * hold a branch's stock post a journal each, and a template's forecast predicts one per batch), and tells the
+         * report its totals as the ledger's lines hold them. A zero amount posts nothing. Returns what happened:
+         * {@code posted}, {@code already posted} (the batch posted it before in this transaction) or
+         * {@code nothing to post}.
+         */
+        String openingJournal(ImportRefs.Opening opening);
+
+        /** The option of a policy decision recorded on the run (spec section 3.8), for example {@code treat_as_settled}. */
+        Optional<String> policy(String key);
     }
 }

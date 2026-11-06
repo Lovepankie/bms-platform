@@ -15,6 +15,13 @@ import java.util.Map;
  */
 public interface ImportForecast {
 
+    /**
+     * A batch begins: the rows that follow, until the next call, are that batch's (issue #133). The commit posts an opening
+     * journal per batch, branch and kind, so a template whose batches each hold a kind predicts one journal per batch.
+     * Nothing by default.
+     */
+    default void batch(int seq) {}
+
     /** One row the commit would write, of one entity set. */
     void row(String entitySet, Map<String, Object> values);
 

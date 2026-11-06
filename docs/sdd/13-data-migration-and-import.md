@@ -497,6 +497,13 @@ In one transaction, bound to the tenant:
 
 Commit failure rolls back everything; the batch stays `ready` and shows the error.
 
+As built for every template (#133, section 13.14.1 7/16): the commit is per run, one transaction per batch in the
+template's dependency order, after the `import_commit` approval and with a verified pre-import dump; the register batch
+stays one transaction. Opening journals post one per batch, branch and kind through `post_entry` against
+`opening_balance_equity` and are registered in `import_refs` in the same transaction; a failed batch rolls back alone and
+the run, still `committing`, resumes from it. No SMS, task or approval request is made inside a batch (a trigger refuses
+it). The lending template of #136 builds steps 1 to 7 above as its loader.
+
 ## 13.11 Reconciliation report
 
 Contents (FR-IMP-08):
@@ -737,7 +744,7 @@ again: the batches already committed are the business's records now. The overrid
 reason and approved by a different one (the CHECK `import_runs_checker_not_maker`, and `self_approval_forbidden`); both
 steps are audited. Branch limits are each template writer's: a writer checks that every row it writes falls in a branch
 the import may write to, first in the template of #136. The maker-checker
-`import_commit` request is #133; until then the commit is called by the operator's tooling. The operator screens and the
+`import_commit` request is built in #133 (7/16 below); the commit is still called by the operator's tooling. The operator screens and the
 stop button are #141.
 
 **2/16, the quarantined upload (#128, migration `V129`).** `core.imports` gains the public API `ImportUploads` (upload, parse
@@ -1177,3 +1184,91 @@ commit only through test-only templates (`FixtureShopTemplate`, `ScriptedTemplat
   `ImportMappingsIT` (the fixture's loader resolved for the dry run and the commit), `ImportUploadsIT` and
   `ImportUploadReviewIT` (`dry_run_required`, and `BATCH_HAS_NO_MAPPING` for a file read without a mapping), and
   `MigrationOrderIT` (V142 keeps every run and batch, and the CHECK keeps the dry run columns whole).
+
+**7/16, the commit (#133, migration `V143`, FR-IMP-07, ADR-027 decisions 4 and 7, spec sections 3.7, 3.8 and 10.2).**
+The commit of 1/16, with the writers of 6/16, gains what makes it the recoverable unit of ADR-027. There is one commit
+path, `ImportRuns.commit(run)` and `resume(run)`; the dry run runs the same batch code. No route yet (#141).
+
+- **Maker and checker (`import_commit`, chapter 8 section 8.4).** `ImportRuns.requestCommit(run)` is the maker's request
+  for a `ready` run, by the signed-in staff user, who needs `core.imports.manage` (the approvals module refuses anyone else,
+  403). It needs the verified dump and every policy decision first, and is raised in the head office's branch with a
+  checker notice of the number of files, never a value. A different user with `core.imports.approve_commit` approves it
+  in the approvals queue (`self_approval_forbidden` for the maker; the database refuses it with
+  `approval_checker_is_not_maker` on the request and `import_runs_commit_checker_not_maker` on the run). The approval
+  executes no batch, since a batch commits in its own transaction: it records the maker, the request, the checker and the
+  time on the run and the run's version just after it (`commit_approved_version`). The commit's start then requires the
+  run at that version (409 `commit_not_approved`), so a dump recorded or a trading override set after the approval needs
+  a new approval; a run that changes while the request waits makes it stale (FR-APR-08). The action is not a row of the
+  approval rules (ADR-091): it always asks.
+- **The verified dump.** `recordPreImportDump` records the dump (1/16) and clears any earlier check;
+  `verifyPreImportDump(run, sha256, listedEntries)` records the check: the SHA-256 again, which must be the recorded one
+  (422 `pre_import_dump_differs`), and the number of entries `pg_restore --list` listed, above zero. The commit, a resume
+  and the request need it (409 `pre_import_dump_unverified`).
+- **Dependency order, one transaction each, 10 minutes a statement.** The batches are written in the template's
+  dependency order, its entity sets and then their number (as the validation and the preview order them), so a run
+  uploaded sales first still writes items first; a resume goes on from the first batch of that order not committed. Each
+  batch's transaction runs `SET LOCAL app.import_commit = 'on'` after it takes the import key, and sets the statement
+  timeout: 10 minutes on a real commit, the dry run's own limit in a dry run (60 seconds into a trading business, 15
+  minutes otherwise; Lead ruling 4 on #872). The run's report lists the batches by the dependency index of their entity set (`dependency_rank`) and
+  then by batch. A resume is refused without the verified dump, without the approval, or on another build than the one
+  the dry run rehearsed (`dry_run_writer_differs`).
+- **`import_refs` and `source_ref`.** The generalisation of `retail_import_refs` (V20): `run_id`, `batch_id`, `source_key`,
+  `source_ref`, `target_type`, `target_id`, append-only under forced RLS. `ImportRefs.sourceRef(file, tab, row,
+  contentHash)` is the one function that makes a reference: the mapping source's file and tab, the row (`ref:<code>` for
+  a source known by its reference column, `line:<n>` for one known by position) and `ImportRefs.contentHash` of the row's
+  mapped values (their canonical JSON: fields sorted, a null left out, each number in one form, a date, an instant or any
+  other value as its ISO text, so the validation's values and the same values read back hash alike). A source known by
+  position is keyed by its upload instead of its file name (`upload:<sha256>`), so two till rolls of one run, or next
+  month's roll, never share a line key (Lead ruling 1 on #872). `source_key` is the reference without the hash. A writer reads its rows through `BatchWriter.Checkpoint.rows`,
+  each with its reference and whether the business's imports hold it (`NEW`, `EXISTING`), and registers every record it
+  creates with `Checkpoint.register` in the batch's transaction; an `EXISTING` row is counted existing and written no
+  more, so a resume, or a re-run of the same rows, writes nothing twice. A row whose key is held with another hash is
+  `CHANGED_SINCE_IMPORT`: the validation reports it on the row, blocking, so the commit never reaches it, and the commit
+  refuses the batch if one reaches it all the same; the change is made in the app (spec section 10.1). The preview leaves
+  out rows already imported with the same content, so a re-run's preview predicts only what is new.
+- **Opening balances.** `Checkpoint.openingJournal(ImportRefs.Opening)` posts one journal per batch, branch and kind (two batches
+  that hold one branch's stock post one each, and the template's forecast predicts one per batch) through
+  `post_entry` (`LedgerPosting`), against `opening_balance_equity` (debit the account for what the business holds,
+  credit it for what it owes), source `core.imports`, `opening_balance`, and registers it in `import_refs` in the same
+  transaction, so it is never posted twice; the report reads its totals back through `LedgerPosting.totals`. A zero is
+  `nothing to post`. The ledger's trading probe does not count journals of `core.imports`.
+- **Policy decisions (spec section 3.8, ADR-027 decision 7).** A template declares its decisions (`ImportTemplate.policies`,
+  `ImportTemplate.Policy`): key, options, options allowed only with the dev lead's exception, the refusal code and the rows
+  that need it. `Policy.receivable(entitySet, rule)` is the receivable decision (`open_from_list`, `treat_as_settled`,
+  `defer`, refused with `CREDIT_DECISION_MISSING`). `ImportRuns.recordPolicy(run, key, decision)` records the option, the
+  day the customer confirmed it and the reference of the confirmation, and for `defer` the platform operator who granted
+  the exception and the day of the follow-up (422 `policy_unknown`, `policy_option_unknown`,
+  `policy_confirmation_required`, `policy_exception_required`), on a run not yet ready, audited. `ready`, the request and
+  the commit refuse a run whose rows need a decision it has not recorded. The loader reads it with `Checkpoint.policy` and
+  the forecast with `ImportTemplate.forecast(policy)`, so the preview predicts the journals the decision gives.
+- **No side effects.** While `app.import_commit` is on, triggers refuse a new row of `notification_outbox`,
+  `sms_deliveries`, `approval_requests` and `scheduled_tasks`: an imported record sends no SMS or email, starts no task and
+  raises no approval; such a writer fails its batch. Every application event carries the `imported` marker
+  (`ImportedRecords.Marked`: `PushNotice` and `ApprovalAmountsChanged`, set when an import batch's transaction makes
+  them), and every listener skips an imported one, so a stock change an import makes commits and raises no low-stock
+  notice (V76). `ImportSideEffectGuardTest` fails the build on a published event without the marker, a listener that
+  does not skip it, and a `REQUIRES_NEW` (which `SET LOCAL` does not reach) not listed with a reason.
+- **Only opening journals (Lead ruling 6 and the Lead's note on the review of 8e570b0, #872).** Writers never vouch for
+  their journals: at the end of each batch the framework reads every entry the transaction posted from the ledger. One
+  passes as the framework's opening journal (`core.imports`, `opening_balance`, a line on `opening_balance_equity`,
+  registered by `Checkpoint.openingJournal`, the only way a writer registers a journal: `Checkpoint.register` refuses
+  `ledger.journal_entry`). The one exception until #135 moves retail onto `openingJournal`: an opening journal of the
+  `import-retail` command, whose logic the retail export's writer reuses (module `retail`, source type
+  `retail.import_opening`, `retail.cash_opening`, `retail.advance_opening` or `retail.advance_repayment_opening`, a line
+  on `opening_balance_equity`), which the framework, not the writer, registers. Any other journal fails the batch.
+- **Kill and resume.** `CommitSeams.afterBatch` is a test hook only: a test bean ends the loop after batch k as a killed
+  process would. The run stays `committing`, the batches before stay committed with their references, and the resume
+  reaches the state of an uninterrupted run.
+- **Operators.** `allowTradingTenant`, `approveTradingTenant`, `setCommitEnabled` and a `defer` exception take only an
+  active platform operator (403 `operator_required`, review of #736).
+- **Proven by** `ImportCommitIT` (dependency order with uploads out of order; the statement timeout and the import setting
+  of a batch; a kill after batch k and the resume equal an uninterrupted run, no reference, row or journal twice; a failing
+  batch rolled back alone and the run resumed; every journal balanced and none but the registered opening journals; each
+  receivable decision's journals; every refusal of the commit and the request; `CHANGED_SINCE_IMPORT` and a re-run that
+  writes nothing; two till rolls and next month's roll; two stock batches of one branch; a dates and instants hash;
+  each refusal of a resume; no message and no approval from a batch; another business reads no reference and reaches no
+  run), `RetailDryRunIT` (the retail export committed through this path with `import-retail`'s own logic),
+  `PushEverydayNoticesIT` (an imported stock change tells nobody),
+  `ImportRunsIT`, `ImportPreviewIT` and `ImportMappingsIT` (every commit through the request and approval),
+  `ImportCatalogueTest` (`CHANGED_SINCE_IMPORT` and `CREDIT_DECISION_MISSING` produced by named tests, none pending) and
+  `MigrationOrderIT` (V143 keeps every run, the CHECKs, append-only `import_refs` under forced RLS, the trigger).

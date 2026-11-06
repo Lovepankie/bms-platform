@@ -70,7 +70,8 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_repayment_allocations`, `lending_collateral_events`,
 `lending_collection_actions` (except `promise_status`), `lending_savings_transactions`,
 `lending_savings_daily_balances`, `lending_savings_interest_postings`,
-`lending_investment_transactions`, `import_issue_resolutions` (V141, #131), `import_mappings` (V139, #129).
+`lending_investment_transactions`, `import_issue_resolutions` (V141, #131), `import_mappings` (V139, #129),
+`import_refs` (V143, #133).
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
 `reject_mutation()` raises on `UPDATE` or `DELETE` for every role, `bms_owner` included,
@@ -1267,7 +1268,7 @@ one repayment (spec 3.4.1).
 ### Import tables (RLS)
 
 Specified in full in chapter 13 section 13.4; listed here for completeness:
-`import_batches`, `import_rows`, `import_issues`, `import_issue_resolutions`.
+`import_batches`, `import_rows`, `import_issues`, `import_issue_resolutions`, and `import_refs` (V143, below).
 
 As built so far (migration `V127__import_runs.sql`, issue #127, ADR-027; chapter 13 section 13.14):
 
@@ -1379,7 +1380,35 @@ only, no new table, index or grant (`bms_app` already has `SELECT, INSERT, UPDAT
   stamp of the run now equals its stamp; `ready` needs one that counts, did not fail and matched the preview. It holds no
   personal value: any text of it that names a personal value of the run's staged rows is stored as hidden.
 - **`import_batches`** gains `report jsonb` (an object: the batch's part of the run's report, written in the batch's commit
-  transaction with its counts, so a real run's report, resumed or not, is its committed batches' parts in `seq` order).
+  transaction with its counts, so a real run's report, resumed or not, is its committed batches' parts in the order they committed, the template's dependency order since #133).
+
+Added by `V143__import_commit.sql` (issue #133, FR-IMP-07, ADR-027 decisions 4 and 7, chapter 13 sections 13.10 and 13.14.1),
+expand only:
+
+- **`import_runs`** gains the `import_commit` approval: `commit_requested_by`, `commit_requested_at` (the maker, a staff user,
+  and when), `commit_approval_id` (the approval request), `commit_approved_by`, `commit_approved_at` (the checker and when)
+  and `commit_approved_version` (the run's version just after the approval; the commit starts only at it). The CHECKs
+  `import_runs_commit_request_whole` and `import_runs_commit_approval_whole` keep each part whole, and
+  `import_runs_commit_checker_not_maker` refuses a checker who is the maker. And the dump's check:
+  `pre_import_dump_verified_at` and `pre_import_dump_entries` (the entries `pg_restore --list` listed, above zero), set
+  together and only with a dump recorded (`import_runs_dump_verified_whole`). The policy decisions stay in `policy jsonb`
+  (V127), keyed by decision: `option`, `confirmed_on`, `confirmation` (a reference, never a personal value), `recorded_by`,
+  and for an option that needs the dev lead's exception `exception_by` and `follow_up_on`.
+- **`import_batches`** gains `dependency_rank integer` (at or above 0: the index of the batch's entity set in its template's
+  dependency order, written with the batch's part of the report), so the run's report lists its parts by dependency index
+  and then by batch, the same order for a run resumed or not (Lead ruling 10 on #872).
+- **`import_refs`** (RLS forced, `SELECT, INSERT`, append-only by `reject_mutation`, the generalisation of
+  `retail_import_refs`): one row per record a commit created, `id`, `tenant_id`, `created_at`, `run_id`, `batch_id` (FKs
+  `(tenant_id, run_id)` and `(tenant_id, batch_id)`), `source_key varchar(330)` (the source file, tab and row),
+  `source_ref varchar(400)` (the key, `#`, the hash of the row's mapped content; the CHECK `import_refs_ref_of_key`),
+  `target_type varchar(60)` (a code such as `retail.product` or `ledger.journal_entry`) and `target_id`. Unique
+  `(tenant_id, source_ref, target_type, target_id)` (a row may create several records of one type, each once); plain indexes `import_refs_by_key (tenant_id, source_key text_pattern_ops)` (a
+  key, and the keys of one file and tab by prefix) and `import_refs_by_target (tenant_id, target_id)`. No personal value:
+  a reference holds a file and tab name from the mapping, a line number or a reference code, and a hash.
+- **`bms_refuse_during_import_commit()`**, a `BEFORE INSERT` trigger on `notification_outbox`, `sms_deliveries`,
+  `approval_requests` and `scheduled_tasks`: while the transaction has set `app.import_commit` to `on` (an import batch
+  does, with `SET LOCAL`), a new row is refused, so an imported record sends no message, starts no task and raises no
+  approval (spec section 3.7).
 
 ## 6.6 General ledger (RLS)
 
@@ -2262,7 +2291,9 @@ only: `import_issues`, the validation columns of `import_rows` with their column
 directly after `V140`) is expand only: `import_issue_resolutions`, the review columns of `import_issues` and `import_rows` with
 their column grants, the per-row ordinal key and the two guards widened (section 6.5, Import tables). `V142__import_dry_run.sql`
 (#132; directly after `V141`) is expand only: the stored dry run columns of `import_runs` with the CHECK
-`import_runs_dry_run_whole`, and the report part of `import_batches` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
+`import_runs_dry_run_whole`, and the report part of `import_batches` (section 6.5, Import tables). `V143__import_commit.sql`
+(#133; directly after `V142`) is expand only: the commit approval and dump check columns of `import_runs` with their CHECKs,
+`import_refs`, and the trigger `bms_refuse_during_import_commit` on four tables (section 6.5, Import tables). The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items

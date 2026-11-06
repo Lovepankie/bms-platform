@@ -39,6 +39,46 @@ public interface ImportRuns {
     /** Records the verified dump taken before the commit (file name, time, SHA-256 in lower-case hex). */
     Run recordPreImportDump(UUID runId, String file, Instant takenAt, String sha256);
 
+    // JUSTIFICATION-A3: issue #133 adds the verified dump, the policy decisions and the import_commit request.
+    /**
+     * Records that the dump recorded on the run was verified (issue #133, spec section 3.11): its SHA-256 again, which must
+     * be the one recorded, and the number of entries {@code pg_restore --list} listed, above zero. Recording another dump
+     * clears it. No verified dump, no commit (409 {@code pre_import_dump_unverified}); a SHA-256 that differs is 422
+     * {@code pre_import_dump_differs}.
+     */
+    Run verifyPreImportDump(UUID runId, String sha256, int listedEntries);
+
+    /**
+     * Records a policy decision the customer confirmed (issue #133, spec section 3.8), on a run not yet ready: one of the
+     * options the run's template declares for the key ({@code policy_unknown}, {@code policy_option_unknown} otherwise,
+     * 422), with the day the customer confirmed it and the reference of their confirmation (the numbered question list or
+     * a document, never a personal value). An option allowed only with the dev lead's exception ({@code defer}) also needs
+     * the platform operator who granted it and the day of the follow-up ({@code policy_exception_required}, 422). Audited.
+     */
+    Run recordPolicy(UUID runId, String key, PolicyDecision decision);
+
+    /**
+     * The maker's request of {@code import_commit} (issue #133, chapter 8 section 8.4, ADR-015) for a {@code ready} run with
+     * a verified dump and every policy decision it needs, by the signed-in staff user, who needs {@code core.imports.manage}
+     * (403 otherwise). Returns the pending approval request; a different user with {@code core.imports.approve_commit}
+     * approves it in the approvals queue, and the database refuses a checker who is the maker. The approval marks the run
+     * approved at its version then; a change to the run after it (a new dump, a trading override) needs a new request. The
+     * request goes stale when the run changes before it is decided.
+     */
+    UUID requestCommit(UUID runId);
+
+    /**
+     * A recorded policy decision: the option, the day the customer confirmed it and the reference of that confirmation,
+     * and, for an option that needs it, the platform operator who granted the exception and the day of the follow-up.
+     */
+    record PolicyDecision(
+            String option,
+            java.time.LocalDate confirmedOn,
+            String confirmation,
+            UUID recordedBy,
+            UUID exceptionBy,
+            java.time.LocalDate followUpOn) {}
+
     /** The operator's stop button: the commit stops before the next batch, or within 1,000 rows of the current one. */
     Run requestHalt(UUID runId);
 
@@ -53,7 +93,11 @@ public interface ImportRuns {
      * {@code committing}, then writes its batches in order, one transaction each, and moves it to {@code committed}. Each
      * batch is written by its template's loader for the entity set its mapping source names (Lead ruling on #869): the
      * service resolves the writer, a caller never passes one, and a batch read without a mapping is 422
-     * {@code BATCH_HAS_NO_MAPPING}.
+     * {@code BATCH_HAS_NO_MAPPING}. Since issue #133 the batches are written in the template's dependency order (its entity
+     * sets, then the batch's own number), each under {@code SET LOCAL statement_timeout} of 10 minutes, and the commit needs
+     * a verified dump ({@code pre_import_dump_unverified}), every policy decision the run needs (409 {@code
+     * CREDIT_DECISION_MISSING} or the policy's own code) and an approved {@code import_commit} for the run as it is now
+     * (409 {@code commit_not_approved}).
      */
     CommitOutcome commit(UUID runId);
 
@@ -131,7 +175,16 @@ public interface ImportRuns {
             UUID allowTradingApprovedBy,
             String preImportDumpFile,
             Instant committingAt,
-            Instant committedAt) {
+            Instant committedAt,
+            boolean preImportDumpVerified,
+            UUID commitRequestedBy,
+            UUID commitApprovedBy,
+            Integer commitApprovedVersion) {
+
+        /** Whether {@code import_commit} is approved for the run as it is now: the run has not changed since. */
+        public boolean commitApproved() {
+            return commitApprovedBy != null && commitApprovedVersion != null && commitApprovedVersion == version;
+        }
 
         /** Whether the trading tenant override is both set and approved. */
         public boolean tradingOverrideApproved() {

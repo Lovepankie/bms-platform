@@ -25,7 +25,10 @@ class CoreJournalActivity implements LiveRecordProbe {
 
     @Override
     public boolean hasLiveRecords() {
-        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE source_module LIKE 'core.%')")
+        // The opening journals an import posts (source core.imports, issue #133) are not trading: spec section 5.4
+        // counts "a journal not posted by an import".
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM journal_entries"
+                        + " WHERE source_module LIKE 'core.%' AND source_module <> 'core.imports')")
                 .query(Boolean.class)
                 .single();
     }

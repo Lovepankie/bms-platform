@@ -36,6 +36,10 @@ class ApprovalAmountsListener {
 
     @EventListener
     void on(ApprovalAmountsChanged change) {
+        // A change an import batch made tells nobody (issue #133).
+        if (change.imported()) {
+            return;
+        }
         Map<String, Boolean> switches = settings.approvalSwitches();
         Set<String> keys = new HashSet<>(change.beforeMinor().keySet());
         keys.addAll(change.afterMinor().keySet());

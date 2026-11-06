@@ -104,14 +104,22 @@ class ImportCatalogueTest {
             // The review queue (#131): a row whose cells changed since it was resolved, after a new upload.
             Map.entry(
                     "ROW_CHANGED_SINCE_REVIEW",
-                    "internal/ImportReviewIT.java#aChangedRowComesBackToTheQueueAndAnUnchangedRowKeepsItsResolution"));
+                    "internal/ImportReviewIT.java#aChangedRowComesBackToTheQueueAndAnUnchangedRowKeepsItsResolution"),
+            // The commit (#133): a row already imported with other content, found against import_refs by the
+            // validation; and a run refused while the receivable decision it needs is missing.
+            Map.entry(
+                    "CHANGED_SINCE_IMPORT",
+                    "internal/ImportCommitIT.java#aRowImportedBeforeWithOtherContentIsChangedSinceImportAndNotWrittenTwice"),
+            Map.entry(
+                    "CREDIT_DECISION_MISSING",
+                    "internal/ImportCommitIT.java#theCommitIsRefusedWithoutTheDumpTheApprovalOrADecisionAndByTheMakerAsChecker"));
 
     /**
-     * Codes whose producer is a later build step of spec section 9: they compare a row with its imported content, which only
-     * the commit's {@code import_refs} hold. Each step adds its fixture row or its named test and moves its code out of this
-     * list; {@code ROW_CHANGED_SINCE_REVIEW} left it with the review queue of #131.
+     * Codes whose producer is a later build step of spec section 9. Each step adds its fixture row or its named test and
+     * moves its code out of this list: {@code ROW_CHANGED_SINCE_REVIEW} left it with the review queue of #131, and
+     * {@code CHANGED_SINCE_IMPORT} with the commit of #133, which holds the {@code import_refs} it compares a row with.
      */
-    static final Map<String, String> PENDING = Map.of("CHANGED_SINCE_IMPORT", "#133");
+    static final Map<String, String> PENDING = Map.of();
 
     static Map<String, Object> mapping() {
         return JsonMapper.builder()
@@ -490,13 +498,16 @@ class ImportCatalogueTest {
      */
     @Test
     void aPendingCodeHasNoProducerYet() throws IOException {
-        assertThat(PENDING).containsOnlyKeys("CHANGED_SINCE_IMPORT");
-        assertThat(PENDING).containsEntry("CHANGED_SINCE_IMPORT", "#133");
-        // The review queue produces ROW_CHANGED_SINCE_REVIEW (#131), proven by its named test.
+        assertThat(PENDING).isEmpty();
+        // The review queue produces ROW_CHANGED_SINCE_REVIEW (#131) and the commit CHANGED_SINCE_IMPORT (#133), each
+        // proven by its named test.
         assertThat(PRODUCED_ELSEWHERE)
                 .containsEntry(
                         "ROW_CHANGED_SINCE_REVIEW",
-                        "internal/ImportReviewIT.java#aChangedRowComesBackToTheQueueAndAnUnchangedRowKeepsItsResolution");
+                        "internal/ImportReviewIT.java#aChangedRowComesBackToTheQueueAndAnUnchangedRowKeepsItsResolution")
+                .containsEntry(
+                        "CHANGED_SINCE_IMPORT",
+                        "internal/ImportCommitIT.java#aRowImportedBeforeWithOtherContentIsChangedSinceImportAndNotWrittenTwice");
         // Every main file, Java, SQL or other, by the code as a word; the catalogue itself may name it once only, so a
         // constant or a second use there counts too (second review of #867).
         Path catalogue = Path.of("src/main/java/com/rincoltech/bms/core/imports/ImportTemplates.java");

@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.imports.internal;
 
 import com.rincoltech.bms.core.imports.BatchWriter;
+import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportTemplate;
 import java.nio.file.Path;
 import java.util.List;
@@ -21,6 +22,10 @@ class RetailExportTestTemplate implements ImportTemplate {
 
     /** The export directory the loader imports; a test may point it at a copy, and resets it after. */
     static volatile Path DIR = RetailImportIT.SAMPLE;
+
+    // JUSTIFICATION-A3: the Lead's ruling 5 on #872: a forecast stand-in so the export commits through the framework.
+    /** The balances the forecast predicts, set by a test from a first dry run; none when null. A test resets it after. */
+    static volatile ImportForecast.Balances FORECAST;
 
     private final RetailImporter importer;
 
@@ -47,6 +52,23 @@ class RetailExportTestTemplate implements ImportTemplate {
     @Override
     public List<IssueCode> issueCodes() {
         return List.of();
+    }
+
+    @Override
+    public ImportForecast forecast() {
+        ImportForecast.Balances balances = FORECAST;
+        if (balances == null) {
+            return ImportForecast.NONE;
+        }
+        return new ImportForecast() {
+            @Override
+            public void row(String entitySet, Map<String, Object> values) {}
+
+            @Override
+            public Balances balances() {
+                return balances;
+            }
+        };
     }
 
     @Override

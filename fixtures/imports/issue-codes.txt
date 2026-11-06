@@ -23,6 +23,7 @@ shared IMPORT_IN_PROGRESS refused
 shared ENCODING_CONVERTED warning
 shared ROW_CHANGED_SINCE_REVIEW blocking
 shared CHANGED_SINCE_IMPORT blocking
+shared CREDIT_DECISION_MISSING refused
 shared TEMPLATE_UNKNOWN refused
 shared MAPPING_INVALID refused
 shared REQUIRED_FIELD_UNMAPPED blocking

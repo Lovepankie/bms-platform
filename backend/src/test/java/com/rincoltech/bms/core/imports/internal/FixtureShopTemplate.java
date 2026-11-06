@@ -226,4 +226,94 @@ class FixtureShopTemplate implements ImportTemplate {
 
     /** What a test has the fixture's loader do for every batch, or null for nothing; reset after each test. */
     static volatile BatchWriter SCRIPT;
+
+    // ---------------------------------------------------------------------------------------------
+    // The receivable decision (issue #133), declared only while a test switches it on.
+    // JUSTIFICATION-A3: the commit of #133 needs a template with a policy decision; the fixture's, switched per test.
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * The fixture's receivable decision (spec section 3.8): a sale to a named buyer is a credit sale whose payment the
+     * source does not record, so a run that writes one needs the decision.
+     */
+    static final Policy RECEIVABLE =
+            Policy.receivable("sales", v -> "sale".equals(v.get("kind")) && v.get("customer") != null);
+
+    /** The policies the fixture declares; none unless a test sets them, and reset after it. */
+    static volatile List<Policy> POLICIES = List.of();
+
+    @Override
+    public List<Policy> policies() {
+        return POLICIES;
+    }
+
+    /**
+     * With the receivable decision declared, the fixture's rules for a commit test (issue #133), made up: a stock take puts
+     * its quantity on hand at the head office at the value it is paid at (stock, and the head office's {@code inventory}
+     * opening journal); a credit sale is history, and only under {@code open_from_list} its amount is opened as a receivable
+     * of the head office ({@code trade_debtors}); {@code treat_as_settled} and {@code defer} open none; a cash sale is
+     * history only. Without the decision, the rules of {@link #forecast()}.
+     */
+    @Override
+    public ImportForecast forecast(Map<String, String> policy) {
+        if (POLICIES.isEmpty()) {
+            return forecast();
+        }
+        boolean open = Policy.OPEN_FROM_LIST.equals(policy.get(Policy.RECEIVABLE));
+        // One inventory and one trade debtors journal per batch, as the commit posts them (Lead ruling 2 on #872).
+        return new ImportForecast() {
+            final List<Journal> journals = new ArrayList<>();
+            BigDecimal qty = BigDecimal.ZERO;
+            long value;
+            long owed;
+            long batchValue;
+            long batchOwed;
+
+            @Override
+            public void batch(int seq) {
+                close();
+            }
+
+            private void close() {
+                if (batchValue != 0) {
+                    journals.add(new Journal(HEAD_OFFICE, "inventory", batchValue, batchValue));
+                }
+                if (batchOwed != 0) {
+                    journals.add(new Journal(HEAD_OFFICE, "trade_debtors", batchOwed, batchOwed));
+                }
+                batchValue = 0;
+                batchOwed = 0;
+            }
+
+            @Override
+            public void row(String entitySet, Map<String, Object> values) {
+                if (!"sales".equals(entitySet)) {
+                    return;
+                }
+                long amount = (Long) values.get("amount");
+                if ("adjustment".equals(values.get("kind"))) {
+                    qty = qty.add((BigDecimal) values.get("qty"));
+                    value = Math.addExact(value, amount);
+                    batchValue = Math.addExact(batchValue, amount);
+                } else if (open && RECEIVABLE.neededBy().test(values)) {
+                    owed = Math.addExact(owed, amount);
+                    batchOwed = Math.addExact(batchOwed, amount);
+                }
+            }
+
+            @Override
+            public Balances balances() {
+                close();
+                List<Stock> stock = new ArrayList<>();
+                List<Amount> receivables = new ArrayList<>();
+                if (value != 0 || qty.signum() != 0) {
+                    stock.add(new Stock(HEAD_OFFICE, qty, value));
+                }
+                if (owed != 0) {
+                    receivables.add(new Amount(HEAD_OFFICE, owed));
+                }
+                return new Balances(stock, receivables, List.of(), List.of(), List.copyOf(journals));
+            }
+        };
+    }
 }

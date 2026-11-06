@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.core.imports.CommitApproval;
 import com.rincoltech.bms.core.imports.ImportMappings;
 import com.rincoltech.bms.core.imports.ImportMappings.Mapping;
 import com.rincoltech.bms.core.imports.ImportMappings.Problem;
@@ -32,6 +33,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -60,6 +62,9 @@ class ImportMappingsIT extends IntegrationTest {
 
     @Autowired
     ImportRuns runs;
+
+    @Autowired
+    TestRestTemplate http;
 
     TestDatabase.Fixture t;
     TestDatabase.Fixture other;
@@ -282,6 +287,7 @@ class ImportMappingsIT extends IntegrationTest {
             runs.transition(runId, "ready");
             return runs.recordPreImportDump(runId, "pre-import-fabricated.dump", Instant.now(), SHA);
         });
+        CommitApproval.readyToCommit(http, t, runs, runId, SHA);
         // The commit resolves the batch's writer from its template, the fixture's loader for items.
         CommitOutcome outcome = as(t, () -> runs.commit(runId));
         assertThat(outcome).isEqualTo(CommitOutcome.COMMITTED);

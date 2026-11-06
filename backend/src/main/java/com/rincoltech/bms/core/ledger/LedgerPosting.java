@@ -38,6 +38,28 @@ public interface LedgerPosting {
      */
     PostedEntry reverse(ReversalRequest request);
 
+    /**
+     * The debit and credit totals, in minor units, the ledger holds on the lines of one entry of the bound tenant (issue
+     * #133): what a report says was posted, read back rather than the amount the caller meant to post. Zero for an entry
+     * the tenant does not hold.
+     */
+    Totals totals(UUID entryId);
+
+    record Totals(long debitMinor, long creditMinor) {}
+
+    /**
+     * The entries of the bound tenant posted in the current transaction (issue #133): those whose {@code created_at}, the
+     * database's default, is this transaction's start. An import batch reads it at its end to refuse a journal that is not
+     * one of its registered opening journals, by what the entry is, not by what its writer says it is.
+     */
+    List<TransactionEntry> postedInThisTransaction();
+
+    /**
+     * An entry posted in the current transaction: its source, and whether a line of it is on the business's
+     * {@code opening_balance_equity} account.
+     */
+    record TransactionEntry(UUID entryId, String sourceModule, String sourceType, boolean againstOpeningEquity) {}
+
     record ReversalRequest(UUID entryId, LocalDate entryDate, String reference, String memo, String idempotencyKey) {}
 
     record EntryRequest(

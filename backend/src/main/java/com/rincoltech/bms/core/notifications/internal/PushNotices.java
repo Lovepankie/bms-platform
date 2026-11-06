@@ -69,7 +69,8 @@ class PushNotices {
 
     @EventListener
     void on(PushNotice notice) {
-        if (!keys.available()) {
+        // An imported record tells nobody (issue #133): the notice of an import batch's change is never sent.
+        if (notice.imported() || !keys.available()) {
             return;
         }
         try {

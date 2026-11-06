@@ -3592,6 +3592,108 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V143 (issue #133) is expand only: a run stored before it keeps its state and reads as neither requested nor approved
+     * for commit and with no verified dump; the database refuses a commit checker who is the maker and an approval that is
+     * not whole; {@code import_refs} is append-only under forced row-level security and keeps a reference to its key; and a
+     * message, task or approval request made while {@code app.import_commit} is on is refused. JUSTIFICATION-A3: a new test
+     * case; no existing case covers V143.
+     */
+    @Test
+    void importCommitMigrationKeepsEveryRunAndGuardsTheCommit() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("143") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v143', 'Test Tenant V143',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, status) VALUES (?, ?, ?, 'ready')")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+            UUID batch = UUID.randomUUID();
+            owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq) VALUES (?, ?, ?, 1)")
+                    .params(batch, tenant, run)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT status = 'ready' AND commit_requested_by IS NULL"
+                                    + " AND commit_approved_by IS NULL AND commit_approved_version IS NULL"
+                                    + " AND pre_import_dump_verified_at IS NULL FROM import_runs WHERE id = ?")
+                            .param(run)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            UUID maker = UUID.randomUUID();
+            owner.sql("UPDATE import_runs SET commit_requested_by = ?, commit_requested_at = now() WHERE id = ?")
+                    .params(maker, run)
+                    .update();
+            assertThatThrownBy(() -> owner.sql("UPDATE import_runs SET commit_approved_by = ?, commit_approval_id = ?,"
+                                    + " commit_approved_at = now(), commit_approved_version = 1 WHERE id = ?")
+                            .params(maker, UUID.randomUUID(), run)
+                            .update())
+                    .hasMessageContaining("import_runs_commit_checker_not_maker");
+            assertThatThrownBy(() -> owner.sql("UPDATE import_runs SET commit_approved_by = ? WHERE id = ?")
+                            .params(UUID.randomUUID(), run)
+                            .update())
+                    .hasMessageContaining("import_runs_commit_approval_whole");
+            assertThatThrownBy(() -> owner.sql("UPDATE import_runs SET pre_import_dump_verified_at = now(),"
+                                    + " pre_import_dump_entries = 12 WHERE id = ?")
+                            .param(run)
+                            .update())
+                    .hasMessageContaining("import_runs_dump_verified_whole");
+
+            assertThatThrownBy(() -> owner.sql("INSERT INTO import_refs (id, tenant_id, run_id, batch_id, source_key,"
+                                    + " source_ref, target_type, target_id) VALUES (?, ?, ?, ?, 'fab.csv|-|line:2',"
+                                    + " 'other|-|line:2#abc', 'test.record', ?)")
+                            .params(UUID.randomUUID(), tenant, run, batch, UUID.randomUUID())
+                            .update())
+                    .hasMessageContaining("import_refs_ref_of_key");
+            UUID ref = UUID.randomUUID();
+            owner.sql("INSERT INTO import_refs (id, tenant_id, run_id, batch_id, source_key, source_ref, target_type,"
+                            + " target_id) VALUES (?, ?, ?, ?, 'fab.csv|-|line:2', 'fab.csv|-|line:2#abc',"
+                            + " 'test.record', ?)")
+                    .params(ref, tenant, run, batch, UUID.randomUUID())
+                    .update();
+            assertThatThrownBy(() -> owner.sql("DELETE FROM import_refs WHERE id = ?")
+                            .param(ref)
+                            .update())
+                    .hasStackTraceContaining("append-only");
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE relname ="
+                                    + " 'import_refs'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+
+            try (Connection c =
+                    DriverManager.getConnection(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)) {
+                c.setAutoCommit(false);
+                try (Statement s = c.createStatement()) {
+                    s.execute("SET LOCAL app.import_commit = 'on'");
+                    assertThatThrownBy(() -> s.execute("INSERT INTO scheduled_tasks (task_name, task_instance,"
+                                    + " execution_time, picked, version) VALUES ('fabricated-task', 'one', now(), false,"
+                                    + " 1)"))
+                            .hasMessageContaining("imported records send no message");
+                }
+                c.rollback();
+            } catch (java.sql.SQLException e) {
+                throw new IllegalStateException(e);
+            }
+            assertThat(owner.sql("INSERT INTO scheduled_tasks (task_name, task_instance, execution_time, picked,"
+                                    + " version) VALUES ('fabricated-task', 'two', now(), false, 1)")
+                            .update())
+                    .isEqualTo(1);
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

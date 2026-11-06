@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.tenancy;
 
+import com.rincoltech.bms.kernel.ImportedRecords;
 import java.util.Map;
 import java.util.UUID;
 
@@ -12,6 +13,14 @@ import java.util.UUID;
  * @param afterMinor the amounts after
  * @param by the person who changed them, who is not told
  * @param version the settings version after the change
+ * @param imported whether an import batch published it (issue #133), when its listener tells nobody
  */
 public record ApprovalAmountsChanged(
-        Map<String, Long> beforeMinor, Map<String, Long> afterMinor, UUID by, int version) {}
+        Map<String, Long> beforeMinor, Map<String, Long> afterMinor, UUID by, int version, boolean imported)
+        implements ImportedRecords.Marked {
+
+    /** A change made in this transaction, marked imported when an import batch makes it. */
+    public ApprovalAmountsChanged(Map<String, Long> beforeMinor, Map<String, Long> afterMinor, UUID by, int version) {
+        this(beforeMinor, afterMinor, by, version, ImportedRecords.inImport());
+    }
+}

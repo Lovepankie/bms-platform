@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.core.documents.internal.StoredObjects;
+import com.rincoltech.bms.core.imports.CommitApproval;
 import com.rincoltech.bms.core.imports.CommitReport;
 import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportMappings;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.context.ApplicationContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -91,6 +93,67 @@ class RetailDryRunIT extends IntegrationTest {
     @AfterEach
     void sample() {
         RetailExportTestTemplate.DIR = RetailImportIT.SAMPLE;
+        RetailExportTestTemplate.FORECAST = null;
+    }
+
+    @Autowired
+    TestRestTemplate http;
+
+    // JUSTIFICATION-A3: the Lead's ruling 5 on #872: the export committed through the framework's own commit path.
+    /**
+     * The retail export committed through the framework (Lead ruling 5 on #872): the commit path of #133, the request and a
+     * second person's approval, the verified dump, one batch transaction with the no-side-effect guard and the check that
+     * every journal it posts is a registered opening journal, runs {@code import-retail}'s own logic as the batch's writer
+     * and gives what a real {@code import-retail} run gives. The forecast is a stand-in set from the first dry run until
+     * the retail template of #135 has its own, so this proves the commit path, not the retail preview.
+     */
+    @Test
+    void theExportCommitsThroughTheFrameworkWithImportRetailsOwnLogic() {
+        UUID run = inReview(t);
+        DryRun first = dryRun(run);
+        assertThat(first.report().failure()).as(first.report().render()).isNull();
+        RetailExportTestTemplate.FORECAST = first.report().balances();
+        DryRun dry = dryRun(run);
+        assertThat(dry.previewMatches()).isTrue();
+        as(t, () -> runs.transition(run, "ready"));
+        String sha = "e".repeat(64);
+        as(t, () -> runs.recordPreImportDump(run, "pre-import-fabricated.dump", java.time.Instant.now(), sha));
+        CommitApproval.readyToCommit(http, t, runs, run, sha);
+
+        assertThat(as(t, () -> runs.commit(run))).isEqualTo(ImportRuns.CommitOutcome.COMMITTED);
+
+        CommitReport committed = as(t, () -> runs.commitReport(run));
+        assertThat(committed.failure()).isNull();
+        assertThat(committed.sameAs(dry.report()))
+                .as("real:%n%s%ndry:%n%s", committed.render(), dry.report().render())
+                .isTrue();
+        assertThat(committed.journals())
+                .extracting(CommitReport.Journal::branch, CommitReport.Journal::debitMinor)
+                .containsExactlyInAnyOrder(RetailImportIT.OPENING.entrySet().stream()
+                        .map(e -> tuple(e.getKey(), e.getValue()))
+                        .toArray(Tuple[]::new));
+        stockAndJournalsAreTheBooks(committed);
+        // import-retail's own references, and every journal the batch posted registered as an opening journal.
+        long journals = TestDatabase.owner()
+                .sql("SELECT count(*) FROM journal_entries WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(journals).isPositive();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM import_refs WHERE tenant_id = ?"
+                                + " AND target_type = 'ledger.journal_entry'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(journals);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_import_refs WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isPositive();
+        assertThat(as(t, () -> runs.get(run)).status()).isEqualTo("committed");
     }
 
     /**

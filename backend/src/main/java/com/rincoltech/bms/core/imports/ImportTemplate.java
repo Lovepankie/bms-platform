@@ -282,6 +282,74 @@ public interface ImportTemplate {
     }
 
     /**
+     * The forecast for a run with these policy decisions recorded, by key the option chosen (issue #133): a template whose
+     * opening balances depend on a decision (the receivable decision opens a receivable or none) predicts by it, so the
+     * preview and the dry run agree. {@link #forecast()} by default.
+     */
+    default ImportForecast forecast(Map<String, String> policy) {
+        return forecast();
+    }
+
+    /**
+     * The policy decisions the template's loader reads (issue #133, spec section 3.8, ADR-027 decision 7): a run is not
+     * {@code ready}, and does not commit, while one it needs is not recorded ({@link Policy#missingCode}). None by default.
+     */
+    default List<Policy> policies() {
+        return List.of();
+    }
+
+    // JUSTIFICATION-A3: issue #133 adds the policy decisions of spec section 3.8 to the template contract.
+    /**
+     * A policy decision a template declares: its key, the options a run may record, the options allowed only with the dev
+     * lead's exception, the refusal code while it is missing, and when the run needs it: when any row it writes of
+     * {@code entitySet} matches {@code neededBy} (typed values as {@link RowCheck} reads them).
+     */
+    record Policy(
+            String key,
+            List<String> options,
+            Set<String> exceptionOnly,
+            String missingCode,
+            String entitySet,
+            java.util.function.Predicate<Map<String, Object>> neededBy) {
+
+        /** The receivable decision (spec section 3.8). */
+        public static final String RECEIVABLE = "receivable";
+
+        /** One opening receivable per buyer from the customer's list at the cutover moment; history without journals. */
+        public static final String OPEN_FROM_LIST = "open_from_list";
+
+        /** The historic credit sales are history only; no receivable is opened. */
+        public static final String TREAT_AS_SETTLED = "treat_as_settled";
+
+        /** No receivable now; listed in the reconciliation with a dated follow-up. Only with the dev lead's exception. */
+        public static final String DEFER = "defer";
+
+        public Policy {
+            Objects.requireNonNull(key, "key");
+            options = List.copyOf(options);
+            exceptionOnly = exceptionOnly == null ? Set.of() : Set.copyOf(exceptionOnly);
+            Objects.requireNonNull(missingCode, "missingCode");
+            Objects.requireNonNull(entitySet, "entitySet");
+            Objects.requireNonNull(neededBy, "neededBy");
+        }
+
+        /**
+         * The receivable decision for a source whose {@code entitySet} rows matching {@code creditWithoutPayment} are credit
+         * sales or loans without their payments: {@code CREDIT_DECISION_MISSING} while it is not recorded.
+         */
+        public static Policy receivable(
+                String entitySet, java.util.function.Predicate<Map<String, Object>> creditWithoutPayment) {
+            return new Policy(
+                    RECEIVABLE,
+                    List.of(OPEN_FROM_LIST, TREAT_AS_SETTLED, DEFER),
+                    Set.of(DEFER),
+                    "CREDIT_DECISION_MISSING",
+                    entitySet,
+                    creditWithoutPayment);
+        }
+    }
+
+    /**
      * The row rules a template may offer an entity set, each switched on per source by the mapping (spec section 4.2):
      * sub-header rows that carry the month for the rows below them, a totals row at the first or last position to ignore,
      * and the cell texts that mark a row as a placeholder.

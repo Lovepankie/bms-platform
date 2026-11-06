@@ -27,8 +27,14 @@
  * is the preview ({@link com.rincoltech.bms.core.imports.ImportPreview}: rows by outcome, records by type and the predicted
  * balances of the template's {@link com.rincoltech.bms.core.imports.ImportForecast}) and the dry run
  * ({@link com.rincoltech.bms.core.imports.ImportRuns#dryRun}: the commit's batch code inside one outer transaction that is
- * rolled back, its {@link com.rincoltech.bms.core.imports.CommitReport} stored on the run). The commit by template and the
- * operator screens follow in #133 to #141. Public API: {@link com.rincoltech.bms.core.imports.ImportRuns},
+ * rolled back, its {@link com.rincoltech.bms.core.imports.CommitReport} stored on the run). The seventh (issue #133,
+ * migration V143) is the commit itself: the {@code import_commit} approval (a maker requests it, a different user approves
+ * it, through {@code core.approvals}), the batches in the template's dependency order with a statement timeout of 10
+ * minutes each, {@code import_refs} by {@link com.rincoltech.bms.core.imports.ImportRefs#sourceRef} with
+ * {@code CHANGED_SINCE_IMPORT}, the opening journals through {@code core.ledger} against {@code opening_balance_equity}, the
+ * policy decisions of {@link com.rincoltech.bms.core.imports.ImportTemplate.Policy}, the verified dump, and no message, task
+ * or approval from an imported record. The reconciliation and the operator screens follow in #134 to #141. Public API:
+ * {@link com.rincoltech.bms.core.imports.ImportRuns}, {@link com.rincoltech.bms.core.imports.ImportRefs},
  * {@link com.rincoltech.bms.core.imports.ImportUploads}, {@link com.rincoltech.bms.core.imports.ImportTemplates},
  * {@link com.rincoltech.bms.core.imports.ImportMappings}, {@link com.rincoltech.bms.core.imports.ImportValidation},
  * {@link com.rincoltech.bms.core.imports.ImportReview}, {@link com.rincoltech.bms.core.imports.ImportPreview} and
@@ -38,7 +44,15 @@
 @ApplicationModule(
         id = "core.imports",
         displayName = "Core: Imports",
-        allowedDependencies = {"kernel", "core.audit", "core.documents", "core.jobs"})
+        allowedDependencies = {
+            "kernel",
+            "core.audit",
+            "core.documents",
+            "core.jobs",
+            "core.approvals",
+            "core.ledger",
+            "core.tenancy"
+        })
 package com.rincoltech.bms.core.imports;
 
 import org.springframework.modulith.ApplicationModule;

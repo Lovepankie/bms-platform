@@ -674,6 +674,11 @@ final class RowValidator {
         return render(batch.file(), line, new Pending("ROW_CHANGED_SINCE_REVIEW", null, Map.of(), null));
     }
 
+    /** The finding on a row the business already imported with other content (spec section 10.1, issue #133). */
+    Finding changedSinceImport(BatchInput batch, int line) {
+        return render(batch.file(), line, new Pending("CHANGED_SINCE_IMPORT", null, Map.of(), null));
+    }
+
     /**
      * The value the engine proposes for a finding, or null: a fraction of a shilling rounded to whole shillings, a quantity
      * rounded to three places, both half up (chapter 13 section 13.7, {@code AMOUNT_NOT_INTEGER}). Only for a field that is

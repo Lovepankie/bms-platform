@@ -1,12 +1,19 @@
 package com.rincoltech.bms.core.imports.internal;
 
+import com.rincoltech.bms.core.approvals.ApprovalAction;
+import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.audit.PlatformAuditLog;
 import com.rincoltech.bms.core.imports.BatchWriter;
 import com.rincoltech.bms.core.imports.CommitReport;
 import com.rincoltech.bms.core.imports.ImportForecast;
+import com.rincoltech.bms.core.imports.ImportRefs;
 import com.rincoltech.bms.core.imports.ImportRuns;
+import com.rincoltech.bms.core.imports.ImportTemplate;
+import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.ImportedRecords;
 import com.rincoltech.bms.kernel.LiveRecordProbe;
 import com.rincoltech.bms.kernel.TenantContext;
 import java.math.BigDecimal;
@@ -18,10 +25,13 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -96,7 +106,8 @@ class ImportRunService implements ImportRuns {
 
     private static final String RUN_COLUMNS = """
             id, status, version, cutover_at, halt_requested, allow_trading_tenant, allow_trading_set_by,
-            allow_trading_approved_by, pre_import_dump_file, committing_at, committed_at""";
+            allow_trading_approved_by, pre_import_dump_file, committing_at, committed_at,
+            pre_import_dump_verified_at, commit_requested_by, commit_approved_by, commit_approved_version""";
 
     private final JdbcClient jdbc;
     private final DataSource dataSource;
@@ -108,6 +119,17 @@ class ImportRunService implements ImportRuns {
     private final PreviewService preview;
 
     private final PlatformTransactionManager transactions;
+
+    /** The maker's request of import_commit (issue #133); the action's approval comes back through {@link #commitApproved}. */
+    private final Approvals approvals;
+
+    private final Branches branches;
+
+    /** import_refs, the rows a writer writes and the opening journals (issue #133). */
+    private final RefService refs;
+
+    /** The test hook after each committed batch (issue #133); a no-op without a bean. */
+    private final CommitSeams seams;
 
     /**
      * The application's build and commit: a dry run of another build no longer counts, and a run rehearsed on one build
@@ -134,7 +156,15 @@ class ImportRunService implements ImportRuns {
             ObjectProvider<GitProperties> git,
             @Value("${bms.git-sha:}") String gitSha,
             @Value("${bms.imports.dry-run-limit-while-trading:60s}") Duration tradingDryRunLimit,
-            @Value("${bms.imports.dry-run-limit:15m}") Duration dryRunLimit) {
+            @Value("${bms.imports.dry-run-limit:15m}") Duration dryRunLimit,
+            Approvals approvals,
+            Branches branches,
+            RefService refs,
+            ObjectProvider<CommitSeams> seams) {
+        this.approvals = approvals;
+        this.branches = branches;
+        this.refs = refs;
+        this.seams = seams.getIfAvailable(() -> new CommitSeams() {});
         this.jdbc = jdbc;
         this.dataSource = dataSource;
         this.transactions = transactions;
@@ -235,6 +265,8 @@ class ImportRunService implements ImportRuns {
             // Ready means a stored dry run of the run as it is now, which did not fail and matched the preview (#132).
             if (RunStates.READY.equals(status)) {
                 requireDryRun(runId, false);
+                // And every policy decision the run needs, recorded (spec section 3.8, issue #133).
+                requirePolicies(runId);
             }
             setStatus(runId, status);
             audit(runId, "core.import_run.status_changed", Map.of("status", run.status()), Map.of("status", status));
@@ -269,9 +301,11 @@ class ImportRunService implements ImportRuns {
         }
         return tx.execute(s -> {
             requireBeforeCommit(find(runId, true));
+            // Another dump is not yet verified (issue #133).
             jdbc.sql("""
                             UPDATE import_runs SET pre_import_dump_file = ?, pre_import_dump_at = ?,
-                                   pre_import_dump_sha256 = ?, version = version + 1, updated_at = now()
+                                   pre_import_dump_sha256 = ?, pre_import_dump_verified_at = NULL,
+                                   pre_import_dump_entries = NULL, version = version + 1, updated_at = now()
                              WHERE id = ?
                             """)
                     .params(file.strip(), Timestamp.from(takenAt), sha256, runId)
@@ -279,6 +313,223 @@ class ImportRunService implements ImportRuns {
             audit(runId, "core.import_run.dump_recorded", Map.of(), Map.of("file", file.strip(), "sha256", sha256));
             return find(runId, false);
         });
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The verified dump, the policy decisions and the import_commit approval (issue #133).
+    // JUSTIFICATION-A3: issue #133's new operations on the run, each its own method beside the dump's record.
+    // ---------------------------------------------------------------------------------------------
+
+    @Override
+    public Run verifyPreImportDump(UUID runId, String sha256, int listedEntries) {
+        if (sha256 == null || !SHA256.matcher(sha256).matches() || listedEntries <= 0) {
+            throw ApiException.rule(
+                    "invalid_pre_import_dump",
+                    "The check needs the dump's SHA-256 and the number of entries pg_restore listed, above zero.");
+        }
+        return tx.execute(s -> {
+            requireBeforeCommit(find(runId, true));
+            String recorded = jdbc.sql("SELECT pre_import_dump_sha256 FROM import_runs WHERE id = ?")
+                    .param(runId)
+                    .query(String.class)
+                    .optional()
+                    .orElse(null);
+            if (recorded == null) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "pre_import_dump_missing",
+                        "No pre-import dump",
+                        "Record the dump taken before the import first, then its check.");
+            }
+            if (!recorded.equals(sha256)) {
+                throw ApiException.rule(
+                        "pre_import_dump_differs",
+                        "The SHA-256 checked is not the one of the dump recorded on the run.");
+            }
+            jdbc.sql("""
+                            UPDATE import_runs SET pre_import_dump_verified_at = now(), pre_import_dump_entries = ?,
+                                   version = version + 1, updated_at = now()
+                             WHERE id = ?
+                            """).params(listedEntries, runId).update();
+            audit(runId, "core.import_run.dump_verified", Map.of(), Map.of("entries", listedEntries));
+            return find(runId, false);
+        });
+    }
+
+    @Override
+    public Run recordPolicy(UUID runId, String key, PolicyDecision decision) {
+        if (key == null || decision == null || decision.option() == null) {
+            throw ApiException.rule("policy_option_unknown", "Say which decision was taken.");
+        }
+        String confirmation =
+                decision.confirmation() == null ? "" : decision.confirmation().strip();
+        if (decision.confirmedOn() == null
+                || confirmation.length() < 3
+                || confirmation.length() > 200
+                || decision.recordedBy() == null) {
+            throw ApiException.rule(
+                    "policy_confirmation_required",
+                    "Give the day the customer confirmed the decision and the reference of their confirmation.");
+        }
+        return tx.execute(s -> {
+            Run run = find(runId, true);
+            if (!List.of(RunStates.DRAFT, RunStates.UPLOADED, RunStates.IN_REVIEW)
+                    .contains(run.status())) {
+                throw invalidTransition("The import is " + RunStates.words(run.status())
+                        + ", so its decisions can no longer be changed.");
+            }
+            ImportTemplate.Policy policy = preview.policies(runId).stream()
+                    .filter(p -> p.key().equals(key))
+                    .findFirst()
+                    .orElseThrow(() -> ApiException.rule(
+                            "policy_unknown", "The template of this import takes no decision " + key + "."));
+            if (!policy.options().contains(decision.option())) {
+                throw ApiException.rule(
+                        "policy_option_unknown",
+                        "The decision " + key + " is one of " + String.join(", ", policy.options()) + ".");
+            }
+            Map<String, Object> stored = new LinkedHashMap<>();
+            stored.put("option", decision.option());
+            stored.put("confirmed_on", decision.confirmedOn().toString());
+            stored.put("confirmation", confirmation);
+            stored.put("recorded_by", decision.recordedBy().toString());
+            if (policy.exceptionOnly().contains(decision.option())) {
+                // The dev lead's exception (spec section 3.8): a platform operator, and the day of the follow-up.
+                if (decision.followUpOn() == null) {
+                    throw ApiException.rule(
+                            "policy_exception_required",
+                            "This decision needs the dev lead's exception and the day of its follow-up.");
+                }
+                requireOperator(decision.exceptionBy(), "policy_exception_required");
+                stored.put("exception_by", decision.exceptionBy().toString());
+                stored.put("follow_up_on", decision.followUpOn().toString());
+            }
+            jdbc.sql("""
+                            UPDATE import_runs SET policy = policy || jsonb_build_object(CAST(? AS text), CAST(? AS jsonb)),
+                                   version = version + 1, updated_at = now()
+                             WHERE id = ?
+                            """).params(key, mapper.writeValueAsString(stored), runId).update();
+            audit(runId, "core.import_run.policy_recorded", Map.of(), Map.of("policy", key, "decision", stored));
+            return find(runId, false);
+        });
+    }
+
+    /**
+     * Refuses a run that needs a policy decision it has not recorded (spec section 3.8): 409 with the policy's own code,
+     * {@code CREDIT_DECISION_MISSING} for the receivable decision. Inside the caller's transaction.
+     */
+    private void requirePolicies(UUID runId) {
+        Set<String> recorded = new HashSet<>(jdbc.sql("SELECT jsonb_object_keys(policy) FROM import_runs WHERE id = ?")
+                .param(runId)
+                .query(String.class)
+                .list());
+        List<ImportTemplate.Policy> missing = preview.missingPolicies(runId, recorded);
+        if (!missing.isEmpty()) {
+            ImportTemplate.Policy first = missing.getFirst();
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    first.missingCode(),
+                    "Decision missing",
+                    "Rows of this import need the " + first.key().replace('_', ' ')
+                            + " decision; record the option the customer confirmed first.");
+        }
+    }
+
+    @Override
+    public UUID requestCommit(UUID runId) {
+        requireNoTransaction();
+        UUID maker = CurrentPrincipal.require().userId();
+        return tx.execute(s -> {
+            Run run = find(runId, true);
+            if (!RunStates.READY.equals(run.status())) {
+                throw invalidTransition("Only an import that is ready can be asked to commit; this one is "
+                        + RunStates.words(run.status()) + ".");
+            }
+            requireCommitPossible(run);
+            requirePolicies(runId);
+            UUID branch = branches.all().stream()
+                    .filter(Branches.Branch::headOffice)
+                    .findFirst()
+                    .or(() -> branches.all().stream().findFirst())
+                    .map(Branches.Branch::id)
+                    .orElseThrow(() -> new IllegalStateException("a business without a branch"));
+            long files = jdbc.sql(
+                            "SELECT count(*) FROM import_batches WHERE run_id = ? AND status IN ('pending', 'parsed')")
+                    .param(runId)
+                    .query(Long.class)
+                    .single();
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("run_id", runId.toString());
+            payload.put("batches", files);
+            payload.put(
+                    ApprovalAction.CHECKER_NOTICE,
+                    "This writes " + files + " checked files of customer data into the business's records and opening"
+                            + " balances. It cannot be undone except by restoring the dump taken before it.");
+            // The request is recorded on the run without a new version, so the request's subject version is the run's.
+            jdbc.sql("""
+                            UPDATE import_runs SET commit_requested_by = ?, commit_requested_at = now(),
+                                   commit_approval_id = NULL, commit_approved_by = NULL, commit_approved_at = NULL,
+                                   commit_approved_version = NULL
+                             WHERE id = ?
+                            """).params(maker, runId).update();
+            // The rule is read once and passed (ADR-091); import_commit is not switchable, so it always waits.
+            Approvals.Rule rule = approvals.rule(ImportCommitAction.TYPE);
+            Approvals.Outcome outcome = approvals.request(
+                    new Approvals.ActionRequest(
+                            ImportCommitAction.TYPE, branch, runId, run.version(), null, null, payload),
+                    rule);
+            if (outcome.executed()) {
+                throw new IllegalStateException("import_commit ran without a checker");
+            }
+            audit(
+                    runId,
+                    "core.import_run.commit_requested",
+                    Map.of(),
+                    Map.of("approval_id", String.valueOf(outcome.approvalId())));
+            return outcome.approvalId();
+        });
+    }
+
+    /** The run's version, for the subject of its import_commit request; empty when the business holds no such run. */
+    Optional<Integer> version(UUID runId) {
+        return jdbc.sql("SELECT version FROM import_runs WHERE id = ?")
+                .param(runId)
+                .query(Integer.class)
+                .optional();
+    }
+
+    /**
+     * The approval of import_commit, inside the approval's transaction (ADR-015): marks the run approved at its next
+     * version, which the commit's start requires. The database refuses a checker who is the maker
+     * ({@code import_runs_commit_checker_not_maker}). A run no longer ready fails the approval, which stays pending with the
+     * error (FR-APR-06).
+     */
+    void commitApproved(UUID runId, UUID approvalId, UUID maker, UUID checker) {
+        Run run = find(runId, true);
+        if (!RunStates.READY.equals(run.status())) {
+            throw invalidTransition(
+                    "The import is " + RunStates.words(run.status()) + ", so it cannot be approved now.");
+        }
+        jdbc.sql("""
+                        UPDATE import_runs SET commit_requested_by = ?, commit_approval_id = ?, commit_approved_by = ?,
+                               commit_approved_at = now(), commit_approved_version = version + 1, version = version + 1,
+                               updated_at = now()
+                         WHERE id = ?
+                        """).params(maker, approvalId, checker, runId).update();
+        audit(runId, "core.import_run.commit_approved", Map.of(), Map.of("approval_id", approvalId.toString()));
+    }
+
+    /** Refuses an id that is not an active platform operator's (review of #736, comment on #133): 403. */
+    private void requireOperator(UUID platformUserId, String code) {
+        boolean active = platformUserId != null
+                && jdbc.sql("SELECT EXISTS (SELECT 1 FROM platform_users WHERE id = ? AND is_active)")
+                        .param(platformUserId)
+                        .query(Boolean.class)
+                        .single();
+        if (!active) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN, code, "Platform operator required", "Only an active platform operator may.");
+        }
     }
 
     @Override
@@ -310,6 +561,7 @@ class ImportRunService implements ImportRuns {
         }
         return tx.execute(s -> {
             requireBeforeCommit(find(runId, true));
+            requireOperator(platformUserId, "operator_required");
             // Setting it again clears an earlier approval: the checker approves the reason now on the run.
             jdbc.sql("""
                             UPDATE import_runs SET allow_trading_tenant = true, allow_trading_reason = ?,
@@ -336,6 +588,7 @@ class ImportRunService implements ImportRuns {
         return tx.execute(s -> {
             Run run = find(runId, true);
             requireBeforeCommit(run);
+            requireOperator(platformUserId, "operator_required");
             if (!run.allowTradingTenant()) {
                 throw invalidTransition("No trading override is set on this run.");
             }
@@ -409,6 +662,8 @@ class ImportRunService implements ImportRuns {
         // The run cannot change once ready, so this holds; checked again so no path commits without its dry run (#132),
         // and only with the writers the dry run rehearsed (Lead ruling 4 on #869).
         requireDryRun(runId, true);
+        // Every policy decision the run needs (spec section 3.8, issue #133), as ready checked it.
+        requirePolicies(runId);
         List<String> trading = tradingAreas();
         if (!trading.isEmpty() && !run.tradingOverrideApproved()) {
             audit(
@@ -417,6 +672,16 @@ class ImportRunService implements ImportRuns {
                     Map.of(),
                     Map.of("code", "TENANT_TRADING", "areas", trading));
             return trading;
+        }
+        // The maker's import_commit, approved by a different user, for the run as it is now (issue #133, ADR-015).
+        if (!run.commitApproved()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "commit_not_approved",
+                    "Commit not approved",
+                    run.commitApprovedBy() == null
+                            ? "The import's commit needs a request and a second person's approval first."
+                            : "The import changed after its commit was approved; ask for the approval again.");
         }
         setStatus(runId, RunStates.COMMITTING);
         Map<String, Object> after = new LinkedHashMap<>();
@@ -452,6 +717,15 @@ class ImportRunService implements ImportRuns {
                             + RunStates.words(run.status()) + ".");
                 }
                 requireCommitPossible(run);
+                // A resume goes on with a commit that was approved (Lead ruling 8 on #872); the run's version
+                // moves with its own commit, so the approval is required, not its version.
+                if (run.commitApprovedBy() == null) {
+                    throw new ApiException(
+                            HttpStatus.CONFLICT,
+                            "commit_not_approved",
+                            "Commit not approved",
+                            "This import's commit has no second person's approval, so it does not go on.");
+                }
                 // The run's own commits make its dry run's stamp differ now, so the build and the writers are checked
                 // again: a resume goes on only on the build, and with the writers, the dry run rehearsed for the
                 // batches left (Lead ruling 4 and the review of d8d1e5b on #869).
@@ -597,9 +871,9 @@ class ImportRunService implements ImportRuns {
                 inputs[0] = stamp(runId);
                 inputs[1] = rehearsal(writers.identity());
                 PreviewService.RunPrivacy privacy = preview.privacy(runId);
-                for (PendingBatch batch : pending(runId)) {
+                for (PendingBatch batch : ordered(pending(runId), writers)) {
                     try {
-                        CommitReport part = writeBatch(runId, batch, writers.of(batch.id()), true, privacy);
+                        CommitReport part = writeBatch(runId, batch, writers, limitSeconds, privacy);
                         if (part != null) {
                             parts.add(part);
                         }
@@ -680,7 +954,7 @@ class ImportRunService implements ImportRuns {
             // A batch committed before V142 stored no part; no run was committed then (no writer existed).
             jdbc.sql("""
                             SELECT report::text FROM import_batches
-                             WHERE run_id = ? AND status = 'committed' AND report IS NOT NULL ORDER BY seq
+                             WHERE run_id = ? AND status = 'committed' AND report IS NOT NULL ORDER BY dependency_rank, seq
                             """)
                     .param(runId)
                     .query(String.class)
@@ -847,6 +1121,14 @@ class ImportRunService implements ImportRuns {
                 .list();
     }
 
+    /** The batches in the template's dependency order (spec section 3.7, issue #133): its entity sets, then their number. */
+    private static List<PendingBatch> ordered(List<PendingBatch> batches, PreviewService.Writers writers) {
+        return batches.stream()
+                .sorted(Comparator.comparingInt((PendingBatch b) -> writers.rank(b.id()))
+                        .thenComparingInt(PendingBatch::seq))
+                .toList();
+    }
+
     /**
      * Claims the business's commit loop: {@code pg_try_advisory_lock} on the loop key, on a connection of its own, in
      * autocommit so it never sits idle in a transaction. Refused with {@code IMPORT_IN_PROGRESS} when another loop of the
@@ -958,10 +1240,11 @@ class ImportRunService implements ImportRuns {
     }
 
     private CommitOutcome writeBatches(UUID runId, LoopClaim claim) {
-        List<PendingBatch> pending = tx.execute(s -> pending(runId));
         // The writers the service resolves from the batches' templates (Lead ruling 4 on #869), and the run's personal
-        // values, read once for every batch's report (review of #869).
+        // values, read once for every batch's report (review of #869). The batches go in the template's dependency
+        // order (issue #133), so a resume continues from the first batch of that order not committed.
         PreviewService.Writers writers = tx.execute(s -> preview.writers(runId));
+        List<PendingBatch> pending = ordered(tx.execute(s -> pending(runId)), writers);
         PreviewService.RunPrivacy privacy = tx.execute(s -> preview.privacy(runId));
         for (PendingBatch batch : pending) {
             // Without the claim a resume may already own the business: write nothing more, leave the run resumable.
@@ -976,7 +1259,7 @@ class ImportRunService implements ImportRuns {
                 return CommitOutcome.HALTED;
             }
             try {
-                tx.executeWithoutResult(s -> writeBatch(runId, batch, writers.of(batch.id()), false, privacy));
+                tx.executeWithoutResult(s -> writeBatch(runId, batch, writers, 0, privacy));
             } catch (Halted e) {
                 tx.executeWithoutResult(s -> audit(
                         runId,
@@ -999,6 +1282,8 @@ class ImportRunService implements ImportRuns {
                                         "error",
                                         e.getClass().getSimpleName()))));
             }
+            // The batch is committed: a process killed here resumes from the next batch (test hook, issue #133).
+            seams.afterBatch(runId, batch.seq());
         }
         tx.executeWithoutResult(s -> {
             Run run = find(runId, true);
@@ -1031,7 +1316,14 @@ class ImportRunService implements ImportRuns {
      * batch with its counts; null for a batch already committed.
      */
     private CommitReport writeBatch(
-            UUID runId, PendingBatch batch, BatchWriter writer, boolean dryRun, PreviewService.RunPrivacy privacy) {
+            UUID runId,
+            PendingBatch batch,
+            PreviewService.Writers writers,
+            long dryRunLimitSeconds,
+            PreviewService.RunPrivacy privacy) {
+        // A dry run's batch has its limit in seconds; a committed batch has none here (0).
+        boolean dryRun = dryRunLimitSeconds > 0;
+        BatchWriter writer = writers.of(batch.id());
         // Never a wait (Lead ruling 5 on #869). A dry run holds the key to its end, so a commit that waited would fail
         // at the statement timeout as a failed batch; whoever finds the key taken is answered at once instead.
         if (!jdbc.sql("SELECT pg_try_advisory_xact_lock(" + LOCK_KEY + ")")
@@ -1054,20 +1346,37 @@ class ImportRunService implements ImportRuns {
         if (!dryRun) {
             stopIfRequested(runId);
         }
+        // Each statement of a committed batch has at most 10 minutes (spec section 3.7, issue #133). A dry run keeps
+        // its own limit, the outer transaction's timeout, and its statements have that limit too (60 seconds into a
+        // trading business; Lead ruling 4 and the Lead's note on the review of 8e570b0, #872). In both, nothing the
+        // batch writes may send a message, start a task or raise an approval: V143's triggers refuse it while
+        // app.import_commit is on, until the transaction ends.
+        String statementLimit = dryRun ? dryRunLimitSeconds + "s" : "10min";
+        jdbc.sql("SELECT set_config('statement_timeout', ?, true)")
+                .param(statementLimit)
+                .query()
+                .singleRow();
+        jdbc.sql("SET LOCAL app.import_commit = 'on'").update();
+        // And every event the batch publishes is an imported record's: its listeners send nothing (Lead ruling 3).
+        ImportedRecords.markTransaction();
         String file = row.get("source_filename") == null
                 ? "batch " + batch.seq()
                 : RowValidator.shortName((String) row.get("source_filename"));
-        RowCheckpoint checkpoint = new RowCheckpoint(runId, !dryRun, file, privacy);
+        RowCheckpoint checkpoint =
+                new RowCheckpoint(runId, batch.id(), writers.source(batch.id()), !dryRun, file, privacy);
         Map<String, Object> counts = writer.write(runId, batch.id(), batch.seq(), checkpoint);
+        // No journal but the registered opening journals (Lead ruling 6 on #872): checked at the batch's end, in both.
+        refs.requireOnlyOpeningJournals(runId, batch.id());
         CommitReport part = checkpoint.part(counts, (Integer) row.get("row_count"));
         jdbc.sql("""
                         UPDATE import_batches SET status = 'committed', committed_at = now(), counts = CAST(? AS jsonb),
-                               report = CAST(? AS jsonb)
+                               report = CAST(? AS jsonb), dependency_rank = ?
                          WHERE id = ?
                         """)
                 .params(
                         mapper.writeValueAsString(counts == null ? Map.of() : counts),
                         mapper.writeValueAsString(part),
+                        writers.setRank(batch.id()),
                         batch.id())
                 .update();
         return part;
@@ -1110,14 +1419,25 @@ class ImportRunService implements ImportRuns {
     private final class RowCheckpoint implements BatchWriter.Checkpoint {
 
         private final UUID runId;
+        private final UUID batchId;
+        private final PreviewService.BatchSource source;
         private final boolean stops;
         private final String file;
         private final PreviewService.RunPrivacy privacy;
         private final CommitReport.Builder part;
         private long rows;
+        private Map<String, String> policy;
 
-        RowCheckpoint(UUID runId, boolean stops, String file, PreviewService.RunPrivacy privacy) {
+        RowCheckpoint(
+                UUID runId,
+                UUID batchId,
+                PreviewService.BatchSource source,
+                boolean stops,
+                String file,
+                PreviewService.RunPrivacy privacy) {
             this.runId = runId;
+            this.batchId = batchId;
+            this.source = source;
             this.stops = stops;
             this.file = file;
             this.privacy = privacy;
@@ -1129,6 +1449,46 @@ class ImportRunService implements ImportRuns {
             if (++rows % CHECKPOINT_ROWS == 0 && stops) {
                 stopIfRequested(runId);
             }
+        }
+
+        // JUSTIFICATION-A3: issue #133's framework side of the commit, delegated to RefService in the batch's tx.
+        @Override
+        public List<ImportRefs.StagedRow> rows(int afterLine, int limit) {
+            if (source == null) {
+                throw new IllegalStateException("the batch has no source to read rows from");
+            }
+            return refs.rows(batchId, source, afterLine, limit);
+        }
+
+        @Override
+        public void register(String sourceRef, String targetType, UUID targetId) {
+            refs.register(runId, batchId, sourceRef, targetType, targetId);
+        }
+
+        @Override
+        public String openingJournal(ImportRefs.Opening opening) {
+            RefService.Posted posted = refs.openingJournal(runId, batchId, opening);
+            journal(
+                    opening.branchCode() == null ? opening.branchId().toString() : opening.branchCode(),
+                    opening.kind(),
+                    posted.debitMinor(),
+                    posted.creditMinor(),
+                    posted.status(),
+                    posted.entryNo());
+            return posted.status();
+        }
+
+        @Override
+        public Optional<String> policy(String key) {
+            if (policy == null) {
+                Map<String, String> read = new LinkedHashMap<>();
+                jdbc.sql("SELECT key, value ->> 'option' FROM import_runs, jsonb_each(policy) WHERE id = ?")
+                        .param(runId)
+                        .query((rs, n) -> read.put(rs.getString(1), rs.getString(2)))
+                        .list();
+                policy = read;
+            }
+            return Optional.ofNullable(policy.get(key));
         }
 
         @Override
@@ -1241,6 +1601,7 @@ class ImportRunService implements ImportRuns {
             throw ApiException.rule("reason_required", "Say why the import commit is switched on or off.");
         }
         tx.executeWithoutResult(s -> {
+            requireOperator(platformUserId, "operator_required");
             Boolean previous = jdbc.sql("SELECT platform_set_import_commit_enabled(?, ?)")
                     .params(enabled, platformUserId)
                     .query(Boolean.class)
@@ -1295,6 +1656,14 @@ class ImportRunService implements ImportRuns {
                     "No pre-import dump",
                     "Record the verified dump taken before the import; without it there is no way back.");
         }
+        // Recorded and verified (issue #133, spec section 3.11): a dump nobody listed may not restore.
+        if (!run.preImportDumpVerified()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "pre_import_dump_unverified",
+                    "Pre-import dump not verified",
+                    "Check the dump with pg_restore --list and record the check; an unchecked dump is no way back.");
+        }
     }
 
     private void audit(UUID runId, String action, Map<String, Object> before, Map<String, Object> after) {
@@ -1332,7 +1701,11 @@ class ImportRunService implements ImportRuns {
                 rs.getObject("allow_trading_approved_by", UUID.class),
                 rs.getString("pre_import_dump_file"),
                 instant(rs, "committing_at"),
-                instant(rs, "committed_at"));
+                instant(rs, "committed_at"),
+                rs.getTimestamp("pre_import_dump_verified_at") != null,
+                rs.getObject("commit_requested_by", UUID.class),
+                rs.getObject("commit_approved_by", UUID.class),
+                (Integer) rs.getObject("commit_approved_version"));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

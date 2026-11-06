@@ -107,6 +107,12 @@ public interface ImportTemplates {
                     "CHANGED_SINCE_IMPORT",
                     Severity.BLOCKING,
                     "Line {line} was already imported with other content; correct it in the app, not by import."),
+            // The commit (issue #133, spec section 3.8): a run is not ready without the receivable decision it needs.
+            new IssueCode(
+                    "CREDIT_DECISION_MISSING",
+                    Severity.REFUSED,
+                    "The source has credit sales or loans without their payments; record the receivable decision the"
+                            + " customer confirmed before the import is ready."),
             // The mapping codes (issue #129): what the validator of a mapping reports.
             new IssueCode("TEMPLATE_UNKNOWN", Severity.REFUSED, "No template {template} is registered on this server."),
             new IssueCode(
