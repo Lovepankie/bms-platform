@@ -40,6 +40,8 @@ link never leads to "not allowed". A screen that opens one record has a stable a
 | A sale | `/staff/retail/sales?sale=<id>` (Credit sales takes the same `sale`) |
 | An item's stock | `/staff/retail/stock?item=<id>` |
 | A branch's stock | `/staff/retail/stock?branch=<id>` (switches to that branch when the person may use it) |
+| A category's items | `/staff/retail/catalogue/products?category=<id>` (`ToItems`, issue #798) |
+| Used and damaged stock of a branch | `/staff/retail/usage-history?branch=<id>&from=<day>&to=<day>` (`ToUsage`, issue #798) |
 | A buyer's account, a credit note, a delivery, an order | their own routes with the id in the path |
 
 ## Rule 3. No training needed

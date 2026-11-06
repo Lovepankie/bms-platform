@@ -124,6 +124,8 @@ totals shown while typing are a preview; the server's response is the receipt.
 - **Stock moves (#112 item 1).** A row reads the date ("6 Oct 2026", on one line), "From X to Y", the item
   count with the first two item names, and "by you" for the user's own moves; tapping it opens the move. The
   API gives a transfer no number of its own and `created_by` is an id, so no number or other name is shown.
+  Since #798 the rows sit under one header per month ("November 2026", "12 moves"), open while 30 or fewer are
+  loaded and closed above that, and Show more moves loads the next 50.
 - **Move stock hint (#112 item 2).** A line above the source branch's stock says "Only N piece in stock at
   this branch.", the words of the sale screen, and Move stock stays disabled; a refusal from the server still
   shows as the plain `insufficient_stock` message.
@@ -517,11 +519,13 @@ with every capability off the menu, the tiles and every screen are today's (`tra
   on the way, and a button that opens the branches. The stock on its way is in neither branch's count, so Combined is
   the balances plus that column. Value at cost, by role and combined, shows only with `retail.profit.read`.
 - **On the way** (`/staff/retail/in-transit`, capability `transfer_receipt`). One card per open dispatch: the route, the
-  date and how long it has waited, the items, and the value at cost with profit read. Where the user may act at the
-  destination the card has "Check what arrived" (each item prefilled with what was sent; less than sent is allowed
-  and says it is written off as a loss; more than sent is refused before the server is asked) and "Mark as received";
-  where they may act at the source it has "Take this back" with a reason. A user holding the permission at neither
-  sees the list only. Someone who reads every branch with cost also sees whether the books agree with the list.
+  date and how long it has waited, the item count with the first two names, and the value at cost with profit read.
+  Since #798 the card opens on that summary, and its forms open on a tap, one at a time, with Close to fold them away.
+  Where the user may act at the destination the card has the plain button "Check what arrived", which opens the items
+  and the form (each item prefilled with what was sent; less than sent is allowed and says it is written off as a loss;
+  more than sent is refused before the server is asked) with "Mark as received"; where they may act at the source it
+  has "Take this back", which opens the reason. A user holding the permission at neither sees the summary, with Show
+  every item when more than two moved. Someone who reads every branch with cost also sees whether the books agree with the list.
 - **Move stock** says "Send stock" while `transfer_receipt` is on and tells the user that the other branch counts it
   once they receive it. **Stock moves** shows "on its way", "received" or "received, some short" (less arrived than was
   sent), "taken back" (the source cancelled it) and keeps "cancelled" for a void; a received or completed move can be
@@ -622,9 +626,9 @@ server sends `over_limit`, which it does for a report over every branch, because
 is owed over the branches the caller may read, the limit with what is left when the caller sees every branch, the terms, and for `retail.credit.manage` a
 form to change the limit and terms under `If-Match`), **Take a payment** (branch that received the money, amount, method, date; the oldest sales are paid
 first and the form lists where the money would go before anything is saved; "Choose which sales it pays" lists the sales with an amount box each; imported
-sales are never offered), **Payments taken** (each receipt with its allocations; Reverse, with a reason of at least five characters once trimmed, the rule the server applies too, for
+sales are never offered), **Payments taken** (fifty at a time under one header per month with its count, then "These are the latest payments. Older ones are not shown yet." and Show older payments, #798; each receipt with its allocations, each sale number opening that sale; Reverse, with a reason of at least five characters once trimmed, the rule the server applies too, for
 `retail.sale.void`; each receipt has its own Idempotency-Key, repeated only on a retry of that receipt with the same reason; to allocate differently, reverse and take it again) and the **Statement** (From and To, 90 days by default ending today in the business
-time zone; opening balance, each line with its running balance, closing balance, and imported sales apart under "Before system start").
+time zone; opening balance, each line with its running balance, closing balance, and imported sales apart under "Before system start", each sale number opening that sale, #798).
 
 On the sale screen with the feature on, a credit sale needs a buyer from the list ("Add this buyer" creates one first); the buyer's limit and terms show under the
 choice; the date is optional when the buyer has terms (the server dates the sale); a sale refused for the limit says by how much, and a user holding
@@ -1149,7 +1153,8 @@ a sale number opens nothing by itself, because a sale opens in place inside All 
 credit note, a return, an account statement or a credit control row stays plain; a product name opens the Stock list, not that item, because Stock takes no
 item parameter; a branch name opens Stock for the session's branch, not the named one, so branch names in the cash records stay plain (the branch roles page opens
 Stores and shops, which lists every branch); category and unit rows open the unfiltered items list, because the items page keeps its category in local
-state; Insights drill-down rows carry no ids; the used, damaged and found-missing counts on Stock health have no list screen. A product opening "its stock and history" is
+state; Insights drill-down rows carry no ids; the used, damaged and found-missing counts on Stock health have no list screen (since #798 Items takes
+`?category=` and the used and damaged counts open Past usage and damage; unit rows, Insights ids and found missing are #863). A product opening "its stock and history" is
 therefore as far as the existing routes go: Stock, and Past restocks and Stock moves for the history.
 
 | Route | Breadcrumb | Page tour | Cross links added (#336) |
@@ -1185,17 +1190,17 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/reports` | Reports | `page-reports` v1 (added) | none added |
 | `/staff/retail` | Retail | `page-retail-home` v2 (the seller's own sales, ADR-055) | none added |
 | `/staff/retail/accounts` | Customer accounts | `page-accounts` v1 (existing) | none added |
-| `/staff/retail/accounts/$customerId` | Account | `page-account` v1 (added) | none added |
+| `/staff/retail/accounts/$customerId` | Account | `page-account` v1 (added) | each sale a payment paid, and each sale before system start, opens that sale (#798) |
 | `/staff/retail/advances` | Advances | `page-advances` v1 (added) | link to Cash summary |
 | `/staff/retail/banking` | Banking | `page-banking` v1 (added) | link to the banking report |
 | `/staff/retail/banking-report` | Banking report | `page-banking-report` v1 (added) | link back to Banking |
 | `/staff/retail/branch-roles` | Branch roles | `page-branch-roles` v1 (added) | branch row opens Stores and shops |
-| `/staff/retail/cash-summary` | Cash summary | `page-cash-summary` v1 (added) | each figure opens the rows behind it (sales, expenses report, banking report, withdrawals, advances, savings) |
+| `/staff/retail/cash-summary` | Cash summary | `page-cash-summary` v2 (Show every line, #798) | each figure opens the rows behind it (sales, expenses report, banking report, withdrawals, advances, savings) |
 | `/staff/retail/catalogue` | Catalogue | `page-catalogue` v1 (existing) | none added |
 | `/staff/retail/catalogue/buyers` | Credit buyers | `page-buyers` v1 (added) | Open account (already there) |
 | `/staff/retail/catalogue/categories` | Categories | `page-categories` v1 (added) | Items link on each row |
 | `/staff/retail/catalogue/import` | Import items | `page-import` v1 (added) | none added |
-| `/staff/retail/catalogue/products` | Items | `page-products` v1 (added) | each item has a Stock link |
+| `/staff/retail/catalogue/products` | Items | `page-products` v1 (added) | each item has a Stock link, which opens that item's stock (#798); `?category=<id>` opens the items of that category (#798) |
 | `/staff/retail/catalogue/suppliers` | Suppliers | `page-suppliers` v1 (added) | Open items link (supplier payment form) |
 | `/staff/retail/catalogue/units` | Units | `page-units` v1 (added) | Items link on each row |
 | `/staff/retail/credit-control` | Credit control | `page-credit-control` v1 (added) | overdue buyer opens the account; "See the credit sales" |
@@ -1203,14 +1208,14 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/retail/customer-ageing` | Customer ageing | `page-customer-ageing` v1 (added) | buyer opens the account (already there); Credit sales link |
 | `/staff/retail/customer-groups` | Customer groups | `page-customer-groups` v1 (added) | Credit buyers and Price lists links |
 | `/staff/retail/documents` | Documents | `page-documents` v1 (existing) | none added |
-| `/staff/retail/evaluation` | Business evaluation | `page-evaluation` v1 (added) | item names open Stock |
-| `/staff/retail/expense-lists` | Expense lists | `page-expense-lists` v1 (added) | link to Expenses |
+| `/staff/retail/evaluation` | Business evaluation | `page-evaluation` v1 (added) | item names open Stock; category names open Items on that category (#798) |
+| `/staff/retail/expense-lists` | Expense lists | `page-expense-lists` v2 (tap a category to open it, #798) | link to Expenses |
 | `/staff/retail/expenses` | Expenses | `page-expenses` v1 (added) | links to the expenses report and the expense lists |
 | `/staff/retail/expenses-report` | Expenses report | `page-expenses-report` v1 (added) | link back to Expenses |
 | `/staff/retail/goods-received` | Goods received | `page-goods-received` v1 (added) | none added |
 | `/staff/retail/goods-received/$receiptId` | Delivery | `page-goods-receipt` v1 (added) | supplier opens its open items |
 | `/staff/retail/goods-received/new` | Receive without an order | `page-goods-receipt` v1 (added) | none added |
-| `/staff/retail/in-transit` | On the way | `page-in-transit` v1 (existing) | none added |
+| `/staff/retail/in-transit` | On the way | `page-in-transit` v2 (forms open on a tap, #798) | none added |
 | `/staff/retail/landed-costs` | Landed costs | `page-landed-costs` v1 (existing) | none added |
 | `/staff/retail/landed-costs/$landedCostId` | Landed cost | `page-landed-cost` v1 (added) | supplier opens its open items; delivery number opens the delivery |
 | `/staff/retail/landed-costs/new` | New landed cost | `page-landed-cost-new` v1 (added) | none added |
@@ -1235,7 +1240,7 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/retail/settings` | Retail settings | `page-retail-settings` v4 (slow movers step, #414) | none added |
 | `/staff/retail/stock` | Stock | `page-stock` v3 (existing) | none added |
 | `/staff/retail/stock-by-location` | Stores and shops | `page-stock-by-location` v1 (existing) | none added |
-| `/staff/retail/stock-health` | Stock health | `page-stock-health` v4 (slow movers step, #414; why-low, #412; damage and use share for profit readers, #822) | item and branch names open Stock; Move on a slow mover opens Move stock filled in |
+| `/staff/retail/stock-health` | Stock health | `page-stock-health` v4 (slow movers step, #414; why-low, #412; damage and use share for profit readers, #822) | item and branch names open Stock; Move on a slow mover opens Move stock filled in; the Used and Damaged counts open Past usage and damage for that branch and those days (#798) |
 | `/staff/retail/stocktake` | Stock-take | `page-stocktake` v1 (existing) | none added |
 | `/staff/retail/supplier-bills` | Supplier invoices | `page-supplier-bills` v1 (added) | none added |
 | `/staff/retail/supplier-bills/$billId` | Supplier invoice | `page-supplier-bill` v1 (added) | supplier opens its open items; delivery number opens the delivery |
@@ -1251,7 +1256,7 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/retail/transfer` | Move stock | `page-transfer` v1 (added) | branch names on the saved summary open Stock |
 | `/staff/retail/transfers` | Stock moves | `page-transfers` v1 (added) | branch names in a move open Stock; link to Move stock |
 | `/staff/retail/usage` | Usage and damage | `page-usage` v1 (added) | "See the stock" link on the saved summary |
-| `/staff/retail/valuation` | Stock value | `page-valuation` v1 (added) | item and branch names open Stock |
+| `/staff/retail/valuation` | Stock value | `page-valuation` v1 (added) | item and branch names open Stock; category names open Items on that category (#798) |
 | `/staff/retail/withdrawals` | Cash withdrawals | `page-withdrawals` v1 (added) | link to Cash summary |
 | `/staff/setup` | Business set-up | `page-setup` v1 (existing) | none added |
 | `/staff/setup/branches` | Branches | `page-branches` v1 (existing) | none added |
@@ -1275,6 +1280,15 @@ section too), slow movers, Business evaluation and a saved stock move open that 
 `retail/links-retail-reports.dom.test.tsx`. Still plain: category and unit rows, Insights drill-down rows, the used, damaged
 and found-missing counts on Stock health, and the allocations on an account's payments (listed in the follow-up issue #798).
 
+**Closed by #798.** `/staff/retail/catalogue/products?category=<id>` chooses that category's chip once and leaves the address
+(`ToItems` in `analytics-ui.tsx` draws the link), so the category names on Stock value's By category and on Business
+evaluation open their items; the Stock link of an item row opens that item. `/staff/retail/usage-history?branch=<id>&from=&to=`
+opens Past usage and damage on those days, switched to that branch the way Stock is (`useBranchFromAddress` in
+`screen-link.tsx`), and `ToUsage` makes Stock health's Used and Damaged counts open it. The allocations of a payment on account
+and the sales before system start on the statement carry the sale id already, so `SaleLink` opens them. Tested in
+`retail/record-links.dom.test.tsx`. Left for #863, each needing the server or a new screen: unit rows (the items list takes no
+unit filter), Insights drill-down ids, and a list for Found missing.
+
 ## The three rules, screen by screen (issue #336, task #794)
 
 Audit of 2026-11-03 over the staff routes in `frontend/src/app/router.tsx` (136 routes: the 105 above and those added since;
@@ -1286,21 +1300,22 @@ shop owner would not use has a help tip), one primary action per view, and an em
 
 **Result.** Rule 1: 133 of 139 pass, 6 break. Rule 3: 101 of 139 passed before this change and 38 broke; this change fixes
 27 of them (the empty states, and three screens with a second brand button), so 128 pass and 11 are left. `/staff` is in both tables below: its empty state is fixed, but its KYC heading still breaks
-rule 3, so it counts among the 11 left. Every route not
+rule 3, so it counts among the 11 left. Issue #798 (2026-11-06) fixed the 6 rule 1 screens and the 11 rule 3 lines left, so
+both rules now pass on all 139 routes (the lines are ticked below); the rule 2 links that need the server or a new screen are #863. Every route not
 named below passes both rules: the sales, stock, restock, controls and cash record lists are grouped; members, loans,
 collateral, documents, opt-outs, the purchasing lists, buyers and suppliers are paged; the reports are bounded by a date
 range or a top count.
 
-**Rule 1: screens that break it** (all larger, left for the follow-up issue #798):
+**Rule 1: screens that broke it** (all larger, left for the follow-up issue #798, all fixed there; so 139 of 139 pass):
 
-| Route | What breaks it |
-|---|---|
-| `/staff/retail/transfers` | The last 50 moves as one flat list, with no group by day and no Show more |
-| `/staff/retail/in-transit` | Every move opens with its whole receive form and its take-back form, so each card carries a brand button |
-| `/staff/retail/valuation` | By item lists every stock row of every branch, flat, under the category summary |
-| `/staff/retail/cash-summary` | Every day and shop card shows about twenty money lines open; closing and expected cash first, the rest behind a button |
-| `/staff/retail/expense-lists` | Every category card is fully open: rename, switch, every item and an add form |
-| `/staff/retail/accounts/$customerId` | Payments taken lists up to 50 receipts open and stops at 50 with nothing said |
+| Route | What broke it | Fixed in #798 |
+|---|---|---|
+| `/staff/retail/transfers` | The last 50 moves as one flat list, with no group by day and no Show more | [x] One header per month with the count of moves; Show more moves |
+| `/staff/retail/in-transit` | Every move opens with its whole receive form and its take-back form, so each card carries a brand button | [x] The summary first; Check what arrived and Take this back are plain buttons that open their form |
+| `/staff/retail/valuation` | By item lists every stock row of every branch, flat, under the category summary | [x] Grouped by category (`GroupedBodies`), each header with its count and stock at selling price, never a cost |
+| `/staff/retail/cash-summary` | Every day and shop card shows about twenty money lines open; closing and expected cash first, the rest behind a button | [x] Closing cash and Cash expected, then Show every line |
+| `/staff/retail/expense-lists` | Every category card is fully open: rename, switch, every item and an add form | [x] Closed to the name and the item count until tapped |
+| `/staff/retail/accounts/$customerId` | Payments taken lists up to 50 receipts open and stops at 50 with nothing said | [x] Paged by 50 under one header per month; says older ones are not shown and offers Show older payments |
 
 **Rule 3: screens that broke it.** Fixed here (the empty text now names the next step, or the second brand button is gone):
 
@@ -1326,19 +1341,23 @@ range or a top count.
 | `/staff/lending`, `/staff/lending/investments`, `/staff/lending/savings` | No match: change the search, or start one (savings: from the member's page) |
 | `/staff/lending/savings/products`, `/staff/lending/investments/products` | Empty: add the first one with New product |
 
-Left for the follow-up issue #798 (each needs a look at the flow, not only a sentence):
+Left for the follow-up issue #798 (each needs a look at the flow, not only a sentence), all fixed there, so 139 of 139 pass:
 
-| Route | What breaks it |
-|---|---|
-| `/staff/lending/existing-loans`, `/existing-loans/import` | After a check, Check and Record are both brand buttons |
-| `/staff/lending/members/$memberId` | For a checker, Change details and Details are correct are both brand buttons |
-| `/staff/assistant` | With the assistant off, Switch on and Save the limit are both brand buttons; "Tokens a day" has no help tip |
-| `/staff/payments` | With a key saved but not checked, Test connection and Save are both brand buttons |
-| `/staff/sms`, `/staff/sms/opt-outs` | Two brand buttons in one state (Switch SMS on and Save changes; Add to the list twice) |
-| `/staff` | The column heading KYC has no help tip |
-| `/staff/lending/investments/$investmentId` | "Return accrued" is an accounting word; "Return earned so far" would do |
-| `/staff/insights` | "Portfolio at risk" and "From posted journal lines only" have no help tip |
-| `/staff/retail/catalogue/suppliers/$supplierId` | No deliveries from this supplier yet: does not say a restock from them shows here |
+| Route | What broke it | Fixed in #798 |
+|---|---|---|
+| `/staff/lending/existing-loans`, `/existing-loans/import` | After a check, Check and Record are both brand buttons | [x] Once there is something to record, Check is a plain button |
+| `/staff/lending/members/$memberId` | For a checker, Change details and Details are correct are both brand buttons | [x] While the details wait for this checker, Change details is a plain button |
+| `/staff/assistant` | With the assistant off, Switch on and Save the limit are both brand buttons; "Tokens a day" has no help tip | [x] Save the limit is plain while the assistant is off; Tokens a day has a tip |
+| `/staff/payments` | With a key saved but not checked, Test connection and Save are both brand buttons | [x] Save the key and secret is plain while a saved key waits for its test |
+| `/staff/sms`, `/staff/sms/opt-outs` | Two brand buttons in one state (Switch SMS on and Save changes; Add to the list twice) | [x] Save changes is plain while SMS is off; one number's Add is plain once a pasted list is checked |
+| `/staff` | The column heading KYC has no help tip | [x] KYC has a tip |
+| `/staff/lending/investments/$investmentId` | "Return accrued" is an accounting word; "Return earned so far" would do | [x] Return earned so far; the transaction reads Return earned |
+| `/staff/insights` | "Portfolio at risk" and "From posted journal lines only" have no help tip | [x] Both have a tip |
+| `/staff/retail/catalogue/suppliers/$supplierId` | No deliveries from this supplier yet: does not say a restock from them shows here | [x] "When you buy stock from them, the delivery shows here." |
+
+The tips are in `frontend/src/app/help-tips.ts` and proven in `areas/staff/rule-three.dom.test.tsx` (named in the help tips
+guard), with the one brand button of the assistant and payments forms; the existing loans test checks Check and Record; the
+short cards of rule 1 are laid out at 412px in `layout/short-cards.layout.test.ts`.
 
 **Added since the audit** (merged from main on 2026-11-05; the screens this change already covers keep their fixes):
 
@@ -1346,7 +1365,7 @@ Left for the follow-up issue #798 (each needs a look at the flow, not only a sen
 |---|---|---|
 | `/staff/retail/items/$productId` (item page, #813) | Passes: movements are paged with Show older movements, and filtered by shop and days | Passes: no brand button competes, and the empty list offers Count it now or Show everything |
 | `/staff/retail/restocks/$purchaseId` (one purchase) | Passes: one record | Passes: one primary (Void and enter it again) |
-| `/staff/retail/catalogue/suppliers/$supplierId` (one supplier, #820) | Passes: deliveries are paged with Show older deliveries | Breaks: the empty deliveries text, above, left for #798 |
+| `/staff/retail/catalogue/suppliers/$supplierId` (one supplier, #820) | Passes: deliveries are paged with Show older deliveries | Fixed in #798: the empty deliveries text, above |
 | `/staff/retail/catalogue/suppliers` (now `suppliers.tsx`) | Passes: searched | Fixed here again: Empty: add the first one above |
 | Damage and use on `/staff/retail/stock-health` (#822) | Passes: grouped by shop with the shop total on each header | Passes; its item and shop names now open Stock (`ToStock`) |
 
