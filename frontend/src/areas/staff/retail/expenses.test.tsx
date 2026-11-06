@@ -146,15 +146,24 @@ describe('expense records, report and lists', () => {
     expect(page('admin', <ExpenseGroups groups={[]} total={0} count={0} by="item" />)).toContain('No expenses in this period');
   });
 
-  it('shows switched off categories and items, the explanation flag and a switch button each', () => {
+  it('closes each category to its name and item count (issue #798)', () => {
     const out = html(<ExpenseLists categories={categories} busy={false} error={null} change={() => undefined} />);
     expect(out).toContain('Closed category');
+    expect(out).toContain('Switched off');
+    expect(out).toContain('2 items');
+    expect(out).toContain('aria-expanded="false"');
+    expect(out).not.toContain('Switch Transport off');
+    expect(out).not.toContain('Needs an explanation');
+  });
+
+  it('shows an open category with its items, the explanation flag and a switch button each', () => {
+    const out = html(<>{categories.map((c) => <CategoryCard key={c.id} category={c} busy={false} change={() => undefined} open />)}</>);
     expect(out).toContain('Switched off');
     expect(out).toContain('Needs an explanation');
     expect(out).toContain('Switch Transport off');
     expect(out).toContain('Switch Closed category on');
     expect(out).toContain('for="');
-    expect(html(<CategoryCard category={categories[1]!} busy change={() => undefined} />)).toContain('disabled');
+    expect(html(<CategoryCard category={categories[1]!} busy change={() => undefined} open />)).toContain('disabled');
   });
 });
 

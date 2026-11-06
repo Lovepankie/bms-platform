@@ -19,7 +19,7 @@ const adminRow: CashDailyRow = {
 
 describe('cash summary', () => {
   it('shows a cashier the lines the server sent and none of the figures it left out', () => {
-    const out = page('cashier', <DaysList rows={[cashierRow]} />);
+    const out = page('cashier', <DaysList rows={[cashierRow]} open />);
     expect(out).toContain('Cash takings');
     expect(out).toContain('UGX 200,000');
     expect(out).toContain('Cash sales voided');
@@ -35,7 +35,7 @@ describe('cash summary', () => {
   });
 
   it('shows the extra lines only when present', () => {
-    const out = page('admin', <DaysList rows={[adminRow]} />);
+    const out = page('admin', <DaysList rows={[adminRow]} open />);
     for (const shown of ['Opening cash', 'Closing cash', 'Other movements', 'Stock bought with cash, at buying price', 'Savings set aside', 'Expected to bank', 'Unbanked so far', 'Profit for the day', 'Savings voided']) {
       expect(out).toContain(shown);
     }
@@ -44,7 +44,7 @@ describe('cash summary', () => {
 
   it('leaves out void lines of zero and shows a day newest first', () => {
     const older: CashDailyRow = { ...cashierRow, business_date: daysBefore(today, 2) };
-    const out = page('cashier', <DaysList rows={[older, cashierRow]} />);
+    const out = page('cashier', <DaysList rows={[older, cashierRow]} open />);
     expect(out).not.toContain('Expenses voided');
     expect(out).not.toContain('Banking voided');
     expect(out.indexOf(showDate(today))).toBeGreaterThan(-1);
@@ -56,6 +56,14 @@ describe('cash summary', () => {
     const out = page('cashier', <DaysList rows={[imported, cashierRow]} />);
     expect(out).toContain('Imported from the old app');
     expect((out.match(/Imported from the old app/g) ?? []).length).toBe(1);
+  });
+
+  it('opens each card on the closing cash and the cash expected, the rest behind Show every line (issue #798)', () => {
+    const out = page('admin', <DaysList rows={[adminRow]} />);
+    expect(out).toContain('Closing cash');
+    expect(out).toContain('Cash expected');
+    expect(out).toContain('Show every line');
+    for (const later of ['Opening cash', 'Cash takings', 'Banked', 'Profit for the day']) expect(out).not.toContain(later);
   });
 
   it('says so when there is nothing in the period', () => {

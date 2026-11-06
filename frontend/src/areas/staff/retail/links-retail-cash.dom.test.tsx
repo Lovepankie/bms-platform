@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Me } from '../../../api/client';
@@ -37,12 +37,13 @@ const href = (name: string) => screen.getByRole('link', { name }).getAttribute('
 describe('links of the cash summary', () => {
   it('opens the report behind the expenses figure and the page behind the withdrawals figure', () => {
     show(<DaysList rows={[{ branch_id: me.branches?.[0]?.id, business_date: '2026-04-01', expenses_minor: 12000, withdrawals_in_minor: 5000 }]} links={{ expenses: '/staff/retail/expenses-report', withdrawals: '/staff/retail/withdrawals' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show every line' }));
     expect(href('Expenses: see the rows')).toBe('/staff/retail/expenses-report');
     expect(href('Withdrawals from the bank: see the rows')).toBe('/staff/retail/withdrawals');
   });
 
   it('draws a figure as plain text when no link is given', () => {
-    show(<DaysList rows={[{ branch_id: me.branches?.[0]?.id, business_date: '2026-04-01', expenses_minor: 12000 }]} />);
+    show(<DaysList rows={[{ branch_id: me.branches?.[0]?.id, business_date: '2026-04-01', expenses_minor: 12000 }]} open />);
     expect(screen.queryByRole('link')).toBeNull();
   });
 });

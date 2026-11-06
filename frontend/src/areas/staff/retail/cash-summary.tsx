@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
+import { useState } from 'react';
 import { retail, type CashDailyRow } from '../../../api/retail';
 import { useStaff } from '../context';
 import { ImportedBadge, WindowFields, useReadScope, useWindow } from './cash-ui';
@@ -26,9 +27,13 @@ export function Line({ label, minor, strong = false, to }: { label: string; mino
   );
 }
 
-/** The lines of a day that move cash in or out, in the order of the daily summary. */
-export function DayCard({ row, shop, links = {} }: { row: CashDailyRow; shop: string; links?: DayLinks }) {
+/**
+ * The lines of a day that move cash in or out, in the order of the daily summary. The card opens on the closing cash and the
+ * cash expected (rule 1, issue #798); Show every line opens the rest, and `open` starts it open.
+ */
+export function DayCard({ row, shop, links = {}, open = false }: { row: CashDailyRow; shop: string; links?: DayLinks; open?: boolean }) {
   const imported = row.ledger_basis === false || row.historical === true;
+  const [all, setAll] = useState(open);
   const voided = (label: string, minor: number | undefined) => (minor === undefined || minor === 0 ? null : <Line label={label} minor={minor} />);
   return (
     <li className="rt-card">
@@ -36,6 +41,14 @@ export function DayCard({ row, shop, links = {} }: { row: CashDailyRow; shop: st
       {imported && (
         <p className="hint"><ImportedBadge /> These figures come from the old app, not from the books.</p>
       )}
+      {!all && (
+        <>
+          <Line label="Closing cash" minor={row.closing_minor} />
+          <Line label="Cash expected" minor={row.cash_expected_minor} strong />
+          <button type="button" aria-expanded={false} onClick={() => setAll(true)}>Show every line</button>
+        </>
+      )}
+      {all && <>
       <Line label="Opening cash" minor={row.opening_minor} />
       <Line label="Cash takings" minor={row.cash_takings_minor} to={links.sales} />
       <Line label="Cash sales voided or refunded" minor={row.cash_sale_voids_minor} />
@@ -58,17 +71,19 @@ export function DayCard({ row, shop, links = {} }: { row: CashDailyRow; shop: st
       <Line label="Expected to bank" minor={row.expected_to_bank_minor} strong />
       <Line label="Unbanked so far" minor={row.unbanked_running_minor} />
       <Line label="Profit for the day" minor={row.daily_profit_minor} />
+      {!open && <button type="button" aria-expanded onClick={() => setAll(false)}>Show less</button>}
+      </>}
     </li>
   );
 }
 
-export function DaysList({ rows, links }: { rows: CashDailyRow[]; links?: DayLinks }) {
+export function DaysList({ rows, links, open = false }: { rows: CashDailyRow[]; links?: DayLinks; open?: boolean }) {
   const shopName = useBranchName();
   if (rows.length === 0) return <p className="empty-state">No cash recorded in this period.</p>;
   const newestFirst = [...rows].sort((a, b) => (b.business_date ?? '').localeCompare(a.business_date ?? '') || shopName(a.branch_id).localeCompare(shopName(b.branch_id)));
   return (
     <ul style={{ listStyle: 'none', padding: 0 }}>
-      {newestFirst.map((r) => <DayCard key={`${r.branch_id}-${r.business_date}`} row={r} shop={shopName(r.branch_id)} links={links} />)}
+      {newestFirst.map((r) => <DayCard key={`${r.branch_id}-${r.business_date}`} row={r} shop={shopName(r.branch_id)} links={links} open={open} />)}
     </ul>
   );
 }
