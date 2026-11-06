@@ -1,6 +1,10 @@
 package com.rincoltech.bms;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -99,6 +103,53 @@ public final class TestDatabase {
     /** bms_owner bypasses RLS: for arranging fixtures and asserting on raw rows only. */
     public static JdbcClient owner() {
         return JdbcClient.create(ownerDataSource());
+    }
+
+    // JUSTIFICATION-A3: issue #132's "the dry run writes nothing" needs every table's count, shared by two tests.
+    /**
+     * The row count of every table, each of which the owner must read: of this business for a table with a tenant, and in
+     * all for one without (the platform's own; the test profile runs no scheduler, so nothing else writes them meanwhile);
+     * and the last value of every sequence, which a rolled-back insert still advances (review of #869). Issue #132: a dry
+     * run leaves every count and every sequence as it was.
+     */
+    public static Map<String, Long> rowCounts(UUID tenantId) {
+        JdbcClient owner = owner();
+        Set<String> tenanted = Set.copyOf(owner.sql("""
+                        SELECT table_name FROM information_schema.columns
+                         WHERE table_schema = 'public' AND column_name = 'tenant_id'
+                        """).query(String.class).list());
+        // A table or sequence the owner cannot read would compare as nothing, so the check would hold without testing
+        // anything (review of d8d1e5b on #869): there must be none.
+        List<String> unreadable = owner.sql("""
+                        SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                         WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'S')
+                           AND NOT has_table_privilege(c.oid, 'SELECT')
+                        """).query(String.class).list();
+        if (!unreadable.isEmpty()) {
+            throw new IllegalStateException("the owner cannot read " + unreadable);
+        }
+        List<String> tables = owner.sql("""
+                        SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                         WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+                         ORDER BY 1
+                        """).query(String.class).list();
+        Map<String, Long> counts = new TreeMap<>();
+        for (String table : tables) {
+            String sql = "SELECT count(*) FROM \"" + table + "\"";
+            counts.put(
+                    table,
+                    tenanted.contains(table)
+                            ? owner.sql(sql + " WHERE tenant_id = ?")
+                                    .param(tenantId)
+                                    .query(Long.class)
+                                    .single()
+                            : owner.sql(sql).query(Long.class).single());
+        }
+        // NULL is a sequence never used (readable, as checked above); -1 tells it from one used up to 0.
+        owner.sql("SELECT schemaname || '.' || sequencename, coalesce(last_value, -1) FROM pg_sequences")
+                .query((rs, n) -> counts.put("sequence " + rs.getString(1), rs.getLong(2)))
+                .list();
+        return counts;
     }
 
     /** A fabricated tenant with a head office branch and, optionally, lending enabled. */

@@ -51,6 +51,9 @@ class ImportRunsIT extends IntegrationTest {
     ImportRuns runs;
 
     @Autowired
+    ImportMappings mappings;
+
+    @Autowired
     LedgerPosting ledger;
 
     @Autowired
@@ -69,6 +72,38 @@ class ImportRunsIT extends IntegrationTest {
         TestDatabase.owner()
                 .sql("UPDATE platform_import_settings SET commit_enabled = true WHERE id = 1")
                 .update();
+        ScriptedTemplate.SCRIPT = null;
+    }
+
+    /** A writer with nothing to write. */
+    static final BatchWriter NOTHING = (r, b, s, c) -> Map.of();
+
+    // JUSTIFICATION-A3: the Lead's ruling 4 on #869: a test's writer reaches the commit only through a test template.
+    /**
+     * The run, after setting the writer the test-only template's loader runs (Lead ruling 4 on #869): the commit resolves
+     * every batch's writer from its template, so a test's writer reaches it only that way.
+     */
+    static UUID script(UUID runId, BatchWriter writer) {
+        ScriptedTemplate.SCRIPT = writer;
+        return runId;
+    }
+
+    /**
+     * Binds the run's batches to a mapping of the test-only template, as an upload with a mapping would. Called inside
+     * the business's context.
+     */
+    void scripted(UUID runId) {
+        UUID mapping = mappings.latest("scripted")
+                .orElseGet(() -> mappings.save("scripted", ScriptedTemplate.mapping(), operator, null))
+                .id();
+        TestDatabase.owner()
+                .sql("""
+                        UPDATE import_batches SET mapping_id = ?, mapping_source = 'rows', template_key = ?,
+                               template_version = 1
+                         WHERE run_id = ?
+                        """)
+                .params(mapping, ScriptedTemplate.KEY, runId)
+                .update();
     }
 
     <T> T as(TestDatabase.Fixture f, Supplier<T> work) {
@@ -82,8 +117,11 @@ class ImportRunsIT extends IntegrationTest {
             for (int seq = 1; seq <= batches; seq++) {
                 runs.addBatch(run.id(), seq);
             }
+            scripted(run.id());
             runs.transition(run.id(), "uploaded");
             runs.transition(run.id(), "in_review");
+            // Ready needs a stored dry run since #132, with the writers the commit resolves.
+            runs.dryRun(run.id(), operator);
             runs.transition(run.id(), "ready");
             return runs.recordPreImportDump(run.id(), "pre-import-fabricated.dump", Instant.now(), SHA);
         });
@@ -149,6 +187,8 @@ class ImportRunsIT extends IntegrationTest {
             assertCode(() -> runs.transition(run.id(), "parsing"), "invalid_status_transition");
             runs.transition(run.id(), "uploaded");
             runs.transition(run.id(), "in_review");
+            assertCode(() -> runs.transition(run.id(), "ready"), "dry_run_required");
+            runs.dryRun(run.id(), operator);
             Run ready = runs.transition(run.id(), "ready");
             assertThat(ready.status()).isEqualTo("ready");
             assertCode(() -> runs.transition(run.id(), "committed"), "invalid_status_transition");
@@ -174,12 +214,12 @@ class ImportRunsIT extends IntegrationTest {
         List<Integer> order = new CopyOnWriteArrayList<>();
         CommitOutcome outcome = as(
                 t,
-                () -> runs.commit(run.id(), (runId, batchId, seq, checkpoint) -> {
+                () -> runs.commit(script(run.id(), (runId, batchId, seq, checkpoint) -> {
                     order.add(seq);
                     postJournal("lending");
                     checkpoint.rowWritten();
                     return Map.of("written", 1);
-                }));
+                })));
         assertThat(outcome).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(order).containsExactly(1, 2, 3);
         assertThat(journals()).isEqualTo(3);
@@ -200,10 +240,11 @@ class ImportRunsIT extends IntegrationTest {
             Run r = runs.open(operator);
             runs.transition(r.id(), "uploaded");
             runs.transition(r.id(), "in_review");
+            runs.dryRun(r.id(), operator);
             return runs.transition(r.id(), "ready");
         });
         as(t, () -> {
-            assertCode(() -> runs.commit(run.id(), (r, b, s, c) -> Map.of()), "pre_import_dump_missing");
+            assertCode(() -> runs.commit(script(run.id(), NOTHING)), "pre_import_dump_missing");
             assertCode(
                     () -> runs.recordPreImportDump(run.id(), "x.dump", Instant.now(), "NOT-A-SHA"),
                     "invalid_pre_import_dump");
@@ -247,7 +288,7 @@ class ImportRunsIT extends IntegrationTest {
 
     private void commitRecording(Run run, BatchWriter writer, CountDownLatch refused, List<Object> results) {
         try {
-            results.add(as(t, () -> runs.commit(run.id(), writer)));
+            results.add(as(t, () -> runs.commit(script(run.id(), writer))));
         } catch (ApiException e) {
             results.add(e.code());
             refused.countDown();
@@ -263,12 +304,11 @@ class ImportRunsIT extends IntegrationTest {
                 .param(first.id())
                 .update();
         // The halt stops the first run before its batch: it stays committing.
-        assertThat(as(t, () -> runs.commit(first.id(), (r, b, s, c) -> Map.of())))
-                .isEqualTo(CommitOutcome.HALTED);
+        assertThat(as(t, () -> runs.commit(script(first.id(), NOTHING)))).isEqualTo(CommitOutcome.HALTED);
         assertThat(as(t, () -> runs.get(first.id())).status()).isEqualTo("committing");
         as(t, () -> {
-            assertCode(() -> runs.commit(second.id(), (r, b, s, c) -> Map.of()), "IMPORT_IN_PROGRESS");
-            assertCode(() -> runs.commit(first.id(), (r, b, s, c) -> Map.of()), "IMPORT_IN_PROGRESS");
+            assertCode(() -> runs.commit(script(second.id(), NOTHING)), "IMPORT_IN_PROGRESS");
+            assertCode(() -> runs.commit(script(first.id(), NOTHING)), "IMPORT_IN_PROGRESS");
             return null;
         });
         assertThat(as(t, () -> runs.get(second.id())).status()).isEqualTo("ready");
@@ -295,18 +335,18 @@ class ImportRunsIT extends IntegrationTest {
             }
             return Map.of("written", 1_500);
         };
-        assertThat(as(t, () -> runs.commit(run.id(), writer))).isEqualTo(CommitOutcome.HALTED);
+        assertThat(as(t, () -> runs.commit(script(run.id(), writer)))).isEqualTo(CommitOutcome.HALTED);
         assertThat(journals()).as("nothing of the halted batch is visible").isZero();
         assertThat(batchStatus(run.id(), 1)).isEqualTo("pending");
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committing");
         assertThat(audits("core.import_run.halted")).isEqualTo(1);
 
         as(t, () -> {
-            assertCode(() -> runs.resume(run.id(), writer), "imports_disabled");
+            assertCode(() -> runs.resume(script(run.id(), writer)), "imports_disabled");
             runs.setCommitEnabled(true, Api.platformUser(Api.email("imports-op")), "Batch limits checked, go on");
             return null;
         });
-        assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(as(t, () -> runs.resume(script(run.id(), writer)))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(journals()).isEqualTo(1);
         assertThat(batchStatus(run.id(), 1)).isEqualTo("committed");
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committed");
@@ -327,18 +367,18 @@ class ImportRunsIT extends IntegrationTest {
             }
             return Map.of();
         };
-        assertThat(as(t, () -> runs.commit(run.id(), writer))).isEqualTo(CommitOutcome.HALTED);
+        assertThat(as(t, () -> runs.commit(script(run.id(), writer)))).isEqualTo(CommitOutcome.HALTED);
         assertThat(batchStatus(run.id(), 1)).isEqualTo("committed");
         assertThat(batchStatus(run.id(), 2)).isEqualTo("pending");
         assertThat(as(t, () -> runs.get(run.id())).haltRequested()).isTrue();
 
-        assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(as(t, () -> runs.resume(script(run.id(), writer)))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(written).containsExactly(1, 2);
         assertThat(journals()).isEqualTo(2);
         assertThat(as(t, () -> runs.get(run.id())).haltRequested()).isFalse();
         as(t, () -> {
             assertCode(() -> runs.requestHalt(run.id()), "invalid_status_transition");
-            assertCode(() -> runs.resume(run.id(), writer), "invalid_status_transition");
+            assertCode(() -> runs.resume(script(run.id(), writer)), "invalid_status_transition");
             return null;
         });
     }
@@ -360,13 +400,14 @@ class ImportRunsIT extends IntegrationTest {
             }
             return Map.of("written", 1_000);
         };
-        assertThatThrownBy(() -> as(t, () -> runs.commit(run.id(), writer))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> as(t, () -> runs.commit(script(run.id(), writer))))
+                .isInstanceOf(IllegalStateException.class);
         assertThat(journals()).as("nothing of the failed batch is visible").isZero();
         assertThat(batchStatus(run.id(), 1)).isEqualTo("pending");
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committing");
         assertThat(audits("core.import_run.batch_failed")).isEqualTo(1);
 
-        assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(as(t, () -> runs.resume(script(run.id(), writer)))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(journals()).isEqualTo(1);
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committed");
     }
@@ -386,7 +427,7 @@ class ImportRunsIT extends IntegrationTest {
             }
             return Map.of("written", 10);
         };
-        assertThat(as(t, () -> runs.commit(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(as(t, () -> runs.commit(script(run.id(), writer)))).isEqualTo(CommitOutcome.COMMITTED);
         Run done = as(t, () -> runs.get(run.id()));
         assertThat(done.status()).isEqualTo("committed");
         assertThat(done.haltRequested()).as("a finished run is not stopping").isFalse();
@@ -412,7 +453,7 @@ class ImportRunsIT extends IntegrationTest {
         };
         ExecutorService pool = Executors.newSingleThreadExecutor();
         try {
-            Future<CommitOutcome> commit = pool.submit(() -> as(t, () -> runs.commit(run.id(), slow)));
+            Future<CommitOutcome> commit = pool.submit(() -> as(t, () -> runs.commit(script(run.id(), slow))));
             assertThat(writing.await(20, TimeUnit.SECONDS)).isTrue();
             TestDatabase.owner()
                     .sql("UPDATE import_runs SET halt_requested = true WHERE id = ?")
@@ -420,7 +461,7 @@ class ImportRunsIT extends IntegrationTest {
                     .update();
             try {
                 as(t, () -> {
-                    assertCode(() -> runs.resume(run.id(), slow), "IMPORT_IN_PROGRESS");
+                    assertCode(() -> runs.resume(script(run.id(), slow)), "IMPORT_IN_PROGRESS");
                     return null;
                 });
                 assertThat(as(t, () -> runs.get(run.id())).haltRequested())
@@ -465,13 +506,13 @@ class ImportRunsIT extends IntegrationTest {
         };
         ExecutorService pool = Executors.newSingleThreadExecutor();
         try {
-            Future<CommitOutcome> commit = pool.submit(() -> as(t, () -> runs.commit(run.id(), writer)));
+            Future<CommitOutcome> commit = pool.submit(() -> as(t, () -> runs.commit(script(run.id(), writer))));
             assertThat(inGap.await(20, TimeUnit.SECONDS)).isTrue();
             try {
                 assertThat(batchStatus(run.id(), 1)).isEqualTo("committed");
                 as(t, () -> {
                     runs.requestHalt(run.id());
-                    assertCode(() -> runs.resume(run.id(), writer), "IMPORT_IN_PROGRESS");
+                    assertCode(() -> runs.resume(script(run.id(), writer)), "IMPORT_IN_PROGRESS");
                     return null;
                 });
                 assertThat(as(t, () -> runs.get(run.id())).haltRequested())
@@ -491,7 +532,7 @@ class ImportRunsIT extends IntegrationTest {
         assertThat(audits("core.import_run.resumed")).isZero();
 
         // The loop has ended and its lock with it, so the operator's resume now goes on.
-        assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(as(t, () -> runs.resume(script(run.id(), writer)))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(written).containsExactly(1, 2, 3);
         assertThat(journals()).isEqualTo(3);
     }
@@ -522,7 +563,7 @@ class ImportRunsIT extends IntegrationTest {
             return Map.of();
         };
 
-        assertThat(as(t, () -> runs.commit(run.id(), writer))).isEqualTo(CommitOutcome.HALTED);
+        assertThat(as(t, () -> runs.commit(script(run.id(), writer)))).isEqualTo(CommitOutcome.HALTED);
         assertThat(written).as("the lost claim stopped the loop before batch 2").containsExactly(1);
         assertThat(batchStatus(run.id(), 1)).isEqualTo("committed");
         assertThat(batchStatus(run.id(), 2)).isEqualTo("pending");
@@ -538,7 +579,7 @@ class ImportRunsIT extends IntegrationTest {
                 .single();
         assertThat(reason).isEqualTo("claim_connection_lost");
 
-        assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(as(t, () -> runs.resume(script(run.id(), writer)))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(written).containsExactly(1, 2, 3);
         assertThat(journals()).isEqualTo(3);
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committed");
@@ -566,15 +607,17 @@ class ImportRunsIT extends IntegrationTest {
 
     @Test
     void aTradingBusinessIsRefusedWithoutTheOverrideAndAllowedWithItBothAudited() {
+        // The business starts trading after the run's dry run: a dry run into a trading business needs the approved
+        // override itself (ImportPreviewIT), so the commit's own guard is what this test reaches.
+        Run run = readyRun(1);
         as(
                 t,
                 () -> new TransactionTemplate(transactionManager).execute(s -> {
                     postJournal("lending");
                     return null;
                 }));
-        Run run = readyRun(1);
         as(t, () -> {
-            assertCode(() -> runs.commit(run.id(), (r, b, s, c) -> Map.of()), "TENANT_TRADING");
+            assertCode(() -> runs.commit(script(run.id(), NOTHING)), "TENANT_TRADING");
             return null;
         });
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("ready");
@@ -584,13 +627,13 @@ class ImportRunsIT extends IntegrationTest {
         UUID checker = Api.platformUser(Api.email("imports-checker"));
         as(t, () -> {
             runs.allowTradingTenant(run.id(), maker, "Top-up import of a forgotten tab");
-            assertCode(() -> runs.commit(run.id(), (r, b, s, c) -> Map.of()), "TENANT_TRADING");
+            assertCode(() -> runs.commit(script(run.id(), NOTHING)), "TENANT_TRADING");
             assertCode(() -> runs.approveTradingTenant(run.id(), maker), "self_approval_forbidden");
             assertThat(runs.approveTradingTenant(run.id(), checker).tradingOverrideApproved())
                     .isTrue();
             return null;
         });
-        assertThat(as(t, () -> runs.commit(run.id(), (r, b, s, c) -> Map.of()))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(as(t, () -> runs.commit(script(run.id(), NOTHING)))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(audits("core.import_run.trading_override_set")).isEqualTo(1);
         assertThat(audits("core.import_run.trading_override_approved")).isEqualTo(1);
         long used = TestDatabase.owner()
@@ -629,7 +672,7 @@ class ImportRunsIT extends IntegrationTest {
         TestDatabase.Fixture other = TestDatabase.tenant("imports-other", true);
         as(other, () -> {
             assertCode(() -> runs.get(run.id()), "not_found");
-            assertCode(() -> runs.commit(run.id(), (r, b, s, c) -> Map.of()), "not_found");
+            assertCode(() -> runs.commit(script(run.id(), NOTHING)), "not_found");
             assertCode(() -> runs.requestHalt(run.id()), "not_found");
             assertCode(() -> runs.addBatch(run.id(), 2), "not_found");
             return null;

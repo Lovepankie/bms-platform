@@ -38,7 +38,12 @@ public interface ImportTemplate {
     /** The template's own codes; the shared codes of the core are added by the registry. */
     List<IssueCode> issueCodes();
 
-    /** The writer of a batch of one entity set, run by the commit inside the batch's own transaction (issue #133). */
+    /**
+     * The writer of a batch of one entity set, run by the commit inside the batch's own transaction (issue #133), and by
+     * the dry run inside its rolled-back one (#132). A loader whose behaviour depends on state it captures (a directory,
+     * a date, a setting) overrides {@link BatchWriter#identity()} to name that state, as {@code exportWriter} does: by
+     * default two loaders of one lambda are the same writer, so a dry run would stand for a commit it did not rehearse.
+     */
     BatchWriter loader(String entitySet);
 
     /** The name a person reads: {@code retail_v1}. */
@@ -266,6 +271,14 @@ public interface ImportTemplate {
      */
     default boolean recordExists(String entitySet, UUID id) {
         return false;
+    }
+
+    /**
+     * A new forecast of what the commit will post (issue #132): the preview's predicted balances, computed by the rules the
+     * loader posts by. {@link ImportForecast#NONE} by default, for a template that posts no opening balance.
+     */
+    default ImportForecast forecast() {
+        return ImportForecast.NONE;
     }
 
     /**

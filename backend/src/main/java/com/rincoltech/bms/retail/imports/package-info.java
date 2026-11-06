@@ -13,6 +13,7 @@
             "kernel",
             "core.tenancy",
             "core.audit",
+            "core.imports",
             "core.jobs",
             "core.ledger",
             "retail.catalogue",

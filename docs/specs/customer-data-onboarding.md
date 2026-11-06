@@ -216,6 +216,16 @@ run: per batch `read`, `written`, `existing`, `skipped`; the anomaly list with f
 opening journals; and the balances checksum. The preview is accepted only when the dry run's
 predicted balances equal the preview's (a test holds this, FR-IMP-06).
 
+Built in #132 (SDD chapter 13 sections 13.3 and 13.14.1, 6/16): the preview reads the staged rows only; the dry run is the
+commit's own batch code with the commit's writer inside one outer transaction marked rollback-only, its report stored on the
+run with a stamp of the run's inputs, and the run is `ready` only while that stored report still counts (no batch, mapping
+version, issue or resolution changed after it, no other build deployed and no other run committed into the business), did
+not fail and matched the preview's balances (every kind, per branch). The service resolves each batch's writer from its
+template; no caller passes one, and the commit and its resume refuse writers other than those the dry run rehearsed. A dry
+run and a commit of one business never wait on each other: whichever finds the other answers 409 at once. The commit
+writes the same report, batch by batch. The writers that make a real template's dry run are the templates' loaders, wired by the
+commit of #133; until #135 the retail export's writer is `import-retail` itself.
+
 ### 3.7 Commit
 
 - **Maker and checker.** The maker requests `import_commit` (chapter 8 section 8.4); a different

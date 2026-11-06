@@ -113,7 +113,12 @@ class ImportUploadReviewIT extends IntegrationTest {
         Batch batch = upload(runId, "fabricated.csv", CSV);
         as(() -> runs.transition(runId, "in_review"));
 
-        seams.afterFetch = () -> runs.transition(runId, "ready");
+        // Ready needs a dry run since #132, which a file read without a mapping cannot have (no template writes it).
+        // The run is moved on by the owner, as a second operator's ready would land, and the parse must still see it.
+        seams.afterFetch = () -> TestDatabase.owner()
+                .sql("UPDATE import_runs SET status = 'ready', ready_at = now() WHERE id = ?")
+                .param(runId)
+                .update();
         assertThatThrownBy(() -> as(() -> uploads.parse(batch.id(), null)))
                 .isInstanceOfSatisfying(
                         ApiException.class, e -> assertThat(e.code()).isEqualTo("invalid_status_transition"));

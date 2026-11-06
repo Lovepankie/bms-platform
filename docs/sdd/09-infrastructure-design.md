@@ -266,7 +266,10 @@ migration) with status only, no details.
   (100000), `BMS_IMPORTS_MAX_COLUMNS` (200), raised only after the big file test passes at the new size;
   `BMS_IMPORTS_WORK_DIR` (empty: the temp folder; holds encrypted copies for the length of one call, mode 600; an upload is
   refused with `UPLOAD_DISK_LOW` when its free space is under twice the file); `BMS_IMPORTS_ORPHAN_AGE` (24h) and
-  `BMS_IMPORTS_CLEANUP_ENABLED` (true) for the daily cleanup (section 9.9). The quarantined files go to the documents bucket
+  `BMS_IMPORTS_CLEANUP_ENABLED` (true) for the daily cleanup (section 9.9); `BMS_IMPORTS_DRY_RUN_LIMIT_WHILE_TRADING` (60s),
+  how long a dry run into a business that trades, under the approved override, may hold its rows (chapter 13 section
+  13.14.1, 6/16), and `BMS_IMPORTS_DRY_RUN_LIMIT` (15m), that of any other dry run. The import's dry run and commit also need the build's identity, which every Maven build carries in
+  `build-info.properties`, and refuse with `build_unknown` without it. The quarantined files go to the documents bucket
   under `tenants/<tenant_id>/quarantine/imports/<run_id>/<batch_id>.bin` (chapter 12 section 12.5).
 - Web Push (ADR-050), optional on every host: `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_VAPID_PRIVATE_KEY`, `BMS_PUSH_SUBJECT` and
   `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`; both compose files pass them; unset means push is off (`docs/runbooks/push-notifications.md`).

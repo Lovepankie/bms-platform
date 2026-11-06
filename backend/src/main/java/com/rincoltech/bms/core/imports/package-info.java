@@ -22,11 +22,18 @@
  * ({@link com.rincoltech.bms.core.imports.ImportValidation}): every staged row of a run against its template and mapping
  * version (normalisers, types, required fields, ranges, references across the run's batches and to the business's own
  * records, duplicates, cross-field rules), each issue a stable code of the template's catalogue with a message that never
- * holds a personal value, stored in {@code import_issues} with the rows' typed values. Review and the operator screens
- * follow in #131 to #141. Public API: {@link com.rincoltech.bms.core.imports.ImportRuns},
+ * holds a personal value, stored in {@code import_issues} with the rows' typed values. The fifth (issue #131, migration
+ * V141) is the review queue ({@link com.rincoltech.bms.core.imports.ImportReview}). The sixth (issue #132, migration V142)
+ * is the preview ({@link com.rincoltech.bms.core.imports.ImportPreview}: rows by outcome, records by type and the predicted
+ * balances of the template's {@link com.rincoltech.bms.core.imports.ImportForecast}) and the dry run
+ * ({@link com.rincoltech.bms.core.imports.ImportRuns#dryRun}: the commit's batch code inside one outer transaction that is
+ * rolled back, its {@link com.rincoltech.bms.core.imports.CommitReport} stored on the run). The commit by template and the
+ * operator screens follow in #133 to #141. Public API: {@link com.rincoltech.bms.core.imports.ImportRuns},
  * {@link com.rincoltech.bms.core.imports.ImportUploads}, {@link com.rincoltech.bms.core.imports.ImportTemplates},
- * {@link com.rincoltech.bms.core.imports.ImportMappings}, {@link com.rincoltech.bms.core.imports.ImportValidation}, and the
- * SPI {@link com.rincoltech.bms.core.imports.ImportTemplate} with {@link com.rincoltech.bms.core.imports.BatchWriter}.
+ * {@link com.rincoltech.bms.core.imports.ImportMappings}, {@link com.rincoltech.bms.core.imports.ImportValidation},
+ * {@link com.rincoltech.bms.core.imports.ImportReview}, {@link com.rincoltech.bms.core.imports.ImportPreview} and
+ * {@link com.rincoltech.bms.core.imports.CommitReport}, and the SPI {@link com.rincoltech.bms.core.imports.ImportTemplate}
+ * with {@link com.rincoltech.bms.core.imports.BatchWriter} and {@link com.rincoltech.bms.core.imports.ImportForecast}.
  */
 @ApplicationModule(
         id = "core.imports",

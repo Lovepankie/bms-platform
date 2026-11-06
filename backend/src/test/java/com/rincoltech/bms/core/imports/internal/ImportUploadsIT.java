@@ -318,7 +318,14 @@ class ImportUploadsIT extends IntegrationTest {
         refused(() -> as(t, () -> runs.transition(runId, "ready")), "invalid_status_transition");
         Batch cancelled = as(t, () -> uploads.cancelBatch(failed.id()));
         assertThat(cancelled.status()).isEqualTo("cancelled");
-        assertThat(as(t, () -> runs.transition(runId, "ready")).status()).isEqualTo("ready");
+        // Every file is read now, so what is left is the dry run of #132, which a file read without a mapping cannot
+        // have: no template writes it. The dry run itself is ImportPreviewIT's; here the run is moved on by the owner.
+        refused(() -> as(t, () -> runs.transition(runId, "ready")), "dry_run_required");
+        refused(() -> as(t, () -> runs.dryRun(runId, operator)), "BATCH_HAS_NO_MAPPING");
+        TestDatabase.owner()
+                .sql("UPDATE import_runs SET status = 'ready', ready_at = now() WHERE id = ?")
+                .param(runId)
+                .update();
         refused(() -> upload(t, runId, "late.csv", TestFiles.csv("Code\nFAB-9\n"), null), "invalid_status_transition");
     }
 

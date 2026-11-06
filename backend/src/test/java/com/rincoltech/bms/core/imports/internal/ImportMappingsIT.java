@@ -277,16 +277,13 @@ class ImportMappingsIT extends IntegrationTest {
         Batch batch = upload(runId, as(t, () -> mappings.parseOptions(v1.id(), "item_list")));
         as(t, () -> {
             runs.transition(runId, "in_review");
+            // Ready needs a stored dry run since #132: the commit's own writer, the template's loader, rolled back.
+            runs.dryRun(runId, operator);
             runs.transition(runId, "ready");
             return runs.recordPreImportDump(runId, "pre-import-fabricated.dump", Instant.now(), SHA);
         });
-        CommitOutcome outcome = as(
-                t,
-                () -> runs.commit(
-                        runId,
-                        templates
-                                .require(batch.templateKey(), batch.templateVersion())
-                                .loader("items")));
+        // The commit resolves the batch's writer from its template, the fixture's loader for items.
+        CommitOutcome outcome = as(t, () -> runs.commit(runId));
         assertThat(outcome).isEqualTo(CommitOutcome.COMMITTED);
 
         Map<String, Object> changed = fixture("fixture_shop_v1.mapping.json");

@@ -1,6 +1,8 @@
 package com.rincoltech.bms.retail.imports.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.imports.BatchWriter;
+import com.rincoltech.bms.core.imports.CommitReport;
 import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.core.tenancy.BranchProvisioning;
 import com.rincoltech.bms.core.tenancy.Branches;
@@ -24,8 +26,11 @@ import com.rincoltech.bms.retail.stock.RetailHistory;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.HistoricalMovement;
 import com.rincoltech.bms.retail.stock.StockLedger.Position;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -44,6 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -264,16 +270,7 @@ public class RetailImporter {
      * journals are dated the day before it. {@code null} means the import day in the tenant's zone.
      */
     public ImportReport run(String tenantSlug, Path dir, boolean dryRun, LocalDate firstLiveDate) {
-        if (!dir.toFile().isDirectory()) {
-            throw new IllegalArgumentException("Not a directory: " + dir);
-        }
-        Map<String, ExportFile> export = new LinkedHashMap<>();
-        for (String name : FILES) {
-            export.put(name, ExportFile.read(dir, name, FIELDS.get(name)));
-        }
-        for (String name : CASH_FILES) {
-            export.put(name, ExportFile.read(dir, name, FIELDS.get(name)));
-        }
+        Map<String, ExportFile> export = readExport(dir);
         ImportReport report = new ImportReport(tenantSlug, dir.toString(), dryRun);
         return tenants.callAsTenant(tenantSlug, "retail", () -> {
             if (dryRun) {
@@ -286,6 +283,158 @@ public class RetailImporter {
             }
             return report;
         });
+    }
+
+    // JUSTIFICATION-A3: issue #132 runs this command's real path as a batch of the import framework, no second path.
+    /**
+     * This command's real path as the writer of one batch of the import framework (issue #132), until the retail template
+     * of #135 gives each file its own batch: it imports the whole export directory in the batch's transaction (each file's
+     * transaction joins it), for the business the framework bound, and tells the batch's report what this command's report
+     * holds, and the stock per branch the books hold. So the framework's dry run of a run is this path rolled back, and its
+     * report equals a real run's ({@link #toCommitReport(String, ImportReport)}). A file that fails throws, so the batch,
+     * or the dry run, stops there. The checkpoint's kill switch is not read between rows: the command never read it
+     * either. A template's loader for retail (#135) is this writer; until then a test-only template stands in.
+     */
+    public BatchWriter exportWriter(Path dir, LocalDate firstLiveDate) {
+        // JUSTIFICATION-A3: the review of #869 asks for the export's content in the writer's identity and the ledger's
+        // own totals in the report; both are the writer's, so they sit with it.
+        return new BatchWriter() {
+            @Override
+            public Map<String, Object> write(UUID runId, UUID batchId, int seq, Checkpoint checkpoint) {
+                ImportReport report = new ImportReport("", dir.toString(), false);
+                // The export read is the export identified (review of d8d1e5b): a file changed while it was read stops
+                // the batch. The window between the commit's check of the identity and this read closes with #135,
+                // whose staged files the run's stamp holds.
+                String identified = exportSha256(dir);
+                Map<String, ExportFile> export = readExport(dir);
+                if (!identified.equals(exportSha256(dir))) {
+                    throw new IllegalStateException("the retail export changed while it was read");
+                }
+                importAll(export, report, firstLiveDate);
+                if (report.failed()) {
+                    // The cause is in the command's own report; it may quote a row, so it is not the message.
+                    throw new IllegalStateException("the retail export stopped at a file");
+                }
+                report.into(checkpoint, RetailImporter.this::ledgerTotals);
+                branchStock(checkpoint);
+                return Map.of();
+            }
+
+            /**
+             * The export's own content is part of what this writer is (review of #869): the SHA-256 of every file it
+             * reads, so a dry run of one export never stands for a commit of files changed since, and the first live day.
+             * With none given, the command takes the business's today, so the identity names that day (review of
+             * d8d1e5b): a dry run on one day does not stand for a commit on the next, whose journals are dated otherwise.
+             */
+            @Override
+            public String identity() {
+                LocalDate firstLive = firstLiveDate != null
+                        ? firstLiveDate
+                        : clock.today(currentTenant.profile().timezone());
+                return "retail.import-retail export sha256:" + exportSha256(dir) + " first-live:" + firstLive;
+            }
+        };
+    }
+
+    /**
+     * The command's report in the framework's shape, with each opening journal's debit and credit as the tenant's ledger
+     * holds them for its entry: the real run the framework's dry run is compared with (issue #132).
+     */
+    public CommitReport toCommitReport(String tenantSlug, ImportReport report) {
+        return tenants.callAsTenant(
+                tenantSlug,
+                "retail",
+                () -> transactions.execute(s -> {
+                    CommitReport.Builder builder = new CommitReport.Builder(null);
+                    report.into(builder, this::ledgerTotals);
+                    branchStock(builder);
+                    if (report.failed()) {
+                        builder.fail("the retail export stopped at a file");
+                    }
+                    return builder.build(CommitReport.COMMIT);
+                }));
+    }
+
+    // JUSTIFICATION-A3: the Lead's ruling 2 on #869: the stock per branch in the retail report, read from the books.
+    /**
+     * Tells the report the stock of every branch as the books hold it now (Lead ruling 2 on #869): the quantity on hand,
+     * summed over the branch's products from the stock ledger, and the value the inventory account holds for the branch.
+     * In a dry run that is what the import wrote, read before the rollback; after a real run, what it committed.
+     */
+    private void branchStock(CommitReport.Sink sink) {
+        Map<UUID, String> codes = new HashMap<>();
+        branches.all().forEach(b -> codes.put(b.id(), b.code().toUpperCase(Locale.ROOT)));
+        Map<String, BigDecimal> qty = new TreeMap<>();
+        stock.positions().forEach(p -> qty.merge(codes.getOrDefault(p.branchId(), "?"), p.balance(), BigDecimal::add));
+        Map<String, Long> value = new TreeMap<>();
+        jdbc.sql("""
+                        SELECT e.branch_id, coalesce(sum(l.debit - l.credit), 0) AS value
+                          FROM journal_lines l JOIN journal_entries e ON e.id = l.entry_id
+                          JOIN gl_accounts a ON a.id = l.account_id
+                         WHERE a.system_key = 'inventory'
+                         GROUP BY e.branch_id
+                        """)
+                .query((rs, n) -> value.merge(
+                        codes.getOrDefault(rs.getObject("branch_id", UUID.class), "?"), rs.getLong("value"), Long::sum))
+                .list();
+        Set<String> all = new TreeSet<>(qty.keySet());
+        all.addAll(value.keySet());
+        all.forEach(code -> sink.stock(
+                code, atLeastThreePlaces(qty.getOrDefault(code, BigDecimal.ZERO)), value.getOrDefault(code, 0L)));
+    }
+
+    /** Three places as the command prints a quantity, more when the books hold more: never rounded (review of d8d1e5b). */
+    static BigDecimal atLeastThreePlaces(BigDecimal qty) {
+        return qty.setScale(Math.max(3, qty.scale()));
+    }
+
+    /** An entry's debit and credit totals by its number, from its lines, in the caller's transaction. */
+    private long[] ledgerTotals(String entryNo) {
+        return jdbc.sql("""
+                        SELECT coalesce(sum(l.debit), 0), coalesce(sum(l.credit), 0)
+                          FROM journal_entries e JOIN journal_lines l ON l.entry_id = e.id
+                         WHERE e.entry_no = ?
+                        """)
+                .param(entryNo)
+                .query((rs, n) -> new long[] {rs.getLong(1), rs.getLong(2)})
+                .single();
+    }
+
+    /** The SHA-256 over the names and bytes of every file of the export the command reads, in a fixed order. */
+    static String exportSha256(Path dir) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            List<String> names = new ArrayList<>(FILES);
+            names.addAll(CASH_FILES);
+            for (String name : names) {
+                Path file = dir.resolve(name);
+                digest.update((name + "\n").getBytes(StandardCharsets.UTF_8));
+                if (Files.isRegularFile(file)) {
+                    digest.update(Files.readAllBytes(file));
+                }
+                digest.update((byte) 0);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        } catch (IOException e) {
+            throw new UncheckedIOException("the export could not be read", e);
+        }
+    }
+
+    /** Every file of the export directory, read once; an absent file is an empty one. */
+    private static Map<String, ExportFile> readExport(Path dir) {
+        if (!dir.toFile().isDirectory()) {
+            throw new IllegalArgumentException("Not a directory: " + dir);
+        }
+        Map<String, ExportFile> export = new LinkedHashMap<>();
+        for (String name : FILES) {
+            export.put(name, ExportFile.read(dir, name, FIELDS.get(name)));
+        }
+        for (String name : CASH_FILES) {
+            export.put(name, ExportFile.read(dir, name, FIELDS.get(name)));
+        }
+        return export;
     }
 
     private void importAll(Map<String, ExportFile> export, ImportReport report, LocalDate firstLiveDate) {

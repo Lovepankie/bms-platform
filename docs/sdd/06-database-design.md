@@ -1364,6 +1364,23 @@ Added by `V141__import_review_queue.sql` (issue #131, FR-IMP-05, chapter 13 sect
   `linked_member_id` (no foreign key: rewritten by each validation, and the record linked is the vertical's), with `UPDATE`
   for `bms_app` on these three only; `import_rows_validation_kept` refuses a change to them once the batch is `committed`.
 
+Added by `V142__import_dry_run.sql` (issue #132, FR-IMP-06, ADR-027 decision 5, chapter 13 sections 13.3 and 13.14.1), expand
+only, no new table, index or grant (`bms_app` already has `SELECT, INSERT, UPDATE` on both tables, under forced RLS since V127):
+
+- **`import_runs`** gains the stored dry run: `dry_run_report jsonb` (an object: the report a real run stores too, per source
+  `read`, `written`, `existing`, `skipped`, the anomalies with file and line, the opening journals with their debit and credit
+  totals, the notes, the balances checksum and the failure, if any), `dry_run_at`, `dry_run_by uuid` (the staff user or
+  platform operator, as `created_by`), `dry_run_stamp char(32)` (an MD5 of the run's inputs when it ran: the application's
+  version, the cutover moment and policy, every batch's status, file, mapping version, parse and row count, every issue's
+  status and version, every resolution, every staged row's review columns and typed values, and the business's last
+  committed import batch), `dry_run_preview_matches boolean` (whether the preview's balances, every kind per branch, equalled
+  the dry run's) and `dry_run_writer text` (the writers it rehearsed, one line per batch: number, template and version, the
+  template's class, entity set and loader; a commit or resume whose writers differ is refused). The CHECK `import_runs_dry_run_whole` keeps the six all set or all NULL. A stored dry run counts while the
+  stamp of the run now equals its stamp; `ready` needs one that counts, did not fail and matched the preview. It holds no
+  personal value: any text of it that names a personal value of the run's staged rows is stored as hidden.
+- **`import_batches`** gains `report jsonb` (an object: the batch's part of the run's report, written in the batch's commit
+  transaction with its counts, so a real run's report, resumed or not, is its committed batches' parts in `seq` order).
+
 ## 6.6 General ledger (RLS)
 
 ### 6.6.1 Tables
@@ -2243,7 +2260,9 @@ form of `import_batches` (section 6.5, Import tables). `V139__import_mappings.sq
 only: `import_issues`, the validation columns of `import_rows` with their column grant, and the guard triggers
 `import_issues_batch_kept` and `import_rows_validation_kept` (section 6.5, Import tables). `V141__import_review_queue.sql` (#131;
 directly after `V140`) is expand only: `import_issue_resolutions`, the review columns of `import_issues` and `import_rows` with
-their column grants, the per-row ordinal key and the two guards widened (section 6.5, Import tables). The next migration takes the number above the highest on `main`
+their column grants, the per-row ordinal key and the two guards widened (section 6.5, Import tables). `V142__import_dry_run.sql`
+(#132; directly after `V141`) is expand only: the stored dry run columns of `import_runs` with the CHECK
+`import_runs_dry_run_whole`, and the report part of `import_batches` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items

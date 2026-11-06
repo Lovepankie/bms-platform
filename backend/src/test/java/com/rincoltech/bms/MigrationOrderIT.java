@@ -3527,6 +3527,71 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V142 (issue #132) is expand only: a run and a batch stored before it keep their state and read as having no dry run
+     * and no report part; the dry run columns are all set or all empty (the CHECK {@code import_runs_dry_run_whole}); and
+     * both tables stay under forced row-level security. JUSTIFICATION-A3: a new test case; no existing case covers V142.
+     */
+    @Test
+    void importDryRunMigrationKeepsEveryRunAndBatch() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("142") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v142', 'Test Tenant V142',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, status) VALUES (?, ?, ?, 'in_review')")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+            UUID batch = UUID.randomUUID();
+            owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq, status, row_count) VALUES (?, ?, ?, 1,"
+                            + " 'parsed', 3)")
+                    .params(batch, tenant, run)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT status = 'in_review' AND dry_run_report IS NULL AND dry_run_at IS NULL"
+                                    + " AND dry_run_by IS NULL AND dry_run_stamp IS NULL AND dry_run_preview_matches IS NULL"
+                                    + " AND dry_run_writer IS NULL"
+                                    + " FROM import_runs WHERE id = ?")
+                            .param(run)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT status = 'parsed' AND row_count = 3 AND report IS NULL FROM import_batches"
+                                    + " WHERE id = ?")
+                            .param(batch)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThatThrownBy(() -> owner.sql("UPDATE import_runs SET dry_run_report = '{}' WHERE id = ?")
+                            .param(run)
+                            .update())
+                    .hasMessageContaining("import_runs_dry_run_whole");
+            assertThat(owner.sql("UPDATE import_runs SET dry_run_report = '{}', dry_run_at = now(), dry_run_by = ?,"
+                                    + " dry_run_stamp = ?, dry_run_preview_matches = true,"
+                                    + " dry_run_writer = 'fabricated writer' WHERE id = ?")
+                            .params(UUID.randomUUID(), "0".repeat(32), run)
+                            .update())
+                    .isEqualTo(1);
+            assertThat(owner.sql(
+                                    "SELECT bool_and(relrowsecurity AND relforcerowsecurity) FROM pg_class WHERE relname IN"
+                                            + " ('import_runs', 'import_batches')")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

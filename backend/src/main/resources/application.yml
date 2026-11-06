@@ -168,6 +168,11 @@ bms:
     work-dir: ${BMS_IMPORTS_WORK_DIR:}
     orphan-age: ${BMS_IMPORTS_ORPHAN_AGE:24h}
     cleanup-enabled: ${BMS_IMPORTS_CLEANUP_ENABLED:true}
+    # A dry run into a business that trades, under the approved override, holds the business's ledger and stock rows
+    # until its rollback; past this limit every statement of it is refused, so staff postings wait no longer (#132).
+    dry-run-limit-while-trading: ${BMS_IMPORTS_DRY_RUN_LIMIT_WHILE_TRADING:60s}
+    # Every other dry run is bounded too, so one whose business begins to trade while it runs still ends.
+    dry-run-limit: ${BMS_IMPORTS_DRY_RUN_LIMIT:15m}
   # The daily sweep of orphaned uploads (issue #39): objects under tenants/<id>/upload/ older than 24 hours that no
   # documents row names. Dry run logs the counts and removes nothing; it is the default until the operator has read a
   # dry run's summary (docs/runbooks/restore-from-backup.md section 4 sets it again after a restore). Bounds: most
