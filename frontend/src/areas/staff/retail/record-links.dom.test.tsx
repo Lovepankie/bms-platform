@@ -5,7 +5,8 @@ import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing
 import { useEffect, useState, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import { retail } from '../../../api/retail';
+import { retail, type AccountPayment, type Statement } from '../../../api/retail';
+import { ReceiptList, StatementView } from './account';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
@@ -64,6 +65,19 @@ describe('a sale number opens that sale (#336)', () => {
 
   it('is the sale row of a credit note', () => {
     show(<CreditNoteView note={{ id: 'r1', credit_note_no: 'CN-HQ-000001', sale_id: SALE_2, sale_no: 'S-900002', returned_on: '2026-10-01', lines: [] }} nameOf={() => 'Test Branch A'} />, '/staff');
+    expect(screen.getByRole('link', { name: 'S-900002' }).getAttribute('href')).toBe(`/staff/retail/sales?sale=${SALE_2}`);
+  });
+
+  it('is each sale an account payment paid, under its month (#798)', () => {
+    const receipt = { id: 'p1', receipt_no: 'AP-000001', status: 'posted', amount_minor: 5000, method: 'cash', paid_on: '2026-10-03', branch_id: BRANCH_A, allocations: [{ sale_id: SALE_2, sale_no: 'S-900002', amount_minor: 5000 }] } as AccountPayment;
+    show(<ReceiptList items={[receipt]} canReverse={() => false} nameOf={() => 'Test Branch A'} onReverse={() => undefined} />, '/staff');
+    expect(screen.getByRole('button', { name: /October 2026/ }).textContent).toContain('1 payment');
+    expect(screen.getByRole('link', { name: 'S-900002' }).getAttribute('href')).toBe(`/staff/retail/sales?sale=${SALE_2}`);
+  });
+
+  it('is each sale brought in from the old records on a statement (#798)', () => {
+    const statement = { from: '2026-10-01', to: '2026-10-31', lines: [], before_system_start: { sales: [{ sale_id: SALE_2, sale_no: 'S-900002', sale_date: '2026-01-05', total_minor: 9000 }] } } as Statement;
+    show(<StatementView statement={statement} />, '/staff');
     expect(screen.getByRole('link', { name: 'S-900002' }).getAttribute('href')).toBe(`/staff/retail/sales?sale=${SALE_2}`);
   });
 

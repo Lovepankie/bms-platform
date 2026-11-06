@@ -1,6 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
+import { GroupedCards, useCategoryGroups } from './category-groups';
+import { monthLabel } from './cash-state';
+import { SaleLink } from './screen-link';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type AccountPayment, type CustomerAccount, type OpenSale, type Statement } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
@@ -186,12 +189,15 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
 }) {
   const [reversing, setReversing] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  // One header per month with how many payments it holds (rule 1, issue #798), open while the list is short.
+  const months = useCategoryGroups({ screen: 'account-payments', items: [...items], categoryOf: (r) => monthLabel(r.paid_on), resetKey: '', searching: false, keepOrder: true, noun: ['payment', 'payments'] });
   if (items.length === 0) return <p className="empty-state">No payment has been taken on account yet.</p>;
   return (
     <>
     <Problem error={error} />
-    <ul style={{ listStyle: 'none', padding: 0 }}>
-      {items.map((r) => (
+    <GroupedCards
+      state={months}
+      renderItem={(r) => (
         <li key={r.id} className="rt-card" data-testid={`receipt-${r.receipt_no}`}>
           <p>
             <strong>{r.receipt_no}</strong> {r.status === 'reversed' && <span className="badge badge-warning">Reversed</span>}
@@ -199,7 +205,9 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
             {money(r.amount_minor ?? 0)} by {methodWords(r.method)} on {showDate(r.paid_on)}, received at {nameOf(r.branch_id)}.
           </p>
           <p className="hint">
-            {(r.allocations ?? []).map((a) => `${a.sale_no} ${money(a.amount_minor ?? 0)}`).join(', ')}
+            {(r.allocations ?? []).map((a, i) => (
+              <Fragment key={a.sale_id ?? i}>{i > 0 && ', '}<SaleLink saleId={a.sale_id} credit>{a.sale_no}</SaleLink> {money(a.amount_minor ?? 0)}</Fragment>
+            ))}
             {r.allocation === 'manual' ? ' (chosen by hand)' : ''}
           </p>
           {r.status === 'reversed' && <p className="hint">Reversed: {r.reverse_reason}</p>}
@@ -218,8 +226,8 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
             </form>
           )}
         </li>
-      ))}
-    </ul>
+      )}
+    />
     </>
   );
 }
@@ -257,7 +265,7 @@ export function StatementView({ statement }: { statement: Statement }) {
           <h3>Before system start</h3>
           <Hint full>These credit sales were brought in from the old records. They are not in the accounts of this system, so they are listed apart and are not in the closing balance above.</Hint>
           <ul>
-            {(imported.sales ?? []).map((s) => <li key={s.sale_id}>{s.sale_no}, {showDate(s.sale_date)}: {money(s.total_minor ?? 0)}</li>)}
+            {(imported.sales ?? []).map((s) => <li key={s.sale_id}><SaleLink saleId={s.sale_id} credit>{s.sale_no}</SaleLink>, {showDate(s.sale_date)}: {money(s.total_minor ?? 0)}</li>)}
           </ul>
           <p className="rt-total">With these, the buyer owes {money(statement.balance_minor ?? 0)}.</p>
         </section>
@@ -289,7 +297,13 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   const { key, draft, setDraft, discard } = usePersistedDraft<PaymentForm>(`account-payment:${me.user_id ?? ''}:${customerId}`, blankPayment(firstBranch, today));
   const account = useQuery({ queryKey: ['retail', 'account', customerId], queryFn: () => retail.customerAccount(customerId), enabled: allowed });
   const balance = useQuery({ queryKey: ['retail', 'account-balance', customerId], queryFn: () => retail.customerBalance(customerId), enabled: allowed });
-  const payments = useQuery({ queryKey: ['retail', 'account-payments', customerId], queryFn: () => retail.listAccountPayments(customerId), enabled: allowed });
+  const payments = useInfiniteQuery({
+    queryKey: ['retail', 'account-payments', customerId],
+    queryFn: ({ pageParam }) => retail.listAccountPayments(customerId, pageParam ? { cursor: pageParam } : undefined),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.next_cursor || undefined,
+    enabled: allowed,
+  });
   const ranged = from !== '' && to !== '' && from <= to;
   const statement = useQuery({ queryKey: ['retail', 'account-statement', customerId, from, to], queryFn: () => retail.customerStatement(customerId, { from, to }), enabled: allowed && ranged });
   // The buyer's phone (issue #817): the account carries no contact, so it is read from the customer list searched by the name,
@@ -366,13 +380,21 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
       <section aria-label="Payments taken" data-tour="account-payments">
         <h2>Payments taken</h2>
         <ReceiptList
-          items={payments.data?.items ?? []}
+          items={payments.data?.pages.flatMap((p) => p.items ?? []) ?? []}
           canReverse={(b) => holdsAt(me, SALE_VOID, b)}
           busy={reverse.isPending}
           error={reverse.error}
           nameOf={nameOf}
           onReverse={(receipt, reason) => reverse.mutate({ receipt, reason })}
         />
+        {payments.hasNextPage && (
+          <>
+            <Hint>These are the latest payments. Older ones are not shown yet.</Hint>
+            <button type="button" onClick={() => void payments.fetchNextPage()} disabled={payments.isFetchingNextPage}>
+              {payments.isFetchingNextPage ? 'Loading' : 'Show older payments'}
+            </button>
+          </>
+        )}
       </section>
       <section aria-label="Statement" data-tour="account-statement">
         <h2>Statement</h2>

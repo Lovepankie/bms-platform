@@ -56,6 +56,12 @@ describe('groupByCategory', () => {
     expect(items.map((i) => i.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
+  it('keeps the groups in the order their rows came when asked (months of a dated list, #798)', () => {
+    const rows = [{ m: 'November 2026' }, { m: 'October 2026' }, { m: 'November 2026' }];
+    expect(groupByCategory(rows, (r) => r.m, undefined, true).map((g) => g.label)).toEqual(['November 2026', 'October 2026']);
+    expect(groupSummary({ items: [1, 2], subtotal: null }, ['move', 'moves'])).toBe('2 moves');
+  });
+
   it('numbers sort naturally', () => {
     const rows = [{ c: 'Size 10' }, { c: 'Size 9' }];
     expect(groupByCategory(rows, (r) => r.c).map((g) => g.label)).toEqual(['Size 9', 'Size 10']);
