@@ -84,6 +84,8 @@ export type CategoryGroups<T> = {
   active: boolean;
   /** What one row is called on a group's header ("2 moves"); items when not given. */
   noun?: [string, string];
+  /** More pages exist: the last group of a dated list may be partial, so its header says "so far" (issue #798). */
+  more?: boolean;
 };
 
 /**
@@ -106,6 +108,7 @@ export function useCategoryGroups<T>(o: {
   /** Groups in the order their rows came (months of a dated list), not A to Z. */
   keepOrder?: boolean;
   noun?: [string, string];
+  more?: boolean;
 }): CategoryGroups<T> {
   const [grouped, setGroupedState] = useState(() => readGrouped(o.screen));
   const latch = useRef<{ key: string; open: boolean } | null>(null);
@@ -125,6 +128,7 @@ export function useCategoryGroups<T>(o: {
     minGroups: o.minGroups ?? 1,
     active: grouped && groups.length >= (o.minGroups ?? 1),
     noun: o.noun,
+    more: o.more,
   };
 }
 
@@ -155,7 +159,11 @@ export function GroupControls<T>({ state, paged = false }: { state: CategoryGrou
 }
 
 /** What a group's header says: the count and the subtotal, if the screen has one. */
-export const groupSummary = (g: { items: unknown[]; subtotal: string | null }, noun: [string, string] = ['item', 'items']) => `${g.items.length} ${g.items.length === 1 ? noun[0] : noun[1]}${g.subtotal ? `, ${g.subtotal}` : ''}`;
+export const groupSummary = (g: { items: unknown[]; subtotal: string | null }, noun: [string, string] = ['item', 'items'], partial = false) =>
+  `${g.items.length} ${g.items.length === 1 ? noun[0] : noun[1]}${partial ? ' so far' : ''}${g.subtotal ? `, ${g.subtotal}` : ''}`;
+
+/** The header words of group `i`: the last one says "so far" while more pages exist (issue #798). */
+const summaryAt = <T,>(state: CategoryGroups<T>, i: number) => groupSummary(state.groups[i] ?? { items: [], subtotal: null }, state.noun, state.more === true && i === state.groups.length - 1);
 
 function Header({ label, summary, open, controls, onToggle }: { label: string; summary: string; open: boolean; controls: string; onToggle: () => void }) {
   return (
@@ -177,7 +185,7 @@ export function GroupedBodies<T>({ state, colSpan, renderRow }: { state: Categor
         return (
           <Fragment key={g.key}>
             <tbody className="cat-group">
-              <tr><th scope="rowgroup" colSpan={colSpan}><Header label={g.label} summary={groupSummary(g, state.noun)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></th></tr>
+              <tr><th scope="rowgroup" colSpan={colSpan}><Header label={g.label} summary={summaryAt(state, i)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></th></tr>
             </tbody>
             <tbody id={id} hidden={!open}>{open && g.items.map(renderRow)}</tbody>
           </Fragment>
@@ -197,7 +205,7 @@ export function GroupedCards<T>({ state, renderItem }: { state: CategoryGroups<T
         const id = `${base}-${i}`;
         return (
           <section key={g.key} className="cat-group">
-            <h3 className="cat-title"><Header label={g.label} summary={groupSummary(g, state.noun)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></h3>
+            <h3 className="cat-title"><Header label={g.label} summary={summaryAt(state, i)} open={open} controls={id} onToggle={() => state.toggle(g.key)} /></h3>
             <ul id={id} hidden={!open} style={{ listStyle: 'none', padding: 0 }}>{open && g.items.map(renderItem)}</ul>
           </section>
         );

@@ -141,7 +141,9 @@ export function UsageHistoryPage() {
   const [from, setFrom] = useState(day(asked.from) ?? daysBefore(today, 30));
   const [to, setTo] = useState(day(asked.to) ?? today);
   const askedBranch = typeof asked.branch === 'string' && asked.branch !== '' ? asked.branch : undefined;
-  const unknownBranch = useBranchFromAddress(askedBranch, go, '/staff/retail/usage-history', { from, to });
+  // `?kind=used|damaged` (a count on Stock health) shows only that kind, in the flat list, until Show used and damaged.
+  const [kind, setKind] = useState<'usage' | 'damage' | undefined>(asked.kind === 'used' ? 'usage' : asked.kind === 'damaged' ? 'damage' : undefined);
+  const unknownBranch = useBranchFromAddress(askedBranch, go, '/staff/retail/usage-history', { from, to, ...(kind ? { kind: kind === 'usage' ? 'used' : 'damaged' } : {}) });
   const { me } = useStaff();
   const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
@@ -154,10 +156,10 @@ export function UsageHistoryPage() {
   const ready = (all || branchId !== null) && from <= to;
   // Issue #816: Flat list as it always was, or Grouped by shop, month, category and item with the server's totals.
   const view = useListView<UsageLevel>(listUser(me), 'usage', USAGE_ORDER);
-  const grouped = view.view === 'grouped';
+  const grouped = view.view === 'grouped' && kind === undefined;
   const page = useInfiniteQuery({
-    queryKey: ['retail', 'usage-history', from, to, branch ?? 'all', productId],
-    queryFn: ({ pageParam, signal }) => retail.usageHistory({ from, to, ...(branch ? { branchId: branch } : {}), ...(productId ? { productId } : {}), ...(pageParam ? { cursor: pageParam } : {}), signal }),
+    queryKey: ['retail', 'usage-history', from, to, branch ?? 'all', productId, kind ?? 'both'],
+    queryFn: ({ pageParam, signal }) => retail.usageHistory({ from, to, ...(branch ? { branchId: branch } : {}), ...(productId ? { productId } : {}), ...(kind ? { kind } : {}), ...(pageParam ? { cursor: pageParam } : {}), signal }),
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
     enabled: ready && !grouped,
@@ -186,7 +188,13 @@ export function UsageHistoryPage() {
       </div>
       {unknownBranch !== null && <p className="hint" data-testid="branch-not-yours">That branch cannot be opened here (it is closed, or not one you work at), so this is the branch you are using.</p>}
       {from > to && <p className="hint" role="status">The first day is after the last day. Choose the days again.</p>}
-      <ViewSwitch view={view.view} onChange={view.setView} />
+      {kind !== undefined && (
+        <div role="status" className="alert alert-info" data-testid="one-kind">
+          <p>{kind === 'damage' ? 'Showing damaged stock only.' : 'Showing used stock only.'}</p>
+          <button type="button" className="btn-sm" onClick={() => { setKind(undefined); go('/staff/retail/usage-history', { from, to }, true); }}>Show used and damaged</button>
+        </div>
+      )}
+      {kind === undefined && <ViewSwitch view={view.view} onChange={view.setView} />}
       {grouped && ready && (
         <ListChain<UsageLevel, UsageSummaryGroup>
           kind={usageKind({ productId })} filterKey={{ productId }} chain={[...USAGE_ORDER]} enabled={ready} view={view} rootLabel="Past usage and damage"

@@ -104,7 +104,11 @@ describe('switching SMS on', () => {
   it('shows the cost notice, needs it ticked, and sends the version of the text that was shown', async () => {
     api.changeSettings.mockResolvedValue({ ...saved, enabled: true, version: 4, acknowledged_text_version: 'sms-1', acknowledged_at: '2031-03-10T07:00:00Z' });
     shell(<SmsSettingsScreen />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Switch SMS on' }));
+    const switchOn = await screen.findByRole('button', { name: 'Switch SMS on' });
+    // One brand button while SMS is off (issue #798): Switch SMS on, and Save changes is plain.
+    expect(document.querySelectorAll('.rt-primary')).toHaveLength(1);
+    expect(switchOn.className).toContain('rt-primary');
+    fireEvent.click(switchOn);
     expect(screen.getByTestId('sms-notice').textContent).toContain('Every message costs money.');
     const confirm = within(screen.getByRole('form', { name: 'Switch SMS on' })).getByRole('button', { name: 'Switch SMS on' }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
@@ -415,6 +419,9 @@ describe('the opt-out list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check the list' }));
     expect(await screen.findByText(/Checked, nothing added yet: 3 read, 2 would be added, 1 not a number we can text/)).toBeTruthy();
     expect(screen.getByText('Not read: number 2.')).toBeTruthy();
+    // One brand button once the list is checked (issue #798): its Add, and one number's Add to the list is plain.
+    expect(document.querySelectorAll('.rt-primary')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Add 2 to the list' }).className).toContain('rt-primary');
     expect(api.importOptOuts).toHaveBeenCalledTimes(1);
     expect(api.importOptOuts).toHaveBeenLastCalledWith('0700000801\nnope\n0700000803', 'all', true);
     fireEvent.click(screen.getByRole('button', { name: 'Add 2 to the list' }));

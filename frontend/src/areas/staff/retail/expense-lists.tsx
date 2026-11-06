@@ -93,12 +93,13 @@ export function CategoryCard({ category, busy, change, open = false }: { categor
     body.name !== undefined ? `Category ${category.name} renamed to ${body.name}` : `Category ${category.name} switched ${body.active ? 'on' : 'off'}`;
   const update = (body: { name?: string; active?: boolean }) => change(() => retail.updateExpenseCategory(category.id ?? '', body, version), words(body));
   return (
-    <section className="rt-card cat-group" aria-label={category.name}>
+    <section className="rt-card" aria-label={category.name}>
       <button type="button" className="cat-head" aria-expanded={shown} aria-controls={bodyId} onClick={() => setShown(!shown)}>
         <span className="cat-name">{category.name} {category.active === false && <span className="badge badge-warning">Switched off</span>}</span>
         <span className="cat-meta">{count} {count === 1 ? 'item' : 'items'}</span>
       </button>
-      {shown && <div id={bodyId}>
+      {/* Always in the page, so aria-controls names an element; its contents are drawn only while open. */}
+      <div id={bodyId} hidden={!shown}>{shown && <>
       <RenameField label={`Rename ${category.name}`} value={category.name ?? ''} disabled={busy} onSave={(name) => update({ name })} />
       <BusyButton busy={busy} type="button" className="btn-sm" onClick={() => update({ active: category.active === false })}>
         {category.active === false ? `Switch ${category.name} on` : `Switch ${category.name} off`}
@@ -108,7 +109,7 @@ export function CategoryCard({ category, busy, change, open = false }: { categor
         {(category.items ?? []).map((i) => <ItemRow key={i.id} category={category} item={i} busy={busy} change={change} />)}
       </ul>
       <AddItem category={category} busy={busy} change={change} />
-      </div>}
+      </>}</div>
     </section>
   );
 }

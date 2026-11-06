@@ -555,11 +555,15 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
   // Issue #798: `?category=<id>` chooses that category's chip once, then leaves the address, so a category elsewhere opens its items.
   const { search: asked, go } = useAddress();
   const fromAddress = typeof asked.category === 'string' ? asked.category : '';
+  // The id asked for, kept so a category that is not in the list (removed, or never there) is said, not dropped in silence.
+  const [askedCategory, setAskedCategory] = useState('');
   useEffect(() => {
     if (fromAddress === '') return;
     setCategoryId(fromAddress);
+    setAskedCategory(fromAddress);
     go('/staff/retail/catalogue/products', {}, true);
   }, [fromAddress, setCategoryId, go]);
+  const unknownCategory = askedCategory !== '' && categories.data !== undefined && !categories.data.some((c) => c.id === askedCategory);
   const active = activeFilter === 'all' ? undefined : activeFilter === 'active';
   const page = useInfiniteQuery({
     queryKey: ['retail', 'catalogue', 'products', query, categoryId, activeFilter, stockAt],
@@ -592,6 +596,7 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
         <div data-tour="product-search"><SearchBox id="items-search" label="Search by name, code, barcode or category" search={search} fetching={finding} count={page.data ? items.length : undefined} more={page.hasNextPage} /></div>
         <CategoryChips categories={categories.data ?? []} value={categoryId} onChange={setCategoryId} />
       </FindBar>
+      {unknownCategory && <p className="hint" role="status" data-testid="category-not-found">That category could not be found, so every category is shown.</p>}
       <p className="cluster">
         {/* Not a second primary action (rule 6): Quick add sits with the other ways to add, as a plain button. */}
         {canUse(me, 'quickAdd') && <Link className="btn" to={'/staff/retail/quick-add' as never}>Quick add</Link>}

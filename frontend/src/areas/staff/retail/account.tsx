@@ -179,8 +179,10 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
 }
 
 /** The payments taken on account, newest first. A reversal undoes a payment as a whole; to change who it pays, reverse it and take it again. */
-export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse }: {
+export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse, more = false }: {
   items: readonly AccountPayment[];
+  /** Older payments exist: the last month's count is of the loaded ones only, so it says "so far" (issue #798). */
+  more?: boolean;
   canReverse: (branchId: string | undefined) => boolean;
   busy?: boolean;
   error?: unknown;
@@ -190,7 +192,7 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
   const [reversing, setReversing] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   // One header per month with how many payments it holds (rule 1, issue #798), open while the list is short.
-  const months = useCategoryGroups({ screen: 'account-payments', items: [...items], categoryOf: (r) => monthLabel(r.paid_on), resetKey: '', searching: false, keepOrder: true, noun: ['payment', 'payments'] });
+  const months = useCategoryGroups({ screen: 'account-payments', items: [...items], categoryOf: (r) => monthLabel(r.paid_on) || 'No date', resetKey: '', searching: false, keepOrder: true, noun: ['payment', 'payments'], more });
   if (items.length === 0) return <p className="empty-state">No payment has been taken on account yet.</p>;
   return (
     <>
@@ -381,6 +383,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
         <h2>Payments taken</h2>
         <ReceiptList
           items={payments.data?.pages.flatMap((p) => p.items ?? []) ?? []}
+          more={payments.hasNextPage}
           canReverse={(b) => holdsAt(me, SALE_VOID, b)}
           busy={reverse.isPending}
           error={reverse.error}

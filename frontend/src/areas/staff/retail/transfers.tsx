@@ -69,11 +69,12 @@ export function ShortageWarning({ from }: { from: string }) {
 
 // The API gives a transfer no number of its own yet, so a row shows the date, the route, what moved
 // and, for the user's own moves, "by you" (#112 item 1). The moves sit under one header per month with
-// how many there are (rule 1, issue #798), open when the list is short; `resetKey` is the branch shown.
-export function TransferList({ items, onOpen, resetKey = '' }: { items: Transfer[]; onOpen: (id: string) => void; resetKey?: string }) {
+// how many there are (rule 1, issue #798), open when the list is short; `resetKey` is the branch shown, and
+// `more` (another page exists) makes the last month say "so far", since its count is of the loaded moves only.
+export function TransferList({ items, onOpen, resetKey = '', more = false }: { items: Transfer[]; onOpen: (id: string) => void; resetKey?: string; more?: boolean }) {
   const label = useBranchLabel();
   const { me } = useStaff();
-  const months = useCategoryGroups({ screen: 'transfers', items, categoryOf: (t) => monthLabel(t.transfer_date), resetKey, searching: false, keepOrder: true, noun: ['move', 'moves'] });
+  const months = useCategoryGroups({ screen: 'transfers', items, categoryOf: (t) => monthLabel(t.transfer_date) || 'No date', resetKey, searching: false, keepOrder: true, noun: ['move', 'moves'], more });
   if (items.length === 0) return <p className="empty-state">No stock has been moved yet. Use Move stock to another branch.</p>;
   return (
     <GroupedCards
@@ -153,7 +154,7 @@ export function StockMoves() {
       ) : (
         <>
           {page.isError && <Problem error={page.error} />}
-          {page.data && <TransferList items={items} onOpen={setOpen} resetKey={branchId ?? ''} />}
+          {page.data && <TransferList items={items} onOpen={setOpen} resetKey={branchId ?? ''} more={page.hasNextPage} />}
           {page.hasNextPage && (
             <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>
               {page.isFetchingNextPage ? 'Loading' : 'Show more moves'}

@@ -112,6 +112,8 @@ export function InTransitCard({ transfer, mayReceive, mayTakeBack, opened = null
       <span className="muted" style={{ display: 'block' }}>{showDate(transfer.transfer_date)}, {waiting(transfer.age_days)}</span>
       <span style={{ display: 'block' }}>{names.length} {names.length === 1 ? 'item' : 'items'}: {names.slice(0, 2).join(', ')}{more}</span>
       {profit && transfer.cost_total_minor !== undefined && <p>Value at cost: {money(transfer.cost_total_minor)}</p>}
+      {/* The note is part of the summary, so a reader with no button still sees it. */}
+      {transfer.note && <p>Note: {transfer.note}</p>}
       {form === null ? (
         <div className="cluster">
           {mayReceive && <button type="button" onClick={() => setForm('receive')}>Check what arrived</button>}
@@ -121,7 +123,6 @@ export function InTransitCard({ transfer, mayReceive, mayTakeBack, opened = null
       ) : (
         <>
           <Items transfer={transfer} />
-          {transfer.note && <p>Note: {transfer.note}</p>}
           {form === 'receive' && mayReceive && <ReceiveForm transfer={transfer} />}
           {form === 'takeBack' && mayTakeBack && <TakeBackForm transfer={transfer} />}
           <button type="button" onClick={() => setForm(null)}>Close</button>

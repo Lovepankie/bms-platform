@@ -60,6 +60,8 @@ describe('groupByCategory', () => {
     const rows = [{ m: 'November 2026' }, { m: 'October 2026' }, { m: 'November 2026' }];
     expect(groupByCategory(rows, (r) => r.m, undefined, true).map((g) => g.label)).toEqual(['November 2026', 'October 2026']);
     expect(groupSummary({ items: [1, 2], subtotal: null }, ['move', 'moves'])).toBe('2 moves');
+    // A month that more pages may add to says so (review of #862).
+    expect(groupSummary({ items: [1, 2], subtotal: null }, ['move', 'moves'], true)).toBe('2 moves so far');
   });
 
   it('numbers sort naturally', () => {

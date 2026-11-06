@@ -22,11 +22,14 @@ export function ToStock({ children, item, branch }: { children: ReactNode; /** O
   return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/stock" search={search as never}>{children}</Link> : <>{children}</>;
 }
 
-/** A count of used or damaged stock that opens Past usage and damage for that branch and those days (issue #798); plain text without a stock read. */
-export function ToUsage({ children, branch, from, to }: { children: ReactNode; branch?: string; from?: string; to?: string }) {
+/**
+ * A count of used or damaged stock that opens Past usage and damage for that branch, those days and that `kind` only (issue #798).
+ * That page's gate is the `stock` screen, so the same check decides the link: plain text for a session that may not open it.
+ */
+export function ToUsage({ children, branch, from, to, kind }: { children: ReactNode; branch?: string; from?: string; to?: string; kind: 'used' | 'damaged' }) {
   const staff = useContext(StaffContext);
   const router = useRouter({ warn: false });
-  const search = { ...(branch ? { branch } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) };
+  const search = { ...(branch ? { branch } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), kind };
   return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/usage-history" search={search as never}>{children}</Link> : <>{children}</>;
 }
 

@@ -153,8 +153,8 @@ export function StockHealthView({ data, nameOf, range = {} }: { data: StockHealt
             {shrink.map((x) => (
               <li key={x.branch_id} className="rt-card">
                 <strong>{nameOf(x.branch_id)}</strong>
-                <div className="rt-row"><span>Used</span><span className="num"><ToUsage branch={x.branch_id} {...range}>{plural(x.used_reports, 'report')}</ToUsage></span></div>
-                <div className="rt-row"><span>Damaged</span><span className="num"><ToUsage branch={x.branch_id} {...range}>{plural(x.damaged_reports, 'report')}</ToUsage></span></div>
+                <div className="rt-row"><span>Used</span><span className="num"><ToUsage branch={x.branch_id} {...range} kind="used">{plural(x.used_reports, 'report')}</ToUsage></span></div>
+                <div className="rt-row"><span>Damaged</span><span className="num"><ToUsage branch={x.branch_id} {...range} kind="damaged">{plural(x.damaged_reports, 'report')}</ToUsage></span></div>
                 <div className="rt-row"><span>Found missing</span><span className="num">{plural(x.short_lines, 'line')}</span></div>
                 {x.net_cost_minor !== undefined && <div className="rt-row"><span>At buying price</span><span className="num">{money(x.net_cost_minor)}</span></div>}
               </li>
@@ -175,8 +175,8 @@ export function StockHealthView({ data, nameOf, range = {} }: { data: StockHealt
               {shrink.map((x) => (
                 <tr key={x.branch_id}>
                   <td>{nameOf(x.branch_id)}</td>
-                  <td className="num"><ToUsage branch={x.branch_id} {...range}>{plural(x.used_reports, 'report')}</ToUsage></td>
-                  <td className="num"><ToUsage branch={x.branch_id} {...range}>{plural(x.damaged_reports, 'report')}</ToUsage></td>
+                  <td className="num"><ToUsage branch={x.branch_id} {...range} kind="used">{plural(x.used_reports, 'report')}</ToUsage></td>
+                  <td className="num"><ToUsage branch={x.branch_id} {...range} kind="damaged">{plural(x.damaged_reports, 'report')}</ToUsage></td>
                   <td className="num">{plural(x.short_lines, 'line')}</td>
                   {shrinkCost && <td className="num">{moneyOrNone(x.net_cost_minor)}</td>}
                 </tr>

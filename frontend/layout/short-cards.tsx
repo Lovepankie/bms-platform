@@ -35,6 +35,9 @@ createRoot(document.getElementById('root') as HTMLElement).render(
           <DayCard row={{ branch_id: a?.id, business_date: '2026-10-06', closing_minor: 1234500, cash_expected_minor: 987600 }} shop="Test Branch A with a long shop name" />
         </ul>
         <CategoryCard category={{ id: 'c1', name: 'Test transport and deliveries to the far shops', active: false, version: 1, items: [{ id: 'i1', name: 'Fuel', active: true, version: 1 }] }} busy={false} change={() => undefined} />
+        {/* The page buttons of Stock moves and Payments taken, as those screens draw them (review of #862). */}
+        <button type="button">Show more moves</button>
+        <button type="button">Show older payments</button>
       </main></div></div>
     </StaffContext.Provider>
   </QueryClientProvider>,
