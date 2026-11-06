@@ -1257,6 +1257,44 @@ class ExistingLoansIT extends LoanFixtures {
                 Map.of("csv", csv));
     }
 
+    // JUSTIFICATION-A3: the review of #871 asks a test of the lending import for the stricter shared amount reader.
+    /**
+     * Issue #870 (review of #871): the shared amount reader takes a comma only between thousands, so a principal of 12,50
+     * or 1000,000 is an error row in plain words, never read as 1250 or 1000000, while 1,200,000 is still read. Fabricated
+     * amounts.
+     */
+    @Test
+    void frExl06_aCommaUsedAsADecimalPointInTheCsvIsAnErrorRow() {
+        product("EXL41", Map.of());
+        String member = memberNo(borrower(41));
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        LocalDate d = today.minusMonths(2);
+        String header = "kind,ref,member_no,product_code,principal,disbursement_date,term\n";
+        String csv = header
+                + "loan,REG-041," + member + ",EXL41,\"12,50\"," + d + ",3\n"
+                + "loan,REG-042," + member + ",EXL41,\"1000,000\"," + d + ",3\n"
+                + "loan,REG-043," + member + ",EXL41,\"1,200,000\"," + d + ",3\n";
+        ResponseEntity<JsonNode> checked = importCsv(csv, true);
+        assertThat(checked.getStatusCode()).as("%s", checked.getBody()).isEqualTo(HttpStatus.OK);
+        Map<Integer, String> outcomes = new LinkedHashMap<>();
+        checked.getBody()
+                .get("rows")
+                .forEach(r -> outcomes.put(
+                        r.get("line").asInt(),
+                        r.get("outcome").asString() + ":" + r.get("message").asString("")));
+        assertThat(outcomes.get(2))
+                .startsWith("error:The principal must be")
+                .contains("Use a point for decimals; a comma only goes between thousands");
+        assertThat(outcomes.get(3))
+                .startsWith("error:The principal must be")
+                .contains("Use a point for decimals; a comma only goes between thousands");
+        assertThat(outcomes.get(4)).startsWith("ready");
+        assertThat(importCsv(csv, false).getBody().get("added").asInt()).isZero();
+        assertThat(count("SELECT count(*) FROM lending_loans WHERE tenant_id = ?", t.tenantId()))
+                .as("a file with a comma decimal records nothing")
+                .isZero();
+    }
+
     /**
      * A check reports every row: an unknown member, a date that is not year-month-day, a repayment with no loan row, a
      * repayment after go-live, a repayment before its disbursement. A commit of a file with errors records nothing; the

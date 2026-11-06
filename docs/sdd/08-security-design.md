@@ -767,6 +767,15 @@ Notes:
   is refused as on Items, and adding it anyway still needs `core.settings.manage` and a reason. Paying for the goods from the branch's cash
   or mobile money (`paid_from`, issue #646) also needs `retail.purchase.create` at that branch, Buy stock's own permission, checked before
   anything is made (403 `permission_denied`).
+- Add many items on Import items (issue #870, ADR-101 amendment of 6 Nov 2026, FR-RET-93) adds no permission, so the matrix is
+  unchanged. `POST /retail/products/import` now needs what Quick add needs, `retail.catalogue.manage` alone: the service no longer
+  asks for `core.settings.manage`, so the owner's stock manager imports as they Quick add (the Import items screen opens with
+  `retail.catalogue.manage` and `retail.stock.read`). The setup helper's reading of a list (`POST /retail/products/import/draft`,
+  ADR-102) stays an administrator's. A file with a `qty` column also needs `retail.stocktake.commit` at its `branch_id`, checked
+  once before anything is made, through stock's own branch check (tenant and branch scoped). Such an apply runs under one
+  `Idempotency-Key`, whose stored answer replays only to the person who stored it (ADR-026 decision 5). The `cost_price` column still
+  needs `retail.profit.read`, the answer carries no cost, and the screen asks the buying price only of whoever holds it, as Quick add
+  does; adding a name that exists already as a second item is not offered on the list (Add to its stock instead).
 - Corrections of entry mistakes (issues #351 and #352, ADR-044, FR-RET-44 to FR-RET-46) add no permission, so the matrix is unchanged. Voiding a
   restock (`POST /retail/purchases/{id}/void`) and reading one restock need `retail.purchase.create`; the void needs it at **every** branch the
   restock added stock to (403 `permission_denied` when one is outside the caller's scope), because it takes stock out of all of them. Correcting a

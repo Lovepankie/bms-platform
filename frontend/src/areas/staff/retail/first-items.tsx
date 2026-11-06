@@ -45,6 +45,7 @@ export function FirstItemsCard() {
           {/* Then Set up your shop beside it, then the Items page and the import (owner's order, review round 4 of #632). */}
           <ScreenLink screen="shopSetup" to="/staff/retail/catalogue/set-up">Set up your shop</ScreenLink>
           <ScreenLink screen="products" to="/staff/retail/catalogue/products">Add your first items</ScreenLink>
+          {/* Issue #870: Import items takes a list typed or pasted, with how many there are now, for an owner too. */}
           <ScreenLink screen="importer" to="/staff/retail/catalogue/import">Import a list</ScreenLink>
           <Link className="link-row" to="/staff/help/$articleId" params={{ articleId: 'getting-your-shop-ready' }}>
             How do I get my shop ready to sell?

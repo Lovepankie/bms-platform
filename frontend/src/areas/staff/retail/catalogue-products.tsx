@@ -618,6 +618,8 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
       <p className="cluster">
         {/* Not a second primary action (rule 6): Quick add sits with the other ways to add, as a plain button. */}
         {canUse(me, 'quickAdd') && <Link className="btn" to={'/staff/retail/quick-add' as never}>Quick add</Link>}
+        {/* Issue #870: a list of items at once on Import items, beside Quick add. */}
+        {canUse(me, 'importer') && <Link className="btn" to={'/staff/retail/catalogue/import' as never}>Add many items</Link>}
         <button type="button" onClick={onAdd} data-tour="product-add">Add an item</button>
         {!phone && sizes}
       </p>

@@ -1,6 +1,8 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.kernel.ApiException;
@@ -9,8 +11,10 @@ import com.rincoltech.bms.kernel.CsvTable;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.catalogue.CatalogueNames;
+import com.rincoltech.bms.retail.catalogue.ImportedStock;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.StandardUnits;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportResult;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportRow;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
@@ -41,8 +45,16 @@ import org.springframework.transaction.annotation.Transactional;
  * on demand, matched by name ignoring case. A row with a blank code, or a file without the code column,
  * gets the next code of its category on apply, such as BLB-0001 (issue #493, ADR-081); rows with a code keep it, unless
  * "Let the app make the codes" is ticked ({@code make_codes}, owner decision D45, issue #562): then every row's code is made
- * and the file's codes are not read. Allowed for an administrator only, and the cost column
- * only for a caller holding {@code retail.profit.read}. Cost is never written to the audit log.
+ * and the file's codes are not read. Allowed to whoever may manage the catalogue, as Quick add (issue #870; an administrator
+ * only before), and the cost column only for a caller holding {@code retail.profit.read}. Cost is never written to the audit log.
+ *
+ * <p>Issue #870 (ADR-101 amendment of 6 Nov 2026), Add many items: an optional {@code qty} column is how many of the item
+ * there are now at {@code branch_id}, added as opening stock through stock's {@link ImportedStock} port (Quick add's own
+ * opening stock), checked for {@code retail.stocktake.commit} there before anything is made; {@code stock_only} (yes) adds the
+ * row's qty to the item already in the list under that name and unit instead of a new item. A list with quantities is
+ * applied under an {@code Idempotency-Key}, so its stock is never added twice, and may come from the phone's outbox with its
+ * offline block. A quantity or price with a comma used as a decimal point is refused (the rule of #867); selling below
+ * buying is a warning on the row, no longer a refusal.
  */
 @Service
 class ProductImportService {
@@ -50,8 +62,14 @@ class ProductImportService {
     static final int MAX_CHARS = 1_000_000;
     static final int MAX_ROWS = 2_000;
     static final String ADMIN = "core.settings.manage";
+    static final String PATH = "/api/v1/retail/products/import";
 
     private static final String PRODUCT = "retail.product";
+    /** Commas only between groups of three digits: 12,500 (the rule of #867). */
+    private static final java.util.regex.Pattern GROUPED =
+            java.util.regex.Pattern.compile("^[1-9]\\d{0,2}(,\\d{3})+(\\.\\d+)?$");
+
+    private static final java.util.regex.Pattern QTY = java.util.regex.Pattern.compile("^\\d{1,11}(\\.\\d{1,3})?$");
 
     private final CatalogueRepository repo;
     private final CurrentTenant tenant;
@@ -59,6 +77,8 @@ class ProductImportService {
     private final ModuleSettings settings;
     private final BarcodeRepository barcodes;
     private final CatalogueService catalogue;
+    private final ImportedStock stock;
+    private final Idempotency idempotency;
 
     ProductImportService(
             CatalogueRepository repo,
@@ -66,25 +86,44 @@ class ProductImportService {
             AuditLog audit,
             ModuleSettings settings,
             BarcodeRepository barcodes,
-            CatalogueService catalogue) {
+            CatalogueService catalogue,
+            ImportedStock stock,
+            Idempotency idempotency) {
         this.catalogue = catalogue;
         this.repo = repo;
         this.tenant = tenant;
         this.audit = audit;
         this.settings = settings;
         this.barcodes = barcodes;
+        this.stock = stock;
+        this.idempotency = idempotency;
     }
 
+    /** What the key of an apply covers: the list without its offline block, and the codes choice. */
+    record KeyedImport(ImportRequest request, boolean makeCodes) {}
+
+    /**
+     * An apply with an {@code Idempotency-Key} runs once per key (issue #870): the same key again answers the stored result
+     * and adds nothing, to the person who stored it only (ADR-026 decision 5). A check, or an apply without a key, runs as
+     * before.
+     */
     @Transactional
-    ImportResult run(String text, boolean dryRun, boolean makeCodes) {
-        Principal principal = CurrentPrincipal.require();
-        if (!principal.hasPermission(ADMIN)) {
-            throw new ApiException(
-                    HttpStatus.FORBIDDEN,
-                    "permission_denied",
-                    "Permission denied",
-                    "Only an administrator can import items from a file.");
+    Outcome<ImportResult> run(String idempotencyKey, ImportRequest r, boolean dryRun, boolean makeCodes) {
+        if (!dryRun && idempotencyKey != null) {
+            return idempotency.once(
+                    idempotencyKey,
+                    "POST",
+                    PATH,
+                    new KeyedImport(r.forKey(), makeCodes),
+                    ImportResult.class,
+                    () -> run(r, false, makeCodes, true));
         }
+        return new Outcome<>(run(r, dryRun, makeCodes, false), false);
+    }
+
+    private ImportResult run(ImportRequest request, boolean dryRun, boolean makeCodes, boolean keyed) {
+        String text = request.csv();
+        Principal principal = CurrentPrincipal.require();
         List<List<String>> table = CsvTable.parse(text);
         if (table.isEmpty()) {
             throw problem("csv", "The file is empty.");
@@ -118,6 +157,27 @@ class ProductImportService {
         if (dataRows.size() > MAX_ROWS) {
             throw problem("csv", "The file has more than " + MAX_ROWS + " rows. Split it into smaller files.");
         }
+        // JUSTIFICATION-A3: issue #870 asks each row to carry how many there are now; the shop is checked here, once.
+        // Issue #870: how many there are now. The shop is checked once, before anything is made, when any row has a
+        // quantity; an apply that adds stock needs its key, so a resend never adds the stock twice.
+        boolean withQty = columns.containsKey("qty");
+        boolean withStockOnly = columns.containsKey("stock_only");
+        boolean anyQty = withQty
+                && dataRows.stream().anyMatch(c -> !cell(c, columns, "qty").isBlank());
+        if (anyQty && !dryRun && !keyed) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "idempotency_key_missing",
+                    "Idempotency-Key required",
+                    "A list with quantities is added under an Idempotency-Key, so its stock is never added twice.");
+        }
+        java.time.Instant occurredAt =
+                request.offline() == null ? null : request.offline().occurredAt();
+        java.time.Instant onlineAsOf =
+                request.offline() == null ? null : request.offline().onlineAsOf();
+        ImportedStock.Opening at = anyQty ? stock.check(request.branchId(), occurredAt, onlineAsOf) : null;
+        List<StockPending> stockPending = new ArrayList<>();
+        int stockRows = 0;
 
         Set<String> existing = repo.productCodes();
         // Issue #345: the optional barcode columns, several codes per cell separated by spaces or |.
@@ -163,9 +223,15 @@ class ProductImportService {
                     withPack ? cell(cells, columns, "pack_factor").strip() : "";
             boolean hasPack = !packUnit.isEmpty() || !packFactorText.isEmpty();
             java.math.BigDecimal packFactor = hasPack ? factor(packFactorText) : null;
-            Long sell = CsvTable.amountMinor(cell(cells, columns, "sell_price"), exponent);
-            Long cost = withCost ? CsvTable.amountMinor(cell(cells, columns, "cost_price"), exponent) : Long.valueOf(0);
-            boolean costBlank = withCost && cell(cells, columns, "cost_price").isBlank();
+            String sellText = cell(cells, columns, "sell_price");
+            String costText = withCost ? cell(cells, columns, "cost_price") : "";
+            Long sell = CsvTable.amountMinor(sellText, exponent);
+            Long cost = withCost ? CsvTable.amountMinor(costText, exponent) : Long.valueOf(0);
+            boolean costBlank = withCost && costText.isBlank();
+            String qtyText = withQty ? cell(cells, columns, "qty").strip() : "";
+            java.math.BigDecimal qty = qtyText.isEmpty() ? null : quantity(qtyText);
+            boolean stockOnly = withStockOnly
+                    && YES.contains(cell(cells, columns, "stock_only").strip().toLowerCase(Locale.ROOT));
             if (code == null && !auto) {
                 problem = "The code holds a special character.";
             } else if (code != null && code.length() > 40) {
@@ -190,21 +256,57 @@ class ProductImportService {
                     && packFactor.compareTo(java.math.BigDecimal.valueOf(StandardUnits.fixedCount(packUnit))) != 0) {
                 // Review of #722 (ADR-110): a dozen holds 12 on the import too, an error row like any other.
                 problem = StandardUnits.fixedCountRefusal(StandardUnits.fixedCount(packUnit));
-            } else if (sell == null) {
-                problem = "The selling price must be " + example(exponent, 12000) + ".";
-            } else if (cost == null && !costBlank) {
-                problem = "The buying price must be " + example(exponent, 9000) + ".";
-            } else if (sell > RetailCatalogue.MAX_AMOUNT_MINOR
+            } else if (qtyText.length() > 0 && qty == null) {
+                problem = "How many must be a number, for example 12 or 2.5, with at most three decimals." + COMMA;
+            } else if (stockOnly && (qty == null || qty.signum() <= 0)) {
+                problem = "Type how many to add to its stock, more than 0.";
+            } else if (sell == null && !stockOnly) {
+                problem = "The selling price must be " + example(exponent, 12000) + "." + commaNote(sellText);
+            } else if (cost == null && !costBlank && !stockOnly) {
+                problem = "The buying price must be " + example(exponent, 9000) + "." + commaNote(costText);
+            } else if ((sell != null && sell > RetailCatalogue.MAX_AMOUNT_MINOR)
                     || (cost != null && cost > RetailCatalogue.MAX_AMOUNT_MINOR)) {
                 problem = "A price is too large.";
-            } else if (cost != null && cost > 0 && sell <= cost) {
-                problem = "The selling price must be above the buying price.";
             }
             if (problem != null) {
                 errors++;
                 report.add(new ImportRow(line, shown, description.strip(), "error", problem));
                 continue;
             }
+            // Issue #870: Add to its stock, the item of this name and unit already in the list takes the quantity.
+            if (stockOnly) {
+                String unitKeyOf = CatalogueNames.unitKey(unit);
+                CatalogueRepository.NameMatch same = repo.sameName(description.strip(), null).stream()
+                        .filter(m -> m.familyId() == null
+                                && CatalogueNames.unitKey(m.unit()).equals(unitKeyOf))
+                        .findFirst()
+                        .orElse(null);
+                String refusal = same == null
+                        ? "There is no item called " + description.strip() + " in " + unit + " to add stock to."
+                        : !same.active()
+                                ? same.description() + " is switched off. Switch it on first, on Items."
+                                : null;
+                if (refusal != null) {
+                    errors++;
+                    report.add(new ImportRow(line, shown, description.strip(), "error", refusal));
+                    continue;
+                }
+                stockRows++;
+                stockPending.add(new StockPending(same.id(), qty));
+                report.add(new ImportRow(
+                        line,
+                        same.code(),
+                        same.description(),
+                        "stock",
+                        (dryRun ? "Would add " : "Added ") + plain(qty) + " to the stock of " + same.description()
+                                + " (" + same.code() + ").",
+                        plain(qty),
+                        same.code()));
+                continue;
+            }
+            // Issue #870: selling below buying is the owner's to check, a warning on the row and never a refusal.
+            String below =
+                    cost != null && cost > 0 && sell < cost ? " The selling price is below the buying price." : "";
             String key = auto ? null : code.toLowerCase(Locale.ROOT);
             if (auto) {
                 code = "";
@@ -242,7 +344,12 @@ class ProductImportService {
                         description.strip(),
                         "skipped",
                         "An item with this name exists already (code " + sameName
-                                + "). Open it in Items, or give this one another name or unit."));
+                                + "). Open it in Items, or give this one another name or unit."
+                                + (qty != null && qty.signum() > 0
+                                        ? " To add the " + plain(qty) + " to its stock, choose Add to its stock."
+                                        : ""),
+                        qty == null ? null : plain(qty),
+                        sameName));
                 continue;
             }
             Integer sameLine = namesInFile.putIfAbsent(nameKey, line);
@@ -318,7 +425,11 @@ class ProductImportService {
                                     ? " The code " + fileCode.strip() + " in the file is not used."
                                     : "")
                             + packNote
-                            + movedNote(rowCodes, rowPackCodes, rowFormat, heldCodes)));
+                            + movedNote(rowCodes, rowPackCodes, rowFormat, heldCodes)
+                            + (qty != null && qty.signum() > 0 ? " With " + plain(qty) + " in stock." : "")
+                            + below,
+                    qty == null ? null : plain(qty),
+                    null));
             pending.add(new Pending(
                     report.size() - 1,
                     auto ? null : code,
@@ -331,7 +442,8 @@ class ProductImportService {
                     packFactor,
                     rowCodes,
                     rowPackCodes,
-                    rowFormat));
+                    rowFormat,
+                    qty));
         }
         if (!dryRun) {
             if (errors > 0) {
@@ -340,8 +452,11 @@ class ProductImportService {
                         errors + (errors == 1 ? " row has" : " rows have")
                                 + " a problem. Nothing was added. Run the check to see which rows, fix them and try again.");
             }
+            Map<Integer, UUID> madeIds = new HashMap<>();
             try {
                 Map<Integer, String> made = apply(
+                        stockRows,
+                        madeIds,
                         pending,
                         categories,
                         units,
@@ -353,8 +468,30 @@ class ProductImportService {
                         principal.userId());
                 made.forEach((row, code) -> {
                     ImportRow r = report.get(row);
-                    report.set(row, new ImportRow(r.line(), code, r.description(), r.outcome(), r.message()));
+                    report.set(
+                            row,
+                            new ImportRow(
+                                    r.line(),
+                                    code,
+                                    r.description(),
+                                    r.outcome(),
+                                    r.message(),
+                                    r.qty(),
+                                    r.existingCode()));
                 });
+                // Issue #870: the quantities, once every item is made, each through Quick add's opening stock.
+                if (at != null) {
+                    UUID importId = UUID.randomUUID();
+                    for (Pending p : pending) {
+                        if (p.qty() != null && p.qty().signum() > 0) {
+                            stock.add(at, madeIds.get(p.row()), p.qty(), importId);
+                        }
+                    }
+                    for (StockPending s : stockPending) {
+                        stock.add(at, s.productId(), s.qty(), importId);
+                    }
+                    stock.recordedOffline(at, occurredAt, onlineAsOf, importId);
+                }
             } catch (DuplicateKeyException e) {
                 throw new ApiException(
                         HttpStatus.CONFLICT,
@@ -365,17 +502,21 @@ class ProductImportService {
         }
         return new ImportResult(
                 dryRun,
-                added + skipped + errors,
+                added + skipped + errors + stockRows,
                 added,
                 skipped,
                 errors,
                 List.copyOf(dryRun || errors == 0 ? newCategories.values() : List.<String>of()),
                 List.copyOf(dryRun || errors == 0 ? newUnits.values() : List.<String>of()),
-                report);
+                report,
+                stockRows,
+                at == null ? null : at.branchId());
     }
 
     /** Adds the rows; returns the code made for each row that had none, by its place in the report. */
     private Map<Integer, String> apply(
+            int stockOnlyRows,
+            Map<Integer, UUID> madeIds,
             List<Pending> pending,
             Map<String, UUID> categories,
             Map<String, UUID> units,
@@ -472,6 +613,7 @@ class ProductImportService {
                     null,
                     null);
             repo.insert(product, by, null);
+            madeIds.put(p.row(), product.id());
             repo.insertHistory(
                     new PriceChange(
                             UUID.randomUUID(),
@@ -535,6 +677,13 @@ class ProductImportService {
         summary.put("make_codes", makeCodes);
         summary.put("categories_created", newCategories.size());
         summary.put("units_created", newUnits.size());
+        // Issue #870: the new items that came with stock, and the rows that added stock to an item already in the list.
+        summary.put(
+                "with_stock",
+                pending.stream()
+                        .filter(p -> p.qty() != null && p.qty().signum() > 0)
+                        .count());
+        summary.put("stock_added", stockOnlyRows);
         audit.record(AuditLog.Entry.created("retail.product.imported", PRODUCT, null, null, summary));
         return made;
     }
@@ -594,7 +743,41 @@ class ProductImportService {
             java.math.BigDecimal packFactor,
             List<String> barcodes,
             List<String> packBarcodes,
-            String barcodeFormat) {}
+            String barcodeFormat,
+            java.math.BigDecimal qty) {}
+
+    // JUSTIFICATION-A3: issue #870 adds the qty and stock_only columns, read beside the other cells.
+    /** Issue #870: a row that adds its quantity to the item already in the list. */
+    private record StockPending(UUID productId, java.math.BigDecimal qty) {}
+
+    /** Issue #870: the words of stock_only that mean yes. */
+    private static final Set<String> YES = Set.of("yes", "y", "true", "1");
+
+    private static final String COMMA =
+            " Use a point for decimals; a comma only goes between thousands, for example 12,500.";
+
+    /** How many, with commas only between thousands and at most three decimals; null when it is not one (never rounded). */
+    private static java.math.BigDecimal quantity(String text) {
+        String t = text.strip();
+        if (t.indexOf(',') >= 0) {
+            if (!GROUPED.matcher(t).matches()) {
+                return null;
+            }
+            t = t.replace(",", "");
+        }
+        return QTY.matcher(t).matches() ? new java.math.BigDecimal(t) : null;
+    }
+
+    /** A quantity as people write it: 12, 2.5. */
+    private static String plain(java.math.BigDecimal qty) {
+        return qty.stripTrailingZeros().toPlainString();
+    }
+
+    /** The reason a price with a comma was refused, when the comma was used as a decimal point. */
+    private static String commaNote(String text) {
+        String t = text.strip();
+        return t.indexOf(',') >= 0 && !GROUPED.matcher(t).matches() ? COMMA : "";
+    }
 
     /** The codes of a barcode cell: separated by spaces or a vertical bar, since the file's separator may be a comma. */
     private static List<String> codes(String text) {
@@ -701,6 +884,9 @@ class ProductImportService {
                 case "barcode", "barcodes", "ean", "upc" -> "barcode";
                 case "pack_barcode", "pack_barcodes" -> "pack_barcode";
                 case "barcode_format", "barcode_type" -> "barcode_format";
+                // Issue #870: how many there are now, and adding them to the item already in the list.
+                case "qty", "quantity", "how_many", "how_many_now", "stock" -> "qty";
+                case "stock_only", "add_to_stock" -> "stock_only";
                 default -> null;
             };
             if (canonical != null) {

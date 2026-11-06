@@ -6238,7 +6238,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import items from CSV for a new client: dry run first, then apply; administrators only (#146) */
+        /** Import items from CSV: dry run first, then apply (#146); with qty, how many there are now at branch_id, added as opening stock (retail.stocktake.commit there) under an Idempotency-Key (issue #870) */
         post: operations["importRetailProducts"];
         delete?: never;
         options?: never;
@@ -17244,13 +17244,37 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
+        /** @description A list kept on the phone offline: its stock is dated the day it was made, judged as every entry kept offline is (RetailOfflineEntry) */
+        RetailProductImportOffline: {
+            /**
+             * Format: date-time
+             * @description When the list was made on the phone
+             */
+            occurred_at: string;
+            /**
+             * Format: date-time
+             * @description The server's time when the phone was last online
+             */
+            online_as_of: string;
+        };
         RetailProductImportRequest: {
-            /** @description The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated. */
+            /**
+             * Format: uuid
+             * @description Issue #870: where the qty of every row goes; defaults to the caller's one branch
+             */
+            branch_id?: string;
+            /** @description The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated. Issue #870: optionally qty, how many there are now at branch_id, and stock_only (yes) to add qty to the item of that name and unit instead of a new item */
             csv: string;
+            offline?: components["schemas"]["RetailProductImportOffline"];
         };
         RetailProductImportResult: {
             /** Format: int32 */
             added?: number;
+            /**
+             * Format: uuid
+             * @description Issue #870: where the quantities go; null when no row has one
+             */
+            branch_id?: string;
             /** @description Categories that are new (would be created on a dry run, were created on an apply) */
             categories_created?: string[];
             dry_run?: boolean;
@@ -17261,17 +17285,26 @@ export interface components {
             rows_read?: number;
             /** Format: int32 */
             skipped?: number;
+            /**
+             * Format: int32
+             * @description Issue #870: rows whose qty goes to an item already in the list (outcome stock)
+             */
+            stock_added?: number;
             units_created?: string[];
         };
         RetailProductImportRow: {
             /** @description Empty on a dry run for a row whose code the category makes; the made code once applied (issue #493) */
             code?: string;
             description?: string;
+            /** @description Issue #870: the code of the item already in the list that a skipped or stock row names */
+            existing_code?: string;
             /** Format: int32 */
             line?: number;
             message?: string;
-            /** @description added, skipped (the code exists already or repeats in the file) or error */
+            /** @description added, stock (issue #870: qty added to the item already in the list), skipped (the code or the name exists already or repeats in the file) or error */
             outcome?: string;
+            /** @description Issue #870: the quantity the row adds at the branch; null when it adds none */
+            qty?: string;
         };
         RetailProductPage: {
             items?: components["schemas"]["RetailProduct"][];
@@ -32866,7 +32899,9 @@ export interface operations {
                 /** @description Let the app make the codes (owner decision D45, issue #562): every row gets its category's next code and the file's code column is not read. Off by default: a row's code is kept and a blank one is made */
                 make_codes?: boolean;
             };
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };

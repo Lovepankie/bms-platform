@@ -49,7 +49,7 @@ const ids = (list: { id: string }[]) => list.map((a) => a.id);
 // ready (issue #615), adding a photo (issue #617), an empty list (issue #619), selling packs at their own prices (issue #624),
 // setting up your shop (issue #625), Quick add (issue #632), selling or buying in cartons (issue #630) and the lost phone (issue #647)
 // are text first in the same way.
-const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo', 'empty-list', 'sell-packs-at-their-own-price', 'set-up-your-shop', 'add-a-unit', 'add-an-item-quickly', 'sell-or-buy-in-cartons', 'lost-phone', 'where-a-sale-is-made'];
+const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo', 'empty-list', 'sell-packs-at-their-own-price', 'set-up-your-shop', 'add-a-unit', 'add-an-item-quickly', 'sell-or-buy-in-cartons', 'lost-phone', 'where-a-sale-is-made', 'add-many-items'];
 
 describe('the help corpus', () => {
   // The ceiling was 30; since 27 Oct 2026 every question a tester asks that the app did not answer gets an article, so it is 40.

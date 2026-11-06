@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 public final class CsvTable {
 
     private static final Pattern AMOUNT = Pattern.compile("(\\d{1,15})(?:\\.(\\d+))?");
+    private static final Pattern GROUPED = Pattern.compile("[1-9]\\d{0,2}(,\\d{3})+(\\.\\d+)?");
 
     private CsvTable() {}
 
@@ -65,13 +66,28 @@ public final class CsvTable {
         return rows;
     }
 
+    /** The words an import adds when it refuses an amount for its comma (issue #870). */
+    public static final String COMMA_WORDS =
+            " Use a point for decimals; a comma only goes between thousands, for example 12,500.";
+
+    /** True when a comma in the amount is not between groups of three digits, as in 1,5 or 12,50: refused, never read. */
+    public static boolean commaDecimal(String text) {
+        String strip = text.strip();
+        return strip.indexOf(',') >= 0 && !GROUPED.matcher(strip).matches();
+    }
+
     /**
      * A non-negative amount in major units, with or without thousands commas, as integer minor units for a currency with
      * {@code exponent} decimals (the same rule as the screens' parseMinor); a fraction is accepted only up to the
-     * exponent. Null when it is anything else.
+     * exponent. Null when it is anything else. A comma is taken only between groups of three digits: 12,500 is read, and 1,5
+     * or 12,50, a comma used as a decimal point, is refused, never read as 15 or 1250 (issue #870, the rule of #867).
      */
     public static Long amountMinor(String text, int exponent) {
-        String clean = text.strip().replace(",", "");
+        String strip = text.strip();
+        if (commaDecimal(strip)) {
+            return null;
+        }
+        String clean = strip.replace(",", "");
         Matcher m = AMOUNT.matcher(clean);
         if (!m.matches()) {
             return null;

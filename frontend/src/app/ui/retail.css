@@ -1817,3 +1817,76 @@ td.num.qty-packs {
   align-items: center;
   gap: var(--tap-gap);
 }
+
+/* Add many items (issue #870): each row a small card on a phone, its cells two to a line; from 720px one line of cells. */
+.am-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.am-row {
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.am-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tap-gap);
+}
+
+.am-row-no {
+  font-weight: 600;
+}
+
+/* Two cells to a line while each has 9rem; with large text one, so the words under a field wrap inside it. */
+.am-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+.am-cells > * {
+  min-width: 0;
+}
+
+.am-cells > .am-wide,
+.am-cells > .am-full {
+  grid-column: 1 / -1;
+}
+
+.am-another {
+  width: 100%;
+}
+
+.am-count {
+  margin: 0;
+}
+
+.am-paste > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.am-paste textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 720px) {
+  .am-cells {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1.2fr) repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .am-cells > .am-wide {
+    grid-column: auto;
+  }
+}

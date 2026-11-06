@@ -499,7 +499,9 @@ class ExistingLoanImport {
         p.product = product.get();
         Long principalMinor = CsvTable.amountMinor(cell(cells, columns, "principal"), exponent);
         if (principalMinor == null || principalMinor <= 0 || principalMinor > LoanApi.MAX_MONEY_MINOR) {
-            return "The principal must be " + example(exponent) + ".";
+            // Issue #870: a comma used as a decimal point is refused in plain words, never read as a bigger amount.
+            return "The principal must be " + example(exponent) + "."
+                    + (CsvTable.commaDecimal(cell(cells, columns, "principal")) ? CsvTable.COMMA_WORDS : "");
         }
         p.principal = principalMinor;
         p.disbursed = date(cell(cells, columns, "disbursement_date"));
@@ -521,7 +523,8 @@ class ExistingLoanImport {
         if (!total.isEmpty()) {
             p.agreedTotal = CsvTable.amountMinor(total, exponent);
             if (p.agreedTotal == null || p.agreedTotal <= 0 || p.agreedTotal > LoanApi.MAX_MONEY_MINOR) {
-                return "The agreed total must be " + example(exponent) + ", or empty to use the product's rate.";
+                return "The agreed total must be " + example(exponent) + ", or empty to use the product's rate."
+                        + (CsvTable.commaDecimal(total) ? CsvTable.COMMA_WORDS : "");
             }
         }
         String purpose = cell(cells, columns, "purpose").strip().toLowerCase(Locale.ROOT);
@@ -605,7 +608,8 @@ class ExistingLoanImport {
         } else if (date == null) {
             problem = "The repayment date must be year-month-day, for example 2026-04-30.";
         } else if (amount == null || amount <= 0 || amount > LoanApi.MAX_MONEY_MINOR) {
-            problem = "The amount must be " + example(exponent) + ".";
+            problem = "The amount must be " + example(exponent) + "."
+                    + (CsvTable.commaDecimal(cell(cells, columns, "amount")) ? CsvTable.COMMA_WORDS : "");
         } else if (!Set.of("cash", "bank", "mtn_momo", "airtel_money").contains(method)) {
             problem = "The method is cash, bank, mtn_momo or airtel_money.";
         } else if (note.length() > 100) {

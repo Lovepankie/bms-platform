@@ -19,8 +19,8 @@ export interface OutboxLine {
   totalMinor: number;
 }
 
-/** The other daily forms kept on the phone while offline (issue #812, ADR-067 decision 13). */
-export type EntryKind = 'expense' | 'savings' | 'banking' | 'withdrawal' | 'purchase' | 'transfer' | 'usage';
+/** The other daily forms kept on the phone while offline (issue #812, ADR-067 decision 13); a list of items (issue #870). */
+export type EntryKind = 'expense' | 'savings' | 'banking' | 'withdrawal' | 'purchase' | 'transfer' | 'usage' | 'items';
 
 /** An entry that is not a sale: the route it goes to, the body as the form built it, and how to show and fix it. */
 export interface OutboxEntry {
@@ -190,7 +190,7 @@ export type SendOutcome =
   | { kind: 'retry'; code?: string; message: string; answered?: boolean }
   | { kind: 'auth' }
   | { kind: 'held' }
-  | { kind: 'refused'; code?: string; message: string };
+  | { kind: 'refused'; code?: string; message: string; fix?: OutboxEntry['fix'] };
 
 /**
  * A status and body from POST /retail/sales. 2xx sent; 401 the session; 408, 409, 425, 429 and 5xx are tried again later
@@ -277,7 +277,11 @@ export function applyOutcome(item: OutboxItem, outcome: SendOutcome, now: number
       return { ...item, state: 'held', error: { code: OTHER_USER_CODE, message: heldWords() } };
     case 'refused':
       if (outcome.code === DISCARDED_CODE) return markDiscarded(item, now, outcome.message);
-      return { ...item, state: 'failed', attempts: item.attempts + 1, refusals: (item.refusals ?? 0) + 1, error: { code: outcome.code, message: outcome.message }, decision: undefined, failureId: undefined };
+      return {
+        ...item, state: 'failed', attempts: item.attempts + 1, refusals: (item.refusals ?? 0) + 1, error: { code: outcome.code, message: outcome.message }, decision: undefined, failureId: undefined,
+        // Issue #870: what Fix opens may be narrowed by the answer, as a list's rows the server skipped.
+        ...(outcome.fix && item.entry ? { entry: { ...item.entry, fix: outcome.fix } } : {}),
+      };
   }
 }
 

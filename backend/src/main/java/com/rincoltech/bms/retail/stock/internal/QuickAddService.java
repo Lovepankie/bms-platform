@@ -50,6 +50,8 @@ class QuickAddService {
     static final String BUY = "retail.purchase.create";
     static final String SOURCE = "retail.quick_add";
     static final String NOTE = "Quick add";
+    /** Issue #870: the words on the movement and the journal entry of stock added by Import items. */
+    static final String IMPORT_NOTE = "Import items";
 
     private final RetailCatalogue catalogue;
     private final StockLedger ledger;
@@ -171,7 +173,13 @@ class QuickAddService {
             BigDecimal before = ledger.lock(branch, product.id());
             total = Quantities.format(before.add(r.qty()));
             if (r.qty().signum() > 0) {
-                movementId = addStock(id, branch, product, r.qty());
+                movementId = addStock(
+                        id,
+                        branch,
+                        product,
+                        r.qty(),
+                        clock.today(tenant.profile().timezone()),
+                        NOTE);
             }
         }
         return new QuickAdd(
@@ -193,23 +201,42 @@ class QuickAddService {
                 bought == null ? null : bought.totalMinor());
     }
 
+    /**
+     * Import items (issue #870, ADR-101 amendment of 6 Nov 2026): how many of an item there are now, added at the branch as Quick
+     * add adds it, one opening movement under the balance row's lock, dated {@code day} (today, or the day a list kept on the
+     * phone was made). The branch was checked by {@link ImportedStockAdapter#check} before any item was made.
+     */
+    void addOpening(UUID branch, UUID productId, BigDecimal qty, LocalDate day, UUID importId) {
+        ProductSnapshot product = catalogue
+                .find(productId)
+                .orElseThrow(() -> ApiException.validation(
+                        List.of(new FieldProblem("product_id", "unknown_product", "No such item."))));
+        ledger.lock(branch, product.id());
+        // Review of #871: every movement and entry of one import carries its id, so its stock is traced to it.
+        addStock(importId, branch, product, qty, day, IMPORT_NOTE, SOURCE + ":" + importId + ":" + UUID.randomUUID());
+    }
+
     /** One opening movement at the branch's average and its entry against opening balance equity, as the import's opening stock. */
-    private UUID addStock(UUID id, UUID branch, ProductSnapshot product, BigDecimal qty) {
+    private UUID addStock(UUID id, UUID branch, ProductSnapshot product, BigDecimal qty, LocalDate today, String from) {
+        return addStock(id, branch, product, qty, today, from, SOURCE + ":" + id);
+    }
+
+    private UUID addStock(
+            UUID id, UUID branch, ProductSnapshot product, BigDecimal qty, LocalDate today, String from, String key) {
         long cost = ledger.averageCost(branch, product.id());
-        LocalDate today = clock.today(tenant.profile().timezone());
         UUID movementId = ledger.record(
                         today,
-                        List.of(new Movement(branch, product.id(), "opening", qty, cost, SOURCE, id, null, null, NOTE)))
+                        List.of(new Movement(branch, product.id(), "opening", qty, cost, SOURCE, id, null, null, from)))
                 .getFirst();
         long value = Quantities.value(qty, cost);
         books.post(new Posting(
                 branch,
                 today,
-                "Quick add " + id.toString().substring(0, 8),
-                "Opening stock from Quick add",
+                from + " " + id.toString().substring(0, 8),
+                "Opening stock from " + from,
                 SOURCE,
                 id,
-                SOURCE + ":" + id,
+                key,
                 List.of(Leg.debit("inventory", value), Leg.credit("opening_balance_equity", value))));
         audited(id, branch, product, qty, cost, null, null, null);
         return movementId;

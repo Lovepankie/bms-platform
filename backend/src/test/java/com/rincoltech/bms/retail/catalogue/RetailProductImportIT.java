@@ -122,13 +122,14 @@ class RetailProductImportIT extends IntegrationTest {
     }
 
     @Test
-    void onlyAnAdministratorWithTheCataloguePermissionMayImport() {
+    void whoeverMayManageTheCatalogueMayImportAsOnQuickAdd() {
+        // Issue #870: the owner's stock manager imports as they Quick add; core.settings.manage is no longer needed.
         String csv = HEADER + "\nIMP-1,Test cable,Cables,roll,100\n";
-        assertThat(run(csv, true, ADMIN).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(run(csv, true, SALES + ",core.settings.manage").getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(run(csv, false, ADMIN).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(products()).isZero();
+        assertThat(run(csv, false, ADMIN).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(products()).isEqualTo(1);
     }
 
     @Test
@@ -159,7 +160,9 @@ class RetailProductImportIT extends IntegrationTest {
                         .replace("1000,700", "600,700"),
                 true,
                 ADMINISTRATOR);
-        assertThat(below.getBody().get("errors").asInt()).isEqualTo(1);
+        // Issue #870: selling below buying is a warning on the row, never a refusal.
+        assertThat(below.getBody().get("errors").asInt()).isZero();
+        assertThat(below.getBody().toString()).contains("The selling price is below the buying price.");
     }
 
     @Test
@@ -178,7 +181,8 @@ class RetailProductImportIT extends IntegrationTest {
                 "code,description,category,unit,buying price,selling price\nIMP-7,Test lamp two,Bulbs,pc,900,800\n",
                 true,
                 ADMINISTRATOR);
-        assertThat(bad.getBody().toString()).contains("The selling price must be above the buying price.");
+        assertThat(bad.getBody().get("errors").asInt()).isZero();
+        assertThat(bad.getBody().toString()).contains("The selling price is below the buying price.");
     }
 
     @Test

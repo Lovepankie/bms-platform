@@ -458,7 +458,8 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
 
   // Item 6: the main action is brand filled and never looks off; on a phone it sticks full width at the bottom.
   it('keeps the main action of the forms of the audit in the sticky ActionBar, and never greys one whose fields are not ready', () => {
-    for (const screen of ['banking', 'expenses', 'savings', 'withdrawals', 'usage', 'transfer', 'catalogue-import', 'labels', 'sale', 'restock', 'shop-setup']) {
+    // Issue #870: Import items' main action is Save the list, whose sticky bar is in add-many.tsx; the file part's buttons are plain.
+    for (const screen of ['banking', 'expenses', 'savings', 'withdrawals', 'usage', 'transfer', 'add-many', 'labels', 'sale', 'restock', 'shop-setup']) {
       expect(code(`areas/staff/retail/${screen}.tsx`), screen).toMatch(/<ActionBar\b|<SaleBar\b/);
     }
     const phone = code('app/ui/kit.css').match(/@media \(max-width: 719px\) \{\s*\.action-bar \{([^}]*)\}/)?.[1] ?? '';

@@ -26,6 +26,7 @@ import { ladderOfProduct, perPieceMinor, type Rung } from './ladder-state';
 import { factorMilli, ladderLevels, packsAndPiecesMilli, packsAndPiecesParts, packsAndPiecesProblem, spellingsOf, type PackSize } from './units-state';
 import { UnitPicker } from './unit-picker';
 import { QuickAddedNext } from './next-steps';
+import { ScreenLink } from './screen-link';
 import { Gate, PacksAndPiecesFields, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 
 // Quick add (issue #632): a shop owner needed nine steps on four screens to add one item and its stock, and said AppSheet was
@@ -662,6 +663,8 @@ function QuickAddScreen() {
   return (
     <Gate screen="quickAdd" title={QUICK_ADD}>
       <p>An item, its prices and how many you have, in one tap.</p>
+      {/* Issue #870: the owner adding stock for a whole shop is sent to the list. */}
+      <ScreenLink screen="importer" to="/staff/retail/catalogue/import">Adding many? Add them as a list</ScreenLink>
       <QuickAddForm
         initialName={name}
         onSell={(productId, branchId) => {

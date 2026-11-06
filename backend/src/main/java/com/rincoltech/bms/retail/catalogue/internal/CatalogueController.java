@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.Problems;
@@ -164,9 +165,12 @@ class CatalogueController {
     @PostMapping("/products/import")
     @RequiresPermission("retail.catalogue.manage")
     @Operation(
-            summary = "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
+            summary =
+                    "Import items from CSV: dry run first, then apply (#146); with qty, how many there are now at branch_id,"
+                            + " added as opening stock (retail.stocktake.commit there) under an Idempotency-Key (issue #870)",
             operationId = "importRetailProducts")
-    ImportResult importProducts(
+    ResponseEntity<ImportResult> importProducts(
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestParam(name = "dry_run", required = false, defaultValue = "true") boolean dryRun,
             @Parameter(
                             description =
@@ -176,7 +180,12 @@ class CatalogueController {
                     @RequestParam(name = "make_codes", required = false, defaultValue = "false")
                     boolean makeCodes,
             @Valid @RequestBody ImportRequest request) {
-        return importer.run(request.csv(), dryRun, makeCodes);
+        Outcome<ImportResult> outcome = importer.run(idempotencyKey, request, dryRun, makeCodes);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
     }
 
     @GetMapping("/products/similar")

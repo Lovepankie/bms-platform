@@ -1301,8 +1301,41 @@ final class CatalogueApi {
             @Schema(
                     description =
                             "The CSV text: a header row, then one item per row. Columns code, description, category, unit,"
-                                    + " sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated.")
-            String csv) {}
+                                    + " sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated."
+                                    + " Issue #870: optionally qty, how many there are now at branch_id, and stock_only (yes) to add"
+                                    + " qty to the item of that name and unit instead of a new item")
+            String csv,
+
+            @Schema(description = "Issue #870: where the qty of every row goes; defaults to the caller's one branch")
+            UUID branchId,
+
+            // Issue #870: sent only by a list kept on the phone offline (ADR-067 decision 13).
+            @Valid ImportOffline offline) {
+
+        /** What the Idempotency-Key covers: the list without its offline block (ADR-067 decision 13). */
+        ImportRequest forKey() {
+            return new ImportRequest(csv, branchId, null);
+        }
+    }
+
+    // JUSTIFICATION-A3: issue #870 sends Import items from the outbox; stock's offline type is not visible here.
+    @Schema(
+            name = "RetailProductImportOffline",
+            description =
+                    "A list kept on the phone offline: its stock is dated the day it was made, judged as every entry kept"
+                            + " offline is (RetailOfflineEntry)")
+    record ImportOffline(
+            @NotNull
+            @Schema(description = "When the list was made on the phone", requiredMode = Schema.RequiredMode.REQUIRED)
+            java.time.Instant occurredAt,
+
+            @NotNull(
+                    message = "The phone had not been online with this app before this list was made, so its day is not"
+                            + " known. Fix it on the phone to save it as a list of today.")
+            @Schema(
+                    description = "The server's time when the phone was last online",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            java.time.Instant onlineAsOf) {}
 
     @Schema(name = "RetailProductImportRow")
     record ImportRow(
@@ -1315,10 +1348,26 @@ final class CatalogueApi {
 
             String description,
 
-            @Schema(description = "added, skipped (the code exists already or repeats in the file) or error")
+            @Schema(
+                    description =
+                            "added, stock (issue #870: qty added to the item already in the list), skipped (the code or"
+                                    + " the name exists already or repeats in the file) or error")
             String outcome,
 
-            String message) {}
+            String message,
+
+            @Schema(description = "Issue #870: the quantity the row adds at the branch; null when it adds none")
+            String qty,
+
+            @Schema(
+                    description =
+                            "Issue #870: the code of the item already in the list that a skipped or stock row names")
+            String existingCode) {
+
+        ImportRow(int line, String code, String description, String outcome, String message) {
+            this(line, code, description, outcome, message, null, null);
+        }
+    }
 
     @Schema(name = "RetailProductImportResult")
     record ImportResult(
@@ -1332,7 +1381,13 @@ final class CatalogueApi {
             List<String> categoriesCreated,
 
             List<String> unitsCreated,
-            List<ImportRow> rows) {}
+            List<ImportRow> rows,
+
+            @Schema(description = "Issue #870: rows whose qty goes to an item already in the list (outcome stock)")
+            int stockAdded,
+
+            @Schema(description = "Issue #870: where the quantities go; null when no row has one")
+            UUID branchId) {}
 
     // ---- Pack sizes (ADR-033, issue #194) ------------------------------------------------------
 

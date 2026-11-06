@@ -1,5 +1,6 @@
 import { FORM_SLACK_MS, applyOutcome, formMayHold, classify, classifyEntry, dueAt, expired, inOrder, markDiscarded, nextToSend, requeue, type OutboxItem, type SendOutcome } from './outbox';
 import type { OfflineStore } from './store';
+import { ITEMS_SKIPPED_CODE, itemsSkipped } from './entries';
 
 export { FORM_SLACK_MS };
 
@@ -376,7 +377,10 @@ export class SyncEngine {
   private async once(item: OutboxItem): Promise<SendOutcome> {
     try {
       const answer = await this.deps.send(item);
-      return item.entry ? classifyEntry(answer.status, answer.body) : classify(answer.status, answer.body);
+      const outcome = item.entry ? classifyEntry(answer.status, answer.body) : classify(answer.status, answer.body);
+      // Issue #870: a list of items whose rows were skipped comes back with Fix, its stock never dropped quietly.
+      const skipped = item.entry?.kind === 'items' && outcome.kind === 'sent' ? itemsSkipped(item.entry, answer.body) : null;
+      return skipped ? { kind: 'refused', code: ITEMS_SKIPPED_CODE, message: skipped.message, fix: skipped.fix } : outcome;
     } catch {
       return { kind: 'retry', message: 'No connection to the server.' };
     }

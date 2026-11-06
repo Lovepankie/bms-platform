@@ -177,7 +177,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   suppliers: ['retail.catalogue.manage', 'retail.purchase.create'],
   buyers: ['retail.customer.manage', 'retail.sale.read'],
   // Importing items needs the catalogue permission; core.settings.manage is the administrator's (#146).
-  importer: ['retail.catalogue.manage', 'retail.stock.read', 'core.settings.manage'],
+  // Issue #870: Quick add's permissions, so an owner or stock manager adds many items here; administrators only before.
+  importer: ['retail.catalogue.manage', 'retail.stock.read'],
   // Barcode labels (issue #345): making a code for an item is a catalogue change, so the catalogue permission.
   labels: ['retail.catalogue.manage', 'retail.stock.read'],
   // Set up your shop (issue #625) adds categories and units, so it needs what Categories and Units need.

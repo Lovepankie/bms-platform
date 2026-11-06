@@ -54,6 +54,7 @@ class IdempotencyCallersTest {
             caller("retail/stock/internal/UsageService", 1, "retail/stock/RetailUsageKeyPerPersonIT"),
             caller("retail/stock/internal/StockCorrectionService", 1, "retail/stock/RetailUsageKeyPerPersonIT"),
             caller("retail/stock/internal/QuickAddService", 1, "retail/stock/RetailUsageKeyPerPersonIT"),
+            caller("retail/catalogue/internal/ProductImportService", 1, "retail/catalogue/RetailImportWithStockIT"),
             caller("retail/purchasing/internal/PurchasingService", 3, "retail/purchasing/RetailRestockKeyPerPersonIT"),
             caller("retail/purchasing/internal/OrdersService", 3, "retail/purchasing/RetailRestockKeyPerPersonIT"),
             caller("retail/purchasing/internal/ReceiptsService", 3, "retail/purchasing/RetailRestockKeyPerPersonIT"),

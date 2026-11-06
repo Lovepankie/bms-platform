@@ -270,6 +270,9 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
 
         bms.web -> bms.api.retailCatalogue "Manages categories, units and products; edits prices; asks for similar names before saving an item and adds a repeated name anyway as an administrator; makes items with sizes and colours and reads an item's stock over its variants; reads an item's entry norms once per item on Buy stock, Sell, Move stock and Count stock, records a confirmed entry warning, asks for Did you mean and the category of similar items while a new item is named; looks up a scanned barcode (a scanner or a typed code in the Scan box, or the phone camera with BarcodeDetector or the lazy Quagga2 fallback), edits an item's barcodes and makes label codes"
         bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
+        bms.api.retailCatalogue -> bms.api.operations "Applies an Import items list that adds stock once per Idempotency-Key (issue #870)"
+        bms.web -> bms.api.retailCatalogue "Add many items: rows typed or pasted, with how many there are now, checked then added through Import items, also sent later from the offline outbox (issue #870)"
+        bms.api.retailCatalogue -> bms.api.retailStock "Import items adds each row's starting stock at the chosen shop through the ImportedStock port that stock supplies, Quick add's own opening stock (issue #870, ADR-101)"
         bms.api.retailCatalogue -> bms.api.documents "Stores item photos and receipt photos as checked, re-encoded uploads and reads them back for the PWA (ADR-053, ADR-124); registers who may read a receipt photo from each record's own rule"
         bms.api.retailSales -> bms.api.retailCatalogue "Adds and reads the receipt photo of a sale through ReceiptPhotos (ADR-124)"
         bms.api.retailPurchasing -> bms.api.retailCatalogue "Adds and reads the receipt photo of a delivery through ReceiptPhotos (ADR-124)"

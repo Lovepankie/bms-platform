@@ -10,7 +10,6 @@ const STOCK_READ = 'retail.stock.read';
 const PURCHASE = 'retail.purchase.create';
 const CUSTOMER = 'retail.customer.manage';
 const SALE_READ = 'retail.sale.read';
-const SETTINGS = 'core.settings.manage';
 const PRICE_EDIT = 'retail.price.edit';
 const BANKING = 'retail.banking.record';
 const EXPENSE_RECORD = 'retail.expense.record';
@@ -209,19 +208,25 @@ export const buyersPage: Tour = {
 
 export const importPage: Tour = {
   id: 'page-import',
-  // Version 3 shows Let the app make the codes (owner decision D45, issue #562); version 4 the setup helper's box (issue #626).
-  version: 4,
+  // Version 3 shows Let the app make the codes (owner decision D45, issue #562); version 4 the setup helper's box (issue #626);
+  // version 5 Add many items, the rows typed or pasted, for an owner too (issue #870). The file's steps show once From a file
+  // is chosen, so they are optional.
+  version: 5,
   title: 'This page: import items',
-  audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ) && held(me, SETTINGS),
+  audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/import',
   steps: [
-    step({ id: 'format', target: 'import-note', title: 'Get the file ready', body: 'The first row names the columns. Then put one item on each row. Leave a code empty and the app gives the next code of its category. Nothing is saved until you add the items.' }),
+    step({ id: 'mode', target: 'import-mode', title: 'Type, paste or a file', body: 'Type or paste your items as a list, or choose From a file for a CSV file.' }),
+    step({ id: 'paste-list', target: 'add-many-paste', title: 'Paste a list', body: 'Copied a list from Excel, Google Sheets or WhatsApp? Tap Paste a list, paste it, then tap Fill the rows.' }),
+    step({ id: 'rows', target: 'add-many-rows', title: 'One item on each row', body: 'Type the name, the prices and how many you have now. Enter takes you to the next box. A row with a problem says what to fix.' }),
+    step({ id: 'save', target: 'add-many-save', title: 'Save them all', body: 'Tap Save the list. Every good row is saved at once, with its stock at the shop at the top. Rows that need a look stay here.' }),
+    step({ id: 'format', target: 'import-note', optional: true, title: 'Get the file ready', body: 'The first row names the columns. Then put one item on each row. Leave a code empty and the app gives the next code of its category. Nothing is saved until you add the items.' }),
     step({ id: 'helper', target: 'import-helper', optional: true, title: 'Let the app read your list', body: 'Type your items, take a photo of your stock book or choose a file. The app fills in the rows for you to check. Nothing is added until you tap Add.' }),
-    step({ id: 'file', target: 'import-file', title: 'Choose your file', body: 'Tap here and pick a CSV file saved as UTF-8.' }),
-    step({ id: 'paste', target: 'import-text', title: 'Or paste the rows', body: 'You can also paste the rows straight into this box.' }),
-    step({ id: 'make-codes', target: 'import-make-codes', title: 'Let the app make the codes', body: 'Tick this to give every item the next code of its category. Without the tick, the codes in your file are kept.' }),
-    step({ id: 'check', target: 'import-check', title: 'Check it first', body: 'Tap Check the file. You see what would be added and which rows have a problem. When all is well, an Add button appears.' }),
+    step({ id: 'file', target: 'import-file', optional: true, title: 'Choose your file', body: 'Tap here and pick a CSV file saved as UTF-8.' }),
+    step({ id: 'paste', target: 'import-text', optional: true, title: 'Or paste the rows', body: 'You can also paste the rows straight into this box.' }),
+    step({ id: 'make-codes', target: 'import-make-codes', optional: true, title: 'Let the app make the codes', body: 'Tick this to give every item the next code of its category. Without the tick, the codes in your file are kept.' }),
+    step({ id: 'check', target: 'import-check', optional: true, title: 'Check it first', body: 'Tap Check the file. You see what would be added and which rows have a problem. When all is well, an Add button appears.' }),
   ],
 };
 

@@ -10,7 +10,9 @@
 @ApplicationModule(
         id = "retail.catalogue",
         displayName = "Retail: Catalogue",
-        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.documents", "core.help"})
+        // core.operations: the Idempotency-Key of an Import items apply that adds stock (issue #870).
+        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.documents", "core.help", "core.operations"
+        })
 package com.rincoltech.bms.retail.catalogue;
 
 import org.springframework.modulith.ApplicationModule;

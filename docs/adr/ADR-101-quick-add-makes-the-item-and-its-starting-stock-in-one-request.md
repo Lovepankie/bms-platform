@@ -107,3 +107,39 @@ never the item's own unit on this screen: stock is counted in the smallest unit 
 
 **Watch for:** another caller of the route that leaves the category out still files under General; a screen that adds an item
 should ask for the category as Quick add does. A carton pack that failed is said once; nothing retries it.
+
+## Amendment of 6 Nov 2026: many items with their starting stock, on Import items (issue #870)
+
+A pilot shop owner stopped using the app after adding about 20 items: one item per form was too slow. On the Lead's review,
+many items are added by extending Import items (#146) and its check, not by a second screen or a second way to make items.
+
+1. Import items opens on rows typed or pasted (Paste a list), each with how many there are now at the shop chosen at the top.
+   The rows become the import's own file, with two new optional columns: `qty`, and `stock_only` (yes: add the `qty` to the
+   item of that name and unit already in the list, instead of a second item). `POST /retail/products/import` takes `branch_id`.
+2. Items are made by the import as before. Their starting stock goes through Quick add's own opening stock: the catalogue cannot
+   depend on stock, so it declares the port `ImportedStock` and stock supplies it (the pattern of `QuickAddPurchase`): one
+   `opening` movement of source `retail.quick_add`, note Import items, against opening balance equity, in the import's
+   transaction. The branch is checked once (`retail.stocktake.commit` there) before anything is made.
+3. An apply that adds stock needs an `Idempotency-Key` and runs once per key; a replay answers only the person who stored it
+   (ADR-026 decision 5). `retail.catalogue` may now depend on `core.operations` for this.
+4. The screen runs the import's check on the rows that pass its own checks, then one apply of the rows the check passed, so
+   "18 items added, 2 need a look" leaves the others on the screen, a name already held among them with Add to its stock.
+   Offline, the apply is one outbox entry (ADR-067 decision 13, kind `items`), dated the day the phone made it, checked by the
+   import when it arrives, and a refused list is fixed on the phone with Fix.
+5. Owners reach it as they reach Quick add: the import needs `retail.catalogue.manage` only, no longer `core.settings.manage`.
+   A selling price below the buying price is a warning on the row, as #870 asks, no longer an error row, and an amount or
+   quantity with a comma used as a decimal point is refused (the rule of #867), never stripped to a bigger number.
+6. The group is optional on the rows, as #870 asks: a row starts with the group of the row above, the first with the group this
+   person last used at the shop, and the picker shows General when none is chosen, so nothing goes under General unseen.
+
+**Better:** twenty items are one screen and one tap, typed or pasted, online or offline, through the one import and the one
+opening stock path.
+
+**Worse:** two requests online (the check, then the apply); an apply with one bad row the check did not see adds nothing, and
+the owner saves again.
+
+**Watch for:** a list kept offline is checked only when it arrives; a name added meanwhile makes it a refused entry to fix on the
+phone: the apply skips that row with its quantity and code, the phone refuses the answer as `items_skipped`, and Fix opens just
+the skipped rows, each set to Add to its stock; online the skipped row stays on the screen with Add to its stock, one tap, so
+no stock is dropped unseen (the Lead on the FAIL of 00210db). A file from before #870 that relied on a comma decimal being
+stripped is now refused on that row, and so is a lending existing loans sheet, with words saying to use a point for decimals.

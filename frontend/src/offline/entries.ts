@@ -12,6 +12,8 @@ export const ENTRY_PATHS: Record<EntryKind, string> = {
   purchase: '/api/v1/retail/purchases',
   transfer: '/api/v1/retail/transfers',
   usage: '/api/v1/retail/usage',
+  // Add many items on Import items (issue #870): the whole list is one apply of the import, under one key.
+  items: '/api/v1/retail/products/import?dry_run=false',
 };
 
 /** The name of each kind, as the list and the toasts say it. */
@@ -23,6 +25,7 @@ export const ENTRY_NAMES: Record<EntryKind, string> = {
   purchase: 'Delivery',
   transfer: 'Stock move',
   usage: 'Usage or damage',
+  items: 'List of items',
 };
 
 /**
@@ -96,6 +99,39 @@ export function offlineEntry(spec: EntrySpec & { scope: string; now: Date; onlin
     attempts: 0,
     nextAttemptAt: spec.now.getTime(),
   };
+}
+
+// JUSTIFICATION-A3: the Lead's review of #871 asks a list's skipped rows to come back with Fix; nothing reads an answer's rows yet.
+/** A list of items whose answer skipped some rows (issue #870): the entry comes back with Fix, never as sent. */
+export const ITEMS_SKIPPED_CODE = 'items_skipped';
+
+/**
+ * The Lead on the review of #871: a list of items sent from the outbox whose answer skipped rows (a name already in the
+ * items) is never counted sent quietly. Its words say how many and what to do, and Fix opens just those rows, each set to
+ * Add to its stock of the item the answer named, with the quantity typed. Null when nothing was skipped. The draft keeps
+ * `keys`, the row keys in the order the list's lines were sent (line 2 is the first).
+ */
+export function itemsSkipped(entry: OutboxEntry, body: unknown): { message: string; fix?: OutboxEntry['fix'] } | null {
+  const rows = ((body ?? {}) as { rows?: { line?: number; outcome?: string; existing_code?: string }[] }).rows ?? [];
+  const skipped = rows.filter((r) => r.outcome === 'skipped');
+  if (skipped.length === 0) return null;
+  const n = skipped.length;
+  const message = n === 1
+    ? '1 item is already in your list, so its stock was not added. Tap Fix to add it to its stock.'
+    : `${n} items are already in your list, so their stock was not added. Tap Fix to add it to their stock.`;
+  type Row = { key: number; name: string; refused?: unknown };
+  const draft = entry.fix?.draft as { rows?: Row[]; keys?: number[] } | undefined;
+  if (!entry.fix || !draft?.rows || !draft.keys) return { message };
+  const back = new Map<number, string>();
+  for (const r of skipped) {
+    const key = draft.keys[(r.line ?? 0) - 2];
+    if (key !== undefined) back.set(key, r.existing_code ?? '');
+  }
+  const again = draft.rows.filter((r) => back.has(r.key)).map((r) => {
+    const code = back.get(r.key) ?? '';
+    return { ...r, refused: undefined, ...(code ? { addTo: { id: code, code, name: r.name.trim() } } : {}) };
+  });
+  return { message, fix: { ...entry.fix, draft: { ...draft, rows: again, keys: undefined, pending: null } } };
 }
 
 /** What a form's save returns when the entry was kept on the phone instead of answered by the server. */

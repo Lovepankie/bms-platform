@@ -17447,13 +17447,37 @@
           }
         }
       },
+      "RetailProductImportOffline" : {
+        "description" : "A list kept on the phone offline: its stock is dated the day it was made, judged as every entry kept offline is (RetailOfflineEntry)",
+        "properties" : {
+          "occurred_at" : {
+            "description" : "When the list was made on the phone",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "online_as_of" : {
+            "description" : "The server's time when the phone was last online",
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "occurred_at", "online_as_of" ]
+      },
       "RetailProductImportRequest" : {
         "properties" : {
+          "branch_id" : {
+            "description" : "Issue #870: where the qty of every row goes; defaults to the caller's one branch",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "csv" : {
-            "description" : "The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated.",
+            "description" : "The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated. Issue #870: optionally qty, how many there are now at branch_id, and stock_only (yes) to add qty to the item of that name and unit instead of a new item",
             "maxLength" : 1000000,
             "minLength" : 0,
             "type" : "string"
+          },
+          "offline" : {
+            "$ref" : "#/components/schemas/RetailProductImportOffline"
           }
         },
         "required" : [ "csv" ]
@@ -17463,6 +17487,11 @@
           "added" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "branch_id" : {
+            "description" : "Issue #870: where the quantities go; null when no row has one",
+            "format" : "uuid",
+            "type" : "string"
           },
           "categories_created" : {
             "description" : "Categories that are new (would be created on a dry run, were created on an apply)",
@@ -17493,6 +17522,11 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "stock_added" : {
+            "description" : "Issue #870: rows whose qty goes to an item already in the list (outcome stock)",
+            "format" : "int32",
+            "type" : "integer"
+          },
           "units_created" : {
             "items" : {
               "type" : "string"
@@ -17510,6 +17544,10 @@
           "description" : {
             "type" : "string"
           },
+          "existing_code" : {
+            "description" : "Issue #870: the code of the item already in the list that a skipped or stock row names",
+            "type" : "string"
+          },
           "line" : {
             "format" : "int32",
             "type" : "integer"
@@ -17518,7 +17556,11 @@
             "type" : "string"
           },
           "outcome" : {
-            "description" : "added, skipped (the code exists already or repeats in the file) or error",
+            "description" : "added, stock (issue #870: qty added to the item already in the list), skipped (the code or the name exists already or repeats in the file) or error",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "Issue #870: the quantity the row adds at the branch; null when it adds none",
             "type" : "string"
           }
         }
@@ -43076,6 +43118,13 @@
       "post" : {
         "operationId" : "importRetailProducts",
         "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
           "in" : "query",
           "name" : "dry_run",
           "required" : false,
@@ -43115,7 +43164,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
+        "summary" : "Import items from CSV: dry run first, then apply (#146); with qty, how many there are now at branch_id, added as opening stock (retail.stocktake.commit there) under an Idempotency-Key (issue #870)",
         "tags" : [ "retail-catalogue" ]
       }
     },

@@ -7,10 +7,12 @@ import { setupHelper, type SetupHelperApi } from '../../../api/setup-helper';
 import { ItemDraftList, ListReader, useSetupHelper } from '../setup-helper/setup-helper';
 import { fromItemDraft, itemsCsv, type ItemEdit } from '../setup-helper/setup-helper-state';
 import { Gate, Note, Problem, useProfitAccess, useToast } from './ui';
-import { ActionBar } from '../../../app/ui/ActionBar';
+import { useStaff } from '../context';
+import { holds } from './permissions';
 import { Hint } from '../../../app/ui/Hint';
+import { AddManyForm } from './add-many';
 
-// Import items from a file (#146), for a new client, administrators only. Paste the rows or choose a
+// Import items from a file (#146), for whoever may manage the catalogue (issue #870; administrators only before). Paste the rows or choose a
 // CSV file, check it first (nothing is saved), read what would be added, skipped and wrong, then add
 // the items. Adding again skips what is already there. A file with a wrong row adds nothing.
 // The setup helper (issue #626, ADR-102), while the platform has it on for the business: the app reads a typed list, a photo
@@ -61,11 +63,31 @@ export function ImportReport({ result }: { result: ImportResult }) {
   );
 }
 
-/** `shop`: the kind of shop chosen in Set up your shop, when the owner came from there; it helps the app match names. */
+/**
+ * Import items (#146) with Add many items (issue #870, on the Lead's review of the first try): the rows of many items, typed or
+ * pasted, with how many there are now at the chosen shop, first, and Save the list in the sticky bar as the page's one main
+ * action; under them, From a file, the CSV file and the setup helper as before, folded away (open when the owner came from Set
+ * up your shop with the helper), its buttons plain so they never stand beside Save the list as a second main action.
+ */
 export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: SetupHelperApi; shop?: string } = {}) {
+  return (
+    <Gate screen="importer" title="Import items">
+      <p>Add many items at once: type or paste them as a list, or choose a file.</p>
+      <AddManyForm />
+      <details className="am-file" data-tour="import-mode" open={shop !== undefined}>
+        <summary className="btn">From a file</summary>
+        <FileImport helperApi={helperApi} shop={shop} />
+      </details>
+    </Gate>
+  );
+}
+
+/** `shop`: the kind of shop chosen in Set up your shop, when the owner came from there; it helps the app match names. */
+function FileImport({ helperApi, shop }: { helperApi: SetupHelperApi; shop?: string }) {
   const queryClient = useQueryClient();
   const profit = useProfitAccess();
   const helper = useSetupHelper(helperApi);
+  const { me } = useStaff();
   const [draft, setDraft] = useState<ItemEdit[] | null>(null);
   const { show, toast } = useToast();
   const [text, setText] = useState('');
@@ -117,14 +139,15 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
     });
   };
   return (
-    <Gate screen="importer" title="Import items">
+    <>
       <div data-tour="import-note">
         <Note>
           The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row. A code in the file is kept, unless you tick Let the app make the codes below. Leave a code empty, or leave out the code column, and the app gives the item the next code of its category, such as BLB-0001.
           {profit ? '' : ' Leave the buying price out.'} Check the file first: nothing is saved until you add the items.
         </Note>
       </div>
-      {helper.enabled && (
+      {/* Review of #871: the helper's reading stays an administrator's (ADR-102), so an owner without it never sees the box. */}
+      {helper.enabled && holds(me, 'core.settings.manage') && (
         <ListReader
           photos={helper.photos}
           tour="import-helper"
@@ -145,23 +168,24 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
       <Hint full>Tick this to give every item the next code of its category and leave out the codes in your file. Without the tick, a code in your file is kept.</Hint>
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <ActionBar>
-        <BusyButton busy={check.isPending} type="button" className={ready ? undefined : 'rt-primary'} data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate(makeCodes)}>
+      {/* Issue #870: a plain button under the file, since Save the list in the sticky bar is the page's main action. */}
+      <p className="cluster">
+        <BusyButton busy={check.isPending} type="button" className="btn" data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate(makeCodes)}>
           {draft ? 'Check these items' : 'Check the file'}
         </BusyButton>
-      </ActionBar>
+      </p>
       {current && <ImportReport result={current} />}
       {current && current.errors === 0 && (current.added ?? 0) === 0 && <p className="empty-state">There is nothing new to add.</p>}
       {current && (current.errors ?? 0) > 0 && <p role="alert" className="alert alert-danger">Fix the rows with a problem in your file and check it again. Nothing is added while a row has a problem.</p>}
       <Problem error={apply.error} />
       {ready && (
-        <BusyButton busy={apply.isPending} type="button" className="rt-primary" onClick={() => apply.mutate()}>
+        <BusyButton busy={apply.isPending} type="button" className="btn" onClick={() => apply.mutate()}>
           {`Add ${current.added} items`}
         </BusyButton>
       )}
       {report && <ImportReport result={report} />}
       {toast}
-    </Gate>
+    </>
   );
 }
 
