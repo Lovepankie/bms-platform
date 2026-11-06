@@ -91,7 +91,7 @@ export function OptOutRows({ items, term, canManage, busy, onRemove }: {
   );
 }
 
-function AddNumber({ onAdded }: { onAdded: () => void }) {
+function AddNumber({ onAdded, primary = true }: { onAdded: () => void; primary?: boolean }) {
   const [phone, setPhone] = useState('');
   const [scope, setScope] = useState('all');
   const [reason, setReason] = useState('');
@@ -122,7 +122,7 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
       <p className="field-hint">Needed only when the number is already stopped for every message and you choose reminders only. Words about why, not names or numbers.</p>
       {error?.fields.reason && <p role="alert" className="field-error">{error.fields.reason}</p>}
       <p>
-        <BusyButton type="submit" className="rt-primary" busy={add.isPending} notReady={phone.trim() === ''}>
+        <BusyButton type="submit" className={primary ? 'rt-primary' : undefined} busy={add.isPending} notReady={phone.trim() === ''}>
           Add to the list
         </BusyButton>
       </p>
@@ -130,10 +130,14 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function PasteList({ onAdded }: { onAdded: () => void }) {
+function PasteList({ onAdded, onChecked }: { onAdded: () => void; onChecked?: (ready: boolean) => void }) {
   const [text, setText] = useState('');
   const [scope, setScope] = useState('all');
-  const [checked, setChecked] = useState<SmsImportResult | null>(null);
+  const [checked, setCheckedState] = useState<SmsImportResult | null>(null);
+  const setChecked = (next: SmsImportResult | null) => {
+    setCheckedState(next);
+    onChecked?.(next !== null && next.dry_run && next.added + next.changed > 0);
+  };
   const run = useMutation({
     mutationFn: (dryRun: boolean) => sms.importOptOuts(text, scope, dryRun),
     onSuccess: (result) => {
@@ -190,6 +194,7 @@ export function OptOutsScreen() {
   const search = useLiveSearch();
   const [scope, setScope] = useState('');
   const [kind, setKind] = useState('');
+  const [pasteChecked, setPasteChecked] = useState(false);
   const allowed = mayReadNotifications(me);
   const pages = useInfiniteQuery({
     queryKey: ['sms', 'opt-outs', search.term, scope, kind],
@@ -265,8 +270,9 @@ export function OptOutsScreen() {
       )}
       {canManage && (
         <>
-          <AddNumber onAdded={() => void refresh()} />
-          <PasteList onAdded={() => void refresh()} />
+          {/* One brand button at a time (rule 3, issue #798): once a pasted list is checked, its Add is the primary. */}
+          <AddNumber onAdded={() => void refresh()} primary={!pasteChecked} />
+          <PasteList onAdded={() => void refresh()} onChecked={setPasteChecked} />
         </>
       )}
     </div>

@@ -180,7 +180,7 @@ describe('the supplier page', () => {
     await screen.findByText('Wholesaler');
     expect(screen.queryByText('Bank account number')).toBeNull();
     expect(screen.getByText('None yet')).toBeTruthy();
-    expect(await screen.findByText('No deliveries from this supplier yet.')).toBeTruthy();
+    expect(await screen.findByText('No deliveries from this supplier yet. When you buy stock from them, the delivery shows here.')).toBeTruthy();
   });
 
   it('saves only what changed under the version read', async () => {

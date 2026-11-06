@@ -115,7 +115,8 @@ export function CredentialsForm({ account, busy, error, onSave }: {
         <CodeField id="receive-code" value={code} onChange={setCode} problem={codeBad} />
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
         <p>
-          <BusyButton type="submit" className="rt-primary" busy={busy} notReady={!ready}>Save the key and secret</BusyButton>
+          {/* A saved key not yet checked: Test connection is the one brand button (rule 3, issue #798). */}
+          <BusyButton type="submit" className={account.credentials_saved && account.status !== 'verified' ? undefined : 'rt-primary'} busy={busy} notReady={!ready}>Save the key and secret</BusyButton>
         </p>
       </form>
     </section>

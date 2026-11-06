@@ -9,6 +9,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { SETTINGS_MANAGE, canConfigureAdvisor } from '../insights/permissions';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { HelpTip } from '../../../app/ui/HelpTip';
 
 // The AI assistant's settings (extras slice C3, issue #226; ADR-037; spec 5.2): the switch with the acknowledgement of what is
 // sent and where, the two daily caps (a cap of 0 stops every call), and what was used today. Off until a business administrator
@@ -78,6 +79,7 @@ export function AssistantSwitch({ saved, canManage, busy, error, onChange }: {
   );
 }
 
+/** The daily limit. While the assistant is off, Switch the assistant on is the one brand button (rule 3, issue #798), so Save the limit is plain. */
 export function AssistantCaps({ saved, busy, error, onSave }: { saved: AdvisorSettings; busy: boolean; error: string | null; onSave: (tokens: number) => void }) {
   const [tokens, setTokens] = useState(String(saved.daily_token_cap));
   const valid = /^\d{1,9}$/.test(tokens.trim());
@@ -96,11 +98,11 @@ export function AssistantCaps({ saved, busy, error, onSave }: { saved: AdvisorSe
           if (valid && !busy) onSave(Number(tokens.trim()));
         }}
       >
-        <label htmlFor="assistant-token-cap">Tokens a day</label>
+        <div className="help-tip-heading"><label htmlFor="assistant-token-cap">Tokens a day</label> <HelpTip tip="tokensADay" /></div>
         <input id="assistant-token-cap" inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} aria-invalid={!valid} />
         {!valid && <p role="alert" className="field-error">Use a whole number, 0 or more.</p>}
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
-        <p><BusyButton type="submit" className="rt-primary" busy={busy} notReady={!valid}>Save the limit</BusyButton></p>
+        <p><BusyButton type="submit" className={saved.enabled ? 'rt-primary' : undefined} busy={busy} notReady={!valid}>Save the limit</BusyButton></p>
       </form>
     </section>
   );

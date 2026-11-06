@@ -75,6 +75,23 @@ export const HELP_TIPS = {
     label: 'Package',
     text: 'Something that holds several single units, like a box of 10 pieces.',
   },
+  // Issue #798 (rule 3 of #336): the words left without a tip by the audit.
+  tokensADay: {
+    label: 'Tokens a day',
+    text: 'Tokens measure how much the assistant reads and writes. It stops for the day when it reaches this limit.',
+  },
+  kyc: {
+    label: 'KYC',
+    text: 'Know your customer: whether the member\'s details and ID have been given and checked.',
+  },
+  portfolioAtRisk: {
+    label: 'Portfolio at risk',
+    text: 'The money still owed on loans with a late payment, by how late it is, out of all the money owed on loans.',
+  },
+  postedLinesOnly: {
+    label: 'From posted journal lines only',
+    text: 'These figures come from what is recorded in the books, not from what the loan schedules expect.',
+  },
 } as const satisfies Record<string, HelpTipWords>;
 
 export type HelpTipKey = keyof typeof HELP_TIPS;

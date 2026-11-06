@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../app/ui/SearchBox';
 import { useLiveSearch } from '../../app/ui/useLiveSearch';
+import { HelpTip } from '../../app/ui/HelpTip';
 import { listMembers } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
 import { EmptyState, SkeletonList } from '../../components/states';
@@ -55,7 +56,7 @@ export function StaffHome() {
                     <th>Member no</th>
                     <th>Name</th>
                     <th>Phone</th>
-                    <th>KYC</th>
+                    <th aria-label="KYC">KYC <HelpTip tip="kyc" /></th>
                   </tr>
                 </thead>
                 <tbody>

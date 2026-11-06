@@ -85,7 +85,7 @@ export function investmentBadge(status: string | undefined): string {
 
 const TXN_WORDS: Record<string, string> = {
   funding: 'Funding',
-  return_accrual: 'Return accrued',
+  return_accrual: 'Return earned',
   return_payout: 'Return paid',
   maturity_payout: 'Paid out at maturity',
   early_withdrawal: 'Early withdrawal',

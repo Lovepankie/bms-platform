@@ -191,7 +191,8 @@ export function ExistingLoanForm({ api = existingLoans }: { api?: ExistingLoansA
       <button type="button" className="btn-sm" onClick={() => set('repayments', [...draft.repayments, emptyRepayment()])}>Add a repayment</button>
       {Object.keys(problems).length > 0 && <p role="alert" className="alert alert-danger">Some entries need a look. They are marked above.</p>}
       <Problem error={Object.keys(problems).length === 0 ? (check.error ?? record.error) : null} />
-      <BusyButton busy={check.isPending} type="submit" className="rt-primary" data-tour="existing-check">Check</BusyButton>
+      {/* One brand button at a time (rule 3, issue #798): once the loan is checked, Record is the primary and Check a plain button. */}
+      <BusyButton busy={check.isPending} type="submit" className={current ? undefined : 'rt-primary'} data-tour="existing-check">Check</BusyButton>
       {current && <ExistingLoanView loan={current} />}
       {current && (
         <BusyButton busy={record.isPending} type="button" className="rt-primary" onClick={() => record.mutate()}>

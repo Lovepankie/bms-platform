@@ -180,7 +180,8 @@ export function MemberView({ member }: { member: MemberRecord }) {
           <Line label="Branch" value={branch} />
         </dl>
         <p className="cluster" data-tour="member-actions">
-          {edit && <Link to="/staff/lending/members/$memberId/edit" params={{ memberId: id }} className="btn rt-primary">Change details</Link>}
+          {/* A checker's one brand button is Details are correct (rule 3, issue #798), so Change details is plain for them. */}
+          {edit && <Link to="/staff/lending/members/$memberId/edit" params={{ memberId: id }} className={mayVerifyKyc(me, member.branch_id) && member.kyc_status === 'pending_verification' ? 'btn' : 'btn rt-primary'}>Change details</Link>}
           {showSavings(me) && <Link to="/staff/lending/members/$memberId/savings" params={{ memberId: id }} className="btn btn-ghost">Savings</Link>}
           {showInvestments(me) && <Link to="/staff/lending/investments/member/$memberId" params={{ memberId: id }} className="btn btn-ghost">Investments</Link>}
         </p>

@@ -23,6 +23,7 @@ import { showInvestments } from '../lending/investment-state';
 import { canExport, canManageDigest, canUseAdvisor, ownPortfolioOnly, showInsights } from './permissions';
 import { MetricCard, MetricGrid, drillOf, type DrillTarget } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { HelpTip } from '../../../app/ui/HelpTip';
 
 // Insights (#153, expectation 7): the morning brief, the loan portfolio, revenue from the ledger
 // and member activity, for the branch chosen in the staff bar and the filters here. Numbers are
@@ -333,7 +334,7 @@ export function PortfolioView({ query, onDrill }: { query: Query<InsightsPortfol
         kind="basis_points"
         currency={cur}
       />
-      <h2>Portfolio at risk</h2>
+      <div className="help-tip-heading"><h2>Portfolio at risk</h2> <HelpTip tip="portfolioAtRisk" /></div>
       <BarList title="Ageing of principal outstanding" rows={ageing} kind="money" currency={cur} tone="c2" />
       {(p.breakdowns ?? []).map((b) => (
         <BarList
@@ -469,7 +470,7 @@ export function RevenueView({ query, onDrill }: { query: Query<InsightsRevenue>;
   );
   return (
     <section aria-label="Revenue">
-      <p className="ln-muted">From posted journal lines only: nothing here is estimated from schedules.</p>
+      <div className="help-tip-heading"><p className="ln-muted">From posted journal lines only: nothing here is estimated from schedules.</p> <HelpTip tip="postedLinesOnly" /></div>
       <MetricGrid metrics={r.metrics ?? []} onDrill={onDrill} />
       <h2>Last 12 months</h2>
       <LineChart

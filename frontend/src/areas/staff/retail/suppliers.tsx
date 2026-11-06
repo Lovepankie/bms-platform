@@ -361,7 +361,7 @@ export function SupplierPage({ supplierId }: { supplierId: string }) {
         <Card title="Deliveries">
           {deliveries.isPending && <p className="loading">Loading</p>}
           <Problem error={deliveries.error} />
-          {deliveries.data && items.length === 0 && <p className="empty-state">No deliveries from this supplier yet.</p>}
+          {deliveries.data && items.length === 0 && <p className="empty-state">No deliveries from this supplier yet. When you buy stock from them, the delivery shows here.</p>}
           {items.length > 0 && (
             <RowList label="Deliveries, newest first">
               {items.map((x) => (
