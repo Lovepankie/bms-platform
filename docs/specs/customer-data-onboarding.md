@@ -154,6 +154,23 @@ Every issue has:
 | `ENCODING_CONVERTED` | warning | The file was not UTF-8 and was read as Windows-1252; check accented names in the preview. |
 | `ROW_CHANGED_SINCE_REVIEW` | blocking | Line {line} changed since it was reviewed; review it again. |
 | `CHANGED_SINCE_IMPORT` | blocking | Line {line} was already imported with other content; correct it in the app, not by import. |
+| `TEMPLATE_UNKNOWN` | mapping refused | No template {template} is registered on this server. (#129) |
+| `MAPPING_INVALID` | mapping refused | The mapping does not match the template's schema at {pointer}: {reason} (#129) |
+| `REQUIRED_FIELD_UNMAPPED` | blocking | {field} of {entity} is required and no column of source {source} feeds it. (#129) |
+| `FIELD_MAPPED_TWICE` | blocking | Columns {column} and {other} of source {source} both feed {field}; keep one and ignore the other. (#129) |
+| `COLUMN_DUPLICATE` | blocking | Column {column} of source {source} is written twice in the mapping, ignoring case and spaces. (#129) |
+| `MAP_FIELD_UNMAPPED` | blocking | Source {source} maps values of {field}, which no column of it feeds. (#129) |
+| `SOURCE_REF_COLUMN_UNKNOWN` | blocking | The reference column {column} of source {source} is not a column the mapping keeps. (#129) |
+| `ZONE_UNKNOWN` | blocking | The time zone {value} is not a known zone. (#129) |
+| `SOURCE_UNKNOWN` | request refused | The mapping has no source {source}. (#129) |
+| `BATCH_HAS_NO_MAPPING` | request refused | The file was read without a mapping; read it again with one before checking its columns. (#129) |
+| `REQUIRED_COLUMN_MISSING` | blocking | Column {column}, which feeds the required {field}, is not in the file of source {source}. (#129) |
+
+The shared codes of this table are `ImportTemplates.SHARED_CODES` in `core.imports` (#129); the retail
+codes (`CODE_DUPLICATE`, `CODE_CONTROL_CHAR`, `NAME_MISSING`, `NEGATIVE_BALANCE`, `PRICE_DIFFERS_EXISTING`,
+`CREDIT_SALE_UNPAID`, `CREDIT_DECISION_MISSING`) are listed by `retail_v1` itself (#135). A mapping is valid
+only with no problem at all, so a column the mapping neither maps nor ignores (`COLUMN_UNMAPPED`, one per
+column) makes it invalid even though the code is a warning on a row.
 
 ### 3.5 Review queue
 
@@ -295,6 +312,15 @@ in `import_mappings` (append-only versions), and recorded on every batch that us
   ignore at a fixed position, rows to treat as placeholders);
 - how `source_ref` is formed when the source has no stable id (tab, row number and content hash
   by default).
+
+As built (#129, SDD chapter 13 section 13.14.1): the contract is `ImportTemplate`, the registry
+`ImportTemplates` (with one JSON Schema per template version) and the mappings `ImportMappings` over
+`import_mappings` (V139). A mapping document has `template`, `template_version`, `date_convention`
+(`day_first`, `month_first`, `iso`), `time_zone`, `currency`, `unit_maps`, and `sources` keyed by a
+source key, each with `entity_set`, `file`, `sheet`, `header_row` (`"auto"` or 1 to 20), `columns`
+(each to `{"field"}` or `{"ignore", "reason"}`), `value_maps`, `enum_maps`, `row_rules`
+(`subheader_month`, `totals_row` first or last, `placeholder_rows`) and `source_ref` (`row_hash` or
+`column`). The fabricated example is `fixtures/imports/fixture_shop_v1.mapping.json`.
 
 A new customer with a different sheet shape is a new mapping and a review of it, not new code.
 A source shape the canonical template cannot express (a new entity, a new rule) is a template

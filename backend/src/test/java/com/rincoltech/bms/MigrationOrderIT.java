@@ -3322,6 +3322,64 @@ class MigrationOrderIT {
                 .single();
     }
 
+    /**
+     * V139 (issue #129, ADR-027 decision 3) is expand only: a batch stored before it keeps every column and reads as parsed
+     * with no mapping, and the new append-only table is under forced row-level security. JUSTIFICATION-A3: a new test case;
+     * no existing case covers V139.
+     */
+    @Test
+    void importMappingsMigrationKeepsEveryBatch() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("139") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v139', 'Test Tenant V139',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+            UUID batch = UUID.randomUUID();
+            owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq, status, row_count) VALUES (?, ?, ?, 1,"
+                            + " 'parsed', 2)")
+                    .params(batch, tenant, run)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql(
+                                    "SELECT status = 'parsed' AND row_count = 2 AND mapping_id IS NULL"
+                                            + " AND template_key IS NULL AND source_headers IS NULL FROM import_batches WHERE id = ?")
+                            .param(batch)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE relname ="
+                                    + " 'import_mappings'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname IN"
+                                    + " ('reject_mutation', 'import_batches_mapping_kept')"
+                                    + " AND tgrelid IN ('import_mappings'::regclass, 'import_batches'::regclass)")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(2);
+            assertThat(owner.sql("SELECT has_table_privilege('bms_app', 'import_mappings', 'UPDATE')"
+                                    + " OR has_table_privilege('bms_app', 'import_mappings', 'DELETE')")
+                            .query(Boolean.class)
+                            .single())
+                    .isFalse();
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

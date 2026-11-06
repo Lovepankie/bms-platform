@@ -12,9 +12,16 @@
  * ({@link com.rincoltech.bms.core.imports.ImportUploads}, migration V129): a file streamed once into a copy encrypted with
  * the run's data key, stored under the quarantine prefix of {@code core.documents}, within the size, row and column limits,
  * and parsed by a streaming reader for CSV, XLSX or JSON Lines into {@code import_rows} 1,000 rows at a time, with the
- * mapping's ignored columns dropped; and the daily cleanup of the files of abandoned uploads. Templates, review and the
- * operator screens follow in #129 to #141. Public API: {@link com.rincoltech.bms.core.imports.ImportRuns},
- * {@link com.rincoltech.bms.core.imports.ImportUploads}.
+ * mapping's ignored columns dropped; and the daily cleanup of the files of abandoned uploads. The third part (issue #129,
+ * migration V139) is the canonical template contract ({@link com.rincoltech.bms.core.imports.ImportTemplate}): entity sets,
+ * typed fields, required flags, normalisers, row rules, an issue catalogue, a loader and a version, which a vertical
+ * registers by declaring a bean, read through the registry {@link com.rincoltech.bms.core.imports.ImportTemplates} (so the
+ * core never depends on a vertical), with a JSON Schema per template version; and a business's append-only mapping versions
+ * ({@link com.rincoltech.bms.core.imports.ImportMappings}, {@code import_mappings}), validated against that schema and the
+ * file's headers, recorded on each batch it parses. Validation, review and the operator screens follow in #130 to #141.
+ * Public API: {@link com.rincoltech.bms.core.imports.ImportRuns}, {@link com.rincoltech.bms.core.imports.ImportUploads},
+ * {@link com.rincoltech.bms.core.imports.ImportTemplates}, {@link com.rincoltech.bms.core.imports.ImportMappings}, and the
+ * SPI {@link com.rincoltech.bms.core.imports.ImportTemplate} with {@link com.rincoltech.bms.core.imports.BatchWriter}.
  */
 @ApplicationModule(
         id = "core.imports",

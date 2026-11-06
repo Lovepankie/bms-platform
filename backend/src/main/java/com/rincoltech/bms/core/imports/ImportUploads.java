@@ -51,24 +51,48 @@ public interface ImportUploads {
     record Upload(String fileName, InputStream content, long declaredSize, UUID uploadedBy, ParseOptions options) {}
 
     /**
-     * What the mapping says about the file (until #129 brings mappings, the caller passes it).
+     * What the mapping says about the file. {@link ImportMappings#parseOptions} builds it from one source of a stored mapping
+     * version (issue #129), and the batch then records that version; a caller may still pass the first three alone, and the
+     * batch then records no mapping.
      *
      * @param sheetName the XLSX sheet to read; blank for the first that is not hidden
      * @param requiredHeaders the header row is the first of the first 20 that holds all of these; empty for the first row
      *     that is not blank
      * @param ignoredColumns columns not stored (spec section 6.1)
+     * @param headerRow the mapping's fixed header row (1 to 20, which must then hold the required headers), or 0 to find it
+     * @param mappingId the stored mapping version the batch records, or null
+     * @param mappingSource the key of the source in that mapping that describes this file, set exactly when the mapping is
      */
-    record ParseOptions(String sheetName, Set<String> requiredHeaders, Set<String> ignoredColumns) {
+    record ParseOptions(
+            String sheetName,
+            Set<String> requiredHeaders,
+            Set<String> ignoredColumns,
+            int headerRow,
+            UUID mappingId,
+            String mappingSource) {
 
         public static final ParseOptions DEFAULT = new ParseOptions(null, Set.of(), Set.of());
 
         public ParseOptions {
             requiredHeaders = requiredHeaders == null ? Set.of() : Set.copyOf(requiredHeaders);
             ignoredColumns = ignoredColumns == null ? Set.of() : Set.copyOf(ignoredColumns);
+            if (headerRow < 0 || (mappingId == null) != (mappingSource == null)) {
+                throw new IllegalArgumentException(
+                        "a header row of 0 or more, and a mapping with its source or neither");
+            }
+        }
+
+        public ParseOptions(String sheetName, Set<String> requiredHeaders, Set<String> ignoredColumns) {
+            this(sheetName, requiredHeaders, ignoredColumns, 0, null, null);
         }
     }
 
-    /** A batch as stored. {@code failureCode} and {@code failureReason} are set only when {@code failed}. */
+    /**
+     * A batch as stored. {@code failureCode} and {@code failureReason} are set only when {@code failed}. {@code mappingId},
+     * {@code mappingSource}, {@code templateKey} and {@code templateVersion} are the mapping version it was last parsed with
+     * (all null without one), kept as they are once it is committed (issue #129); {@code headers} are the header names the
+     * parse found.
+     */
     record Batch(
             UUID id,
             UUID runId,
@@ -86,5 +110,10 @@ public interface ImportUploads {
             List<String> warnings,
             String failureCode,
             String failureReason,
-            Instant uploadedAt) {}
+            Instant uploadedAt,
+            UUID mappingId,
+            String mappingSource,
+            String templateKey,
+            Integer templateVersion,
+            List<String> headers) {}
 }

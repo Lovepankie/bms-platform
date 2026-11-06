@@ -164,7 +164,7 @@ registers into through its manifest at startup:
 | Branch deactivation guards | Whether a branch still has open accounts of the module | Loans, savings, investments |
 | Branch selling checks | What the module still has open at a branch's till before it is marked as a Store (issue #366, ADR-048): read only, never moves or posts | Retail: credit sales with a balance owing |
 | Branch closing checks | What the module still holds at a branch before it is closed or marked as not stocking (issue #329, ADR-041): read only, never moves or posts | Retail: stock on hand with its value, transfers on the road |
-| Import templates | Parser, classifier, normaliser, committer | `pilot_loan_register_v1` |
+| Import templates | One `ImportTemplate` bean per template version (built in #129, ADR-027 decision 3): entity sets, typed fields, required flags, normalisers, row rules, issue codes and the loader (`BatchWriter`) the commit runs; `core.imports` reads them through `ImportTemplates` and builds one JSON Schema per version for the mappings | `retail_v1` (#135), `lending_loans_v1` (#136) |
 | Payment purposes | Booking handler per purpose | `lending.loan_repayment` books a repayment (built in #216: `LoanRepaymentPurpose` in `lending.loans`, through `LoanServicing`); `lending.savings_deposit` books a deposit (built in #219: `SavingsDepositPurpose` in `lending.savings`, through `SavingsServicing`) |
 | Report definitions | Report key, parameters, permission, query | `lending.par` |
 | Scheduled jobs | Job key, schedule, handler | `lending.nightly_arrears` |

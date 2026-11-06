@@ -1,0 +1,75 @@
+{
+  "template": "fixture_shop",
+  "template_version": 1,
+  "date_convention": "day_first",
+  "time_zone": "Africa/Kampala",
+  "currency": "UGX",
+  "unit_maps": {
+    "pcs": "piece",
+    "ctn": "carton"
+  },
+  "sources": {
+    "item_list": {
+      "entity_set": "items",
+      "file": "fab-item-list.csv",
+      "header_row": "auto",
+      "columns": {
+        "Fab Item Code": { "field": "code" },
+        "Fab Item Label": { "field": "name" },
+        "Fab Pack": { "field": "unit" },
+        "Fab Asking Price": { "field": "price" },
+        "Fab Line Type": { "field": "kind" },
+        "Fab In Use": { "field": "active" },
+        "Fab Shelf Note": { "ignore": true, "reason": "free text the template has no field for" }
+      },
+      "enum_maps": {
+        "kind": { "Goods": "stock", "Labour": "service" }
+      },
+      "row_rules": {
+        "placeholder_rows": ["tbc", "-"]
+      },
+      "source_ref": { "rule": "column", "column": "Fab Item Code" }
+    },
+    "buyer_book": {
+      "entity_set": "customers",
+      "file": "fab-shop-book.xlsx",
+      "sheet": "Fab Buyers",
+      "header_row": 2,
+      "columns": {
+        "Fab Buyer No": { "field": "ref_no" },
+        "Fab Buyer": { "field": "name" },
+        "Fab Mobile": { "field": "phone" },
+        "Fab Card No": { "field": "nin" },
+        "Fab Since": { "field": "joined_on" },
+        "Fab Remarks": { "ignore": true, "reason": "personal remarks not needed on the platform" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    },
+    "till_roll": {
+      "entity_set": "sales",
+      "file": "fab-shop-book.xlsx",
+      "sheet": "Fab Till Roll",
+      "header_row": "auto",
+      "columns": {
+        "Fab Item Code": { "field": "item" },
+        "Fab Buyer No": { "field": "customer" },
+        "Fab When": { "field": "sold_at" },
+        "Fab Count": { "field": "qty" },
+        "Fab Paid": { "field": "amount" },
+        "Fab Entry Type": { "field": "kind" },
+        "Fab Cashier": { "ignore": true, "reason": "staff names are not imported" }
+      },
+      "value_maps": {
+        "item": { "FAB-OLD-1": "FAB-001" }
+      },
+      "enum_maps": {
+        "kind": { "Sold": "sale", "Stock take": "adjustment" }
+      },
+      "row_rules": {
+        "subheader_month": true,
+        "totals_row": "last"
+      },
+      "source_ref": { "rule": "row_hash" }
+    }
+  }
+}

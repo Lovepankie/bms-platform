@@ -1,0 +1,23 @@
+{
+  "template": "fixture_shop",
+  "template_version": 1,
+  "date_convention": "day_first",
+  "time_zone": "Africa/Kampala",
+  "currency": "UGX",
+  "sources": {
+    "item_list": {
+      "entity_set": "items",
+      "file": "fab-item-list.csv",
+      "header_row": "auto",
+      "columns": {
+        "Fab Item Code": { "field": "code" },
+        "Fab Second Code": { "field": "code" },
+        "Fab Pack": { "field": "unit" }
+      },
+      "value_maps": {
+        "price": { "free": "0" }
+      },
+      "source_ref": { "rule": "column", "column": "Fab Item Label" }
+    }
+  }
+}

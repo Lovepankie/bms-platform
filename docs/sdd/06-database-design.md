@@ -70,7 +70,7 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_repayment_allocations`, `lending_collateral_events`,
 `lending_collection_actions` (except `promise_status`), `lending_savings_transactions`,
 `lending_savings_daily_balances`, `lending_savings_interest_postings`,
-`lending_investment_transactions`, `import_issue_resolutions`.
+`lending_investment_transactions`, `import_issue_resolutions`, `import_mappings` (V139, #129).
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
 `reject_mutation()` raises on `UPDATE` or `DELETE` for every role, `bms_owner` included,
@@ -1301,6 +1301,23 @@ Added by `V129__import_upload.sql` (issue #128, chapter 13 section 13.14.1), exp
   customer's cells and so may hold personal data: it is the quarantine, read by no business module, removed with a cancelled
   run by the cleanup and purged by #139; the generic purge removes it with a closed business before its batch.
 
+Added by `V139__import_mappings.sql` (issue #129, ADR-027 decision 3, chapter 13 section 13.14.1), expand only:
+
+- **`import_mappings`** (RLS forced, `SELECT, INSERT`, append-only by `reject_mutation`): a business's mapping documents, one
+  row per version. `id`, `tenant_id`, `created_at`, `name varchar(80)` (lower-case letters, digits, `-` and `_`: the
+  business's own name for one source shape), `version integer` (`UNIQUE (tenant_id, name, version)`), `template_key`,
+  `template_version`, `document jsonb` (an object whose `template` and `template_version` equal the row's, a CHECK),
+  `created_by uuid NOT NULL`, `note varchar(500)`. `UNIQUE (tenant_id, id, template_key, template_version)` is the target of
+  the batches' foreign key. A change is a new version; no role updates or deletes a row (a migration's `bms.allow_mutation`
+  and the removal and purge of a closed business aside). It holds header names and value labels, no personal data.
+- **`import_batches`** gains `mapping_id`, `mapping_source varchar(40)`, `template_key`, `template_version` (all four set or
+  none, `import_batches_mapping_complete`; FK `(tenant_id, mapping_id, template_key, template_version)` to
+  `import_mappings`, so the batch's template is the mapping's; added `NOT VALID`, since every earlier batch has no mapping and
+  the validation scan is a query under forced row security that an owner without BYPASSRLS cannot run, while every row
+  written afterwards is checked) and `source_headers text[]` (the header names its parse found).
+  The plain index `import_batches_by_mapping (tenant_id, mapping_id) WHERE mapping_id IS NOT NULL` serves the foreign key.
+  The trigger `import_batches_mapping_kept` refuses a change to those five columns once the batch is `committed`.
+
 ## 6.6 General ledger (RLS)
 
 ### 6.6.1 Tables
@@ -2174,7 +2191,9 @@ the backfill), `tenant_referrals`, `referral_commission_lines`, `referral_commis
 `onboarding_applications`, their definer functions and the permission `core.referrals.read`; `V85` is shop logos and `V86` and `V87`
 are the ordered claims before it (offline sales, barcodes); it is renamed at merge if that order changes. `V127__import_runs.sql`
 (#127, ADR-027; claimed as `V114` and renumbered above main's `V121` and the claims `V122` to `V126`) is expand only: `platform_import_settings` with `platform_set_import_commit_enabled`, `import_runs` and the first
-form of `import_batches` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
+form of `import_batches` (section 6.5, Import tables). `V139__import_mappings.sql` (#129, ADR-027 decision 3; directly after
+`V138`, claimed by #767) is expand only: `import_mappings`, the mapping columns of `import_batches` and the guard trigger
+`import_batches_mapping_kept` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items

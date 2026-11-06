@@ -728,12 +728,16 @@ tooling, as the commit is. Every call works on the bound business only: a run or
   one transaction, so the limits (`TOO_MANY_ROWS` over 100,000, `TOO_MANY_COLUMNS` over 200) and a damaged file
   (`FILE_UNREADABLE`: an unclosed quote, a cell over 32,767 characters, a broken zip or XML) roll every row back: the batch
   is `failed` with its code and a reason that names a limit, a row or a column, never a value, and its file is deleted. A
-  batch can be parsed again with other options before the run is ready; its rows are replaced. Until the mappings of #129,
-  the caller passes the required headers, the ignored columns and the sheet. A repeated header gets the first count no
+  batch can be parsed again with other options before the run is ready; its rows are replaced. Since #129 the required
+  headers, the ignored columns, the sheet and a fixed header row come from one source of a stored mapping version
+  (`ImportMappings.parseOptions`, below), and the batch records that version; a caller may still pass the first three
+  alone. A repeated header gets the first count no
   other header holds (`Phone`, `Phone (2)`, and for `Phone, Phone, Phone (2)` the third is `Phone (2) (2)`), and a cell
   beyond the header is `column_7` unless a header already has that name, so no cell is lost under another's name. A
-  refusal on a re-parse deletes the file like any other, a `HEADER_NOT_FOUND` caused by the options included; keeping the
-  file for refusals the mapping caused belongs with the mappings of #129.
+  refusal on a re-parse deletes the file like any other, a `HEADER_NOT_FOUND` caused by the options included. #129 did not
+  change this: keeping the file after a refusal the mapping caused would need a failed batch that can be parsed again and a
+  cleanup that spares it, which is left open for the review queue (#131); until then the operator checks a mapping with
+  `ImportMappings.validate` against the file's header row before the upload, and uploads again after a refusal.
 - **States.** A batch is `uploaded`, `parsed`, `failed` or `cancelled` (`pending` and `committed` keep their meaning for the
   commit). A run becomes `ready` only when no batch is `uploaded` or `failed`, and the commit writes the `pending` and
   `parsed` batches. Cancelling a batch deletes its rows and file.
@@ -774,3 +778,72 @@ tooling, as the commit is. Every call works on the bound business only: a run or
   a long sheet name and a refused update of the batch fail the batch with a code, the daily job as the scheduler runs it);
   `BusinessClosureIT` shows a removed business's quarantined file deleted, and `QuarantinePurgeIT` a refused delete that
   stops the purge and goes on the next run.
+
+**3/16, canonical templates and versioned mappings (#129, migration `V139`, ADR-027 decision 3).** `core.imports` gains the
+template contract, its registry and a business's mappings. No route yet: the operator's screen is #141, so until then the
+operator's tooling calls the services, as it calls the upload and the commit.
+
+- **The contract (`ImportTemplate`, the SPI).** A template has a key (`retail`, `lending_loans`) and a version (1, 2, ...;
+  read as `retail_v1`), its entity sets in commit order, each with typed fields of spec section 3.2 (`text(n)`, `money`,
+  `qty`, `date`, `datetime`, `phone`, `nin`, `enum(...)`, `bool`, `ref(entity set)`), a required flag and a named
+  normaliser per field (`trim` by default; `collapse_spaces`, `upper`, or the vertical's own form function under its own
+  name), the row rules a mapping may switch on per entity set (`subheader_month`, `totals_row`, `placeholder_rows`), its
+  own issue codes, and its loader: the `BatchWriter` the commit runs for a batch of one entity set (#133). A change is a
+  new version; a batch records the key and version it was parsed with.
+- **The registry (`ImportTemplates`, chapter 5 section 5.4.3).** A vertical registers a template by declaring a bean that
+  implements `ImportTemplate` in its own module; `TemplateRegistry` takes every such bean through an `ObjectProvider`, so the
+  core starts with none and never names a vertical (`ModularityTest`). Each template is checked once at start-up, and one
+  that fails stops the application with the reason: a key and version registered twice, a key, set, field or code that is
+  not a plain name, a field declared twice, a `ref` to a set not committed before it (or itself), an `enum` without
+  distinct values, a `text` of no length, a code that is a shared one or declared twice. The catalogue of a template is the
+  shared codes (`ImportTemplates.SHARED_CODES`: the shared codes of spec section 3.4.1 and the mapping codes below) then its
+  own. No production template is registered yet: `retail_v1` is #135 and `lending_loans_v1` #136; the tests register the
+  fabricated `fixture_shop` version 1.
+- **One JSON Schema per template version.** `ImportTemplates.schema(key, version)` returns a draft 2020-12 schema built from
+  the template: the shared shape of a mapping, narrowed per entity set (through `if`/`then` on `entity_set`) to its own
+  fields, the values of its enums and the row rules it offers. The service checks a mapping with exactly that document, by
+  an interpreter of the keywords the schema uses (`SchemaCheck`), which refuses any keyword it does not interpret, so the
+  published schema never says more than is checked; the fixtures pass a standard draft 2020-12 validator too.
+- **A mapping document** (spec section 4.2): `template`, `template_version`, `date_convention` (`day_first`, `month_first`,
+  `iso`), `time_zone`, `currency` (three capital letters), optional `unit_maps` (source label to unit), and `sources`, an
+  object keyed by a lower-case source key, each with: `entity_set`; optional `file` and `sheet` (which file or tab feeds it);
+  `header_row` (`"auto"` or a fixed row from 1 to 20); `columns`, each source header to `{"field": ...}` or
+  `{"ignore": true, "reason": ...}` (a reason of 3 to 200 characters); optional `value_maps` and `enum_maps` (per field,
+  source label to value; an enum map's values must be the enum's); optional `row_rules`; and `source_ref`
+  (`{"rule": "row_hash"}`, the tab, row number and content hash, or `{"rule": "column", "column": ...}`).
+- **The validator.** First the schema (`MAPPING_INVALID`, one per violation, with its JSON Pointer and never a value; a
+  template not registered is `TEMPLATE_UNKNOWN` alone; a pattern's final `$` is the end of the text, as in ECMA-262, so a
+  trailing line break never passes), then, on every part the schema accepted (a bad currency does not hide a source's
+  missing field), what a schema cannot say: a required field no column feeds
+  (`REQUIRED_FIELD_UNMAPPED`), one field fed by two columns (`FIELD_MAPPED_TWICE`), a column written twice ignoring case and
+  spaces (`COLUMN_DUPLICATE`), a value or enum map for a field no column feeds (`MAP_FIELD_UNMAPPED`), a `source_ref` column
+  the source does not keep (`SOURCE_REF_COLUMN_UNKNOWN`), an unknown zone (`ZONE_UNKNOWN`). Against a file's headers,
+  compared trimmed and ignoring case: one `COLUMN_UNMAPPED` per header neither mapped nor ignored, and
+  `REQUIRED_COLUMN_MISSING` per required field whose column the file lacks. A mapping is valid only with no problem at all,
+  so a column left unmapped and not ignored makes it invalid. The messages are the catalogue's, filled with the source,
+  column and field names (header names, not personal data).
+- **`import_mappings` (append-only).** `ImportMappings.save(name, document, by, note)` validates the document on its own and
+  stores the next version of the named mapping (422 `mapping_invalid` with every problem in `errors`, 422
+  `TEMPLATE_UNKNOWN`, 409 `mapping_version_conflict` when two saves race); audited as `core.import_mapping.saved` with
+  the name, version, template and number of sources. `get`, `latest`, `versions`, `check` (a document without storing it),
+  `validate(mapping, source, headers)` and `validateBatch(batch)`.
+- **A batch records its mapping.** `ImportMappings.parseOptions(mapping, source)` gives the upload the source's tab, header
+  row, the columns of its required fields (to find an automatic header row, or to check the fixed one: a fixed row that is
+  blank or lacks one of them is `HEADER_NOT_FOUND`), the columns it ignores (never stored) and the mapping itself. The parse
+  writes `mapping_id`, `mapping_source`, `template_key`, `template_version` and `source_headers` (every header name the parse
+  found, ignored ones included, and any column a row holds beyond the header) on the batch; a mapping of another business
+  is `not_found`. When options name a mapping, the upload and the parse use that mapping's own options for the source and
+  nothing else the caller passed, so a batch never records a mapping it was not parsed with; a source the mapping lacks is
+  `SOURCE_UNKNOWN` before the file is stored. A header name holding a NUL is `FILE_UNREADABLE`. A parse that fails clears the
+  five columns, so a failed batch never shows an earlier version's headers (`validateBatch` on it is 409
+  `batch_not_parsed`; on a batch read without a mapping it reports `BATCH_HAS_NO_MAPPING`). A new mapping version is a new
+  row, so a batch keeps reading the version it was parsed with; a parse is refused once the run is ready, and the trigger
+  `import_batches_mapping_kept` refuses any change to those five columns in an update that leaves or makes the batch
+  `committed`, for every role, the removal and purge of a closed business aside (V102's `bms_erasing`).
+- **Fixtures.** `fixtures/imports/` holds the fabricated mappings the tests read (`fixture_shop_v1.mapping.json`, valid;
+  `fixture_shop_v1.invalid.mapping.json`; a header row). Real mappings are never committed (spec section 4.2).
+- **Proven by** `MappingValidatorTest` (the registry's checks, the schema and its narrowing, every validator code, one
+  `COLUMN_UNMAPPED` per column, the fixed header row), `ImportMappingsIT` (versions append-only for every role; a refused
+  mapping stores nothing; a batch records its version and its unmapped columns are reported, its ignored column not stored;
+  a committed batch keeps its version after a new one; another business can neither read nor write a mapping), `RlsIsolationIT`
+  (forced RLS and append-only on `import_mappings`), `MigrationOrderIT` (V139 keeps every batch) and `ModularityTest`.

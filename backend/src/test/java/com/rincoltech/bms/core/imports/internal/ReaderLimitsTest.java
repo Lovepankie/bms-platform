@@ -334,6 +334,9 @@ class ReaderLimitsTest {
         refusedWith(Parsing.FILE_UNREADABLE, () -> parse(FileType.JSONL, key));
         byte[] nested = TestFiles.csv("{\"code\":\"FAB-1\",\"tags\":[\"a\\u0000\"]}\n");
         refusedWith(Parsing.FILE_UNREADABLE, () -> parse(FileType.JSONL, nested));
+        // A header-only file: its names reach import_batches.source_headers, which cannot hold a NUL (#129).
+        byte[] header = TestFiles.csv("Fab\u0000Code,Fab Label\n");
+        refusedWith(Parsing.FILE_UNREADABLE, () -> parse(FileType.CSV, header));
     }
 
     // JUSTIFICATION-A3: the two tests for items 3 and 5 of the review of 6e4f8c0, no new mechanism.

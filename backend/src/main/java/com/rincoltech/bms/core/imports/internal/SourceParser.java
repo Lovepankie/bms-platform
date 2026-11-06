@@ -11,8 +11,10 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -40,8 +42,13 @@ final class SourceParser {
     /** One row ready to store: its source row number and its {@code raw} as JSON. */
     record StagedRow(int sourceRowNo, String rawJson) {}
 
-    /** What the parse found. {@code headerRowNo} is 0 for JSON Lines, which has no header row. */
-    record Parsed(String sheetName, int headerRowNo, int columns, int rows, List<String> warnings) {}
+    /**
+     * What the parse found. {@code headerRowNo} is 0 for JSON Lines, which has no header row. {@code headers} are the
+     * names of the header row (ignored ones included) and of any other column a row holds (a cell past the header's
+     * width, a key a later JSON line adds), in the order first met: what the mapping validator checks (issue #129).
+     */
+    record Parsed(
+            String sheetName, int headerRowNo, int columns, int rows, List<String> warnings, List<String> headers) {}
 
     static Parsed parse(
             FileType type,
@@ -77,7 +84,8 @@ final class SourceParser {
             case XLSX -> {
                 Parsing.Sheet sheet = new Parsing.Sheet(limits, chunks);
                 String read = XlsxRows.read(source, sheetName, sheet);
-                parsed = new Parsed(read, sheet.headerRowNo(), sheet.columns(), sheet.rows(), warnings);
+                parsed = new Parsed(
+                        read, sheet.headerRowNo(), sheet.columns(), sheet.rows(), warnings, chunks.headers());
             }
             case CSV -> {
                 Parsing.Sheet sheet = new Parsing.Sheet(limits, chunks);
@@ -85,14 +93,15 @@ final class SourceParser {
                     CsvRows.read(in, sheet, limits);
                 }
                 sheet.end();
-                parsed = new Parsed(null, sheet.headerRowNo(), sheet.columns(), sheet.rows(), warnings);
+                parsed = new Parsed(
+                        null, sheet.headerRowNo(), sheet.columns(), sheet.rows(), warnings, chunks.headers());
             }
             case JSONL -> {
                 int columns;
                 try (Reader in = reader(source.open(), utf8)) {
                     columns = JsonLinesRows.read(in, mapper, limits, chunks);
                 }
-                parsed = new Parsed(null, 0, columns, chunks.rows, warnings);
+                parsed = new Parsed(null, 0, columns, chunks.rows, warnings, chunks.headers());
             }
             default -> throw new IllegalStateException();
         }
@@ -121,6 +130,8 @@ final class SourceParser {
         private long chunkChars;
         private long chars;
         int rows;
+        /** At most the column limit of names: the readers refuse a file with more columns. */
+        private final Set<String> headers = new LinkedHashSet<>();
 
         Chunks(ObjectMapper mapper, Consumer<List<StagedRow>> flush, Parsing.Limits limits) {
             this.mapper = mapper;
@@ -128,12 +139,23 @@ final class SourceParser {
             this.limits = limits;
         }
 
+        List<String> headers() {
+            return List.copyOf(headers);
+        }
+
         @Override
-        public void header(int headerRowNo, List<String> names) {}
+        public void header(int headerRowNo, List<String> names) {
+            // The names are stored in import_batches.source_headers, which cannot hold a NUL (review of #866).
+            if (names.stream().anyMatch(n -> n.indexOf('\0') >= 0)) {
+                throw Parsing.unreadable("The header row holds a NUL character.");
+            }
+            headers.addAll(names);
+        }
 
         @Override
         public void row(int sourceRowNo, Map<String, Cell> raw) {
             Map<String, Object> json = new LinkedHashMap<>();
+            headers.addAll(raw.keySet());
             raw.forEach((name, cell) -> {
                 // PostgreSQL cannot store a NUL in jsonb, though JSON may carry one (JSON Lines {"a":"\u0000"}).
                 if (name.indexOf('\0') >= 0

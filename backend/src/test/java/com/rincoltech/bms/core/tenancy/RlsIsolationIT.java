@@ -1197,9 +1197,22 @@ public class RlsIsolationIT {
         owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
                 .params(importRun, t.tenantId(), user)
                 .update();
+        // Versioned mappings (migration V139, #129): one fabricated mapping version, which the batch records, so the
+        // purge of a closed business meets the batch's foreign key to it (review of #866).
+        UUID importMapping = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO import_mappings (id, tenant_id, name, version, template_key, template_version, document,
+                                                     created_by)
+                        VALUES (?, ?, 'fab-shop', 1, 'fixture_shop', 1,
+                                '{"template": "fixture_shop", "template_version": 1}', ?)
+                        """).params(importMapping, t.tenantId(), user).update();
         UUID importBatch = UUID.randomUUID();
-        owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq) VALUES (?, ?, ?, 1)")
-                .params(importBatch, t.tenantId(), importRun)
+        owner.sql("""
+                        INSERT INTO import_batches (id, tenant_id, run_id, seq, mapping_id, mapping_source, template_key,
+                                                    template_version)
+                        VALUES (?, ?, ?, 1, ?, 'item_list', 'fixture_shop', 1)
+                        """)
+                .params(importBatch, t.tenantId(), importRun, importMapping)
                 .update();
         // The quarantined upload (migration V129, #128): one staged row of fabricated cells.
         owner.sql("""
@@ -1982,7 +1995,9 @@ public class RlsIsolationIT {
                 "lending_savings_transactions",
                 "lending_savings_daily_balances",
                 "lending_savings_interest_postings",
-                "lending_investment_transactions")) {
+                "lending_investment_transactions",
+                // A business's import mapping versions (#129).
+                "import_mappings")) {
             assertThatThrownBy(() -> asApp(
                             a.tenantId(),
                             c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))

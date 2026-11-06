@@ -73,12 +73,27 @@ final class Parsing {
     /**
      * The limits of one batch and the mapping's say: the headers the header row must hold (empty: the first row that is not
      * blank) and the columns not to keep (spec section 6.1). Header names are compared trimmed and ignoring case.
+     * {@code headerRowNo} is the mapping's fixed header row (issue #129), or 0 to find it.
      */
     record Limits(
-            int maxRows, int maxColumns, Set<String> requiredHeaders, Set<String> ignoredColumns, long maxFileBytes) {
+            int maxRows,
+            int maxColumns,
+            Set<String> requiredHeaders,
+            Set<String> ignoredColumns,
+            long maxFileBytes,
+            int headerRowNo) {
 
         Limits(int maxRows, int maxColumns, Set<String> requiredHeaders, Set<String> ignoredColumns) {
             this(maxRows, maxColumns, requiredHeaders, ignoredColumns, DEFAULT_MAX_FILE_BYTES);
+        }
+
+        Limits(
+                int maxRows,
+                int maxColumns,
+                Set<String> requiredHeaders,
+                Set<String> ignoredColumns,
+                long maxFileBytes) {
+            this(maxRows, maxColumns, requiredHeaders, ignoredColumns, maxFileBytes, 0);
         }
 
         Limits {
@@ -130,7 +145,15 @@ final class Parsing {
         void row(int rowNo, List<Cell> cells) {
             boolean blank = cells.stream().allMatch(c -> c == null || c.blank());
             if (names == null) {
-                if (rowNo > HEADER_SEARCH_ROWS) {
+                int fixed = limits.headerRowNo();
+                if (rowNo > HEADER_SEARCH_ROWS || (fixed > 0 && rowNo > fixed)) {
+                    throw headerNotFound();
+                }
+                if (fixed > 0 && rowNo < fixed) {
+                    return;
+                }
+                if (fixed > 0 && (blank || !isHeader(cells))) {
+                    // The mapping's header row is blank or lacks a required column (issue #129).
                     throw headerNotFound();
                 }
                 if (!blank && isHeader(cells)) {
