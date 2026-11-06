@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,10 @@ class TemplateRegistry implements ImportTemplates {
 
     static final Pattern KEY = Pattern.compile("^[a-z][a-z0-9_]{0,39}$");
     static final Pattern CODE = Pattern.compile("^[A-Z][A-Z0-9_]{1,59}$");
+    static final Pattern PLACEHOLDER = Pattern.compile("\\{([A-Za-z0-9_]+)}");
+
+    /** The longest message template, so a message filled with two file names stays inside its 500 (review of #867). */
+    static final int MAX_MESSAGE_TEMPLATE = 200;
 
     private final Map<String, ImportTemplate> templates = new LinkedHashMap<>();
 
@@ -127,9 +132,24 @@ class TemplateRegistry implements ImportTemplates {
                                 || before.contains(f.type().ref())
                                 || set.key().equals(f.type().ref()),
                         at + "a ref must name this entity set or one committed before it");
+                require(
+                        kind != Kind.REF || keyField(sets, f.type().ref()).isPresent(),
+                        at + "a ref must name an entity set with a key field");
+                require(!f.key() || kind == Kind.TEXT, at + "a key field must be a text field");
+                require(
+                        (f.min() == null && f.max() == null) || kind == Kind.MONEY || kind == Kind.QTY,
+                        at + "only a money or qty field has a range");
+                require(
+                        f.min() == null || f.max() == null || f.min().compareTo(f.max()) <= 0,
+                        at + "the range's minimum is above its maximum");
             }
+            require(
+                    set.fields().stream().filter(Field::key).count() <= 1,
+                    where + "entity set " + set.key() + " has more than one key field");
             before.add(set.key());
         }
+        Set<String> personal = new HashSet<>();
+        sets.forEach(s -> s.fields().stream().filter(Field::isPersonal).forEach(f -> personal.add(f.name())));
         Set<String> shared = new HashSet<>();
         SHARED_CODES.forEach(c -> shared.add(c.code()));
         Set<String> own = new HashSet<>();
@@ -140,7 +160,38 @@ class TemplateRegistry implements ImportTemplates {
             require(!shared.contains(c.code()), where + "code " + c.code() + " is a shared code");
             require(own.add(c.code()), where + "code " + c.code() + " is declared twice");
             require(!c.message().isBlank(), where + "code " + c.code() + " has no message");
+            require(
+                    c.message().length() <= MAX_MESSAGE_TEMPLATE,
+                    where + "code " + c.code() + " has a message over " + MAX_MESSAGE_TEMPLATE + " characters");
+            // JUSTIFICATION-A3: the personal-placeholder check of #130 sits with the registry's start-up checks.
+            for (String p : placeholders(c.message())) {
+                require(
+                        !personal.contains(p),
+                        where + "code " + c.code() + " interpolates the personal field {" + p + "}");
+                require(
+                        MESSAGE_PLACEHOLDERS.contains(p),
+                        where + "code " + c.code() + " interpolates {" + p + "}, not a placeholder a message may hold");
+            }
         }
+    }
+
+    /** The placeholders of a message template, in order: {@code {field}} gives {@code field}. */
+    static List<String> placeholders(String message) {
+        List<String> out = new ArrayList<>();
+        Matcher m = PLACEHOLDER.matcher(message);
+        while (m.find()) {
+            out.add(m.group(1));
+        }
+        return out;
+    }
+
+    /** The key field of an entity set, if the template has the set and the set has one. */
+    static Optional<Field> keyField(List<EntitySet> sets, String setKey) {
+        return sets.stream()
+                .filter(s -> s.key().equals(setKey))
+                .flatMap(s -> s.fields().stream())
+                .filter(Field::key)
+                .findFirst();
     }
 
     private static void require(boolean ok, String reason) {

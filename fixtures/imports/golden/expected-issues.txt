@@ -1,0 +1,36 @@
+fab-item-list.csv|3|code|VALUE_NORMALISED|info|code on fab-item-list.csv line 3 was tidied by the rule upper; the original is kept with this note.
+fab-item-list.csv|3|name|VALUE_NORMALISED|info|name on fab-item-list.csv line 3 was tidied by the rule collapse_spaces; the original is kept with this note.
+fab-item-list.csv|3|price|VALUE_NORMALISED|info|price on fab-item-list.csv line 3 was tidied by the rule thousands_separator; the original is kept with this note.
+fab-item-list.csv|4|code|CODE_DUPLICATE|warning|code on fab-item-list.csv line 4 is the same as line 2 ignoring case and spaces; they become one record of items.
+fab-item-list.csv|5|name|REQUIRED_MISSING|blocking|name is empty on fab-item-list.csv line 5.
+fab-item-list.csv|6|price|MONEY_FRACTION|blocking|price on fab-item-list.csv line 6 has a fraction; amounts are whole shillings.
+fab-item-list.csv|6|active|TYPE_INVALID|blocking|active on fab-item-list.csv line 6 is not a valid bool.
+fab-item-list.csv|7|price|TYPE_INVALID|blocking|price on fab-item-list.csv line 7 is not a valid money.
+fab-item-list.csv|7|kind|TYPE_INVALID|blocking|kind on fab-item-list.csv line 7 is not a valid enum(stock|service).
+fab-item-list.csv|8|unit|TEXT_TOO_LONG|blocking|unit on fab-item-list.csv line 8 is longer than 20 characters.
+fab-item-list.csv|8|price|VALUE_OUT_OF_RANGE|blocking|price on fab-item-list.csv line 8 is outside the allowed range: from 0 to 10000000.
+fab-item-list.csv|10|-|DUPLICATE_SOURCE_REF|blocking|Line 10 of fab-item-list.csv repeats the reference of line 9.
+fab-item-list.csv|10|code|CODE_DUPLICATE|warning|code on fab-item-list.csv line 10 is the same as line 9 ignoring case and spaces; they become one record of items.
+fab-buyers.csv|3|phone|VALUE_NORMALISED|info|phone on fab-buyers.csv line 3 was tidied by the rule uganda_phone; the original is kept with this note.
+fab-buyers.csv|4|name|VALUE_NORMALISED|info|name on fab-buyers.csv line 4 was tidied by the rule collapse_spaces; the original is kept with this note.
+fab-buyers.csv|4|nin|VALUE_NORMALISED|info|nin on fab-buyers.csv line 4 was tidied by the rule national_id; the original is kept with this note.
+fab-buyers.csv|5|phone|TYPE_INVALID|blocking|phone on fab-buyers.csv line 5 is not a valid phone.
+fab-buyers.csv|5|joined_on|TYPE_INVALID|blocking|joined_on on fab-buyers.csv line 5 is not a valid date.
+fab-buyers.csv|5|nin|NIN_DUPLICATE|warning|nin on fab-buyers.csv line 5 is the same national ID number as line 3; check whether they are one person.
+fab-buyers.csv|6|phone|VALUE_NORMALISED|info|phone on fab-buyers.csv line 6 was tidied by the rule uganda_phone; the original is kept with this note.
+fab-buyers.csv|6|nin|TYPE_INVALID|blocking|nin on fab-buyers.csv line 6 is not a valid nin.
+fab-buyers.csv|6|joined_on|DATE_AFTER_CUTOVER|blocking|joined_on on fab-buyers.csv line 6 is after the agreed cutover moment.
+fab-buyers.csv|7|phone|VALUE_NORMALISED|info|phone on fab-buyers.csv line 7 was tidied by the rule uganda_phone; the original is kept with this note.
+fab-buyers.csv|7|ref_no|CODE_DUPLICATE|warning|ref_no on fab-buyers.csv line 7 is the same as line 3 ignoring case and spaces; they become one record of customers.
+fab-buyers.csv|8|ref_no|CODE_CONTROL_CHAR|blocking|ref_no on fab-buyers.csv line 8 has a hidden character inside it.
+fab-buyers.csv|8|phone|VALUE_NORMALISED|info|phone on fab-buyers.csv line 8 was tidied by the rule uganda_phone; the original is kept with this note.
+fab-till-roll.csv|5|item|REF_UNKNOWN|blocking|item on fab-till-roll.csv line 5 names a record of items that is not in the import or the tenant.
+fab-till-roll.csv|5|customer|REF_UNKNOWN|blocking|customer on fab-till-roll.csv line 5 names a record of customers that is not in the import or the tenant.
+fab-till-roll.csv|6|item|VALUE_NORMALISED|info|item on fab-till-roll.csv line 6 was tidied by the rule upper; the original is kept with this note.
+fab-till-roll.csv|6|qty|QTY_PRECISION|blocking|qty on fab-till-roll.csv line 6 has more than three decimal places.
+fab-till-roll.csv|7|qty|FIXTURE_SALE_QTY_NOT_POSITIVE|blocking|qty on fab-till-roll.csv line 7 must be above zero for a sale.
+fab-till-roll.csv|8|sold_at|DATE_AFTER_CUTOVER|blocking|sold_at on fab-till-roll.csv line 8 is after the agreed cutover moment.
+fab-till-roll.csv|9|sold_at|REQUIRED_MISSING|blocking|sold_at is empty on fab-till-roll.csv line 9.
+fab-till-roll.csv|9|kind|TYPE_INVALID|blocking|kind on fab-till-roll.csv line 9 is not a valid enum(sale|adjustment).
+fab-till-roll.csv|10|-|BLANK_ROW|info|Line 10 of fab-till-roll.csv is blank; it is left out.
+fab-till-roll.csv|11|sold_at|TYPE_INVALID|blocking|sold_at on fab-till-roll.csv line 11 is not a valid datetime.

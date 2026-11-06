@@ -1,8 +1,10 @@
 package com.rincoltech.bms.core.imports;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -154,13 +156,33 @@ public interface ImportTemplate {
         }
     }
 
-    /** One target field of an entity set. */
-    record Field(String name, FieldType type, boolean required, Normaliser normaliser) {
+    // JUSTIFICATION-A3: issue #130 extends the template contract itself (personal and key fields, ranges, checks).
+    /**
+     * One target field of an entity set (issue #130 adds the last four). {@code personal}: the field holds personal data (a
+     * name, a contact), so no message may interpolate it; a {@code phone} or {@code nin} field is personal whatever the
+     * flag says ({@link #isPersonal()}). {@code key}: the entity set's code, at most one per set, a {@code text} field; a
+     * {@code ref} to the set names it, and two rows of the run with the same key ignoring case and spaces are reported
+     * ({@code CODE_DUPLICATE}). {@code min} and {@code max}: the inclusive range of a {@code money} or {@code qty} field, or
+     * null for no bound ({@code VALUE_OUT_OF_RANGE}).
+     */
+    record Field(
+            String name,
+            FieldType type,
+            boolean required,
+            Normaliser normaliser,
+            boolean personal,
+            boolean key,
+            BigDecimal min,
+            BigDecimal max) {
 
         public Field {
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(type, "type");
             normaliser = normaliser == null ? Normaliser.TRIM : normaliser;
+        }
+
+        public Field(String name, FieldType type, boolean required, Normaliser normaliser) {
+            this(name, type, required, normaliser, false, false, null, null);
         }
 
         public static Field required(String name, FieldType type) {
@@ -172,8 +194,67 @@ public interface ImportTemplate {
         }
 
         public Field normalisedBy(Normaliser normaliser) {
-            return new Field(name, type, required, normaliser);
+            return new Field(name, type, required, normaliser, personal, key, min, max);
         }
+
+        /** Marks the field as personal data: never interpolated into a message. */
+        public Field personalData() {
+            return new Field(name, type, required, normaliser, true, key, min, max);
+        }
+
+        /** Marks the field as the entity set's code. */
+        public Field asKey() {
+            return new Field(name, type, required, normaliser, personal, true, min, max);
+        }
+
+        /** The inclusive range of a money or qty field; either bound may be null. */
+        public Field range(BigDecimal min, BigDecimal max) {
+            return new Field(name, type, required, normaliser, personal, key, min, max);
+        }
+
+        /** Whether the field holds personal data: flagged so, or a phone or a NIN. */
+        public boolean isPersonal() {
+            return personal || type.kind() == Kind.PHONE || type.kind() == Kind.NIN;
+        }
+    }
+
+    /**
+     * A cross-field rule of one entity set (spec section 3.4; chapter 13 section 13.6 for lending, quantity and price rules
+     * for retail), run by the validation of #130 on each row after its fields are typed. It sees the typed values by field
+     * of the fields that passed their own checks (text, {@code Long} for money, {@code BigDecimal} for qty,
+     * {@code LocalDate}, {@code Instant}, {@code Boolean}) and answers its findings. A finding names a code of the
+     * template's catalogue and the field it is on; its parameters may only be placeholders of
+     * {@link ImportTemplates#MESSAGE_PLACEHOLDERS} and never carry a value of the row.
+     */
+    @FunctionalInterface
+    interface RowCheck {
+
+        List<RowFinding> check(Map<String, Object> values);
+    }
+
+    /** One finding of a {@link RowCheck}: a code, the field it is on (or null for the row), and non-personal parameters. */
+    record RowFinding(String code, String field, Map<String, String> params) {
+
+        public RowFinding {
+            Objects.requireNonNull(code, "code");
+            params = params == null ? Map.of() : Map.copyOf(params);
+        }
+    }
+
+    /** The cross-field rules of one entity set, run in this order; none by default. */
+    default List<RowCheck> rowChecks(String entitySet) {
+        return List.of();
+    }
+
+    /**
+     * The keys of one entity set the business already holds, among {@code keys} (spec section 3.4: a reference names a
+     * record "in the import or the tenant"). The validation asks only for the keys a {@code ref} names that no row of the
+     * run holds, each in compare form: the key field's normaliser applied, then upper case with every space removed. Called
+     * inside a read-only transaction bound to the business, so it reads only the business's own rows (RLS). None by
+     * default.
+     */
+    default Set<String> existingKeys(String entitySet, Set<String> keys) {
+        return Set.of();
     }
 
     /**

@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.imports.ImportTemplate.Severity;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The registry of canonical templates (issue #129, spec section 4.1, chapter 5 section 5.4.3). It holds every
@@ -74,11 +75,14 @@ public interface ImportTemplates {
                     Severity.BLOCKING,
                     "{field} on {file} line {line} has more than three decimal places."),
             new IssueCode(
-                    "DUPLICATE_SOURCE_REF", Severity.BLOCKING, "Line {line} repeats the reference of line {other}."),
+                    "DUPLICATE_SOURCE_REF",
+                    Severity.BLOCKING,
+                    "Line {line} of {file} repeats the reference of line {other}."),
             new IssueCode(
                     "REF_UNKNOWN",
                     Severity.BLOCKING,
-                    "{field} on {file} line {line} names a {entity} that is not in the import or the tenant."),
+                    "{field} on {file} line {line} names a record of {entity} that is not in the import or the"
+                            + " tenant."),
             new IssueCode(
                     "DATE_AFTER_CUTOVER",
                     Severity.BLOCKING,
@@ -129,7 +133,7 @@ public interface ImportTemplates {
                     "SOURCE_REF_COLUMN_UNKNOWN",
                     Severity.BLOCKING,
                     "The reference column {column} of source {source} is not a column the mapping keeps."),
-            new IssueCode("ZONE_UNKNOWN", Severity.BLOCKING, "The time zone {value} is not a known zone."),
+            new IssueCode("ZONE_UNKNOWN", Severity.BLOCKING, "The time zone {zone} is not a known zone."),
             new IssueCode("SOURCE_UNKNOWN", Severity.REFUSED, "The mapping has no source {source}."),
             new IssueCode(
                     "BATCH_HAS_NO_MAPPING",
@@ -138,5 +142,65 @@ public interface ImportTemplates {
             new IssueCode(
                     "REQUIRED_COLUMN_MISSING",
                     Severity.BLOCKING,
-                    "Column {column}, which feeds the required {field}, is not in the file of source {source}."));
+                    "Column {column}, which feeds the required {field}, is not in the file of source {source}."),
+            // The validation codes (issue #130): what the engine reports on a row besides the shared row codes above.
+            // CODE_DUPLICATE and CODE_CONTROL_CHAR were planned as retail codes; the engine finds them for the key
+            // field of any template, so they are shared. JUSTIFICATION-A3: the catalogue is data; #130 adds its codes.
+            new IssueCode(
+                    "VALUE_NORMALISED",
+                    Severity.INFO,
+                    "{field} on {file} line {line} was tidied by the rule {normaliser}; the original is kept with this"
+                            + " note."),
+            new IssueCode(
+                    "TEXT_TOO_LONG",
+                    Severity.BLOCKING,
+                    "{field} on {file} line {line} is longer than {limit} characters."),
+            new IssueCode(
+                    "VALUE_OUT_OF_RANGE",
+                    Severity.BLOCKING,
+                    "{field} on {file} line {line} is outside the allowed range: {range}."),
+            new IssueCode(
+                    "CODE_DUPLICATE",
+                    Severity.WARNING,
+                    "{field} on {file} line {line} is the same as line {other} ignoring case and spaces; they become one"
+                            + " record of {entity}."),
+            new IssueCode(
+                    "CODE_CONTROL_CHAR",
+                    Severity.BLOCKING,
+                    "{field} on {file} line {line} has a hidden character inside it."),
+            // Chapter 13 section 13.5 named it for the lending register; a blank row is the same in every template.
+            new IssueCode("BLANK_ROW", Severity.INFO, "Line {line} of {file} is blank; it is left out."),
+            new IssueCode(
+                    "NIN_DUPLICATE",
+                    Severity.WARNING,
+                    "{field} on {file} line {line} is the same national ID number as line {other}; check whether they"
+                            + " are one person."));
+
+    /**
+     * The only placeholders a message template may hold (issue #130, spec section 3.4): where an issue is and what rule it
+     * broke, never a value of a row. {@code field}, {@code column}, {@code source}, {@code entity} and {@code template} are
+     * names from the template and the mapping; {@code file} the batch's file name; {@code line}, {@code other} and
+     * {@code row} line numbers; {@code type}, {@code limit}, {@code range} and {@code normaliser} the rule; {@code pointer}
+     * and {@code reason} a place in a mapping and what is wrong there; {@code zone} the mapping's time zone; {@code branch}
+     * the name of a branch of the business. The registry refuses a template whose message holds any other placeholder or the
+     * name of one of its personal fields.
+     */
+    Set<String> MESSAGE_PLACEHOLDERS = Set.of(
+            "field",
+            "file",
+            "line",
+            "other",
+            "row",
+            "column",
+            "source",
+            "entity",
+            "template",
+            "type",
+            "limit",
+            "range",
+            "normaliser",
+            "pointer",
+            "reason",
+            "zone",
+            "branch");
 }

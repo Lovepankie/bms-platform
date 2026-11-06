@@ -1296,7 +1296,7 @@ Added by `V129__import_upload.sql` (issue #128, chapter 13 section 13.14.1), exp
   the migration's one transaction; the table is empty on every server). A failed or cancelled batch keeps its `object_key`
   until storage confirms the file's delete, so the cleanup finds a delete that failed. A partial unique index `import_batches_one_file_per_run (run_id, source_sha256)` over batches
   not failed or cancelled holds one copy of a file per run, and `import_batches_held_files` finds the files still held.
-- **`import_rows`** (RLS, `SELECT, INSERT, DELETE`; never updated): `batch_id` (FK `(tenant_id, batch_id)`), `source_row_no`
+- **`import_rows`** (RLS, `SELECT, INSERT, DELETE`; `raw` never updated, V140 below adds `UPDATE` on its two validation columns): `batch_id` (FK `(tenant_id, batch_id)`), `source_row_no`
   (`UNIQUE (batch_id, source_row_no)`), `raw jsonb` (per kept column `{"value", "type"}`, a column absent is empty). It holds a
   customer's cells and so may hold personal data: it is the quarantine, read by no business module, removed with a cancelled
   run by the cleanup and purged by #139; the generic purge removes it with a closed business before its batch.
@@ -1317,6 +1317,24 @@ Added by `V139__import_mappings.sql` (issue #129, ADR-027 decision 3, chapter 13
   written afterwards is checked) and `source_headers text[]` (the header names its parse found).
   The plain index `import_batches_by_mapping (tenant_id, mapping_id) WHERE mapping_id IS NOT NULL` serves the foreign key.
   The trigger `import_batches_mapping_kept` refuses a change to those five columns once the batch is `committed`.
+
+Added by `V140__import_validation.sql` (issue #130, chapter 13 sections 13.4, 13.7 and 13.14.1), expand only:
+
+- **`import_rows`** gains `normalised jsonb` (the typed values by target field, NULL until the row is validated) and
+  `source_ref varchar(300)` (the reference a re-run recognises the row by). `bms_app` gets `UPDATE` on these two columns only
+  (a column grant), so `raw` is still never changed; the trigger `import_rows_validation_kept` refuses a change to them once
+  the row's batch is `committed`. `normalised` may hold personal data, like `raw`, and is purged with it by #139.
+- **`import_issues`** (RLS forced, `SELECT, INSERT, DELETE`): the issues of the latest validation of a batch. `id`, `tenant_id`,
+  `created_at`, `batch_id` (FK `(tenant_id, batch_id)`), `row_id` (FK `(tenant_id, batch_id, row_id)` to the new
+  `UNIQUE (tenant_id, batch_id, id)` of `import_rows`, `ON DELETE CASCADE`, so an issue's row is of its business and batch
+  and a new parse, a cancel or the purge takes its rows' issues with it), `source_row_no`, `ordinal` (the engine's order within the batch, `UNIQUE (batch_id, ordinal)`),
+  `code` (a code of the template's catalogue), `severity` [`info`, `warning`, `blocking`], `field` (or NULL for the row),
+  `message varchar(500)` (built from the code's template with field, file and line, never a personal value),
+  `original_value jsonb` (the cell text the issue concerns, which may be personal: the review screen shows it to a holder of
+  `core.imports.view_raw` only), `status` [`open`, `resolved`] (`info` is created `resolved`, a CHECK). Plain indexes
+  `import_issues_by_row (row_id)` and `import_issues_by_code (tenant_id, batch_id, code)`. A new validation of a batch deletes
+  its issues and writes them again; the trigger `import_issues_batch_kept` refuses an insert or delete for a `committed`
+  batch, a delete cascaded from its rows included (the purge of #139 brings its own way past it). Both triggers keep V102's bypass for a migration and for the removal and purge of a closed business.
 
 ## 6.6 General ledger (RLS)
 
@@ -2193,7 +2211,9 @@ are the ordered claims before it (offline sales, barcodes); it is renamed at mer
 (#127, ADR-027; claimed as `V114` and renumbered above main's `V121` and the claims `V122` to `V126`) is expand only: `platform_import_settings` with `platform_set_import_commit_enabled`, `import_runs` and the first
 form of `import_batches` (section 6.5, Import tables). `V139__import_mappings.sql` (#129, ADR-027 decision 3; directly after
 `V138`, claimed by #767) is expand only: `import_mappings`, the mapping columns of `import_batches` and the guard trigger
-`import_batches_mapping_kept` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
+`import_batches_mapping_kept` (section 6.5, Import tables). `V140__import_validation.sql` (#130; directly after `V139`) is expand
+only: `import_issues`, the validation columns of `import_rows` with their column grant, and the guard triggers
+`import_issues_batch_kept` and `import_rows_validation_kept` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items

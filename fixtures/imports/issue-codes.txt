@@ -1,0 +1,45 @@
+# Every issue code ever registered (issue #130, spec section 3.4): the catalogue a code is in, the code, its severity, and
+# "retired" once it is retired. A code is never renamed, reused or removed; a retired code stays, marked. ImportCatalogueTest
+# fails when a code listed here is missing from its catalogue, has another severity, or loses its retired mark, and when a
+# catalogue holds a code not listed here. Add a line with every new code; never delete one.
+shared FILE_TYPE_UNSUPPORTED batch_fails
+shared FILE_TOO_LARGE batch_fails
+shared TOO_MANY_ROWS batch_fails
+shared HEADER_NOT_FOUND batch_fails
+shared TOO_MANY_COLUMNS batch_fails
+shared FILE_UNREADABLE batch_fails
+shared FILE_ALREADY_UPLOADED refused
+shared UPLOAD_DISK_LOW refused
+shared COLUMN_UNMAPPED warning
+shared REQUIRED_MISSING blocking
+shared TYPE_INVALID blocking
+shared MONEY_FRACTION blocking
+shared QTY_PRECISION blocking
+shared DUPLICATE_SOURCE_REF blocking
+shared REF_UNKNOWN blocking
+shared DATE_AFTER_CUTOVER blocking
+shared TENANT_TRADING refused
+shared IMPORT_IN_PROGRESS refused
+shared ENCODING_CONVERTED warning
+shared ROW_CHANGED_SINCE_REVIEW blocking
+shared CHANGED_SINCE_IMPORT blocking
+shared TEMPLATE_UNKNOWN refused
+shared MAPPING_INVALID refused
+shared REQUIRED_FIELD_UNMAPPED blocking
+shared FIELD_MAPPED_TWICE blocking
+shared COLUMN_DUPLICATE blocking
+shared MAP_FIELD_UNMAPPED blocking
+shared SOURCE_REF_COLUMN_UNKNOWN blocking
+shared ZONE_UNKNOWN blocking
+shared SOURCE_UNKNOWN refused
+shared BATCH_HAS_NO_MAPPING refused
+shared REQUIRED_COLUMN_MISSING blocking
+shared VALUE_NORMALISED info
+shared TEXT_TOO_LONG blocking
+shared VALUE_OUT_OF_RANGE blocking
+shared CODE_DUPLICATE warning
+shared CODE_CONTROL_CHAR blocking
+shared BLANK_ROW info
+shared NIN_DUPLICATE warning
+fixture_shop_v1 FIXTURE_ITEM_UNNAMED blocking retired
+fixture_shop_v1 FIXTURE_SALE_QTY_NOT_POSITIVE blocking

@@ -100,14 +100,19 @@ All tenant-owned, RLS as chapter 6 section 6.3.
 | Column | Type | Notes |
 |---|---|---|
 | (std, no `version`) | | |
-| `row_id` | `uuid NOT NULL` | |
-| `code` | `text NOT NULL` | 13.7 |
+| `batch_id` | `uuid NOT NULL` | As built (V140, #130). |
+| `row_id` | `uuid NOT NULL` | Its issues go with the row when a new parse replaces it. |
+| `source_row_no`, `ordinal` | `integer NOT NULL` | The line, and the engine's order within the batch (V140). |
+| `code` | `text NOT NULL` | 13.7 and the shared codes of the spec's section 3.4.1 |
 | `severity` | `text NOT NULL` | [`info`, `warning`, `blocking`] |
 | `field` | `text` | Target field, or NULL for row-level issues. |
-| `message` | `text NOT NULL` | Human explanation, with the original and proposed values. |
-| `original_value` | `jsonb` | |
-| `suggested_value` | `jsonb` | Only when a rule in this chapter produces one. |
+| `message` | `varchar(500) NOT NULL` | Plain language from the code's template with field, file and line; never a personal value (13.7, #130). |
+| `original_value` | `jsonb` | The cell text the issue concerns; shown only to a holder of `core.imports.view_raw`. |
+| `suggested_value` | `jsonb` | Only when a rule in this chapter produces one; not built yet (#131 holds suggestions with the resolutions). |
 | `status` | `text NOT NULL` | [`open`, `resolved`] (`info` issues are created `resolved`). |
+
+As built (V140), `import_rows` carries `normalised` and `source_ref`, written by the validation, and not yet `row_class`,
+`status`, `excluded_reason`, `linked_row_id`, `member_key` or the created ids, which come with the steps that need them.
 
 ### `import_issue_resolutions` (append-only)
 
@@ -293,7 +298,7 @@ to `other` for every imported loan (the spreadsheet has no category).
 
 | Code | Severity | Field | Suggestion | Allowed resolutions |
 |---|---|---|---|---|
-| `BLANK_ROW` | info | row | | none (auto-excluded) |
+| `BLANK_ROW` | info | row | | none (auto-excluded); a shared code since #130 |
 | `SUBHEADER_ROW` | info | row | | `reclassify` |
 | `PLACEHOLDER_ROW` | blocking | row | exclude | `exclude_row`, `reclassify` |
 | `AMOUNTS_ONLY_ROW` | blocking | row | exclude, or link to preceding data row | `exclude_row`, `link_row`, `reclassify` (after editing identity fields) |
@@ -346,6 +351,29 @@ to `other` for every imported loan (the spreadsheet has no category).
 Severity semantics: `info` issues are recorded resolved and never block. `warning` and
 `blocking` issues start `open`; commit requires none open (FR-IMP-07). `override` is not
 available on blocking issues.
+
+**The catalogue as a contract (#130).** This table is the own catalogue of the `lending_loans_v1`
+template (#136); the validation engine adds the shared codes of the spec's section 3.4.1 in front of
+it, so a lending row also gets `REQUIRED_MISSING`, `TYPE_INVALID`, `REF_UNKNOWN`, `DUPLICATE_SOURCE_REF`,
+`VALUE_NORMALISED` and the rest from the engine, and the template reports the codes above through its
+normalisers and cross-field rules. `BLANK_ROW` is now a shared code, with the same name and meaning, and
+so is not listed again by the template. The rules every catalogue keeps:
+
+- A code is never renamed or reused. A code no longer produced stays in its catalogue, marked retired
+  (`IssueCode.retired`); the engine refuses to report a retired code. Every code ever registered is
+  pinned in `fixtures/imports/issue-codes.txt`, and `ImportCatalogueTest` fails when one is removed,
+  renamed, given another severity or loses its retired mark. The lending codes join that file with #136.
+- Every code that is not retired is produced by a fabricated fixture row (the golden run of the
+  template), or, for a code another stage owns (the upload, the mapping validator, the commit guards),
+  by the named test of that stage; a code whose producer is a later build step is listed as pending that
+  step and leaves the list with it.
+- A message is written for the customer from a template with the field, the file and the line
+  (`{field} on {file} line {line} ...`) and only the placeholders of `ImportTemplates.MESSAGE_PLACEHOLDERS`.
+  It never interpolates a field the template marks personal (a name, a contact; a `phone` or `nin` field
+  always counts as personal), and the registry refuses at start-up a template whose message does. The
+  column "Message" of 13.4 therefore no longer carries the original and proposed values: the original
+  is stored beside the message (`import_issues.original_value`) and shown only in the review screen to
+  a holder of `core.imports.view_raw`, and a suggestion is the resolution's (#131).
 
 ## 13.8 Column mapping
 
@@ -623,7 +651,8 @@ retail command. ADR-027 makes the framework the one pipeline for every tenant's 
   the review queue and creates a new mapping version.
 - **Issue codes.** Every template has a stable code catalogue (13.7 for lending; the shared and
   retail codes are in the spec, section 3.4.1). Messages are plain language and carry the field,
-  file and line, never a personal value.
+  file and line, never a personal value. The engine that applies them is built (#130, section
+  13.14.1 4/16).
 - **Dry run and commit.** The dry run is the commit in one outer transaction that is rolled back,
   with the same report as `import-retail`. Commit is maker-checker (`import_commit`), one
   transaction per batch in dependency order; the register batch of this chapter stays one
@@ -847,3 +876,81 @@ operator's tooling calls the services, as it calls the upload and the commit.
   mapping stores nothing; a batch records its version and its unmapped columns are reported, its ignored column not stored;
   a committed batch keeps its version after a new one; another business can neither read nor write a mapping), `RlsIsolationIT`
   (forced RLS and append-only on `import_mappings`), `MigrationOrderIT` (V139 keeps every batch) and `ModularityTest`.
+
+**4/16, the validation engine (#130, migration `V140`).** `core.imports` gains the public API `ImportValidation`
+(`validate(run)`, `issues(batch)`); no route yet (#141), so the operator's tooling calls it, as it calls the upload.
+
+- **What is checked.** Every parsed batch of a run that is `uploaded` or `in_review` (409 `run_not_open` otherwise),
+  against its template and the mapping version the batch recorded (422 `BATCH_HAS_NO_MAPPING` for a batch read without
+  one, 409 `templates_differ` when the batches name two template versions). Per field, in the template's order: required
+  (`REQUIRED_MISSING`); the mapping's value map, and for an enum its enum map, as the mapping's explicit word, without an
+  issue; the normaliser, which is the shared form function (section 13.6): the field's own `Normaliser` for text, codes and
+  references (`collapse_spaces`, `upper`, `RetailCatalogue.normaliseCode` for retail codes under the vertical's own name),
+  `PhoneNumbers.normaliseUganda` for a `phone` and `NationalIds.normaliseNin` for a `nin`, each change an `info`
+  `VALUE_NORMALISED` with the original; group separators in a number are taken only between groups of three digits after a
+  first group that does not start with 0 (`12,500`, `12 500`; `12,50`, `1,5` and `0,250` are `TYPE_INVALID`, never 1250, 15
+  or 250) and their removal is a `VALUE_NORMALISED`
+  of the rule `thousands_separator`; the type (`TYPE_INVALID`, `MONEY_FRACTION` for a fraction of a shilling,
+  `QTY_PRECISION` beyond three places, `TEXT_TOO_LONG`; dates and moments read as ISO under every convention and day first
+  or month first under the mapping's, a moment in the mapping's zone); a hidden character inside a key or a reference
+  (`CODE_CONTROL_CHAR`); the field's range (`VALUE_OUT_OF_RANGE`); a date or moment after the run's `cutover_at`
+  (`DATE_AFTER_CUTOVER`). Per row: its `source_ref` (the mapping's column, or the source, line and a hash of its kept
+  cells), repeated in the run (`DUPLICATE_SOURCE_REF`); a reference to a code no batch of the run holds and the business does
+  not hold either (`REF_UNKNOWN`; the template answers for its own tables through `existingKeys`, inside a read-only
+  transaction bound to the business); a key repeated across the run ignoring case and spaces (`CODE_DUPLICATE`); a NIN
+  repeated in the entity set within the run (`NIN_DUPLICATE`; a NIN the business already holds is matched by the
+  template's linking step, section 13.9, with #136); then the template's cross-field rules (`rowChecks`), whose parameters
+  may only be a number, a code in capitals or a name of the template's entity sets and fields, and never a personal value
+  of the row (of four characters or more, as written, normalised or by its digits); anything else is shown as `(hidden)`,
+  so a rule never leaks a value and ordinary data never stops the run. A rule that does it is a programming error the
+  template's golden run catches: its test fails on any message that shows `(hidden)`. A row whose kept cells are all empty is
+  `BLANK_ROW` and nothing else.
+- **The template contract grows.** A `Field` may be `personalData()` (never interpolated; a `phone` or `nin` always is), the
+  set's key (`asKey()`, at most one, a `text`, which a `ref` to the set names) and have a `range(min, max)` (money and qty).
+  A template may offer `rowChecks(set)` and `existingKeys(set, keys)`. The registry refuses at start-up a key that is not
+  text, a range on another kind, a `ref` to a set without a key, and a message that holds the name of a personal field or a
+  placeholder outside `ImportTemplates.MESSAGE_PLACEHOLDERS`.
+- **Two passes, deterministic.** `RowValidator` is plain Java. Pass 1 reads the run's batches in commit order (the
+  template's entity sets, then the batch's order), 1,000 rows at a time, and learns the first line of each key,
+  `source_ref` and NIN and the codes each reference names; pass 2 checks each row and answers its typed values, its
+  `source_ref` and its issues in a fixed order (fields in the template's order, then the row's reference, then per field its
+  reference and duplicates, then the cross-field rules). The same rows, template and mapping version give the same issues,
+  messages and values every time.
+- **A run that changes while it is checked.** A validation refuses to start while a file of the run is stored and not
+  yet read (409 `batch_not_parsed`). Pass 1 records each batch's stamp (status, mapping version, parse time, row count).
+  Pass 2 and the end run in one transaction that holds the run `FOR UPDATE`, as an upload does, so no file of the run is
+  added, read again or cancelled meanwhile (the parse and the cancel take the run `FOR SHARE`). It writes only if every
+  batch of the run still has the stamp pass 1 saw; otherwise 409 `batch_changed`, nothing of the run is written, and the
+  run stays where it was, so no batch ever keeps issues built from another batch's old content. A second validation that
+  finishes later finds the run already in review.
+- **Where the results are.** In that transaction, for each parsed batch: the batch's issues are
+  deleted and written again in `import_issues` (code, severity, field, line, message, the original cell text, `open` or
+  `resolved` for `info`), and each row's `normalised` and `source_ref` are set; `raw` is never changed (a column grant). A
+  committed batch is read for its keys and references and never written; the triggers `import_issues_batch_kept` and
+  `import_rows_validation_kept` refuse it for every role but a migration and the removal of a business, a delete cascaded
+  from the rows included: the purge of #139, which removes a committed batch's staged rows, brings its own way past the
+  guard (Lead ruling on #867). An issue's row is of its
+  business and its batch (the foreign key `(tenant_id, batch_id, row_id)`). An `uploaded` run
+  moves to `in_review`. Audited as `core.import_run.validated` with counts by code; the log line carries the run id and the
+  counts by code only.
+- **Messages.** Built from the code's template, in one pass over the template (a placeholder written inside a file name
+  is never filled), with the field name, the batch's file name (at most 100 characters, the middle elided), line numbers
+  and the rule; never a cell's text. A template is at most 200 characters (the registry refuses a longer one), and a
+  message is cut to the 500 its column holds. Section 13.7 sets the rules of the catalogue; the golden run proves them.
+- **Not in this step.** The row rules a mapping switches on (the sub-header rows, totals row and placeholder rows of
+  section 13.5) are not applied yet: a totals row is checked as a data row. `ROW_CHANGED_SINCE_REVIEW` (#131) and
+  `CHANGED_SINCE_IMPORT` (#133) are pending the steps that hold a row's reviewed and imported content.
+- **Proven by** `ImportCatalogueTest` (the golden files of `fixtures/imports/golden/` give exactly `expected-issues.txt`;
+  the same rows give identical issues, originals and values; every normaliser change is an `info` with its original;
+  every code of the catalogue is produced by a fixture row, by the named test of its stage, or is pending or retired; the
+  catalogue equals `fixtures/imports/issue-codes.txt`; no message interpolates a personal field or holds a personal value;
+  the registry refuses a leaking message, a non-text key, a misplaced range and a `ref` to a set without a key; a retired or
+  unknown code is never reported), `ImportValidationIT` (the golden files uploaded through the quarantine validate into the
+  expected issues, with typed values stored and `raw` unchanged; the messages, the audit row and the logs hold none of the
+  fixture's names, phones or NINs; validating again stores the same issues, values and references; a committed batch is
+  read and never written, by the service or by `bms_app` directly; another business can neither validate the run, read
+  its issues nor lend it a reference; a cancelled run is not validated; a file read again between the passes is refused
+  with `batch_changed` and a file not yet read with `batch_not_parsed`; deleting a committed batch's rows is refused by
+  the guard; and, in `ImportCatalogueTest`, each code of another stage is asserted in its named test method, two long file
+  names fit a message, ambiguous commas are refused and a rule's personal parameter is refused), `RlsIsolationIT` (forced RLS on `import_issues`),
+  `MigrationOrderIT` (V140 keeps every staged row) and `ModularityTest`.

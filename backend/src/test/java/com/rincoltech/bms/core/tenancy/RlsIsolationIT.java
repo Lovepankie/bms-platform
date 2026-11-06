@@ -1215,10 +1215,20 @@ public class RlsIsolationIT {
                 .params(importBatch, t.tenantId(), importRun, importMapping)
                 .update();
         // The quarantined upload (migration V129, #128): one staged row of fabricated cells.
+        UUID importRow = UUID.randomUUID();
         owner.sql("""
                         INSERT INTO import_rows (id, tenant_id, batch_id, source_row_no, raw)
                         VALUES (?, ?, ?, 2, '{"Item": {"value": "Fabricated item", "type": "text"}}')
-                        """).params(UUID.randomUUID(), t.tenantId(), importBatch).update();
+                        """).params(importRow, t.tenantId(), importBatch).update();
+        // The validation (migration V140, #130): one issue of the staged row, its message without a value.
+        owner.sql("""
+                        INSERT INTO import_issues (id, tenant_id, batch_id, row_id, source_row_no, ordinal, code, severity,
+                                                   field, message, status)
+                        VALUES (?, ?, ?, ?, 2, 1, 'REQUIRED_MISSING', 'blocking', 'code',
+                                'code is empty on fab-items.csv line 2.', 'open')
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), importBatch, importRow)
+                .update();
     }
 
     /**

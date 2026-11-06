@@ -18,9 +18,14 @@
  * registers by declaring a bean, read through the registry {@link com.rincoltech.bms.core.imports.ImportTemplates} (so the
  * core never depends on a vertical), with a JSON Schema per template version; and a business's append-only mapping versions
  * ({@link com.rincoltech.bms.core.imports.ImportMappings}, {@code import_mappings}), validated against that schema and the
- * file's headers, recorded on each batch it parses. Validation, review and the operator screens follow in #130 to #141.
- * Public API: {@link com.rincoltech.bms.core.imports.ImportRuns}, {@link com.rincoltech.bms.core.imports.ImportUploads},
- * {@link com.rincoltech.bms.core.imports.ImportTemplates}, {@link com.rincoltech.bms.core.imports.ImportMappings}, and the
+ * file's headers, recorded on each batch it parses. The fourth part (issue #130, migration V140) is the validation
+ * ({@link com.rincoltech.bms.core.imports.ImportValidation}): every staged row of a run against its template and mapping
+ * version (normalisers, types, required fields, ranges, references across the run's batches and to the business's own
+ * records, duplicates, cross-field rules), each issue a stable code of the template's catalogue with a message that never
+ * holds a personal value, stored in {@code import_issues} with the rows' typed values. Review and the operator screens
+ * follow in #131 to #141. Public API: {@link com.rincoltech.bms.core.imports.ImportRuns},
+ * {@link com.rincoltech.bms.core.imports.ImportUploads}, {@link com.rincoltech.bms.core.imports.ImportTemplates},
+ * {@link com.rincoltech.bms.core.imports.ImportMappings}, {@link com.rincoltech.bms.core.imports.ImportValidation}, and the
  * SPI {@link com.rincoltech.bms.core.imports.ImportTemplate} with {@link com.rincoltech.bms.core.imports.BatchWriter}.
  */
 @ApplicationModule(

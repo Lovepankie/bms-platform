@@ -74,7 +74,7 @@ final class MappingValidator {
             try {
                 ZoneId.of(zone);
             } catch (DateTimeException e) {
-                out.add(problem("ZONE_UNKNOWN", null, null, null, "/time_zone", Map.of("value", zone)));
+                out.add(problem("ZONE_UNKNOWN", null, null, null, "/time_zone", Map.of("zone", zone)));
             }
         }
         for (Map.Entry<String, Map<String, Object>> source : sources(document).entrySet()) {

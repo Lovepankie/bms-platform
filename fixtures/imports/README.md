@@ -15,3 +15,11 @@ They map onto `fixture_shop` version 1, a template registered only on the test c
 | `fixture_shop_v1.item_list.headers.json` | The header row of a fabricated item list, with one column the mapping does not name | |
 
 `MappingValidatorTest` and `ImportMappingsIT` read these files.
+
+The validation engine (issue #130) adds:
+
+| File | What it is |
+|---|---|
+| `golden/fab-item-list.csv`, `golden/fab-buyers.csv`, `golden/fab-till-roll.csv` | The golden run: three fabricated files for the sources `item_list`, `buyer_book` (a title line, then the header on line 2) and `till_roll`, with rows that produce every code the engine reports. Line 8 of `fab-buyers.csv` holds a tab inside its quoted code, on purpose (`CODE_CONTROL_CHAR`). The names, phones and NINs are made up and listed in `GoldenRun.PERSONAL`, which the tests search the messages and logs for |
+| `golden/expected-issues.txt` | The golden report: one line per issue (file, line, field, code, severity and message, separated by a vertical bar), in the engine's order. `ImportCatalogueTest` and `ImportValidationIT` compare the run with it exactly |
+| `issue-codes.txt` | Every issue code ever registered, with its catalogue and severity, and `retired` once retired. A code is never removed from this file |

@@ -3380,6 +3380,69 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V140 (issue #130) is expand only: a staged row stored before it keeps its cells and reads as not yet validated, the
+     * new issue table is under forced row-level security, and the application role may change only the two validation
+     * columns of a row, never its cells. JUSTIFICATION-A3: a new test case; no existing case covers V140.
+     */
+    @Test
+    void importValidationMigrationKeepsEveryStagedRow() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("140") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v140', 'Test Tenant V140',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+            UUID batch = UUID.randomUUID();
+            owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq, status, row_count) VALUES (?, ?, ?, 1,"
+                            + " 'parsed', 1)")
+                    .params(batch, tenant, run)
+                    .update();
+            UUID row = UUID.randomUUID();
+            owner.sql("INSERT INTO import_rows (id, tenant_id, batch_id, source_row_no, raw) VALUES (?, ?, ?, 2,"
+                            + " '{\"Fab Item\": {\"value\": \"Fabricated item\", \"type\": \"text\"}}')")
+                    .params(row, tenant, batch)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT raw -> 'Fab Item' ->> 'value' = 'Fabricated item' AND normalised IS NULL"
+                                    + " AND source_ref IS NULL FROM import_rows WHERE id = ?")
+                            .param(row)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE relname ="
+                                    + " 'import_issues'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname IN"
+                                    + " ('import_issues_batch_kept', 'import_rows_validation_kept')")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(2);
+            assertThat(owner.sql("SELECT has_column_privilege('bms_app', 'import_rows', 'normalised', 'UPDATE')"
+                                    + " AND has_column_privilege('bms_app', 'import_rows', 'source_ref', 'UPDATE')"
+                                    + " AND NOT has_column_privilege('bms_app', 'import_rows', 'raw', 'UPDATE')"
+                                    + " AND NOT has_table_privilege('bms_app', 'import_issues', 'UPDATE')")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

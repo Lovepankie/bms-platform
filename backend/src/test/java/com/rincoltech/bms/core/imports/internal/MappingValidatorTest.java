@@ -265,7 +265,9 @@ class MappingValidatorTest {
         List<IssueCode> catalogue = registry.catalogue(FixtureShopTemplate.KEY, 1);
 
         assertThat(catalogue).startsWith(ImportTemplates.SHARED_CODES.toArray(IssueCode[]::new));
-        assertThat(catalogue.getLast().code()).isEqualTo("FIXTURE_ITEM_UNNAMED");
+        assertThat(catalogue.subList(ImportTemplates.SHARED_CODES.size(), catalogue.size()))
+                .extracting(IssueCode::code)
+                .containsExactly("FIXTURE_ITEM_UNNAMED", "FIXTURE_SALE_QTY_NOT_POSITIVE");
         Set<String> codes = new HashSet<>();
         assertThat(catalogue).allSatisfy(c -> assertThat(codes.add(c.code())).isTrue());
         assertThat(catalogue)

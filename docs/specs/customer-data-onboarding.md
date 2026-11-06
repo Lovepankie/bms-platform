@@ -139,10 +139,10 @@ Every issue has:
 | `TYPE_INVALID` | blocking | {field} on {file} line {line} is not a valid {type}. |
 | `MONEY_FRACTION` | blocking | {field} on {file} line {line} has a fraction; amounts are whole shillings. |
 | `QTY_PRECISION` | blocking | {field} on {file} line {line} has more than three decimal places. |
-| `DUPLICATE_SOURCE_REF` | blocking | Line {line} repeats the reference of line {other}. |
-| `REF_UNKNOWN` | blocking | {field} on {file} line {line} names a {entity} that is not in the import or the tenant. |
-| `CODE_DUPLICATE` | warning | Code on line {line} is the same as line {other} ignoring case and spaces; they become one {entity}. |
-| `CODE_CONTROL_CHAR` | blocking | The code on line {line} has a hidden character inside it. |
+| `DUPLICATE_SOURCE_REF` | blocking | Line {line} of {file} repeats the reference of line {other}. |
+| `REF_UNKNOWN` | blocking | {field} on {file} line {line} names a record of {entity} that is not in the import or the tenant. |
+| `CODE_DUPLICATE` | warning | {field} on {file} line {line} is the same as line {other} ignoring case and spaces; they become one record of {entity}. (shared since #130) |
+| `CODE_CONTROL_CHAR` | blocking | {field} on {file} line {line} has a hidden character inside it. (shared since #130) |
 | `NAME_MISSING` | blocking | The item on line {line} has no name or description. |
 | `NEGATIVE_BALANCE` | warning | The source shows a negative quantity for this item at {branch}; it is imported as it is and listed for the first stock-take. |
 | `PRICE_DIFFERS_EXISTING` | info | The item already exists with other prices; its prices are left unchanged. |
@@ -161,14 +161,26 @@ Every issue has:
 | `COLUMN_DUPLICATE` | blocking | Column {column} of source {source} is written twice in the mapping, ignoring case and spaces. (#129) |
 | `MAP_FIELD_UNMAPPED` | blocking | Source {source} maps values of {field}, which no column of it feeds. (#129) |
 | `SOURCE_REF_COLUMN_UNKNOWN` | blocking | The reference column {column} of source {source} is not a column the mapping keeps. (#129) |
-| `ZONE_UNKNOWN` | blocking | The time zone {value} is not a known zone. (#129) |
+| `ZONE_UNKNOWN` | blocking | The time zone {zone} is not a known zone. (#129) |
 | `SOURCE_UNKNOWN` | request refused | The mapping has no source {source}. (#129) |
 | `BATCH_HAS_NO_MAPPING` | request refused | The file was read without a mapping; read it again with one before checking its columns. (#129) |
 | `REQUIRED_COLUMN_MISSING` | blocking | Column {column}, which feeds the required {field}, is not in the file of source {source}. (#129) |
+| `VALUE_NORMALISED` | info | {field} on {file} line {line} was tidied by the rule {normaliser}; the original is kept with this note. (#130) |
+| `TEXT_TOO_LONG` | blocking | {field} on {file} line {line} is longer than {limit} characters. (#130) |
+| `VALUE_OUT_OF_RANGE` | blocking | {field} on {file} line {line} is outside the allowed range: {range}. (#130) |
+| `BLANK_ROW` | info | Line {line} of {file} is blank; it is left out. (#130; the code of chapter 13 section 13.5, now shared) |
+| `NIN_DUPLICATE` | warning | {field} on {file} line {line} is the same national ID number as line {other}; check whether they are one person. (#130) |
 
-The shared codes of this table are `ImportTemplates.SHARED_CODES` in `core.imports` (#129); the retail
-codes (`CODE_DUPLICATE`, `CODE_CONTROL_CHAR`, `NAME_MISSING`, `NEGATIVE_BALANCE`, `PRICE_DIFFERS_EXISTING`,
-`CREDIT_SALE_UNPAID`, `CREDIT_DECISION_MISSING`) are listed by `retail_v1` itself (#135). A mapping is valid
+The shared codes of this table are `ImportTemplates.SHARED_CODES` in `core.imports` (#129, #130); the retail
+codes (`NAME_MISSING`, `NEGATIVE_BALANCE`, `PRICE_DIFFERS_EXISTING`, `CREDIT_SALE_UNPAID`, `CREDIT_DECISION_MISSING`)
+are listed by `retail_v1` itself (#135). `CODE_DUPLICATE` and `CODE_CONTROL_CHAR` were planned as retail codes; the
+validation engine of #130 finds them for the key field of any template, so they are shared, with the same names and
+meanings. A message may hold only the placeholders `{field}`, `{file}`, `{line}`, `{other}`, `{row}`, `{column}`,
+`{source}`, `{entity}`, `{template}`, `{type}`, `{limit}`, `{range}`, `{normaliser}`, `{pointer}`, `{reason}`, `{zone}`
+and `{branch}` (`ImportTemplates.MESSAGE_PLACEHOLDERS`), and never the name of a field the template marks personal; the
+registry refuses a template that breaks this at start-up. Every code ever registered is pinned in
+`fixtures/imports/issue-codes.txt`: a test fails when one is removed, renamed, given another severity or loses its retired
+mark (SDD chapter 13 section 13.14.1). A mapping is valid
 only with no problem at all, so a column the mapping neither maps nor ignores (`COLUMN_UNMAPPED`, one per
 column) makes it invalid even though the code is a warning on a row.
 
