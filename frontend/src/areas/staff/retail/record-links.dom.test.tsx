@@ -54,7 +54,12 @@ function show(ui: ReactElement, url: string, opts: { me?: Me; branch?: string; c
 }
 
 describe('a category opens its items (#798)', () => {
+  const CABLES = '00000000-0000-4000-8000-0000000c0001';
   const LIGHTING = '00000000-0000-4000-8000-0000000c0002';
+  const FITTINGS = '00000000-0000-4000-8000-0000000c0003';
+  // Where Items remembers the chip the person chose (phone-find-state.ts).
+  const SAVED = 'bms.findChip.items';
+  afterEach(() => localStorage.removeItem(SAVED));
 
   it('links a category name to Items with the category in the address', () => {
     show(<ToItems category={LIGHTING}>Lighting</ToItems>, '/staff');
@@ -70,6 +75,7 @@ describe('a category opens its items (#798)', () => {
 
   it('says so when the category in the address is not in the list, and shows every category', async () => {
     const list = vi.spyOn(retail, 'listCatalogue');
+    localStorage.setItem(SAVED, CABLES);
     show(<ProductsPage />, '/staff/retail/catalogue/products?category=00000000-0000-4000-8000-0000000c00ff');
     expect(await screen.findByTestId('category-not-found')).toBeTruthy();
     // The unknown id is dropped (useChosenChip's knownChip): the list asks for no category, so items of every category show.
@@ -78,6 +84,17 @@ describe('a category opens its items (#798)', () => {
     expect(await screen.findAllByText(/2\.5mm twin cable 100m roll/)).not.toHaveLength(0);
     expect(screen.getAllByText(/Solar panel 100W/)).not.toHaveLength(0);
     expect(screen.getByRole('button', { name: /^All/, pressed: true })).toBeTruthy();
+    // The saved chip is the person's own: a link that names a missing category leaves it alone.
+    expect(localStorage.getItem(SAVED)).toBe(CABLES);
+  });
+
+  it('chooses the category for that visit only: the saved Items chip is unchanged, and a tap still saves (Lead, #862)', async () => {
+    localStorage.setItem(SAVED, CABLES);
+    show(<ProductsPage />, `/staff/retail/catalogue/products?category=${LIGHTING}`);
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Lighting/, pressed: true })).toBeTruthy());
+    expect(localStorage.getItem(SAVED)).toBe(CABLES);
+    fireEvent.click(screen.getByRole('button', { name: /^Fittings/ }));
+    expect(localStorage.getItem(SAVED)).toBe(FITTINGS);
   });
 
   it('is the category row of Stock value, by its id', () => {
@@ -93,7 +110,7 @@ describe('a used or damaged count on Stock health opens the records behind it (#
     expect(screen.getByRole('link', { name: '2 reports' }).getAttribute('href')).toBe(`/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31&kind=damaged`);
   });
 
-  it('is plain text for a session that may not open Past usage and damage (its gate is the stock screen)', () => {
+  it('is plain text for a session that lacks the stock screen, the gate of Past usage and damage', () => {
     const me = { ...mockMe('admin'), permissions: ['retail.sale.read'] } as Me;
     show(<ToUsage branch={BRANCH_B} kind="used">2 reports</ToUsage>, '/staff', { me });
     expect(screen.queryByRole('link')).toBeNull();

@@ -551,18 +551,19 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
   const stockAt = !all && branchId && holdsAt(me, 'retail.stock.read', branchId) ? branchId : '';
   const [activeFilter, setActiveFilter] = useState<'active' | 'off' | 'all'>('active');
   const categories = useQuery({ queryKey: ['retail', 'catalogue', 'categories'], queryFn: () => retail.listCategories() });
-  const [categoryId, setCategoryId, chipReady] = useChosenChip('items', categories.data, categories.isError);
-  // Issue #798: `?category=<id>` chooses that category's chip once, then leaves the address, so a category elsewhere opens its items.
+  const [categoryId, setCategoryId, chipReady, visitCategory] = useChosenChip('items', categories.data, categories.isError);
+  // Issue #798: `?category=<id>` chooses that category's chip for this visit only (the remembered chip is left as it was), then
+  // leaves the address, so a category elsewhere opens its items.
   const { search: asked, go } = useAddress();
   const fromAddress = typeof asked.category === 'string' ? asked.category : '';
   // The id asked for, kept so a category that is not in the list (removed, or never there) is said, not dropped in silence.
   const [askedCategory, setAskedCategory] = useState('');
   useEffect(() => {
     if (fromAddress === '') return;
-    setCategoryId(fromAddress);
+    visitCategory(fromAddress);
     setAskedCategory(fromAddress);
     go('/staff/retail/catalogue/products', {}, true);
-  }, [fromAddress, setCategoryId, go]);
+  }, [fromAddress, visitCategory, go]);
   const unknownCategory = askedCategory !== '' && categories.data !== undefined && !categories.data.some((c) => c.id === askedCategory);
   const active = activeFilter === 'all' ? undefined : activeFilter === 'active';
   const page = useInfiniteQuery({
