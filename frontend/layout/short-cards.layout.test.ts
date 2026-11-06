@@ -24,7 +24,8 @@ describe.each([1, 2])('The short cards at 412px, font scale %i', (font) => {
     await openLayout(page, `layout/short-cards.html?font=${font}`, page.getByText('Show every line'));
     expect(await page.evaluate(() => document.documentElement.scrollWidth), 'page width').toBeLessThanOrEqual(WIDTH);
     const c = await page.evaluate(() => {
-      const names = ['Check what arrived', 'Take this back', 'Show every line', 'Show more moves', 'Show older payments'];
+      const names = ['Check what arrived', 'Take this back', 'Show every line', 'Show more moves'];
+      const moves = document.querySelector<HTMLElement>('[data-testid="stock-moves"]');
       const buttons = [...document.querySelectorAll<HTMLElement>('button')];
       const opening = buttons.filter((b) => names.includes(b.textContent?.trim() ?? '') || b.getAttribute('aria-expanded') !== null);
       const money = [...document.querySelectorAll<HTMLElement>('.rt-row strong, .rt-row span')].find((s) => /UGX/.test(s.textContent ?? ''));
@@ -32,11 +33,18 @@ describe.each([1, 2])('The short cards at 412px, font scale %i', (font) => {
         count: opening.length,
         heights: opening.map((b) => b.getBoundingClientRect().height),
         rights: [...document.querySelectorAll<HTMLElement>('.rt-card')].map((x) => x.getBoundingClientRect().right),
-        brand: document.querySelectorAll('.rt-primary, .btn-primary').length,
+        // The cards: none of them has a brand button until a form opens. Stock moves keeps its one, Move stock.
+        brand: [...document.querySelectorAll('.rt-primary, .btn-primary')].filter((x) => !moves?.contains(x)).length,
+        movesBrand: moves?.querySelectorAll('.rt-primary, .btn-primary').length ?? -1,
+        soFar: moves?.textContent?.includes('1 move so far') ?? false,
+        showMore: buttons.some((x) => x.textContent?.trim() === 'Show more moves' && moves?.contains(x)),
         tabular: money ? getComputedStyle(money).fontVariantNumeric : '',
       };
     });
-    expect(c.count, 'the buttons that open more').toBeGreaterThanOrEqual(6);
+    expect(c.count, 'the buttons that open more').toBeGreaterThanOrEqual(5);
+    expect(c.showMore, 'Stock moves draws its own Show more moves').toBe(true);
+    expect(c.soFar, 'the last month says so far while more pages exist').toBe(true);
+    expect(c.movesBrand, 'Stock moves has one brand button, Move stock').toBe(1);
     for (const h of c.heights) expect(h, 'a 48px target').toBeGreaterThanOrEqual(48);
     for (const r of c.rights) expect(r, 'card inside the phone').toBeLessThanOrEqual(WIDTH);
     expect(c.brand, 'no brand button until a form is open').toBe(0);

@@ -173,7 +173,12 @@ export function UsageHistoryPage() {
     <Gate screen="stock" title="Past usage and damage">
       <Hint>Every item taken out of stock as used in the shop or damaged. Choose the days, the branch at the top of the page, or one item. An entry undone stays here marked Undone and counts in no total.</Hint>
       <div data-tour="usage-history-filters">
-        <PeriodPicker from={from} to={to} onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
+        <PeriodPicker from={from} to={to} onChange={(range) => {
+          setFrom(range.from);
+          setTo(range.to);
+          // Opened from a link (issue #798): the address follows the days chosen, so a reload keeps them and not the old ones.
+          if (asked.from !== undefined || asked.to !== undefined || asked.kind !== undefined) go('/staff/retail/usage-history', { from: range.from, to: range.to, ...(kind ? { kind: kind === 'usage' ? 'used' : 'damaged' } : {}) }, true);
+        }} />
         <SearchBox id="usage-history-item-search" label="Item (type part of its name or code)" search={itemBox} fetching={products.isPlaceholderData || products.isFetching} count={itemSearch !== '' && products.data ? products.data.length : undefined} />
         {itemSearch !== '' && (
           <>

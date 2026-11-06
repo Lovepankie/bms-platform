@@ -5,7 +5,7 @@ import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing
 import { useEffect, useState, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import { retail, type AccountPayment, type Statement, type Valuation } from '../../../api/retail';
+import { businessToday, retail, type AccountPayment, type Statement, type Valuation } from '../../../api/retail';
 import { ValuationTable } from './profit';
 import { ReceiptList, StatementView } from './account';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
@@ -68,9 +68,16 @@ describe('a category opens its items (#798)', () => {
     expect(screen.queryByTestId('category-not-found')).toBeNull();
   });
 
-  it('says so when the category in the address is not in the list', async () => {
+  it('says so when the category in the address is not in the list, and shows every category', async () => {
+    const list = vi.spyOn(retail, 'listCatalogue');
     show(<ProductsPage />, '/staff/retail/catalogue/products?category=00000000-0000-4000-8000-0000000c00ff');
     expect(await screen.findByTestId('category-not-found')).toBeTruthy();
+    // The unknown id is dropped (useChosenChip's knownChip): the list asks for no category, so items of every category show.
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    for (const [q] of list.mock.calls) expect(q.categoryId ?? '').toBe('');
+    expect(await screen.findAllByText(/2\.5mm twin cable 100m roll/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/Solar panel 100W/)).not.toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^All/, pressed: true })).toBeTruthy();
   });
 
   it('is the category row of Stock value, by its id', () => {
@@ -84,6 +91,24 @@ describe('a used or damaged count on Stock health opens the records behind it (#
   it('links to Past usage and damage with the branch, the days and the kind', () => {
     show(<ToUsage branch={BRANCH_B} from="2026-10-01" to="2026-10-31" kind="damaged">2 reports</ToUsage>, '/staff');
     expect(screen.getByRole('link', { name: '2 reports' }).getAttribute('href')).toBe(`/staff/retail/usage-history?branch=${BRANCH_B}&from=2026-10-01&to=2026-10-31&kind=damaged`);
+  });
+
+  it('is plain text for a session that may not open Past usage and damage (its gate is the stock screen)', () => {
+    const me = { ...mockMe('admin'), permissions: ['retail.sale.read'] } as Me;
+    show(<ToUsage branch={BRANCH_B} kind="used">2 reports</ToUsage>, '/staff', { me });
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText('2 reports')).toBeTruthy();
+    cleanup();
+    show(<UsageHistoryPage />, '/staff/retail/usage-history', { me });
+    expect(screen.getByText(/You do not have access/)).toBeTruthy();
+  });
+
+  it('keeps the days chosen in the address, so a reload keeps them', async () => {
+    const router = show(<UsageHistoryPage />, '/staff/retail/usage-history?from=2026-10-01&to=2026-10-31&kind=used');
+    await screen.findByTestId('one-kind');
+    fireEvent.click(screen.getByRole('radio', { name: 'Today' }));
+    const today = businessToday();
+    await waitFor(() => expect(router.state.location.search).toEqual({ from: today, to: today, kind: 'used' }));
   });
 
   it('opens Past usage and damage on those days and that kind, switched to that branch', async () => {
