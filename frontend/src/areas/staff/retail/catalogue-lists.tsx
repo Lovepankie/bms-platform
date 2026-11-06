@@ -237,7 +237,13 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false, sec
           </>
         ) : undefined}
       extra={withPrefix
-        ? <Link className="btn-sm" to={`/staff/retail/catalogue/categories/${r.id ?? ''}` as never} aria-label={`Open ${r.name} and its items`}>Open</Link>
+        ? (
+          <>
+            <Link className="btn-sm" to={`/staff/retail/catalogue/categories/${r.id ?? ''}` as never} aria-label={`Open ${r.name} and its items`}>Open</Link>
+            {/* Issue #798: the category's items in the Items list, with search and price changes, by the address. */}
+            {r.id && <ScreenLink screen="products" to="/staff/retail/catalogue/products" search={{ category: r.id }} label={`See the items of ${r.name}`}>Items</ScreenLink>}
+          </>
+        )
         : (
           <>
             <ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>

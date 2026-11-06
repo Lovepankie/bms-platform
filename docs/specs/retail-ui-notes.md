@@ -1198,7 +1198,7 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/retail/cash-summary` | Cash summary | `page-cash-summary` v2 (Show every line, #798) | each figure opens the rows behind it (sales, expenses report, banking report, withdrawals, advances, savings) |
 | `/staff/retail/catalogue` | Catalogue | `page-catalogue` v1 (existing) | none added |
 | `/staff/retail/catalogue/buyers` | Credit buyers | `page-buyers` v1 (added) | Open account (already there) |
-| `/staff/retail/catalogue/categories` | Categories | `page-categories` v1 (added) | Items link on each row |
+| `/staff/retail/catalogue/categories` | Categories | `page-categories` v1 (added) | Open on each row opens the category's page; Items opens the Items list on that category (`?category=`, #798) |
 | `/staff/retail/catalogue/import` | Import items | `page-import` v1 (added) | none added |
 | `/staff/retail/catalogue/products` | Items | `page-products` v1 (added) | each item has a Stock link, which opens that item's stock (#798); `?category=<id>` opens the items of that category (#798) |
 | `/staff/retail/catalogue/suppliers` | Suppliers | `page-suppliers` v1 (added) | Open items link (supplier payment form) |
