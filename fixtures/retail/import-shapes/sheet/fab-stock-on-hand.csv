@@ -1,0 +1,7 @@
+Shop,Product ID,Quantity on hand
+KLA,TS-001,12.5
+KLA,TS-002,1.5
+KLA,TS-003,0
+ENT,TS-001,5
+ENT,TS-002,-1
+ENT,TS-003,2

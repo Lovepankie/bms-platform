@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -50,6 +51,29 @@ public final class ImportRefs {
         Objects.requireNonNull(row, "row");
         String key = file.strip() + "|" + (tab == null || tab.isBlank() ? "-" : tab.strip()) + "|" + row.strip();
         return key.length() <= MAX_KEY ? key : "sha256:" + sha256(key);
+    }
+
+    // JUSTIFICATION-A3: issue #135 moves retail_import_refs into import_refs; its rows were never hashed.
+    /**
+     * The marker in place of a content hash of a reference held by its key alone (issue #135): the rows V145 copied from
+     * {@code retail_import_refs}, and every row the {@code import-retail} command registers, since the command has always
+     * known a row by its export reference whatever its content. A later run of that key is the same row: the command and
+     * the framework count it as already imported ({@link #holds}), never {@code CHANGED_SINCE_IMPORT}.
+     */
+    public static final String BY_KEY = "by-key";
+
+    /** The reference of a row held by its key alone: the key, {@code #} and {@link #BY_KEY}. */
+    public static String byKey(String sourceKey) {
+        return sourceKey + "#" + BY_KEY;
+    }
+
+    /**
+     * Whether the references held under a row's key hold that row: its own reference, or the key held by its key alone
+     * ({@link #BY_KEY}). False for none.
+     */
+    public static boolean holds(Set<String> heldUnderKey, String sourceRef) {
+        return heldUnderKey != null
+                && (heldUnderKey.contains(sourceRef) || heldUnderKey.contains(byKey(keyOf(sourceRef))));
     }
 
     /** The key part of a {@code source_ref}: everything before its last {@code #}. */
@@ -174,6 +198,10 @@ public final class ImportRefs {
      * {@code opening_balance_equity}. {@code accountKey} is the account's system key; {@code debit} true for an asset the
      * business holds (inventory, receivables, loans receivable: debit the account, credit equity), false for what it owes
      * (member credits: debit equity, credit the account). {@code branchCode} is what the report names the branch by.
+     * {@code ledgerType} is the entry's {@code source_type} in the ledger (issue #135): {@link #OPENING_BALANCE} unless the
+     * template names its own, as {@code retail_v1} names {@code retail.import_opening}, the type the {@code import-retail}
+     * command's journals have always had, so the ledger and its readers see one kind of retail opening whichever path
+     * posted it. The source module is always {@code core.imports}.
      */
     public record Opening(
             UUID branchId,
@@ -182,7 +210,11 @@ public final class ImportRefs {
             LocalDate entryDate,
             String accountKey,
             boolean debit,
-            long amountMinor) {
+            long amountMinor,
+            String ledgerType) {
+
+        /** The ledger type of an opening journal whose template names none. */
+        public static final String OPENING_BALANCE = "opening_balance";
 
         public Opening {
             Objects.requireNonNull(branchId, "branchId");
@@ -192,6 +224,21 @@ public final class ImportRefs {
             if (amountMinor < 0) {
                 throw new IllegalArgumentException("an opening balance is posted as a positive amount");
             }
+            ledgerType = ledgerType == null ? OPENING_BALANCE : ledgerType;
+            if (!ledgerType.matches("^[a-z][a-z0-9_.]{1,59}$")) {
+                throw new IllegalArgumentException("a ledger type is a lower-case code");
+            }
+        }
+
+        public Opening(
+                UUID branchId,
+                String branchCode,
+                String kind,
+                LocalDate entryDate,
+                String accountKey,
+                boolean debit,
+                long amountMinor) {
+            this(branchId, branchCode, kind, entryDate, accountKey, debit, amountMinor, null);
         }
     }
 }

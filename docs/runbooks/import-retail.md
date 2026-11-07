@@ -25,6 +25,24 @@ and a different `--first-live-date` is refused with exit status 1, so a re-run n
 Exit status 0 means every file was imported (anomalies are reported, not fatal); 1 means a file
 failed, or the tenant or directory was refused; 2 is a usage error.
 
+**On the import framework (issue #135).** The command's interface, its reading of the export and
+its report are unchanged; underneath, each file is one batch of a run of customer data onboarding
+(SDD chapter 13 section 13.14), written by the loader of the canonical template `retail_v1` with the
+framework's guards. What that means for the operator:
+
+- The run shows in `import_runs` with origin `import_retail`, one batch per file recording the
+  export's mapping `import-retail-export` (stored once for the business). It is not listed under
+  Imports to sign off: the command's runs are not reconciled in the app, the report below is the
+  record.
+- The command is refused, with nothing written, while an import of the screens is being committed
+  for the business (`IMPORT_IN_PROGRESS`), and a real run is refused while the platform's import
+  kill switch is off (`imports_disabled`). A dry run is not stopped by the switch.
+- A command killed part way leaves its run `committing`; the next run of the command cancels it
+  and, as before, skips what its committed files wrote.
+- The next retail customer does not need an export script: their sheet is uploaded through the
+  import screens with a mapping onto `retail_v1` (spec `docs/specs/customer-data-onboarding.md`
+  Appendix A). The cash book files stay this command's.
+
 **Real data never enters the repository.** The export lives only on the host, readable by the
 operator, and is deleted when the import is signed off. Staging gets fabricated data only; the real
 export goes to production.
@@ -251,8 +269,11 @@ legacy balances the import date, which is also the date of the opening journals.
 
 The import is idempotent for the data it imports:
 
-- History rows are keyed by `source_ref` in `retail_import_refs`; a reference already imported is
-  counted as `existing` and skipped.
+- History rows are keyed by `source_ref` in `import_refs` (issue #135: the key
+  `<file>.jsonl|-|ref:<source_ref>`, held by key alone), and still written to `retail_import_refs`
+  beside it until that table is retired (by a `retail_v1` upload through the screens too); a reference already imported, by this command before or
+  after the upgrade (migration V145 copied every earlier reference), is counted as `existing` and
+  skipped.
 - Catalogue, suppliers, credit buyers and branches are matched by code or name.
 - **An existing product's prices are never changed by a re-run** (issue #73). A product that
   already exists keeps its cost and sell price and gets no price history row, so a price edited in
@@ -264,8 +285,37 @@ The import is idempotent for the data it imports:
 - The legacy balance is written once per branch and product. On a re-run, a balance that no longer
   equals the source is reported (`legacy balance already written ... correct it with a stock-take`),
   never silently changed.
-- The opening journal is posted once per branch (`already posted, not posted again`), and so is
-  the cash opening journal of each shop (`retail.cash_opening:<branch>`).
+- **One opening stock journal per branch, ever** (issue #135). The first run that commits balances
+  for a branch, through the command or the screens, posts that branch's opening journal: debit
+  `inventory`, credit opening balance equity, for what its balance rows above zero are worth at
+  each item's current cost. The legacy balances make each row's derived balance the source's,
+  whatever run wrote the history, so the first journal after a stopped or killed run still values
+  everything imported. An item whose legacy balance an earlier import already wrote is valued at
+  what the books hold, since the run writes nothing for it (`... the opening values the balance;
+  correct it with a stock-take`). Any later run for a branch that already has an import opening
+  journal (the framework's, this command's or the old command's) posts none for it (`already
+  posted, not posted again`). Its balance rows still go through: a new item gets its legacy
+  balance, and each row that differs from the books is listed (`... differs from the opening;
+  correct it with a stock-take`), never journalled. So a partial file, a corrected row or a full re-upload
+  can never journal stock away; correct a difference with a stock-take in the app. The preview
+  applies the same rule, so it always agrees with the commit. Only the branches the balances name
+  are journalled: imported history at a branch with no balance rows is listed (`no balance row
+  for branch ... its derived balance ... is kept`), so give a branch's balances whole the first
+  time. At a branch that is inactive nothing is journalled; the report gives the amount for the
+  owner to post by hand. The cash opening journal of each shop (`retail.cash_opening:<branch>`)
+  is posted once too.
+- A dry run of the command holds the business's import key for its whole run: a real command or
+  a screens commit started meanwhile is refused (`IMPORT_IN_PROGRESS`); run it after the dry run.
+- A history row (`source_ref`) is imported once. Uploaded again, through the command or the
+  screens, it is counted existing whatever its content, with no issue raised: a corrected sale or
+  restock is corrected in the app, not by import.
+- Only one command runs per business. A second one started while the first is writing, or within
+  15 minutes of its last file, is refused (`Another import is being written for this business`);
+  wait and run it again. A run left `committing` for longer by a killed process is cancelled by
+  the next command, which recognises what the killed one wrote. Until then it holds the
+  business's one committing import, so a commit from the import screens is refused
+  (`IMPORT_IN_PROGRESS`): run the command again (a real run, not `--dry-run`, whose cancel is
+  rolled back with it) to clear it.
 - Cash book rows are keyed by `source_ref` per file (`savings`, `expenses`, `banking`,
   `withdrawals`, `advances`, `advance_payments`); a re-run takes no advance number and adds no row.
   A banked row keeps the expected amount it was computed with; a savings, expense or advance added

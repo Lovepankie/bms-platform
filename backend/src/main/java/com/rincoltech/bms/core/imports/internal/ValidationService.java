@@ -504,7 +504,7 @@ class ValidationService implements ImportValidation {
             if (!imported.isEmpty()) {
                 String ref = RefService.sourceRef(from, result.sourceRef(), row.line(), result.normalised());
                 Set<String> held = imported.get(ImportRefs.keyOf(ref));
-                if (held != null && !held.contains(ref)) {
+                if (held != null && !ImportRefs.holds(held, ref)) {
                     findings.add(engine.changedSinceImport(input, row.line()));
                 }
             }

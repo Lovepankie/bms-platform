@@ -1405,7 +1405,15 @@ expand only:
   `target_type varchar(60)` (a code such as `retail.product` or `ledger.journal_entry`) and `target_id`. Unique
   `(tenant_id, source_ref, target_type, target_id)` (a row may create several records of one type, each once); plain indexes `import_refs_by_key (tenant_id, source_key text_pattern_ops)` (a
   key, and the keys of one file and tab by prefix) and `import_refs_by_target (tenant_id, target_id)`. No personal value:
-  a reference holds a file and tab name from the mapping, a line number or a reference code, and a hash.
+  a reference holds a file and tab name from the mapping, a line number or a reference code, and a hash. V145 (#135) adds
+  the plain index `import_refs_by_run (tenant_id, run_id, target_type)` (a run's own records by type: the retail opening
+  journal and the reconciliation's books read them) and the hash marker `by-key` (`ImportRefs.BY_KEY`) of a row known by
+  its key alone, the rows it copied from `retail_import_refs` and those the `import-retail` command registers.
+- **`import_runs.origin`** (V145, #135): `varchar(40) NOT NULL DEFAULT 'framework'`, CHECK `import_runs_origin_check` in
+  `framework`, `import_retail` (a run of the command, through `ImportCommandRuns`: committing from its opening, committed
+  or cancelled at its end, no upload, review or maker and checker, never reconciled or listed for sign-off) or
+  `retail_import_refs` (the backfill's run, at most one per business: the plain partial unique index
+  `import_runs_one_backfill (tenant_id) WHERE origin = 'retail_import_refs'`).
 - **`bms_refuse_during_import_commit()`**, a `BEFORE INSERT` trigger on `notification_outbox`, `sms_deliveries`,
   `approval_requests` and `scheduled_tasks`: while the transaction has set `app.import_commit` to `on` (an import batch
   does, with `SET LOCAL`), a new row is refused, so an imported record sends no message, starts no task and raises no
@@ -2314,7 +2322,11 @@ their column grants, the per-row ordinal key and the two guards widened (section
 `import_refs`, and the trigger `bms_refuse_during_import_commit` on four tables (section 6.5, Import tables).
 `V144__import_reconciliation.sql` (#134; directly after `V143`) is expand only: the permission `core.imports.sign_off` for the
 tenant admin, `import_reconciliations`, `import_signoffs` and the trigger `import_signoff_rules` (section 6.5, Import
-tables). The next migration takes the number above the highest on `main`
+tables). `V145__retail_import_refs_into_import_refs.sql` (#135; directly after `V144`) is the expand step of
+`retail_import_refs` into `import_refs`: `import_runs.origin`, the index `import_runs_one_backfill`, the functions
+`bms_retail_import_ref_key` and `bms_backfill_retail_import_refs` (owned by `bms_owner`, not granted to the application),
+the backfill in batches of 5,000 under `lock_timeout` 5s, and the index `import_refs_by_run` (sections 6.5 and 6.11.4).
+The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
@@ -2887,9 +2899,31 @@ as `bms_app` under the tenant's row-level security:
   `initial` history row; an existing product's prices are never changed by the import, and no
   history row is written for it (#73). An `import` history row, dated at the restock, is written only where two
   consecutive restocks of a product carried different prices.
-- **The opening journal**: one per branch (section 6.11.2), for the positive balances only.
+- **The opening journal**: one per branch (section 6.11.2), for the positive balances only. Since #135 it is posted
+  through the import framework's `openingJournal` (source module `core.imports`, ledger type `retail.import_opening`),
+  registered in `import_refs` as `ledger.journal_entry`, for what the branch's balance rows above zero are worth. One per
+  branch, ever: a later run, command or screens, for a branch that already has an import opening journal (the
+  framework's, the command's or the old command's, in either table) posts none for it, reports it already posted, and
+  lists each difference of its rows against the books for a stock-take; the forecast applies the same rule.
+- **On the framework (#135).** Every file the command reads, and every batch of a run of the import screens read with a
+  mapping onto the canonical template `retail_v1`, is one batch of a run in `import_runs` (`origin` `import_retail` for the
+  command) written by the same code. Each record it makes (a branch, category, unit, item, supplier, credit buyer, sale,
+  restock, adjustment or return movement, usage report, legacy balance movement) is registered in `import_refs`: the
+  command's history rows by their export key alone, `<file>.jsonl|-|ref:<source_ref>#by-key`, and its other rows by file
+  and line under a tab of their own, `<file>.jsonl|import-retail|line:<n>#by-key`, a key no upload derives, so a
+  corrected reference or balance row uploaded later through the screens is never taken for the command's; a framework batch's rows by the `source_ref` of the mapping, the records a row matched included.
 
 ### `retail_import_refs` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+Being replaced by `import_refs` (#135, expand and contract, section 6.9). V145 copied every row with a target into
+`import_refs` (function `bms_backfill_retail_import_refs(limit)`, under the key of `bms_retail_import_ref_key`, the marker
+`#by-key`, one committed backfill run of `origin` `retail_import_refs` per business and one committed batch per
+`source_file`), returning the rows it selected and failing on a `source_file` it has no batch for, so the migration's loop
+of 5,000 never stops with rows left; the command, and a framework batch of `retail_v1`, still write this table's history
+rows and stock opening journals beside `import_refs` (`ON CONFLICT DO NOTHING`), so the previous
+release recognises the rows after a rollback, and the cash book still reads its `cash_opening` rows for the first live day.
+Every other reader reads `import_refs`. The contract step, a later release once no deployed release reads it, stops the
+second write, moves the cash book's read and drops the table.
 
 | Column | Type | Notes |
 |---|---|---|

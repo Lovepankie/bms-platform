@@ -187,6 +187,9 @@ class ReconciliationService implements ImportReconciliation {
                           LEFT JOIN LATERAL (SELECT version, signable FROM import_reconciliations x
                                               WHERE x.run_id = r.id ORDER BY version DESC LIMIT 1) c ON true
                          WHERE r.status IN ('committed', 'signed_off')
+                           -- Not the import-retail command's runs nor V145's backfill run (#135): neither staged rows
+                           -- to reconcile against.
+                           AND r.origin = 'framework'
                          ORDER BY r.committed_at DESC NULLS LAST, r.id
                          LIMIT 20
                         """)
@@ -351,8 +354,9 @@ class ReconciliationService implements ImportReconciliation {
             String status, Instant cutoverAt, Instant committedAt, Map<String, Map<String, Object>> policy) {}
 
     private RunRow run(UUID runId, boolean forUpdate) {
-        return jdbc.sql("SELECT status, cutover_at, committed_at, policy::text FROM import_runs WHERE id = ?"
-                        + (forUpdate ? " FOR UPDATE" : ""))
+        // A run of the import-retail command or V145's backfill run has no staged rows to reconcile: not found (#135).
+        return jdbc.sql("SELECT status, cutover_at, committed_at, policy::text FROM import_runs"
+                        + " WHERE id = ? AND origin = 'framework'" + (forUpdate ? " FOR UPDATE" : ""))
                 .param(runId)
                 .query((rs, n) -> {
                     Map<String, Map<String, Object>> policy = new TreeMap<>();
@@ -559,7 +563,7 @@ class ReconciliationService implements ImportReconciliation {
         // The source: each row left out alone, with its own part, and the rows written netted together over the whole
         // run, as the forecast and the writer count them (Lead on the review of 4105c2a): an item counted in two
         // batches nets to one balance.
-        ImportForecast whole = template == null ? null : template.forecast(open);
+        ImportForecast whole = template == null ? null : template.forecast(open, runId);
         Map<CheckId, BigDecimal> writtenParts = new LinkedHashMap<>();
         for (BatchInfo b : batches) {
             if (whole != null) {
@@ -800,7 +804,7 @@ class ReconciliationService implements ImportReconciliation {
                 String unmeasurable = null;
                 if (template != null && stored.containsKey(s.line())) {
                     try {
-                        part = part(template, open, b, stored.get(s.line()));
+                        part = part(template, open, runId, b, stored.get(s.line()));
                     } catch (RuntimeException e) {
                         unmeasured++;
                         unmeasurable = e.getClass().getSimpleName();
@@ -866,7 +870,7 @@ class ReconciliationService implements ImportReconciliation {
                     // itemised, so its difference stays unexplained and holds the sign-off.
                     Map<CheckId, BigDecimal> asDecided = null;
                     try {
-                        asDecided = part(template, actual, b, stored.get(s.line()));
+                        asDecided = part(template, actual, runId, b, stored.get(s.line()));
                     } catch (RuntimeException e) {
                         // Named like any other row the rules cannot measure (review of 391e1dc, point 3).
                         unmeasured++;
@@ -1003,8 +1007,8 @@ class ReconciliationService implements ImportReconciliation {
      * rules cannot measure it (a row left out for a value they need); the caller counts and names that row.
      */
     private static Map<CheckId, BigDecimal> part(
-            ImportTemplate template, Map<String, String> policy, BatchInfo b, Map<String, Object> stored) {
-        ImportForecast f = template.forecast(policy);
+            ImportTemplate template, Map<String, String> policy, UUID runId, BatchInfo b, Map<String, Object> stored) {
+        ImportForecast f = template.forecast(policy, runId);
         f.batch(b.seq());
         f.row(b.set().key(), PreviewService.typed(b.set(), stored));
         return parts(f);
@@ -1109,16 +1113,22 @@ class ReconciliationService implements ImportReconciliation {
         long credits = 0;
         Map<UUID, long[]> perEntry = new LinkedHashMap<>();
         Map<UUID, Boolean> opening = new HashMap<>();
+        Map<UUID, Boolean> equity = new HashMap<>();
         for (LedgerAccounts.EntryLine l : ledger.lines(journalKinds.keySet())) {
             debits = Math.addExact(debits, l.debitMinor());
             credits = Math.addExact(credits, l.creditMinor());
             long[] dc = perEntry.computeIfAbsent(l.entryId(), k -> new long[2]);
             dc[0] = Math.addExact(dc[0], l.debitMinor());
             dc[1] = Math.addExact(dc[1], l.creditMinor());
-            boolean isOpening = (RefService.MODULE.equals(l.sourceModule()) && "opening_balance".equals(l.sourceType()))
+            // The framework's opening journal whatever ledger type its template named (retail_v1's is
+            // retail.import_opening, #135), or a cash book opening of the import-retail command.
+            boolean isOpening = RefService.MODULE.equals(l.sourceModule())
                     || ("retail".equals(l.sourceModule()) && RefService.RETAIL_OPENINGS.contains(l.sourceType()));
             opening.merge(l.entryId(), isOpening, Boolean::logicalAnd);
+            // And against opening balance equity, as RefService checks it (re-review of 0bb283a, nice-to-have 3).
+            equity.merge(l.entryId(), "opening_balance_equity".equals(l.accountKey()), Boolean::logicalOr);
         }
+        equity.forEach((entry, against) -> opening.merge(entry, against, Boolean::logicalAnd));
         long unbalanced =
                 perEntry.values().stream().filter(dc -> dc[0] != dc[1]).count();
         long notOpening = opening.values().stream().filter(o -> !o).count();

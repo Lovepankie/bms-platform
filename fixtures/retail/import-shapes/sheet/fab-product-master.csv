@@ -1,0 +1,5 @@
+Product ID,Description,Category,Unit,Unit cost,Unit sell,In use,Stock value
+TS-001,Test shape cable 01,Cables,metre,700,1200,Yes,12250
+TS-002,Test shape switch 02,Switches,piece,2500,3000,Yes,1250
+TS-003,Test shape switch 03,Switches,piece,4000,5000,No,8000
+Totals,,,,,,,21500

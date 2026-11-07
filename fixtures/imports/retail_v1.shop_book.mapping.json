@@ -1,0 +1,146 @@
+{
+  "template": "retail",
+  "template_version": 1,
+  "date_convention": "day_first",
+  "time_zone": "Africa/Kampala",
+  "currency": "UGX",
+  "sources": {
+    "shops": {
+      "entity_set": "branches",
+      "file": "fab-shops.csv",
+      "header_row": "auto",
+      "columns": {
+        "Shop code": { "field": "code" },
+        "Shop name": { "field": "name" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    },
+    "categories": {
+      "entity_set": "categories",
+      "file": "fab-categories.csv",
+      "header_row": "auto",
+      "columns": {
+        "Category": { "field": "name" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    },
+    "units": {
+      "entity_set": "units",
+      "file": "fab-units.csv",
+      "header_row": "auto",
+      "columns": {
+        "Unit": { "field": "name" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    },
+    "product_master": {
+      "entity_set": "products",
+      "file": "fab-product-master.csv",
+      "header_row": "auto",
+      "columns": {
+        "Product ID": { "field": "code" },
+        "Description": { "field": "description" },
+        "Category": { "field": "category" },
+        "Unit": { "field": "unit" },
+        "Unit cost": { "field": "cost_minor" },
+        "Unit sell": { "field": "sell_minor" },
+        "In use": { "field": "active" },
+        "Stock value": { "ignore": true, "reason": "a derived total of the sheet, not data" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    },
+    "suppliers": {
+      "entity_set": "suppliers",
+      "file": "fab-suppliers.csv",
+      "header_row": "auto",
+      "columns": {
+        "Supplier": { "field": "name" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    },
+    "buyers": {
+      "entity_set": "customers",
+      "file": "fab-buyers.csv",
+      "header_row": "auto",
+      "columns": {
+        "Buyer": { "field": "name" },
+        "Contact": { "field": "contact" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    },
+    "restock_log": {
+      "entity_set": "purchases",
+      "file": "fab-restock-log.csv",
+      "header_row": "auto",
+      "columns": {
+        "Ref": { "field": "source_ref" },
+        "User": { "field": "source_user" },
+        "Date": { "field": "purchased_on" },
+        "Product ID": { "field": "product_code" },
+        "Supplier": { "field": "supplier" },
+        "Entry type": { "field": "kind" },
+        "Unit cost": { "field": "unit_cost_minor" },
+        "Unit sell": { "field": "unit_sell_minor" },
+        "Quantity per shop": { "field": "qty_by_branch" }
+      },
+      "enum_maps": {
+        "kind": { "Restock": "purchase", "Stock take": "adjustment", "Customer return": "return" }
+      },
+      "source_ref": { "rule": "column", "column": "Ref" }
+    },
+    "sales_log": {
+      "entity_set": "sales",
+      "file": "fab-sales-log.csv",
+      "header_row": "auto",
+      "columns": {
+        "Ref": { "field": "source_ref" },
+        "User": { "field": "source_user" },
+        "Date and time": { "field": "sold_at" },
+        "Shop": { "field": "branch" },
+        "Product ID": { "field": "product_code" },
+        "Quantity": { "field": "qty" },
+        "Unit price": { "field": "unit_price_minor" },
+        "Unit cost": { "field": "unit_cost_minor" },
+        "Sale type": { "field": "payment_method" },
+        "Buyer": { "field": "buyer" },
+        "Contact": { "field": "buyer_contact" },
+        "Proposed payment date": { "field": "due_date" }
+      },
+      "enum_maps": {
+        "payment_method": { "Cash": "cash", "Credit": "credit" }
+      },
+      "source_ref": { "rule": "column", "column": "Ref" }
+    },
+    "usage_log": {
+      "entity_set": "usage",
+      "file": "fab-usage-log.csv",
+      "header_row": "auto",
+      "columns": {
+        "Ref": { "field": "source_ref" },
+        "User": { "field": "source_user" },
+        "Date and time": { "field": "reported_at" },
+        "Shop": { "field": "branch" },
+        "Product ID": { "field": "product_code" },
+        "Usage type": { "field": "kind" },
+        "Reason": { "field": "reason" },
+        "Quantity": { "field": "qty" },
+        "Unit cost": { "field": "unit_cost_minor" }
+      },
+      "enum_maps": {
+        "kind": { "Used": "used", "Damaged": "damaged" }
+      },
+      "source_ref": { "rule": "column", "column": "Ref" }
+    },
+    "stock_on_hand": {
+      "entity_set": "balances",
+      "file": "fab-stock-on-hand.csv",
+      "header_row": "auto",
+      "columns": {
+        "Shop": { "field": "branch" },
+        "Product ID": { "field": "product_code" },
+        "Quantity on hand": { "field": "qty" }
+      },
+      "source_ref": { "rule": "row_hash" }
+    }
+  }
+}

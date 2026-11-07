@@ -1,0 +1,5 @@
+Ref,User,Date,Product ID,Supplier,Entry type,Unit cost,Unit sell,Quantity per shop
+PUR-S001,test.admin01,02/07/2026,TS-001,Test Supplier 01,Restock,600,1100,KLA=10; ENT=5
+PUR-S002,test.admin01,20/07/2026,TS-001,Test Supplier 01,Restock,700,1200,KLA=8
+PUR-S003,test.admin01,15/08/2026,TS-002,,Stock take,2500,,KLA=4; ENT=-2.5
+PUR-S004,test.admin01,20/08/2026,TS-002,,Customer return,2500,,ENT=1

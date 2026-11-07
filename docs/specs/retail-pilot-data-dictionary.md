@@ -66,6 +66,12 @@ applying sections 2 and 3 on the way (formatted dates, ids trimmed, stock-takes 
 by `kind`), and runs `import-retail` on the directory (`docs/runbooks/import-retail.md`, SDD
 chapter 13 section 13.13). A fabricated example is `fixtures/retail/import-sample/`.
 
+This field list is the canonical import template `retail_v1` (issue #135, `docs/specs/customer-data-onboarding.md` section
+4.1): a sheet of another shape can be mapped onto it and imported through the import screens without an export, as the
+fabricated `fixtures/retail/import-shapes/sheet/` with `fixtures/imports/retail_v1.shop_book.mapping.json` shows (the same
+data as the export `fixtures/retail/import-shapes/export/`). In a sheet, `qty_by_branch` is one cell of `BRANCH=qty` pairs
+separated by `;`, for example `KLA=4; ENT=-2.5`.
+
 **Encoding.** UTF-8 JSON Lines: one JSON object per line, blank lines ignored, a byte order mark on
 the first line tolerated. A line that is not a JSON object is reported and skipped. A missing file
 is treated as empty and reported. Fields not listed here are reported once per file and ignored.

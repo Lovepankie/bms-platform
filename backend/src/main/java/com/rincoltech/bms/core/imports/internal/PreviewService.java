@@ -148,7 +148,7 @@ class PreviewService implements ImportPreview {
         Map<String, Integer> records = new LinkedHashMap<>();
         order.forEach(set -> records.put(set, 0));
         List<BatchOutcome> outcomes = new ArrayList<>();
-        ImportForecast forecast = template == null ? ImportForecast.NONE : template.forecast(policy(runId));
+        ImportForecast forecast = template == null ? ImportForecast.NONE : template.forecast(policy(runId), runId);
         for (BatchRow b : ordered) {
             String set = sets.get(b.id());
             BatchOutcome outcome = outcome(b, set);
@@ -511,7 +511,7 @@ class PreviewService implements ImportPreview {
                 Map<String, Object> stored = JSON.readValue((String) row[1], OBJECT);
                 if (!imported.isEmpty()) {
                     String ref = RefService.sourceRef(source, (String) row[2], after, stored);
-                    if (imported.getOrDefault(ImportRefs.keyOf(ref), Set.of()).contains(ref)) {
+                    if (ImportRefs.holds(imported.get(ImportRefs.keyOf(ref)), ref)) {
                         continue;
                     }
                 }

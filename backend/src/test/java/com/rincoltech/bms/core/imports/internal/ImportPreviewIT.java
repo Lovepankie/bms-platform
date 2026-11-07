@@ -17,6 +17,7 @@ import com.rincoltech.bms.core.imports.ImportMappings.Mapping;
 import com.rincoltech.bms.core.imports.ImportPreview;
 import com.rincoltech.bms.core.imports.ImportPreview.BatchOutcome;
 import com.rincoltech.bms.core.imports.ImportPreview.Preview;
+import com.rincoltech.bms.core.imports.ImportRefs;
 import com.rincoltech.bms.core.imports.ImportReview;
 import com.rincoltech.bms.core.imports.ImportReview.Resolution;
 import com.rincoltech.bms.core.imports.ImportRuns;
@@ -247,15 +248,11 @@ class ImportPreviewIT extends IntegrationTest {
      * The commit's writer for the fixture's run, by the fixture template's made-up rules (those of its forecast): every
      * row to write is counted; each new buyer is reported twice, by its number and by its name (a personal value the report
      * must hide); a stock take puts its quantity on hand at the head office as a stock movement of the fabricated item; and
-     * the sales post three opening journals, each reported with the totals its lines hold: the head office's
-     * {@code inventory}, its {@code loans_receivable} dated the loan's day, and the second branch's {@code trade_debtors}.
-     * {@code extra} is added to the stock's value, to make the dry run differ from the preview.
+     * the sales post three opening journals through the framework, which reports each with the totals its lines hold: the
+     * head office's {@code inventory}, its {@code loans_receivable} dated the loan's day, and the second branch's
+     * {@code trade_debtors}. {@code extra} is added to the stock's value, to make the dry run differ from the preview.
      */
     BatchWriter writer(TestDatabase.Fixture f, long extra) {
-        UUID inventory = f.account("inventory");
-        UUID debtors = f.account("trade_debtors");
-        UUID loans = f.account("loans_receivable");
-        UUID equity = f.account("opening_balance_equity");
         UUID product = item;
         return (runId, batchId, seq, checkpoint) -> {
             String source = jdbc.sql("SELECT mapping_source FROM import_batches WHERE id = ?")
@@ -321,16 +318,16 @@ class ImportPreviewIT extends IntegrationTest {
                 String hq = FixtureShopTemplate.HEAD_OFFICE;
                 String br2 = FixtureShopTemplate.SECOND_BRANCH;
                 if (value != 0) {
-                    report(checkpoint, hq, "inventory", post(f.headOffice(), DAY, inventory, equity, value));
+                    opening(checkpoint, f.headOffice(), hq, "inventory", DAY, value);
                     checkpoint.stock(hq, qty, value);
                 }
                 if (lent != 0) {
-                    report(checkpoint, hq, "loans_receivable", post(f.headOffice(), lentOn, loans, equity, lent));
+                    opening(checkpoint, f.headOffice(), hq, "loans_receivable", lentOn, lent);
                     checkpoint.loanPrincipal(hq, lent);
                     buckets.forEach((bucket, b) -> checkpoint.arrears(hq, bucket, Math.toIntExact(b[0]), b[1]));
                 }
                 if (owed != 0) {
-                    report(checkpoint, br2, "trade_debtors", post(f.secondBranch(), DAY, debtors, equity, owed));
+                    opening(checkpoint, f.secondBranch(), br2, "trade_debtors", DAY, owed);
                     checkpoint.receivable(br2, owed);
                 }
                 checkpoint.note(
@@ -342,35 +339,15 @@ class ImportPreviewIT extends IntegrationTest {
         };
     }
 
-    /** Posts one opening journal: debit the account, credit opening balance equity; answers its entry number. */
-    String post(UUID branch, LocalDate day, UUID debit, UUID equity, long amount) {
-        return ledger.post(new EntryRequest(
-                        branch,
-                        day,
-                        "IMP-OPEN",
-                        "Opening balance from the fabricated import",
-                        "retail",
-                        // As the import-retail command posts its opening stock (until #135): the only journal besides
-                        // the framework's own that a batch may post, recognised and registered by the framework.
-                        "retail.import_opening",
-                        null,
-                        null,
-                        List.of(
-                                Line.debit(debit, Money.of(amount, "UGX")),
-                                Line.credit(equity, Money.of(amount, "UGX")))))
-                .entryNo();
-    }
-
-    /** Reports a posted journal with the debit and credit totals its lines hold, read back from the ledger. */
-    void report(BatchWriter.Checkpoint checkpoint, String branch, String kind, String entryNo) {
-        long[] totals = jdbc.sql("""
-                        SELECT coalesce(sum(l.debit), 0), coalesce(sum(l.credit), 0)
-                          FROM journal_entries e JOIN journal_lines l ON l.entry_id = e.id WHERE e.entry_no = ?
-                        """)
-                .param(entryNo)
-                .query((rs, n) -> new long[] {rs.getLong(1), rs.getLong(2)})
-                .single();
-        checkpoint.journal(branch, kind, totals[0], totals[1], "posted", entryNo);
+    /**
+     * Posts one opening journal through the framework (since #135 the only way a batch posts one, the retail stock opening
+     * included): debit the account, credit opening balance equity. The framework reports it
+     * with the totals its lines hold.
+     */
+    static void opening(
+            BatchWriter.Checkpoint checkpoint, UUID branch, String code, String account, LocalDate day, long amount) {
+        checkpoint.openingJournal(
+                new ImportRefs.Opening(branch, code, account, day, account, amount > 0, Math.abs(amount)));
     }
 
     /** Every trace a run can leave: every table's rows, every sequence, and the business's files in storage. */

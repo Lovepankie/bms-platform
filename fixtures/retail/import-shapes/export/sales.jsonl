@@ -1,0 +1,3 @@
+{"source_ref": "SAL-S001", "branch": "KLA", "product_code": "TS-001", "qty": "3.000", "unit_price_minor": 1200, "unit_cost_minor": 700, "payment_method": "cash", "sold_at": "2026-08-02T09:01:00", "source_user": "test.sales01"}
+{"source_ref": "SAL-S002", "branch": "ENT", "product_code": "TS-002", "qty": "1.000", "unit_price_minor": 3000, "unit_cost_minor": 2500, "payment_method": "credit", "buyer": "Test Buyer 01", "buyer_contact": "+256700000001", "due_date": "2026-10-12", "sold_at": "2026-08-12T09:11:00", "source_user": "test.sales02"}
+{"source_ref": "SAL-S003", "branch": "KLA", "product_code": "TS-002", "qty": "2.500", "unit_price_minor": 3000, "unit_cost_minor": 2500, "payment_method": "cash", "sold_at": "2026-09-10T10:00:00", "source_user": "test.sales01"}

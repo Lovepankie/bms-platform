@@ -1,0 +1,3 @@
+{"code": "TS-001", "description": "Test shape cable 01", "category": "Cables", "unit": "metre", "cost_minor": 700, "sell_minor": 1200, "active": true}
+{"code": "TS-002", "description": "Test shape switch 02", "category": "Switches", "unit": "piece", "cost_minor": 2500, "sell_minor": 3000, "active": true}
+{"code": "TS-003", "description": "Test shape switch 03", "category": "Switches", "unit": "piece", "cost_minor": 4000, "sell_minor": 5000, "active": false}

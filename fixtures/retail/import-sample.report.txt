@@ -1,0 +1,34 @@
+import-retail report
+tenant: <tenant>
+directory: ../fixtures/retail/import-sample
+mode: committed, one transaction per file
+result: ok
+
+file                   read  written existing  skipped
+branches.jsonl            3        3        0        0
+categories.jsonl          4        4        0        0
+units.jsonl               4        4        0        0
+products.jsonl           21       20        0        1
+suppliers.jsonl           3        3        0        0
+customers.jsonl           4        4        0        0
+purchases.jsonl          34       34        0        0
+sales.jsonl             221      220        0        1
+usage.jsonl              15       15        0        0
+balances.jsonl           60       60        0        0
+
+opening journals (debit inventory, credit opening balance equity):
+  ENT        debit         4568150  credit         4568150  posted JE00000001
+  JJA        debit         1569950  credit         1569950  posted JE00000002
+  KLA        debit         2464600  credit         2464600  posted JE00000003
+  total      debit         8602700  credit         8602700
+
+negative source balances, excluded from the opening journal, for the first stock-take (1):
+  JJA TP-007 -3.000
+
+credit sales imported unpaid (the source keeps no payments): 20, total 554300 minor units; no receivable is journalled for them
+
+anomalies (2):
+  products.jsonl:6: duplicate product code tp-001 (same as line 1 ignoring case and spaces); row skipped
+  sales.jsonl:221: unknown product code TP-404; row skipped
+
+balances checksum: rows=60 total_qty=2210.500 source_sha256=24f5fc396fd0f096535e8b08af5392e35f9ddaa56f47d46785df387a1c6b6ef4 derived_sha256=24f5fc396fd0f096535e8b08af5392e35f9ddaa56f47d46785df387a1c6b6ef4 match=yes excluded_no_goods=0

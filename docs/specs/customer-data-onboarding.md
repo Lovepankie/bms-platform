@@ -224,7 +224,7 @@ not fail and matched the preview's balances (every kind, per branch). The servic
 template; no caller passes one, and the commit and its resume refuse writers other than those the dry run rehearsed. A dry
 run and a commit of one business never wait on each other: whichever finds the other answers 409 at once. The commit
 writes the same report, batch by batch. The writers that make a real template's dry run are the templates' loaders, wired by the
-commit of #133; until #135 the retail export's writer is `import-retail` itself.
+commit of #133; since #135 the retail one is `retail_v1`'s loader, which is the code of `import-retail`.
 
 ### 3.7 Commit
 
@@ -315,8 +315,8 @@ system is the books (the run's journals through the ledger's port, the business'
 the stock ledger and loan book through the template's `ImportBooks`), never the commit's report. Every check shows source,
 system, difference, itemised and not itemised, as exact decimals with money in minor units; the items are the rows left
 out or held back (`excluded`, by file and line), the written rows with an overridden warning (`overridden`, no amount) and
-the receivable decision and negative stock balances (`policy`). Until the templates of #135 and #136, the retail and lending
-checks are proven on the test-only `fixture_shop` template.
+the receivable decision and negative stock balances (`policy`). The retail checks are proven on `retail_v1` itself since #135
+(the fabricated sample reconciles and is signed); until #136 the lending checks on the test-only `fixture_shop` template.
 
 ### 3.10 Sign-off
 
@@ -360,6 +360,11 @@ golden fixtures. Planned:
 | `lending_investments_v1` | lending | investment holdings, opening balances | With phase 2 investments |
 
 A template changes only by a new version (`retail_v2`); a run keeps the version it started with.
+
+Built for retail in #135 (SDD chapter 13 section 13.14.1, 9/16): `retail_v1` is the export's ten entity sets with their fields,
+the four retail codes above, the receivable decision with `treat_as_settled` and `defer` only (the export holds no outstanding
+amount per buyer), its forecast and books, and the code of `import-retail` as its loader; `import-retail` is its wrapper, a
+run of the framework of its own origin recording the export's mapping. The cash book files stay outside it.
 
 ### 4.2 Mappings (data, one per customer source and version)
 

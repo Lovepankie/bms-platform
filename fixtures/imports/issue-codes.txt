@@ -44,3 +44,7 @@ shared BLANK_ROW info
 shared NIN_DUPLICATE warning
 fixture_shop_v1 FIXTURE_ITEM_UNNAMED blocking retired
 fixture_shop_v1 FIXTURE_SALE_QTY_NOT_POSITIVE blocking
+retail_v1 NAME_MISSING blocking
+retail_v1 NEGATIVE_BALANCE warning
+retail_v1 PRICE_DIFFERS_EXISTING info
+retail_v1 CREDIT_SALE_UNPAID info

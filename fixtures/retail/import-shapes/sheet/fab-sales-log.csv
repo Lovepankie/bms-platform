@@ -1,0 +1,4 @@
+Ref,User,Date and time,Shop,Product ID,Quantity,Unit price,Unit cost,Sale type,Buyer,Contact,Proposed payment date
+SAL-S001,test.sales01,02/08/2026 09:01,KLA,TS-001,3,1200,700,Cash,,,
+SAL-S002,test.sales02,12/08/2026 09:11,ENT,TS-002,1,3000,2500,Credit,Test Buyer 01,+256700000001,12/10/2026
+SAL-S003,test.sales01,10/09/2026 10:00,KLA,TS-002,2.5,3000,2500,Cash,,,

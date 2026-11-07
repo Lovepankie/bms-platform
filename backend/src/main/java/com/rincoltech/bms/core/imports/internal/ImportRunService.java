@@ -81,8 +81,8 @@ class ImportRunService implements ImportRuns {
     /** Rows between two reads of the kill switch and the halt inside a batch (spec section 5.4). */
     static final int CHECKPOINT_ROWS = 1_000;
 
-    /** The business's import key: the advisory lock every batch takes. */
-    private static final String LOCK_KEY = "hashtextextended('core.imports:' || current_setting('app.tenant_id'), 0)";
+    /** The business's import key: the advisory lock every batch takes, the import-retail command's too (#135). */
+    static final String LOCK_KEY = "hashtextextended('core.imports:' || current_setting('app.tenant_id'), 0)";
 
     /** The business's loop key, followed by the business's id: the session lock the whole commit loop holds. */
     private static final String LOOP_KEY = "core.imports.loop:";

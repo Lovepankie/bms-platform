@@ -116,10 +116,13 @@ class RefService {
         for (PreviewService.StoredRow r : stored) {
             String ref = sourceRef(src, r.validationRef(), r.line(), r.stored());
             Set<String> underKey = heldRefs.getOrDefault(ImportRefs.keyOf(ref), Set.of());
-            if (!underKey.isEmpty() && !underKey.contains(ref)) {
+            if (!underKey.isEmpty() && !ImportRefs.holds(underKey, ref)) {
                 throw changedSinceImport(r.line());
             }
-            Map<String, UUID> targets = held.getOrDefault(ref, Map.of());
+            // A key held by its key alone (V145's rows, the import-retail command's) is this row whatever its content.
+            Map<String, UUID> targets = held.containsKey(ref)
+                    ? held.get(ref)
+                    : held.getOrDefault(ImportRefs.byKey(ImportRefs.keyOf(ref)), Map.of());
             out.add(new StagedRow(
                     r.line(),
                     r.typed(),
@@ -212,7 +215,7 @@ class RefService {
                 "IMPORT-OPENING",
                 "Opening balance: " + o.kind(),
                 MODULE,
-                "opening_balance",
+                o.ledgerType(),
                 runId,
                 // At most 100 characters (journal_entries.idempotency_key): a hash of run, batch, branch and kind.
                 "import-opening:"
@@ -237,10 +240,11 @@ class RefService {
      * review of 8e570b0, #872). Writers never vouch for their journals: the check reads each entry the transaction posted
      * from the ledger. One passes only as the framework's opening journal, {@code core.imports}, {@code opening_balance},
      * with a line on {@code opening_balance_equity}, registered by {@link #openingJournal} (the only way a journal is
-     * registered from a writer: {@link #register} refuses one). The one exception, until #135 moves retail onto
-     * {@code openingJournal}: an opening journal of the {@code import-retail} command, whose logic the retail export's
-     * writer reuses, recognised by the ledger alone ({@link #isRetailCommandOpening}) and registered here by the framework,
-     * never by the writer. Anything else fails the batch, which rolls back whole.
+     * registered from a writer: {@link #register} refuses one), whatever ledger type its template named
+     * ({@link ImportRefs.Opening#ledgerType}). Since #135 the retail stock opening is posted that way. The one exception
+     * left: an opening of the cash book that the {@code import-retail} command's cash files post through the cash book
+     * (outside {@code retail_v1}), recognised by the ledger alone ({@link #isRetailCommandOpening}) and registered here by
+     * the framework, never by the writer. Anything else fails the batch, which rolls back whole.
      */
     void requireOnlyOpeningJournals(UUID runId, UUID batchId) {
         List<TransactionEntry> posted = ledger.postedInThisTransaction();
@@ -255,10 +259,11 @@ class RefService {
         Set<UUID> registered = new HashSet<>(held);
         long refused = 0;
         for (TransactionEntry e : posted) {
-            if (isFrameworkOpening(e) && registered.contains(e.entryId())) {
+            // Registered already, by this batch or by an earlier batch of one outer transaction (a dry run's).
+            if ((isFrameworkOpening(e) || isRetailCommandOpening(e)) && registered.contains(e.entryId())) {
                 continue;
             }
-            if (isRetailCommandOpening(e) && !registered.contains(e.entryId())) {
+            if (isRetailCommandOpening(e)) {
                 insert(
                         runId,
                         batchId,
@@ -275,16 +280,20 @@ class RefService {
         }
     }
 
-    /** The {@code import-retail} command's opening journals, by source type (module {@code retail}). */
-    static final Set<String> RETAIL_OPENINGS = Set.of(
-            "retail.import_opening",
-            "retail.cash_opening",
-            "retail.advance_opening",
-            "retail.advance_repayment_opening");
+    /**
+     * The cash book openings the {@code import-retail} command's cash files post (module {@code retail}). The stock opening
+     * {@code retail.import_opening} is not one since #135: {@code retail_v1} posts it through {@link #openingJournal}, so
+     * one posted by the retail module inside a batch fails it.
+     */
+    static final Set<String> RETAIL_OPENINGS =
+            Set.of("retail.cash_opening", "retail.advance_opening", "retail.advance_repayment_opening");
 
-    /** The framework's opening journal, by what the ledger holds. */
+    /**
+     * The framework's opening journal, by what the ledger holds: source module {@code core.imports}, which only
+     * {@link #openingJournal} posts, and a line on {@code opening_balance_equity}, whatever ledger type the template named.
+     */
     static boolean isFrameworkOpening(TransactionEntry e) {
-        return MODULE.equals(e.sourceModule()) && "opening_balance".equals(e.sourceType()) && e.againstOpeningEquity();
+        return MODULE.equals(e.sourceModule()) && e.againstOpeningEquity();
     }
 
     /** An opening journal of the {@code import-retail} command, by what the ledger holds. */

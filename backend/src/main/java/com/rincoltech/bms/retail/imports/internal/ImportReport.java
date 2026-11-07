@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * What one run did, printed as plain text at the end of the command: counts per file, anomalies,
@@ -120,27 +119,25 @@ public final class ImportReport {
 
     // JUSTIFICATION-A3: issue #132 tells the framework's report what this one holds, one shape for every run.
     /**
-     * Tells a report of the import framework (issue #132) what this one holds: a line per file, the anomalies with their file
-     * and line, the opening journals (inventory per branch, and the cash book's per branch, each with the debit and credit
-     * totals {@code ledger} reads for its entry), the negative balances and the notes as notes, and the checksum. A failure
-     * is not told: the framework records the batch that failed itself.
+     * Tells the batch of one file, in a report of the import framework (issues #132 and #135), its line and its anomalies.
+     * The stock opening journals are told by the framework as it posts them ({@code openingJournal}), with the totals their
+     * lines hold.
      */
-    public void into(CommitReport.Sink sink, Function<String, long[]> ledger) {
-        files.forEach((name, c) -> sink.counts(name, c.read, c.written, c.existing, c.skipped));
-        sourced.forEach(a -> sink.anomaly(a.file(), a.line(), a.message()));
-        // The debit and credit the ledger holds for each entry, read back from its lines, never the amount meant
-        // (review of #869): an entry posted unbalanced or in part shows as it is.
-        openings.forEach(o -> {
-            long[] posted = o.entryNo() == null ? new long[2] : ledger.apply(o.entryNo());
-            sink.journal(o.branch(), "inventory", posted[0], posted[1], o.status(), o.entryNo());
-        });
-        cashOpenings.forEach(o -> {
-            long[] posted = o.entryNo() == null ? new long[2] : ledger.apply(o.entryNo());
-            sink.journal(o.branch(), "cash_book", posted[0], posted[1], o.status(), o.entryNo());
-        });
+    void intoFile(CommitReport.Sink sink, String name) {
+        Counts c = files.get(name);
+        if (c != null) {
+            sink.counts(name, c.read, c.written, c.existing, c.skipped);
+        }
+        sourced.stream().filter(a -> a.file().equals(name)).forEach(a -> sink.anomaly(a.file(), a.line(), a.message()));
+    }
+
+    /** Tells a framework report the negative balances and the notes as notes, and the checksum once computed. */
+    void intoTail(CommitReport.Sink sink) {
         negatives.forEach(n -> sink.note("negative source balance, excluded from the opening journal: " + n));
         notes.forEach(sink::note);
-        sink.checksum(checksum);
+        if (!"not computed".equals(checksum)) {
+            sink.checksum(checksum);
+        }
     }
 
     public String render() {

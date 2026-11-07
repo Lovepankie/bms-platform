@@ -3812,6 +3812,109 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V145 (issue #135) is expand only and backfills: every run before it keeps its state and is a {@code framework} run;
+     * every reference of the import-retail command in {@code retail_import_refs} with a target is in {@code import_refs}
+     * under the key a JSON Lines upload of the export derives and the marker {@code #by-key}, under the business's one
+     * backfill run, committed, with one committed batch per old file; a journal's target type is
+     * {@code ledger.journal_entry}; a row without a target is left out; the old table is unchanged; and a second backfill
+     * copies nothing. JUSTIFICATION-A3: a new test case; no existing case covers V145.
+     */
+    @Test
+    void retailImportRefsMigrationCopiesEveryReferenceOnce() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("145") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v145', 'Test Tenant V145',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, status) VALUES (?, ?, ?, 'committed')")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+            UUID sale = UUID.randomUUID();
+            UUID opening = UUID.randomUUID();
+            UUID cash = UUID.randomUUID();
+            UUID branch = UUID.randomUUID();
+            String refs = "INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, target_id)"
+                    + " VALUES (?, ?, ?, ?, ?)";
+            owner.sql(refs)
+                    .params(tenant, "sales", "SAL-9001", "retail.sale", sale)
+                    .update();
+            owner.sql(refs)
+                    .params(tenant, "opening", "KLA", "core.journal_entry", opening)
+                    .update();
+            owner.sql(refs)
+                    .params(tenant, "cash_opening", branch.toString(), "journal", cash)
+                    .update();
+            owner.sql("INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type)"
+                            + " VALUES (?, 'usage', 'USE-9001', 'retail.usage')")
+                    .param(tenant)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT status || ' ' || origin FROM import_runs WHERE id = ?")
+                            .param(run)
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("committed framework");
+            assertThat(owner.sql("SELECT source_ref || ' ' || target_type FROM import_refs WHERE tenant_id = ?"
+                                    + " ORDER BY source_ref")
+                            .param(tenant)
+                            .query(String.class)
+                            .list())
+                    .containsExactly(
+                            "opening|cash_book|legacy:branch:" + branch + "#by-key ledger.journal_entry",
+                            "opening|inventory|legacy:code:KLA#by-key ledger.journal_entry",
+                            "sales.jsonl|-|ref:SAL-9001#by-key retail.sale");
+            assertThat(owner.sql("SELECT target_id FROM import_refs WHERE tenant_id = ? ORDER BY source_ref")
+                            .param(tenant)
+                            .query(UUID.class)
+                            .list())
+                    .containsExactly(cash, opening, sale);
+            assertThat(owner.sql("SELECT status FROM import_runs WHERE tenant_id = ? AND origin = 'retail_import_refs'")
+                            .param(tenant)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("committed");
+            assertThat(owner.sql("SELECT b.source_filename || ' ' || b.status FROM import_batches b"
+                                    + " JOIN import_runs r ON r.id = b.run_id"
+                                    + " WHERE r.tenant_id = ? AND r.origin = 'retail_import_refs' ORDER BY b.seq")
+                            .param(tenant)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("sales committed", "opening committed", "cash_opening committed");
+            assertThat(owner.sql("SELECT count(*) FROM retail_import_refs WHERE tenant_id = ?")
+                            .param(tenant)
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(4L);
+            assertThat(owner.sql("SELECT bms_backfill_retail_import_refs(10)")
+                            .query(Integer.class)
+                            .single())
+                    .as("a second backfill")
+                    .isZero();
+            assertThatThrownBy(() -> owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, origin)"
+                                    + " VALUES (?, ?, ?, 'retail_import_refs')")
+                            .params(UUID.randomUUID(), tenant, UUID.randomUUID())
+                            .update())
+                    .hasStackTraceContaining("import_runs_one_backfill");
+            assertThatThrownBy(() -> owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, origin)"
+                                    + " VALUES (?, ?, ?, 'elsewhere')")
+                            .params(UUID.randomUUID(), tenant, UUID.randomUUID())
+                            .update())
+                    .hasStackTraceContaining("import_runs_origin_check");
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

@@ -632,11 +632,14 @@ rows 7, 9 and 13), commit must create:
 ## 13.13 Retail pilot import (FR-RET-12; ADR-020 decision 9; #55)
 
 The retail pilot moves from a spreadsheet with a form app on top
-(`docs/specs/retail-pilot-data-dictionary.md`). Its import is not a template of the framework above:
-it is a one-off application command, run once per tenant at cutover by a platform operator, on a
-**normalised export** that a person prepares from the spreadsheet (data dictionary section 4). The
-dry run and its report stand in for the preview, and the review of the source happens before the
-export. The procedure is `docs/runbooks/import-retail.md`.
+(`docs/specs/retail-pilot-data-dictionary.md`). Its import is an application command, run once per
+tenant at cutover by a platform operator, on a **normalised export** that a person prepares from the
+spreadsheet (data dictionary section 4). The dry run and its report stand in for the preview, and the
+review of the source happens before the export. The procedure is `docs/runbooks/import-retail.md`.
+Since #135 the command is a wrapper of the framework of 13.14: the export's fields are the canonical
+template `retail_v1`, each file is a batch of a run of the framework written by that template's
+loader, and the references below are in `import_refs` (13.14.1, 9/16). The next retail customer's
+sheet is a mapping onto `retail_v1` through the import screens, with no export script (spec Appendix A).
 
 ```
 java -jar bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run] [--first-live-date yyyy-mm-dd]
@@ -660,10 +663,10 @@ transaction that is rolled back, and prints the same report.
 |---|---|
 | Branches, categories, units, suppliers, credit buyers | Created when no existing one matches (branch code, or name ignoring case) |
 | Products | Matched by code normalised as the catalogue normalises it (`RetailCatalogue.normaliseCode`, review F9) and ignoring case (data dictionary rule 1); a duplicate is one product and is reported. New products take the master's prices with an `initial` history row. An existing product is never changed, prices included, and gets no history row, so a price edited in the app between two runs stays (#73); when the master's prices differ, the report lists it as information. The code is at most 40 characters after normalisation; a longer one is a skipped row |
-| Sales, restocks, usage and damage | Historical documents and movements, no journals, keyed by `source_ref` in `retail_import_refs`; each movement's `business_date` is the source row's sale, purchase or usage date in the tenant's zone, so valuation `as_of` and daily profit read them by business date |
+| Sales, restocks, usage and damage | Historical documents and movements, no journals, keyed by `source_ref` in `import_refs` by key alone (`sales.jsonl\|-\|ref:<source_ref>#by-key`, and still in `retail_import_refs` until the contract step, #135); each movement's `business_date` is the source row's sale, purchase or usage date in the tenant's zone, so valuation `as_of` and daily profit read them by business date |
 | Restocks of kind `adjustment` or `return` | `adjustment` or `return` movements, not purchases, with no supplier payable |
 | Restock price changes | An `import` history row where consecutive restocks of a product changed its cost or sell price |
-| Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly, dated with the import date as its business date; then one opening journal per branch, dated the same day, (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost. A balance the history already gives (a zero difference) writes nothing and counts as existing |
+| Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly, dated with the import date as its business date; then one opening journal per branch, dated the same day, (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost, posted through the framework's `openingJournal` since #135, once per branch, ever: a later run posts none for a branch that has one (reported already posted) and lists each difference for a stock-take. A balance the history already gives (a zero difference) writes nothing and counts as existing |
 
 **Never guess, never lose a row (13.2).** A row with an unknown product or branch code, a missing
 or malformed field, a duplicate `source_ref`, a duplicate product code or a duplicate balance is
@@ -1388,3 +1391,54 @@ sign-off screen (chapter 7 section 7.11.9). What each check reads and how differ
   service, the routes or `bms_app`), `RlsIsolationIT` (forced RLS and append-only on both tables), `MigrationOrderIT` (V144
   keeps every run, the permission is the tenant admin's alone, the trigger's refusals), `PermissionMatrixIT` and
   `RoutePermissionIT`.
+
+**9/16, `retail_v1` on the framework and `import-retail` as its wrapper (#135, migration `V145`, ADR-027 decision 1, spec
+section 4.1 and Appendix A).**
+
+- **The template.** `retail_v1` (`RetailV1Template` in `retail.imports`, a bean the registry finds) has the ten entity sets
+  of the normalised export in its import order, each field of `docs/specs/retail-pilot-data-dictionary.md` section 4 with
+  its type (codes by the catalogue's normaliser, `ref` from history and balances to branches and products, money ranged
+  from zero, dates as the export writes them, `qty_by_branch` a JSON object or `BRANCH=qty` pairs from a sheet), the retail
+  codes of spec 3.4.1 (`NAME_MISSING`, `NEGATIVE_BALANCE`, `PRICE_DIFFERS_EXISTING`, `CREDIT_SALE_UNPAID`; the receivable
+  decision's `CREDIT_DECISION_MISSING` is shared), the receivable decision with `treat_as_settled` and `defer` (the export
+  holds no outstanding amount per buyer, so `open_from_list` is not offered and is refused with `policy_option_unknown`),
+  a forecast and its books. The cash book files of 13.13.1 are not in it: they stay the command's.
+- **One loader, two drivers.** Its loader is the command's own code (`RetailImporter`): a batch's staged rows are written
+  back as the export's lines and run through the same file code, so a sheet read with a mapping and the export read by
+  the command write one way. Nothing is kept from one batch to the next: the names a products row may use are the
+  catalogue's, the instant before the history is the stock ledger's, and each branch's opening stock journal is posted
+  through `openingJournal` (ledger type `retail.import_opening`, source module `core.imports`). **One opening stock
+  journal per branch, ever:** the first run that commits balances for a branch posts it, for what the branch's balance
+  rows above zero are worth at each item's current cost (the source's quantity, which the legacy balance makes the
+  derived one whichever run wrote the history, so the first journal after a stopped or killed run still values
+  everything imported; the rules of #872 and #873: a negative balance is never journalled and is listed for the first
+  stock-take; an item with history and no balance row is not journalled, as the old command did). A later run, command
+  or screens, for a branch that already has an import opening journal (the framework's, the command's or the old
+  command's) posts none for it ("already posted"); its rows still go through, a new item's legacy balance is written,
+  and each difference against the books is listed for a stock-take. The forecast applies the same rule through the same
+  function (`RetailV1Template.BranchOpening.journal`, the opened branches read by `openedBranches`, leaving out the
+  forecast run's own journal, `ImportTemplate.forecast(policy, runId)`), so the preview and the commit always agree.
+  Every row the loader writes is registered, the records it matched included, so the reconciliation finds each one in
+  the books.
+- **The wrapper.** `import-retail --tenant --dir [--dry-run] [--first-live-date]` keeps its interface, its tolerant reading
+  of the export and its report, and runs on the framework (`ImportCommandRuns`): a run of origin `import_retail`, one
+  batch per file recording the export's mapping (the identity mapping of the export onto `retail_v1`, stored once per
+  business as `import-retail-export`), each written with the commit's guards (the import key, `app.import_commit`, the
+  imported marker, the end-of-batch journal check), its records in `import_refs`. The command is the platform operator's
+  tool on the host under its runbook, so it has no upload, review, stored dry run or maker and checker, and its runs are
+  not reconciled in the app; its dry run is one outer transaction rolled back, run included. A second command is refused
+  with `IMPORT_IN_PROGRESS` while the first writes a batch (it holds the import key) or within its lease of 15 minutes
+  after its last batch; a run of the command a killed process left `committing` past its lease is cancelled by the next
+  one. Each file of a real run is its own transaction.
+- **`retail_import_refs` into `import_refs`, expand and contract (chapter 6 section 6.9).** V145 copies every reference of
+  the old table into `import_refs` under the key a JSON Lines upload of the export derives (`sales.jsonl|-|ref:SAL-00011`)
+  with the marker `#by-key` (`ImportRefs.BY_KEY`): the command never hashed a row, so such a key is the same row whatever
+  its content, for the command and for the framework (no `CHANGED_SINCE_IMPORT`). The command now registers by key in
+  `import_refs` and still writes the old table; the readers moved to `import_refs` (the trading probe `RetailActivity`, the
+  command's own) except the cash book's first live day, which keeps reading the old table. Dropping it is a later release.
+- **Proven by** `RetailImportIT` (unchanged, against the wrapper), `RetailImportReportIT` (the report text on the sample
+  is the golden text captured from the command before the wrapper), `RetailV1TemplateIT` (the sample through the framework
+  writes nothing in its dry run, commits what the dry run predicted, gives the books the command gives, reconciles and is
+  signed off; a fabricated spreadsheet-shaped book with a mapping gives the state the same data as a JSON Lines export
+  gives; `open_from_list` refused; another business reaches nothing), `RetailImportRefsBackfillIT` (a re-run after the
+  backfill recognises the old command's rows), `RetailV1TemplateTest` and `MigrationOrderIT` (V145).

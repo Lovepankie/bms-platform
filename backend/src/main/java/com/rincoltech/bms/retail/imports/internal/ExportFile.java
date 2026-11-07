@@ -25,6 +25,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * One file of the normalised export: UTF-8 JSON Lines, one object per line, blank lines ignored. A
@@ -90,6 +91,66 @@ final class ExportFile {
             throw new UncheckedIOException("cannot read " + name, e);
         }
         return file;
+    }
+
+    // JUSTIFICATION-A3: issue #135 runs the command's file code on the framework's staged rows of retail_v1.
+    /**
+     * The rows of one batch of {@code retail_v1} staged by the framework (issue #135), as the command reads a file: each row's
+     * values as the validation typed them ({@code Long} money, {@code BigDecimal} quantities, a {@code LocalDate}, an
+     * {@code Instant}, a {@code Boolean}, text) written back as the export writes them, so the command's own code reads them
+     * and refuses what it refuses. {@code qty_by_branch} is a JSON object or, from a sheet, {@code BRANCH=qty} pairs
+     * separated by {@code ;}.
+     */
+    static ExportFile staged(String name, List<Map.Entry<Integer, Map<String, Object>>> rows) {
+        ExportFile file = new ExportFile(name, true);
+        for (Map.Entry<Integer, Map<String, Object>> r : rows) {
+            ObjectNode node = JSON.createObjectNode();
+            r.getValue().forEach((field, v) -> {
+                switch (v) {
+                    case null -> {}
+                    case String s when field.equals("qty_by_branch") -> node.set(field, branchQuantities(s));
+                    case String s -> node.put(field, s);
+                    case Long l -> node.put(field, l.longValue());
+                    case Integer i -> node.put(field, i.longValue());
+                    case BigDecimal d -> node.put(field, d.toPlainString());
+                    case Boolean b -> node.put(field, b.booleanValue());
+                    default -> node.put(field, v.toString());
+                }
+            });
+            file.rows.add(new Row(r.getKey(), node));
+        }
+        return file;
+    }
+
+    /**
+     * {@code {"KLA": "4"}} as written; {@code KLA=4; ENT=-2.5} from a sheet; or {@code {KLA=4, ENT=-2.5}}, the text the
+     * staged row holds for a JSON Lines object (the stored cell read back as a map). Anything else is left as text for the
+     * row to refuse.
+     */
+    static JsonNode branchQuantities(String text) {
+        String s = text.strip();
+        if (s.startsWith("{")) {
+            try {
+                return JSON.readTree(s);
+            } catch (JacksonException e) {
+                if (!s.endsWith("}")) {
+                    return JSON.getNodeFactory().stringNode(text);
+                }
+                s = s.substring(1, s.length() - 1);
+            }
+        }
+        ObjectNode out = JSON.createObjectNode();
+        for (String part : s.split("[;,]")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            int eq = part.indexOf('=');
+            if (eq <= 0) {
+                return JSON.getNodeFactory().stringNode(text);
+            }
+            out.put(part.substring(0, eq).strip(), part.substring(eq + 1).strip());
+        }
+        return out;
     }
 
     /** A problem with one line: the row is reported and skipped. */

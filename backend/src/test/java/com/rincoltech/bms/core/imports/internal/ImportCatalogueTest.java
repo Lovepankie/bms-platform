@@ -239,7 +239,11 @@ class ImportCatalogueTest {
                 continue;
             }
             String[] parts = line.trim().split("\\s+");
-            assertThat(parts[0]).isIn("shared", "fixture_shop_v1");
+            assertThat(parts[0]).isIn("shared", "fixture_shop_v1", "retail_v1");
+            if ("retail_v1".equals(parts[0])) {
+                // The production retail template's own codes (#135), pinned against it by RetailV1TemplateTest.
+                continue;
+            }
             pinned.put(
                     parts[1],
                     parts[0] + " " + parts[2] + (parts.length > 3 && "retired".equals(parts[3]) ? " retired" : ""));

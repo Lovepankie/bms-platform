@@ -291,6 +291,15 @@ public interface ImportTemplate {
     }
 
     /**
+     * The forecast of one run (issue #135): a template whose opening balances depend on what other runs already posted
+     * (retail's one opening journal per branch) tells that run's own records from the others'. {@link #forecast(Map)} by
+     * default.
+     */
+    default ImportForecast forecast(Map<String, String> policy, UUID runId) {
+        return forecast(policy);
+    }
+
+    /**
      * The policy decisions the template's loader reads (issue #133, spec section 3.8, ADR-027 decision 7): a run is not
      * {@code ready}, and does not commit, while one it needs is not recorded ({@link Policy#missingCode}). None by default.
      */
