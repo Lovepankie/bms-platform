@@ -82,3 +82,12 @@ disguise (a new option needs a golden case and a reviewer's agreement that a sec
 use it); the batch transaction timeout against real volumes (the big file test sets the limits);
 mappings drifting from the template version a run started with; operators bypassing the app with
 host-side files after self service exists.
+
+## Note (7 November 2026, issue #134, review of #873)
+
+Decision 8's reconciliation is "stored as a document" (spec section 3.10) as a JSONB row with the SHA-256 of its plain
+text (`import_reconciliations`, append-only under forced row-level security), not as a file in `core.documents`. The Lead
+accepted this for #134. The row is the document: the plain text is rendered from it byte for byte, the sign-off names
+its SHA-256, the database refuses any change to it, and the download (`reconciliation.txt`) is that same text with the
+sign-off. A file in `core.documents` would be a second copy of the same text that could drift from the row, with nothing
+the row does not already give. A rendered file stored at sign-off can be added later without changing what is signed.

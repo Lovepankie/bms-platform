@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.imports.internal;
 
 import com.rincoltech.bms.core.imports.BatchWriter;
+import com.rincoltech.bms.core.imports.ImportBooks;
 import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportTemplate;
 import java.math.BigDecimal;
@@ -13,6 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
@@ -115,8 +119,16 @@ class FixtureShopTemplate implements ImportTemplate {
         if (between != null) {
             between.run();
         }
-        return "items".equals(entitySet) && keys.contains(EXISTING_ITEM) ? Set.of(EXISTING_ITEM) : Set.of();
+        if (!"items".equals(entitySet)) {
+            return Set.of();
+        }
+        return Set.of(EXISTING_ITEM, SHORT_ITEM).stream()
+                .filter(keys::contains)
+                .collect(java.util.stream.Collectors.toSet());
     }
+
+    /** A second item the business holds, which a test counts below zero (review of 391e1dc); no golden file names it. */
+    static final String SHORT_ITEM = "FAB-901";
 
     /** The test business's head office: stock takes and loans. */
     static final String HEAD_OFFICE = "HQ";
@@ -152,6 +164,13 @@ class FixtureShopTemplate implements ImportTemplate {
             long owed;
             long lent;
             final Map<String, long[]> buckets = new TreeMap<>();
+            final ProductStocks products = new ProductStocks();
+            final List<Journal> inventory = new ArrayList<>();
+
+            @Override
+            public void batch(int seq) {
+                products.closeBatch(inventory);
+            }
 
             @Override
             public void row(String entitySet, Map<String, Object> values) {
@@ -162,6 +181,7 @@ class FixtureShopTemplate implements ImportTemplate {
                 if ("adjustment".equals(values.get("kind"))) {
                     qty = qty.add((BigDecimal) values.get("qty"));
                     value = Math.addExact(value, amount);
+                    products.add(values, amount);
                 } else if (values.get("customer") != null) {
                     lent = Math.addExact(lent, amount);
                     long[] b = buckets.computeIfAbsent(bucket((Instant) values.get("sold_at")), k -> new long[2]);
@@ -181,8 +201,11 @@ class FixtureShopTemplate implements ImportTemplate {
                 List<ArrearsBucket> arrears = new ArrayList<>();
                 if (value != 0 || qty.signum() != 0) {
                     stock.add(new Stock(HEAD_OFFICE, qty, value));
-                    journals.add(new Journal(HEAD_OFFICE, "inventory", value, value));
                 }
+                // The journals hold the positive balances only, netted over the whole run; a negative one is listed
+                // apart (ImportBooks.stock).
+                products.closeBatch(inventory);
+                journals.addAll(inventory);
                 if (lent != 0) {
                     loans.add(new Amount(HEAD_OFFICE, lent));
                     buckets.forEach((bucket, b) ->
@@ -195,6 +218,143 @@ class FixtureShopTemplate implements ImportTemplate {
                 }
                 return new Balances(stock, receivables, loans, arrears, journals);
             }
+
+            @Override
+            public List<ProductStock> productStock() {
+                return products.list();
+            }
+        };
+    }
+
+    // JUSTIFICATION-A3: issue #134, the fixture's stock per product and its books, for the reconciliation's checks.
+    /** The fixture's stock takes per item at the head office (issue #134): the reconciliation's quantity check. */
+    static final class ProductStocks {
+        private final Map<String, BigDecimal> qty = new TreeMap<>();
+        private final Map<String, Long> value = new TreeMap<>();
+
+        void add(Map<String, Object> values, long amount) {
+            String item = String.valueOf(values.get("item"));
+            qty.merge(item, (BigDecimal) values.get("qty"), BigDecimal::add);
+            value.merge(item, amount, Math::addExact);
+        }
+
+        private long journalledSoFar;
+
+        /**
+         * Closes a batch (Lead on the review of 4105c2a): its inventory journal is what the run's items counted above zero
+         * are worth now less what the earlier batches journalled, so the journals of the run add up to the items netted
+         * over every batch. A fall is a journal the other way (credit inventory), listed by its amount.
+         */
+        void closeBatch(List<ImportForecast.Journal> journals) {
+            long now = journalled();
+            long change = Math.subtractExact(now, journalledSoFar);
+            if (change != 0) {
+                long amount = Math.abs(change);
+                journals.add(new ImportForecast.Journal(HEAD_OFFICE, "inventory", amount, amount));
+            }
+            journalledSoFar = now;
+        }
+
+        /** The value of the items counted above zero: what the opening inventory journals hold. */
+        long journalled() {
+            long sum = 0;
+            for (Map.Entry<String, BigDecimal> e : qty.entrySet()) {
+                if (e.getValue().signum() > 0) {
+                    sum = Math.addExact(sum, value.get(e.getKey()));
+                }
+            }
+            return sum;
+        }
+
+        List<ImportForecast.ProductStock> list() {
+            List<ImportForecast.ProductStock> out = new ArrayList<>();
+            qty.forEach((item, q) -> out.add(
+                    new ImportForecast.ProductStock(HEAD_OFFICE, item, q, BigDecimal.valueOf(value.get(item)))));
+            return out;
+        }
+    }
+
+    /** Whether reading the fixture's books takes a second, as a big book would; off by default. */
+    static volatile boolean SLOW_BOOKS;
+
+    /** The test business's database, for the fixture's books; null when a unit test makes the template by hand. */
+    @Autowired(required = false)
+    JdbcClient jdbc;
+
+    /**
+     * The fixture's books (issue #134), read inside the reconciliation's transaction as the business: the stock the run's
+     * registered movements put on hand per branch and item, from the retail stock ledger the test writers post to, valued
+     * exactly at each movement's unit cost (the value matters only for a negative balance, listed separately), and the
+     * run's loans from its {@code loans_receivable}
+     * opening journals, one loan per line, aged from the entry's day to the day asked (the fixture has no loan book of its
+     * own until the lending template of #136).
+     */
+    @Override
+    public ImportBooks books() {
+        JdbcClient db = jdbc;
+        if (db == null) {
+            return ImportBooks.NONE;
+        }
+        return new ImportBooks() {
+            @Override
+            public List<ImportForecast.ProductStock> stock(Scope scope) {
+                if (SLOW_BOOKS) {
+                    // A big book: one statement longer than a short limit (the sign-off's time limit test).
+                    db.sql("SELECT pg_sleep(1)").query().singleRow();
+                }
+                List<UUID> movements = scope.of("retail.stock_movement");
+                if (movements.isEmpty()) {
+                    return List.of();
+                }
+                // Only the movements the run registered: stock held before or moved after the import is not the
+                // import's.
+                return db.sql("""
+                                SELECT b.code, p.code, sum(m.qty), sum(m.qty * m.unit_cost_minor)
+                                  FROM retail_stock_movements m
+                                  JOIN branches b ON b.id = m.branch_id
+                                  JOIN retail_products p ON p.id = m.product_id
+                                 WHERE m.id = ANY(?)
+                                 GROUP BY b.code, p.code
+                                 ORDER BY b.code, p.code
+                                """)
+                        .param(movements.toArray(UUID[]::new))
+                        .query((rs, n) -> new ImportForecast.ProductStock(
+                                rs.getString(1), rs.getString(2), rs.getBigDecimal(3), rs.getBigDecimal(4)))
+                        .list();
+            }
+
+            @Override
+            public List<ImportForecast.ArrearsBucket> arrears(Scope scope, LocalDate asAt) {
+                List<UUID> journals = scope.of("ledger.journal_entry");
+                if (journals.isEmpty()) {
+                    return List.of();
+                }
+                Map<String, long[]> buckets = new TreeMap<>();
+                db.sql("""
+                                SELECT b.code, e.entry_date, l.debit - l.credit
+                                  FROM journal_lines l
+                                  JOIN journal_entries e ON e.id = l.entry_id
+                                  JOIN gl_accounts a ON a.id = l.account_id
+                                  JOIN branches b ON b.id = e.branch_id
+                                 WHERE a.system_key = 'loans_receivable' AND l.entry_id = ANY(?)
+                                """)
+                        .param(journals.toArray(UUID[]::new))
+                        .query((rs, n) -> {
+                            String key =
+                                    rs.getString(1) + "|" + bucket(rs.getDate(2).toLocalDate(), asAt);
+                            long[] b = buckets.computeIfAbsent(key, k -> new long[2]);
+                            b[0]++;
+                            b[1] = Math.addExact(b[1], rs.getLong(3));
+                            return null;
+                        })
+                        .list();
+                List<ImportForecast.ArrearsBucket> out = new ArrayList<>();
+                buckets.forEach((key, b) -> {
+                    String[] parts = key.split("\\|");
+                    out.add(new ImportForecast.ArrearsBucket(parts[0], parts[1], Math.toIntExact(b[0]), b[1]));
+                });
+                return out;
+            }
         };
     }
 
@@ -205,7 +365,12 @@ class FixtureShopTemplate implements ImportTemplate {
 
     /** The days-past-due bucket of a loan made on that day, aged to {@link #AS_AT}. */
     static String bucket(LocalDate madeOn) {
-        long days = ChronoUnit.DAYS.between(madeOn, AS_AT);
+        return bucket(madeOn, AS_AT);
+    }
+
+    /** The days-past-due bucket of a loan made on that day, aged to the day given (issue #134, the fixture's books). */
+    static String bucket(LocalDate madeOn, LocalDate asAt) {
+        long days = ChronoUnit.DAYS.between(madeOn, asAt);
         if (days <= 0) {
             return "current";
         }
@@ -266,22 +431,26 @@ class FixtureShopTemplate implements ImportTemplate {
             BigDecimal qty = BigDecimal.ZERO;
             long value;
             long owed;
-            long batchValue;
             long batchOwed;
+            // The run's items: each batch's inventory journal is the change in what its items counted above zero are
+            // worth, netted over the whole run (ImportBooks.stock).
+            final ProductStocks products = new ProductStocks();
 
             @Override
             public void batch(int seq) {
                 close();
             }
 
+            @Override
+            public List<ProductStock> productStock() {
+                return products.list();
+            }
+
             private void close() {
-                if (batchValue != 0) {
-                    journals.add(new Journal(HEAD_OFFICE, "inventory", batchValue, batchValue));
-                }
+                products.closeBatch(journals);
                 if (batchOwed != 0) {
                     journals.add(new Journal(HEAD_OFFICE, "trade_debtors", batchOwed, batchOwed));
                 }
-                batchValue = 0;
                 batchOwed = 0;
             }
 
@@ -294,7 +463,7 @@ class FixtureShopTemplate implements ImportTemplate {
                 if ("adjustment".equals(values.get("kind"))) {
                     qty = qty.add((BigDecimal) values.get("qty"));
                     value = Math.addExact(value, amount);
-                    batchValue = Math.addExact(batchValue, amount);
+                    products.add(values, amount);
                 } else if (open && RECEIVABLE.neededBy().test(values)) {
                     owed = Math.addExact(owed, amount);
                     batchOwed = Math.addExact(batchOwed, amount);

@@ -131,6 +131,9 @@ class ImportRunService implements ImportRuns {
     /** The test hook after each committed batch (issue #133); a no-op without a bean. */
     private final CommitSeams seams;
 
+    /** The reconciliation the commit makes as it finishes (issue #134). */
+    private final ReconciliationService reconciliations;
+
     /**
      * The application's build and commit: a dry run of another build no longer counts, and a run rehearsed on one build
      * neither starts nor resumes on another (reviews of #869). Null when the server knows neither; it then refuses both.
@@ -160,7 +163,9 @@ class ImportRunService implements ImportRuns {
             Approvals approvals,
             Branches branches,
             RefService refs,
-            ObjectProvider<CommitSeams> seams) {
+            ObjectProvider<CommitSeams> seams,
+            ReconciliationService reconciliations) {
+        this.reconciliations = reconciliations;
         this.approvals = approvals;
         this.branches = branches;
         this.refs = refs;
@@ -246,6 +251,9 @@ class ImportRunService implements ImportRuns {
                     RunStates.known(status)
                             ? "A run is " + RunStates.words(status) + " only through the import itself."
                             : "That is not a state an import can be in.");
+        }
+        if (RunStates.SIGN_OFF_ONLY.contains(status)) {
+            throw invalidTransition("A run is signed off only by the customer's sign-off of its reconciliation.");
         }
         return tx.execute(s -> {
             Run run = find(runId, true);
@@ -1285,7 +1293,7 @@ class ImportRunService implements ImportRuns {
             // The batch is committed: a process killed here resumes from the next batch (test hook, issue #133).
             seams.afterBatch(runId, batch.seq());
         }
-        tx.executeWithoutResult(s -> {
+        boolean finished = Boolean.TRUE.equals(tx.execute(s -> {
             Run run = find(runId, true);
             long left = jdbc.sql(
                             "SELECT count(*) FROM import_batches WHERE run_id = ? AND status IN ('pending', 'parsed')")
@@ -1293,19 +1301,26 @@ class ImportRunService implements ImportRuns {
                     .query(Long.class)
                     .single();
             // A concurrent resume may have finished the run first.
-            if (RunStates.COMMITTING.equals(run.status()) && left == 0) {
-                setStatus(runId, RunStates.COMMITTED);
-                // A halt pressed during the last batch, which ended before its next checkpoint, means nothing now.
-                jdbc.sql("UPDATE import_runs SET halt_requested = false WHERE id = ? AND halt_requested")
-                        .param(runId)
-                        .update();
-                audit(
-                        runId,
-                        "core.import_run.status_changed",
-                        Map.of("status", RunStates.COMMITTING),
-                        Map.of("status", RunStates.COMMITTED));
+            if (!RunStates.COMMITTING.equals(run.status()) || left != 0) {
+                return false;
             }
-        });
+            setStatus(runId, RunStates.COMMITTED);
+            // A halt pressed during the last batch, which ended before its next checkpoint, means nothing now.
+            jdbc.sql("UPDATE import_runs SET halt_requested = false WHERE id = ? AND halt_requested")
+                    .param(runId)
+                    .update();
+            audit(
+                    runId,
+                    "core.import_run.status_changed",
+                    Map.of("status", RunStates.COMMITTING),
+                    Map.of("status", RunStates.COMMITTED));
+            return true;
+        }));
+        // The reconciliation is generated after the commit and stored (issue #134, spec section 3.9), in its own
+        // transaction: the commit is done whatever it finds.
+        if (finished) {
+            reconciliations.afterCommit(runId);
+        }
         return CommitOutcome.COMMITTED;
     }
 

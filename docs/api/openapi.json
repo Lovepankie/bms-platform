@@ -3605,6 +3605,151 @@
           }
         }
       },
+      "ImportReconciliation" : {
+        "description" : "The reconciliation of an imported run (FR-IMP-08)",
+        "properties" : {
+          "as_at" : {
+            "description" : "The day arrears are aged to: the cutover day",
+            "format" : "date",
+            "type" : "string"
+          },
+          "generated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "run_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sections" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportReconciliationSection"
+            },
+            "type" : "array"
+          },
+          "sha256" : {
+            "description" : "The SHA-256 of the report's text; name it when signing",
+            "type" : "string"
+          },
+          "signable" : {
+            "description" : "False while any difference is not explained",
+            "type" : "boolean"
+          },
+          "signed" : {
+            "$ref" : "#/components/schemas/ImportSignOff"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportReconciliationCheck" : {
+        "description" : "One check: values are exact decimal strings, money in minor units, never rounded",
+        "properties" : {
+          "difference" : {
+            "description" : "Source less system",
+            "type" : "string"
+          },
+          "itemised" : {
+            "description" : "The part of the difference the items explain",
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "system" : {
+            "type" : "string"
+          },
+          "ties" : {
+            "type" : "boolean"
+          },
+          "unit" : {
+            "description" : "rows, qty, minor, loans or entries",
+            "type" : "string"
+          },
+          "unitemised" : {
+            "description" : "The part no item explains; anything but 0 blocks the sign-off",
+            "type" : "string"
+          }
+        }
+      },
+      "ImportReconciliationFact" : {
+        "description" : "A figure shown and not compared",
+        "properties" : {
+          "label" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportReconciliationItem" : {
+        "description" : "One explained difference, without any value of a row",
+        "properties" : {
+          "amount" : {
+            "type" : "string"
+          },
+          "check" : {
+            "type" : "string"
+          },
+          "detail" : {
+            "type" : "string"
+          },
+          "file" : {
+            "type" : "string"
+          },
+          "line" : {
+            "description" : "The line of the file, or 0 for the run as a whole",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "description" : "excluded, overridden or policy",
+            "type" : "string"
+          }
+        }
+      },
+      "ImportReconciliationSection" : {
+        "properties" : {
+          "checks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportReconciliationCheck"
+            },
+            "type" : "array"
+          },
+          "facts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportReconciliationFact"
+            },
+            "type" : "array"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportReconciliationItem"
+            },
+            "type" : "array"
+          },
+          "key" : {
+            "description" : "counts, stock_quantity, stock_value, receivables, loan_principal, arrears, ledger or review",
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
       "ImportResolveOutcome" : {
         "properties" : {
           "issues" : {
@@ -3669,6 +3814,110 @@
           }
         },
         "required" : [ "resolution", "version" ]
+      },
+      "ImportSignOff" : {
+        "description" : "The sign-off: the typed name and date, the sections ticked",
+        "properties" : {
+          "sections" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "signed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "signed_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "signed_name" : {
+            "type" : "string"
+          },
+          "signed_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "ImportSignOffRequest" : {
+        "properties" : {
+          "date" : {
+            "description" : "Today's date as typed",
+            "format" : "date",
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The signer's name as typed",
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reconciliation_id" : {
+            "description" : "The reconciliation read",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sections" : {
+            "description" : "Every section key, ticked",
+            "items" : {
+              "description" : "Every section key, ticked",
+              "maxLength" : 40,
+              "minLength" : 0,
+              "type" : "string"
+            },
+            "maxItems" : 10,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "sha256" : {
+            "description" : "Its sha256 as read",
+            "pattern" : "[0-9a-f]{64}",
+            "type" : "string"
+          }
+        },
+        "required" : [ "date", "name", "reconciliation_id", "sections", "sha256" ]
+      },
+      "ImportSignOffRun" : {
+        "description" : "An imported run on the sign-off screen",
+        "properties" : {
+          "committed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "run_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "signable" : {
+            "description" : "Whether every difference is explained, or null while none was made",
+            "type" : "boolean"
+          },
+          "signed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "committed or signed_off",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The newest reconciliation's version, or null while none was made",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportSignOffRunList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportSignOffRun"
+            },
+            "type" : "array"
+          }
+        }
       },
       "ImportSmsOptOutsRequest" : {
         "properties" : {
@@ -29245,6 +29494,145 @@
           }
         },
         "summary" : "The same questions as a CSV file to send to the customer; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/reconciliation" : {
+      "get" : {
+        "operationId" : "getImportReconciliation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportReconciliation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The newest reconciliation of an imported run, with its sign-off once signed (FR-IMP-08)",
+        "tags" : [ "imports" ]
+      },
+      "post" : {
+        "operationId" : "reconcileImport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportReconciliation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make the reconciliation of an imported run again from the source and the books; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/reconciliation.txt" : {
+      "get" : {
+        "operationId" : "downloadImportReconciliation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The newest reconciliation as the plain text that is signed, with the sign-off once signed",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/sign-off" : {
+      "post" : {
+        "operationId" : "signOffImport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportSignOffRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportReconciliation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign the reconciliation: every section ticked, the name and today's date typed; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/sign-off" : {
+      "get" : {
+        "operationId" : "listImportsForSignOff",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportSignOffRunList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The business's imported runs to sign off, newest first, at most 20",
         "tags" : [ "imports" ]
       }
     },

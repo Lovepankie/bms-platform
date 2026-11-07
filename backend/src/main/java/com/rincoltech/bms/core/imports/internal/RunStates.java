@@ -39,6 +39,9 @@ final class RunStates {
     /** The states only the commit reaches, never a plain transition. */
     static final Set<String> COMMIT_ONLY = Set.of(COMMITTING, COMMITTED);
 
+    /** The state only the customer's sign-off reaches (issue #134, spec section 3.10), never a plain transition. */
+    static final Set<String> SIGN_OFF_ONLY = Set.of(SIGNED_OFF);
+
     private RunStates() {}
 
     static boolean known(String status) {

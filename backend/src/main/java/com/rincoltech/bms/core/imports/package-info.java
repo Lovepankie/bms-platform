@@ -33,13 +33,18 @@
  * minutes each, {@code import_refs} by {@link com.rincoltech.bms.core.imports.ImportRefs#sourceRef} with
  * {@code CHANGED_SINCE_IMPORT}, the opening journals through {@code core.ledger} against {@code opening_balance_equity}, the
  * policy decisions of {@link com.rincoltech.bms.core.imports.ImportTemplate.Policy}, the verified dump, and no message, task
- * or approval from an imported record. The reconciliation and the operator screens follow in #134 to #141. Public API:
+ * or approval from an imported record. The eighth (issue #134, migration V144) is the reconciliation
+ * ({@link com.rincoltech.bms.core.imports.ImportReconciliation}): made by the commit as it finishes, from the staged rows
+ * measured by the template's forecast and the books (the ledger's port and the template's
+ * {@link com.rincoltech.bms.core.imports.ImportBooks}), every difference itemised, stored append-only, and signed in the
+ * app by the tenant admin, which moves the run to {@code signed_off}. The operator screens follow in #141. Public API:
  * {@link com.rincoltech.bms.core.imports.ImportRuns}, {@link com.rincoltech.bms.core.imports.ImportRefs},
  * {@link com.rincoltech.bms.core.imports.ImportUploads}, {@link com.rincoltech.bms.core.imports.ImportTemplates},
  * {@link com.rincoltech.bms.core.imports.ImportMappings}, {@link com.rincoltech.bms.core.imports.ImportValidation},
- * {@link com.rincoltech.bms.core.imports.ImportReview}, {@link com.rincoltech.bms.core.imports.ImportPreview} and
- * {@link com.rincoltech.bms.core.imports.CommitReport}, and the SPI {@link com.rincoltech.bms.core.imports.ImportTemplate}
- * with {@link com.rincoltech.bms.core.imports.BatchWriter} and {@link com.rincoltech.bms.core.imports.ImportForecast}.
+ * {@link com.rincoltech.bms.core.imports.ImportReview}, {@link com.rincoltech.bms.core.imports.ImportPreview},
+ * {@link com.rincoltech.bms.core.imports.ImportReconciliation} and {@link com.rincoltech.bms.core.imports.CommitReport}, and
+ * the SPI {@link com.rincoltech.bms.core.imports.ImportTemplate} with {@link com.rincoltech.bms.core.imports.BatchWriter},
+ * {@link com.rincoltech.bms.core.imports.ImportForecast} and {@link com.rincoltech.bms.core.imports.ImportBooks}.
  */
 @ApplicationModule(
         id = "core.imports",

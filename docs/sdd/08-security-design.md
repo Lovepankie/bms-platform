@@ -332,6 +332,7 @@ platform API and holds no tenant permissions.
 | `core.notification_templates.manage` | Y | | | | | | | | | | | |
 | `core.imports.manage` | Y | | | | Y | | | | | | | |
 | `core.imports.approve_commit` | Y | | | | Y | | | | | | | |
+| `core.imports.sign_off` | Y | | | | | | | | | | | |
 | `core.payments.read` | Y | Y | | Y | Y | Y | | | | | | |
 | `core.payments.collect` | Y | Y | | Y | | | | | | | | |
 | `core.payments.allocate` | Y | | | Y | Y | | | | | | | |
@@ -533,6 +534,12 @@ Notes:
   The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth
   and villages, the arrears phone, customers' and suppliers' contacts); they are only in the full workbook downloaded after
   sign-in (ADR-074 decision 6).
+  Built (issue #134, ADR-027 decision 8, migration `V144`): `core.imports.sign_off`, the tenant admin's alone, reads the
+  reconciliation of an imported run and signs it for the business (spec section 3.10): every section ticked, the typed name and
+  today's date. It moves no money and is not a maker-checker action: the sign-off is the customer's own statement that the
+  figures tie, and a reconciliation with a difference that is not itemised is refused by the service and by the database
+  (`import_signoff_rules`). Audited `core.import_run.signed_off` without the typed name, which is kept only in the append-only
+  `import_signoffs` row. The operator's `core.imports.manage` makes the reconciliation again; it does not sign.
   Built (extras slice D5, issue #229): the monthly pack `lending.monthly_pack` runs under `lending.reports.portfolio` and the permission
   of each of its eight reports (`lending.reports.collections`, `lending.reports.members`, `lending.reports.compliance`), with
   `lending.insights.read`; a requester missing any is refused 403 and does not see the pack in the catalogue, and can still run the

@@ -71,7 +71,7 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_collection_actions` (except `promise_status`), `lending_savings_transactions`,
 `lending_savings_daily_balances`, `lending_savings_interest_postings`,
 `lending_investment_transactions`, `import_issue_resolutions` (V141, #131), `import_mappings` (V139, #129),
-`import_refs` (V143, #133).
+`import_refs` (V143, #133), `import_reconciliations` and `import_signoffs` (V144, #134).
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
 `reject_mutation()` raises on `UPDATE` or `DELETE` for every role, `bms_owner` included,
@@ -1268,7 +1268,8 @@ one repayment (spec 3.4.1).
 ### Import tables (RLS)
 
 Specified in full in chapter 13 section 13.4; listed here for completeness:
-`import_batches`, `import_rows`, `import_issues`, `import_issue_resolutions`, and `import_refs` (V143, below).
+`import_batches`, `import_rows`, `import_issues`, `import_issue_resolutions`, `import_refs` (V143, below), and
+`import_reconciliations` and `import_signoffs` (V144, below).
 
 As built so far (migration `V127__import_runs.sql`, issue #127, ADR-027; chapter 13 section 13.14):
 
@@ -1409,6 +1410,23 @@ expand only:
   `approval_requests` and `scheduled_tasks`: while the transaction has set `app.import_commit` to `on` (an import batch
   does, with `SET LOCAL`), a new row is refused, so an imported record sends no message, starts no task and raises no
   approval (spec section 3.7).
+- **`import_reconciliations`** (V144, #134; RLS forced, `SELECT, INSERT`, append-only by `reject_mutation`): the
+  reconciliation of a committed run stored as a document (chapter 13 section 13.11), one row per version: `id`,
+  `tenant_id`, `created_at`, `run_id` (FK `(tenant_id, run_id)`), `version integer > 0` (unique per run), `generated_by`
+  (the staff user, NULL when the commit made it), `as_at date` (the cutover day), `report jsonb` (the whole document:
+  sections, checks with source, system and difference as exact decimal strings, itemised differences with file, line and
+  reason; codes, counts and amounts only), `sha256 char(64)` (of the report's plain text, the text that is signed) and
+  `signable boolean` (false while any difference is not itemised). Unique `(tenant_id, id)` for the sign-off's FK.
+- **`import_signoffs`** (V144, #134; RLS forced, `SELECT, INSERT`, append-only): the customer's sign-off, one per run:
+  `id`, `tenant_id`, `created_at`, `run_id` (unique), `reconciliation_id` (FK `(tenant_id, reconciliation_id)`),
+  `report_sha256` (as read), `sections text[]` (the sections ticked), `signed_name varchar(120)` (the name typed: the only
+  personal value of these tables), `signed_on date` (the date typed) and `signed_by` (the staff user).
+- **`import_signoff_rules()`**, a `BEFORE INSERT` trigger on both tables, for every role: a sign-off needs the run
+  `committed`, the run's newest reconciliation, `signable` true and the stored SHA-256; a reconciliation needs the run
+  `committed` and not signed. Both take the run `FOR UPDATE` first, so the two never pass each other and the signed
+  document stays the newest for good.
+- **`imports_erase_personal_data()`** (definer, the removal of a closed business, ADR-090): the typed name of every
+  sign-off of the business becomes "Removed".
 
 ## 6.6 General ledger (RLS)
 
@@ -2293,7 +2311,10 @@ their column grants, the per-row ordinal key and the two guards widened (section
 (#132; directly after `V141`) is expand only: the stored dry run columns of `import_runs` with the CHECK
 `import_runs_dry_run_whole`, and the report part of `import_batches` (section 6.5, Import tables). `V143__import_commit.sql`
 (#133; directly after `V142`) is expand only: the commit approval and dump check columns of `import_runs` with their CHECKs,
-`import_refs`, and the trigger `bms_refuse_during_import_commit` on four tables (section 6.5, Import tables). The next migration takes the number above the highest on `main`
+`import_refs`, and the trigger `bms_refuse_during_import_commit` on four tables (section 6.5, Import tables).
+`V144__import_reconciliation.sql` (#134; directly after `V143`) is expand only: the permission `core.imports.sign_off` for the
+tenant admin, `import_reconciliations`, `import_signoffs` and the trigger `import_signoff_rules` (section 6.5, Import
+tables). The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items

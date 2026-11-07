@@ -828,6 +828,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/runs/{run_id}/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The newest reconciliation of an imported run, with its sign-off once signed (FR-IMP-08) */
+        get: operations["getImportReconciliation"];
+        put?: never;
+        /** Make the reconciliation of an imported run again from the source and the books; audited */
+        post: operations["reconcileImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/reconciliation.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The newest reconciliation as the plain text that is signed, with the sign-off once signed */
+        get: operations["downloadImportReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/sign-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign the reconciliation: every section ticked, the name and today's date typed; audited */
+        post: operations["signOffImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/sign-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The business's imported runs to sign off, newest first, at most 20 */
+        get: operations["listImportsForSignOff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger/payment-methods": {
         parameters: {
             query?: never;
@@ -10405,6 +10474,71 @@ export interface components {
         ImportQuestionList: {
             items?: components["schemas"]["ImportQuestion"][];
         };
+        /** @description The reconciliation of an imported run (FR-IMP-08) */
+        ImportReconciliation: {
+            /**
+             * Format: date
+             * @description The day arrears are aged to: the cutover day
+             */
+            as_at?: string;
+            /** Format: date-time */
+            generated_at?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            run_id?: string;
+            sections?: components["schemas"]["ImportReconciliationSection"][];
+            /** @description The SHA-256 of the report's text; name it when signing */
+            sha256?: string;
+            /** @description False while any difference is not explained */
+            signable?: boolean;
+            signed?: components["schemas"]["ImportSignOff"];
+            /** Format: int32 */
+            version?: number;
+        };
+        /** @description One check: values are exact decimal strings, money in minor units, never rounded */
+        ImportReconciliationCheck: {
+            /** @description Source less system */
+            difference?: string;
+            /** @description The part of the difference the items explain */
+            itemised?: string;
+            key?: string;
+            label?: string;
+            source?: string;
+            system?: string;
+            ties?: boolean;
+            /** @description rows, qty, minor, loans or entries */
+            unit?: string;
+            /** @description The part no item explains; anything but 0 blocks the sign-off */
+            unitemised?: string;
+        };
+        /** @description A figure shown and not compared */
+        ImportReconciliationFact: {
+            label?: string;
+            value?: string;
+        };
+        /** @description One explained difference, without any value of a row */
+        ImportReconciliationItem: {
+            amount?: string;
+            check?: string;
+            detail?: string;
+            file?: string;
+            /**
+             * Format: int32
+             * @description The line of the file, or 0 for the run as a whole
+             */
+            line?: number;
+            /** @description excluded, overridden or policy */
+            reason?: string;
+        };
+        ImportReconciliationSection: {
+            checks?: components["schemas"]["ImportReconciliationCheck"][];
+            facts?: components["schemas"]["ImportReconciliationFact"][];
+            items?: components["schemas"]["ImportReconciliationItem"][];
+            /** @description counts, stock_quantity, stock_value, receivables, loan_principal, arrears, ledger or review */
+            key?: string;
+            title?: string;
+        };
         ImportResolveOutcome: {
             /** @description The issues of the row as they now are */
             issues?: components["schemas"]["ImportIssue"][];
@@ -10444,6 +10578,56 @@ export interface components {
              * @description The issue's version as read
              */
             version: number;
+        };
+        /** @description The sign-off: the typed name and date, the sections ticked */
+        ImportSignOff: {
+            sections?: string[];
+            /** Format: date-time */
+            signed_at?: string;
+            /** Format: uuid */
+            signed_by?: string;
+            signed_name?: string;
+            /** Format: date */
+            signed_on?: string;
+        };
+        ImportSignOffRequest: {
+            /**
+             * Format: date
+             * @description Today's date as typed
+             */
+            date: string;
+            /** @description The signer's name as typed */
+            name: string;
+            /**
+             * Format: uuid
+             * @description The reconciliation read
+             */
+            reconciliation_id: string;
+            /** @description Every section key, ticked */
+            sections: string[];
+            /** @description Its sha256 as read */
+            sha256: string;
+        };
+        /** @description An imported run on the sign-off screen */
+        ImportSignOffRun: {
+            /** Format: date-time */
+            committed_at?: string;
+            /** Format: uuid */
+            run_id?: string;
+            /** @description Whether every difference is explained, or null while none was made */
+            signable?: boolean;
+            /** Format: date-time */
+            signed_at?: string;
+            /** @description committed or signed_off */
+            status?: string;
+            /**
+             * Format: int32
+             * @description The newest reconciliation's version, or null while none was made
+             */
+            version?: number;
+        };
+        ImportSignOffRunList: {
+            items?: components["schemas"]["ImportSignOffRun"][];
         };
         ImportSmsOptOutsRequest: {
             /** @description Default true: report what would happen and change nothing */
@@ -23595,6 +23779,118 @@ export interface operations {
                 };
                 content: {
                     "text/csv": string;
+                };
+            };
+        };
+    };
+    getImportReconciliation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReconciliation"];
+                };
+            };
+        };
+    };
+    reconcileImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReconciliation"];
+                };
+            };
+        };
+    };
+    downloadImportReconciliation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    signOffImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSignOffRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReconciliation"];
+                };
+            };
+        };
+    };
+    listImportsForSignOff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSignOffRunList"];
                 };
             };
         };

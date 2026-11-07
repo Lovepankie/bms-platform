@@ -496,6 +496,9 @@ export function Setup() {
           <Tile to="/staff/setup/referrals" icon={icons.arrow} label="Referrals" hint="Your link for other businesses and who signed up with it" />
         )}
         <Tile to="/staff/sms" icon={icons.chat} label="Text messages" hint="Switch SMS on, choose the sender name and hours, reword messages" />
+        {permissions.includes('core.imports.sign_off') && (
+          <Tile to="/staff/setup/imports" icon={icons.approve} label="Imports to sign off" hint="Check the data Rincol Tech imported for you, then sign it" />
+        )}
         {permissions.includes('core.settings.manage') && (
           <Tile to="/staff/setup/close" icon={icons.close} label="Close the business" hint="Stop for good: the data is removed after a waiting period" />
         )}

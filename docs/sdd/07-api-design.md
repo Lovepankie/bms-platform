@@ -827,6 +827,20 @@ business's run or issue is 404); no answer holds a cell's value, a value before 
 
 `docs/api/openapi.json` and `frontend/src/api/schema.d.ts` carry these routes (`make openapi`).
 
+As built (the reconciliation and the sign-off, #134, FR-IMP-08, chapter 13 sections 13.11 and 13.14.1 8/16): the
+planned `/imports/{batch_id}/reconciliation` is the run's. Reading and signing need `core.imports.sign_off`, the tenant
+administrator's alone (chapter 8); making the reconciliation again needs `core.imports.manage`. Every route works on the
+business of the host only (another business's run is 404). No answer holds a value of a row: codes, counts and amounts as
+exact decimal strings, money in minor units.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/imports/sign-off` | `core.imports.sign_off` | The business's runs that are `committed` or `signed_off`, newest first, at most 20: `{items: [{run_id, status, committed_at, version, signable, signed_at}]}`; `version` and `signable` are null while no reconciliation was made |
+| GET | `/imports/runs/{run_id}/reconciliation` | `core.imports.sign_off` | The newest reconciliation: `{id, run_id, version, generated_at, as_at, sha256, signable, sections, signed}`. A section: `{key, title, facts: [{label, value}], checks: [{key, label, unit, source, system, difference, itemised, unitemised, ties}], items: [{check, file, line, reason, detail, amount}]}`, `reason` one of `excluded`, `overridden`, `policy`; `signed` is `{signed_at, signed_by, signed_name, signed_on, sections}` or null. 404 while none was made |
+| GET | `/imports/runs/{run_id}/reconciliation.txt` | `core.imports.sign_off` | The same as the plain text whose SHA-256 is `sha256`, with the sign-off once signed (the typed name and date: the signed document), as an attachment |
+| POST | `/imports/runs/{run_id}/reconciliation` | `core.imports.manage` | Makes it again from the source and the books as the next version, audited `core.import_run.reconciled`. 409 `run_not_committed` (also once signed off) |
+| POST | `/imports/runs/{run_id}/sign-off` | `core.imports.sign_off` | `{reconciliation_id, sha256, sections, name, date}`: the reconciliation as read, every section key ticked, the typed name (at most 120 characters) and today's date on the business clock. 200 with the signed reconciliation; the run is `signed_off`; audited `core.import_run.signed_off` with the reconciliation, its version, its SHA-256 and the sections, never the name. 409 `run_not_committed`, `reconciliation_missing`, `reconciliation_changed` (made again since it was read, or the books, measured again in the sign-off's transaction, no longer give the reconciliation read; then that measurement is stored as the next version, and the refusal carries its `reconciliation_id` and `version`), `unitemised_difference`; 422 `sections_not_ticked`, `name_required`, `name_too_long`, `sign_off_date_not_today`; 503 `sign_off_too_big` (measuring again passed its 60-second limit per statement: too big to sign here at once; nothing is signed); 400 for an unknown property |
+
 ### 7.11.10 Payments
 
 | Method | Path | Permission | Notes |

@@ -1,6 +1,8 @@
 package com.rincoltech.bms.core.ledger;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,6 +50,34 @@ public interface LedgerAccounts {
      * inter-branch clearing account), this is how a module reads only its own part of it.
      */
     long balanceBySource(String systemKey, String sourceModule, String sourceType);
+
+    // JUSTIFICATION-A3: issue #134, the reconciliation reads its journals through the ledger's own port.
+    /**
+     * The lines of these entries as the ledger holds them (issue #134, the import reconciliation): each with its entry, the
+     * entry's branch, day and source, the account's {@code system_key} (null for an account without one), and its debit and
+     * credit in minor units, and the entry's number (the signed report lists it, FR-IMP-08). Entries of another business
+     * are not seen (row-level security).
+     */
+    List<EntryLine> lines(Collection<UUID> entryIds);
+
+    /**
+     * The whole ledger of the bound business (issue #134): the sum of every line's debits and credits, and how many entries
+     * have debits that differ from their credits. A balanced ledger has equal sums and no such entry.
+     */
+    TrialBalanceCheck trialBalanceCheck();
+
+    record EntryLine(
+            UUID entryId,
+            UUID branchId,
+            LocalDate entryDate,
+            String sourceModule,
+            String sourceType,
+            String accountKey,
+            long debitMinor,
+            long creditMinor,
+            String entryNo) {}
+
+    record TrialBalanceCheck(long debitMinor, long creditMinor, long unbalancedEntries) {}
 
     record Account(UUID id, String code, String currency) {}
 }

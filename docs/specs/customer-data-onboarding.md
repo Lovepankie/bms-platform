@@ -307,11 +307,29 @@ source before sign-off. Per template it shows source value, system value and dif
 
 A difference that is not itemised blocks sign-off.
 
+Built in #134 (SDD chapter 13 sections 13.11 and 13.14.1 8/16; migration V144): the commit makes the reconciliation as it
+finishes and stores it in `import_reconciliations`, append-only, versioned per run; it is made again on request until it is
+signed. The source is the staged rows (every row not blank, the rows left out included), measured by the template's own
+forecast: the rows written netted per product over the whole run, each row left out alone, keeping its own part; the
+system is the books (the run's journals through the ledger's port, the business's ledger, and
+the stock ledger and loan book through the template's `ImportBooks`), never the commit's report. Every check shows source,
+system, difference, itemised and not itemised, as exact decimals with money in minor units; the items are the rows left
+out or held back (`excluded`, by file and line), the written rows with an overridden warning (`overridden`, no amount) and
+the receivable decision and negative stock balances (`policy`). Until the templates of #135 and #136, the retail and lending
+checks are proven on the test-only `fixture_shop` template.
+
 ### 3.10 Sign-off
 
 The customer's sign-off is recorded in the app: the tenant admin opens the reconciliation, ticks
 each section, and types their name and the date. The signed report is stored as a document; the run
 becomes `signed_off`. Sign-off is the trigger for source deletion (section 6.4).
+
+Built in #134: the screen Imports to sign off (`/staff/setup/imports`, the new permission `core.imports.sign_off`, the
+tenant admin's alone). The admin ticks every section, types their name and today's date; the sign-off names the
+reconciliation and its SHA-256 as read and is refused while any difference is not itemised, by the service and by the
+database. It is stored in `import_signoffs`, append-only, one per run; the run becomes `signed_off` (no other path reaches
+it) and no new reconciliation of it is stored; audited `core.import_run.signed_off` without the name. The deletion it
+starts is #139.
 
 ### 3.11 Run states
 

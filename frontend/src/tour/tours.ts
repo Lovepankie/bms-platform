@@ -1460,6 +1460,38 @@ export const billingPage: Tour = {
   ],
 };
 
+// Business set-up > Imports to sign off (issue #134): the reconciliation of an import, read section by section and signed by
+// the tenant admin. The list is what the page shows first, so the steps point at it and say what opening an import holds.
+// JUSTIFICATION-A3: the page tour ADR-049 asks of the new route.
+export const importsSignOffPage: Tour = {
+  id: 'page-imports-sign-off',
+  version: 1,
+  title: 'This page: imports to sign off',
+  audience: (me) => held(me, 'core.imports.sign_off'),
+  autoStart: false,
+  page: '/staff/setup/imports',
+  steps: [
+    {
+      id: 'intro',
+      target: 'imports-intro',
+      title: 'Your data, checked by you',
+      body: 'When Rincol Tech imports your sheets, the import waits here. Open it to compare your own figures with what BMS now holds.',
+    },
+    {
+      id: 'list',
+      target: 'imports-list',
+      title: 'Open an import',
+      body: 'Each row is one import and says whether it is ready to sign. Tap it to compare your sheet with BMS, check by check. Each difference shows why: a row left out, a warning accepted or your decision.',
+    },
+    {
+      // A card in the middle of the page: the signing happens on an import, which the list opens.
+      id: 'sign',
+      title: 'Tick, type and sign',
+      body: 'Tick each section once you have checked it, type your name and today\'s date, and tap Sign the reconciliation. A difference that is not explained cannot be signed.',
+    },
+  ],
+};
+
 // Business set-up > Close the business (issue #571, ADR-090): what closing means, then a review step and the owner's own proof.
 export const closePage: Tour = {
   id: 'page-close',
@@ -2103,7 +2135,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, purchasePage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, wholesaleGroup, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, notificationsPage, feedbackPage, helpPage, helpArticlePage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, importsSignOffPage, notificationsPage, feedbackPage, helpPage, helpArticlePage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;

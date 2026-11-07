@@ -298,6 +298,14 @@ public interface ImportTemplate {
         return List.of();
     }
 
+    /**
+     * What the template's own books hold after a commit (issue #134): its stock ledger and its loan book, the system side of
+     * the reconciliation the ledger cannot answer. {@link ImportBooks#NONE} by default.
+     */
+    default ImportBooks books() {
+        return ImportBooks.NONE;
+    }
+
     // JUSTIFICATION-A3: issue #133 adds the policy decisions of spec section 3.8 to the template contract.
     /**
      * A policy decision a template declares: its key, the options a run may record, the options allowed only with the dev

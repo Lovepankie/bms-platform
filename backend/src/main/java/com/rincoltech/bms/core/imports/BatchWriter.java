@@ -22,6 +22,11 @@ import java.util.UUID;
  * transaction of its own or keeps a long step without a statement: the dry run's time limit is a deadline the database
  * driver checks at each statement (review of 1c607ea on #869), so the business's rows are held until the next one.
  *
+ * <p>A writer keeps nothing in memory from one batch to the next: a batch may be the first one a resumed process writes.
+ * What depends on the run's earlier batches (such as an opening journal that is the change in the run's balance since
+ * them) it derives from the database, from the run's own records and journals in {@code import_refs} (the Lead on the
+ * review of 5b32682 on #873, issue #134; {@link ImportBooks#stock}).
+ *
  * <p>Branch limits are the writer's contract, not the run's (review of #736): each template's writer checks that every row
  * it writes falls in a branch the import may write to and refuses the batch otherwise. The first writer, and so the first
  * place this is enforced and tested, is the template of #136.

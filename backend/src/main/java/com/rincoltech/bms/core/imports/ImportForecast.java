@@ -28,6 +28,21 @@ public interface ImportForecast {
     /** The predicted balances once every row is seen. */
     Balances balances();
 
+    /**
+     * The stock once every row is seen, per branch and product (issue #134): the reconciliation's quantity check, the
+     * balances checksum of spec section 3.9, compares it product by product with the stock ledger. The product is the
+     * template's own code for it, never a personal value. None by default, for a template that keeps no stock.
+     */
+    default List<ProductStock> productStock() {
+        return List.of();
+    }
+
+    /**
+     * Stock of one product at one branch: the quantity and its value at cost in minor units (issue #134), an exact decimal,
+     * since a fractional quantity at a whole unit cost need not be whole: never rounded.
+     */
+    record ProductStock(String branch, String product, BigDecimal qty, BigDecimal valueMinor) {}
+
     /** A forecast that predicts nothing: the default of a template that posts no opening balance. */
     ImportForecast NONE = new ImportForecast() {
         @Override

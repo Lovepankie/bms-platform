@@ -1250,6 +1250,26 @@ public class RlsIsolationIT {
                         + " 'fab-items.csv|-|ref:FAB-001#0123456789abcdef', 'test.record', ?)")
                 .params(UUID.randomUUID(), t.tenantId(), importRun, importBatch, UUID.randomUUID())
                 .update();
+        // The reconciliation and its sign-off (migration V144, #134): a committed run, its fabricated reconciliation
+        // and the sign-off of it, the name typed fabricated. JUSTIFICATION-A3: the factory rows of the two new tables.
+        UUID committedRun = UUID.randomUUID();
+        owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, status) VALUES (?, ?, ?, 'committed')")
+                .params(committedRun, t.tenantId(), user)
+                .update();
+        UUID reconciliation = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO import_reconciliations (id, tenant_id, run_id, version, as_at, report, sha256, signable)
+                        VALUES (?, ?, ?, 1, DATE '2026-10-01', '{"sections": []}', ?, true)
+                        """)
+                .params(reconciliation, t.tenantId(), committedRun, hex64(reconciliation))
+                .update();
+        owner.sql("""
+                        INSERT INTO import_signoffs (id, tenant_id, run_id, reconciliation_id, report_sha256, sections,
+                                                     signed_name, signed_on, signed_by)
+                        VALUES (?, ?, ?, ?, ?, ARRAY['counts', 'ledger'], 'Test Signer 01', DATE '2026-10-02', ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), committedRun, reconciliation, hex64(reconciliation), user)
+                .update();
     }
 
     /**
@@ -2032,7 +2052,10 @@ public class RlsIsolationIT {
                 // The resolutions of the review queue (#131).
                 "import_issue_resolutions",
                 // The references of imported records (#133).
-                "import_refs")) {
+                "import_refs",
+                // The reconciliation of an import and the customer's sign-off (#134).
+                "import_reconciliations",
+                "import_signoffs")) {
             assertThatThrownBy(() -> asApp(
                             a.tenantId(),
                             c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))

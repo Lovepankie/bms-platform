@@ -108,6 +108,14 @@ const staffCloseRoute = createRoute({ getParentRoute: () => staffRoute, path: '/
 const staffReferralsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/referrals', staticData: { crumb: 'Referrals' } }).lazy(() =>
   import('../areas/staff/referrals/page').then((m) => m.Route),
 );
+// Imports to sign off (issue #134): the tenant admin reads the reconciliation of an import and signs it. Under Business set-up;
+// ?run= opens one import, as the link Rincol Tech sends does.
+const staffImportsSignOffRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/setup/imports',
+  staticData: { crumb: 'Imports to sign off' },
+  validateSearch: (s: Record<string, unknown>): { run?: string } => ({ run: typeof s.run === 'string' ? s.run : undefined }),
+}).lazy(() => import('../areas/staff/imports/page').then((m) => m.Route));
 // The Money and More pages of the phone's bottom tabs (issue #539).
 const staffMoneyRoute = createRoute({ getParentRoute: () => staffRoute, path: '/money', staticData: { crumb: 'Money' } }).lazy(() =>
   import('../areas/staff/tab-pages').then((m) => m.MoneyRoute),
@@ -434,7 +442,7 @@ export const router = createRouter({
     forgotPasswordRoute,
     resetPasswordRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffMoneyRoute, staffMoreRoute, staffKitRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffApprovalRulesRoute, staffBusinessNotificationsRoute, staffBillingRoute, staffCloseRoute, staffReferralsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
+    staffRoute.addChildren([staffHomeRoute, staffMoneyRoute, staffMoreRoute, staffKitRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffApprovalRulesRoute, staffBusinessNotificationsRoute, staffBillingRoute, staffCloseRoute, staffReferralsRoute, staffImportsSignOffRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
         retailCreditSalesRoute,

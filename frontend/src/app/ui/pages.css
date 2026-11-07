@@ -444,3 +444,44 @@
   margin-bottom: var(--space-1);
   text-transform: capitalize;
 }
+
+/* Imports to sign off (issue #134): each check of the reconciliation is its label over its figures, a label and a value per
+   line, so four figures fit a phone 412 wide at any font size; a long code wraps instead of pushing the page sideways. */
+.recon-check {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.recon-check > p {
+  margin: 0 0 var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.recon-figures {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.recon-figures dt {
+  color: var(--color-text-muted);
+}
+
+.recon-figures dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* The explained differences open under their own 48px line (rule 12). */
+.recon-items > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+.recon-items li {
+  overflow-wrap: anywhere;
+}

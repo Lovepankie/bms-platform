@@ -53,6 +53,7 @@ import { ReferralsPage } from '../areas/staff/referrals/page';
 import { BusinessNotificationsScreen } from '../areas/staff/notifications/business';
 import { BillingScreen } from '../areas/staff/billing/page';
 import { CloseScreen } from '../areas/staff/close/page';
+import { ImportsSignOff } from '../areas/staff/imports/page';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { ApprovalRulesScreen } from '../areas/staff/approval-rules/page';
 import { UsersScreen } from '../areas/staff/users/page';
@@ -121,6 +122,8 @@ function screen(path: string | undefined): ReactElement {
       return <BillingScreen />;
     case '/staff/setup/close':
       return <CloseScreen />;
+    case '/staff/setup/imports':
+      return <ImportsSignOff />;
     case '/staff/retail':
       return <RetailHome />;
     case '/staff/retail/sale':
@@ -220,6 +223,8 @@ function render(me: Me, path: string | undefined): string {
     state: 'active', paid_until: '2026-11-30', grace_days: 7, how_to_pay: 'Test: pay to the test account',
     payments: [{ id: 'p1', amount_minor: 10000, currency: 'UGX', method: 'mtn_momo', paid_on: '2026-11-01', months: 1, period_start: '2026-11-01', period_end: '2026-11-30', receipt_no: 'RT-2026-000001' }],
   });
+  // What Imports to sign off reads (issue #134): one imported run, so its list is in the static markup.
+  client.setQueryData(['imports-sign-off'], [{ run_id: 'run-1', status: 'committed', committed_at: '2026-10-01T07:00:00Z', version: 1, signable: true }]);
   // What the approval rules read (issue #343): one rule, so the page and its save button are in the static markup.
   client.setQueryData(['approval-rules'], {
     currency: 'UGX', version: 1,
@@ -320,6 +325,9 @@ const ASSISTANT: Me = { ...ADMIN, full_name: 'Test Assistant Admin 01', permissi
 // The owner or an administrator, who reads the business's referrals (issue #464, ADR-069).
 const REFERRER: Me = { ...ADMIN, full_name: 'Test Referrer 01', permissions: [...(ADMIN.permissions ?? []), 'core.referrals.read'] } as Me;
 
+// The tenant administrator who signs the reconciliation of an import (issue #134).
+const SIGNER: Me = { ...ADMIN, full_name: 'Test Signer 01', permissions: [...(ADMIN.permissions ?? []), 'core.imports.sign_off'] } as Me;
+
 const AUDIENCE: Record<string, Me[]> = {
   'page-money': [ADMIN, SELLER],
   'page-more': [ADMIN, SELLER, OFFICER],
@@ -336,6 +344,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-business-notifications': [ADMIN],
   'page-billing': [ADMIN],
   'page-close': [ADMIN],
+  'page-imports-sign-off': [SIGNER],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],
