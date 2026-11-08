@@ -275,6 +275,16 @@ class ImportRunService implements ImportRuns {
                 requireDryRun(runId, false);
                 // And every policy decision the run needs, recorded (spec section 3.8, issue #133).
                 requirePolicies(runId);
+                // And no open issue of the template's ready-blocking codes on a row it keeps (issue #136).
+                String blocker = preview.readyBlocker(runId).orElse(null);
+                if (blocker != null) {
+                    throw new ApiException(
+                            HttpStatus.CONFLICT,
+                            blocker,
+                            "Import not ready",
+                            "Rows of this import have the blocking issue " + blocker
+                                    + "; leave them out or fix the files first.");
+                }
             }
             setStatus(runId, status);
             audit(runId, "core.import_run.status_changed", Map.of("status", run.status()), Map.of("status", status));

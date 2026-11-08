@@ -182,14 +182,26 @@ public final class ImportRefs {
      * One staged row a writer writes, in line order: its line, its typed values (as {@link ImportTemplate.RowCheck} reads
      * them), its {@code source_ref}, whether it is new or already imported, and the records already registered for it by
      * target type. A row imported before with other content never reaches a writer: the validation holds it back as
-     * {@code CHANGED_SINCE_IMPORT}, and the commit refuses the batch if one reaches it all the same.
+     * {@code CHANGED_SINCE_IMPORT}, and the commit refuses the batch if one reaches it all the same. Since issue #136 it also
+     * carries the business's record the review linked it to ({@code link_member}, {@link ImportTemplate#recordExists}), or
+     * null, so the writer uses that record instead of making one.
      */
     public record StagedRow(
-            int line, Map<String, Object> values, String sourceRef, Status status, Map<String, UUID> targets) {
+            int line,
+            Map<String, Object> values,
+            String sourceRef,
+            Status status,
+            Map<String, UUID> targets,
+            UUID linkedMemberId) {
 
         public StagedRow {
             values = values == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(values));
             targets = targets == null ? Map.of() : Map.copyOf(targets);
+        }
+
+        public StagedRow(
+                int line, Map<String, Object> values, String sourceRef, Status status, Map<String, UUID> targets) {
+            this(line, values, sourceRef, status, targets, null);
         }
     }
 
@@ -211,7 +223,8 @@ public final class ImportRefs {
             String accountKey,
             boolean debit,
             long amountMinor,
-            String ledgerType) {
+            String ledgerType,
+            List<OpeningLine> lines) {
 
         /** The ledger type of an opening journal whose template names none. */
         public static final String OPENING_BALANCE = "opening_balance";
@@ -228,6 +241,23 @@ public final class ImportRefs {
             if (!ledgerType.matches("^[a-z][a-z0-9_.]{1,59}$")) {
                 throw new IllegalArgumentException("a ledger type is a lower-case code");
             }
+            lines = lines == null ? List.of() : List.copyOf(lines);
+            if (!lines.isEmpty()
+                    && lines.stream().mapToLong(OpeningLine::amountMinor).reduce(0, Math::addExact) != amountMinor) {
+                throw new IllegalArgumentException("an opening's lines add up to its amount");
+            }
+        }
+
+        public Opening(
+                UUID branchId,
+                String branchCode,
+                String kind,
+                LocalDate entryDate,
+                String accountKey,
+                boolean debit,
+                long amountMinor,
+                String ledgerType) {
+            this(branchId, branchCode, kind, entryDate, accountKey, debit, amountMinor, ledgerType, List.of());
         }
 
         public Opening(
@@ -239,6 +269,23 @@ public final class ImportRefs {
                 boolean debit,
                 long amountMinor) {
             this(branchId, branchCode, kind, entryDate, accountKey, debit, amountMinor, null);
+        }
+    }
+
+    // JUSTIFICATION-A3: chapter 13 section 13.10 step 7 posts one loans_receivable line per open loan (issue #136).
+    /**
+     * One line of an opening's account side (issue #136): its amount and the subledger it is for, so the account side is
+     * posted as one line per record (one {@code loans_receivable} line per open loan, subledger the loan, chapter 13
+     * section 13.10 step 7) against one equity line for the total. An opening without lines posts its account side as one.
+     */
+    public record OpeningLine(String subledgerType, UUID subledgerId, long amountMinor) {
+
+        public OpeningLine {
+            Objects.requireNonNull(subledgerType, "subledgerType");
+            Objects.requireNonNull(subledgerId, "subledgerId");
+            if (amountMinor <= 0) {
+                throw new IllegalArgumentException("an opening line is a positive amount");
+            }
         }
     }
 }

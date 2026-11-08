@@ -10,13 +10,17 @@ spreadsheet becomes members, next of kin, collateral items, loans, schedules, hi
 repayments and opening balances, without losing a row and without guessing.
 
 The import framework (core module `imports`) is generic: batches, rows, issues, review,
-preview, commit, reconciliation. The pilot register is its first **template**,
-`pilot_loan_register_v1`, registered by the lending module (chapter 5 section 5.4.3).
-Requirements: FR-IMP-01 to FR-IMP-09, FR-GL-09.
+preview, commit, reconciliation. The rules of this chapter are the canonical **template**
+`lending_loans_v1`, registered by the lending module (chapter 5 section 5.4.3), and the pilot
+register is its first **mapping** (planned as the template `pilot_loan_register_v1`; built so in
+#136, section 13.14.1 10/16). Requirements: FR-IMP-01 to FR-IMP-09, FR-GL-09.
 
 ADR-027 makes this framework the one onboarding pipeline for every tenant's data, with canonical
 templates per vertical and versioned mappings per customer sheet (section 13.14,
-`docs/specs/customer-data-onboarding.md`).
+`docs/specs/customer-data-onboarding.md`). The lending templates `lending_savings_v1` (savings
+accounts, opening balances, historic deposits) and `lending_investments_v1` (investment holdings,
+opening balances) are later work, with phase 2 savings and investments: they are not built, and a
+savings or investments sheet is not imported by `lending_loans_v1`.
 
 ## 13.2 Principles
 
@@ -376,7 +380,8 @@ so is not listed again by the template. The rules every catalogue keeps:
 - A code is never renamed or reused. A code no longer produced stays in its catalogue, marked retired
   (`IssueCode.retired`); the engine refuses to report a retired code. Every code ever registered is
   pinned in `fixtures/imports/issue-codes.txt`, and `ImportCatalogueTest` fails when one is removed,
-  renamed, given another severity or loses its retired mark. The lending codes join that file with #136.
+  renamed, given another severity or loses its retired mark. The lending codes joined that file with #136
+  (`lending_loans_v1`, pinned by `LendingLoansV1TemplateTest`).
 - Every code that is not retired is produced by a fabricated fixture row (the golden run of the
   template), or, for a code another stage owns (the upload, the mapping validator, the commit guards),
   by the named test of that stage; a code whose producer is a later build step is listed as pending that
@@ -388,6 +393,20 @@ so is not listed again by the template. The rules every catalogue keeps:
   column "Message" of 13.4 therefore no longer carries the original and proposed values: the original
   is stored beside the message (`import_issues.original_value`) and shown only in the review screen to
   a holder of `core.imports.view_raw`, and a suggestion is the resolution's (#131).
+
+As built in #136 (section 13.14.1 10/16), the catalogue differs from the table above in four ways. `SUBHEADER_ROW`
+(info) and `PLACEHOLDER_ROW` (blocking) are shared codes, the codes of the shared row rules `subheader_month` and
+`placeholder_rows` that any template may offer, as `BLANK_ROW` is the shared code of a blank row. A code has one
+severity, so the kin's `PHONE_UNPARSEABLE` (a warning) is its own code, `KIN_PHONE_UNPARSEABLE`. Four codes are added:
+`BRANCH_UNKNOWN` and `PRODUCT_UNKNOWN` (blocking, a row's branch or loan product that the business has not open or
+active), `BRANCH_IN_TWO_FILES` (blocking, on every row of a later file of the run for a branch an earlier file has; the
+run is not `ready` while one is open on a row it keeps, so a branch's one opening journal holds all its loans) and
+`DISBURSEMENT_DECISION_MISSING` (the run's refusal while the decision of 13.8 row 15 is not recorded). And
+`reclassify` is not a resolution: a row of a class is completed by `edit_value` of its cells (the row is classed again
+from the edit) or left out by `exclude_row`, and `link_row` on `AMOUNTS_ONLY_ROW` decides nothing the commit writes.
+`DATE_AMBIGUOUS` has no suggestion (a resolution names one value, so the reviewer edits the date); `KIN_PHONE_MATCH`
+links the kin with `link_status = suggested` whether it is accepted or overridden, for the member's screen to confirm,
+since the commit cannot tell the two resolutions apart.
 
 ## 13.8 Column mapping
 
@@ -741,7 +760,8 @@ retail command. ADR-027 makes the framework the one pipeline for every tenant's 
   versioned mapping document in `import_mappings` (append-only), validated against the template:
   columns to fields, value maps, the date convention and row rules such as the sub-header rows of
   13.5. `pilot_loan_register_v1` of this chapter becomes the `lending_loans_v1` template with the
-  pilot register as its first mapping. A new resolution kind, `map_value`, adds a value map from
+  pilot register as its first mapping (built in #136, 13.14.1 10/16; `lending_savings_v1` and
+  `lending_investments_v1` are later work, not built). A new resolution kind, `map_value`, adds a value map from
   the review queue and creates a new mapping version.
 - **Issue codes.** Every template has a stable code catalogue (13.7 for lending; the shared and
   retail codes are in the spec, section 3.4.1). Messages are plain language and carry the field,
@@ -1442,3 +1462,92 @@ section 4.1 and Appendix A).**
   signed off; a fabricated spreadsheet-shaped book with a mapping gives the state the same data as a JSON Lines export
   gives; `open_from_list` refused; another business reaches nothing), `RetailImportRefsBackfillIT` (a re-run after the
   backfill recognises the old command's rows), `RetailV1TemplateTest` and `MigrationOrderIT` (V145).
+
+**10/16, `lending_loans_v1` and the pilot register as its first mapping (#136, no migration, ADR-027 decision 1, spec
+section 4.1; coordinated with #110, which builds no second framework).**
+
+- **The template.** `lending_loans_v1` (`LendingLoansV1Template` in `lending.loans`, a bean the registry finds) has one
+  entity set, `loans`: a row per loan of a register, its 25 columns as the fields of 13.8 (`disbursed_on`,
+  `customer_name`, ..., `remarks`, every one read as text and typed by the rules of 13.6), plus the batch's `branch` (a
+  branch code; empty is the head office) and `product` (a loan product code, required). The rules are pure functions
+  (`LoanRegister`) that the validation, the forecast and the loader all call, so what the review shows, what the preview
+  predicts and what the commit writes agree. Its catalogue is 13.7 as amended there; the codes are pinned in
+  `fixtures/imports/issue-codes.txt`.
+- **Rules over the run's rows (the SPI `ImportTemplate.SetRules`).** The engine of 4/16 sees one row at a time; the row
+  classes of 13.5, the dates of 13.6.3 and the linking of 13.9 need the rows around it. A template may now answer
+  `setRules(entitySet)`: pass 1 indexes every row the review has not left out, in commit order; pass 2 classes a row first
+  (a classed row has no record, so none of its fields is checked: no `REQUIRED_MISSING` on a sub-header), then, after the
+  fields and the row checks, answers its findings and the values that replace its typed ones (a resolved date as ISO
+  text), so the preview, the forecast and the loader read the resolved date. A finding may carry a suggestion (a repaired
+  date, the implied rate, the rounded amount), kept only on a field that is not personal. A row classed `SUBHEADER_ROW`
+  is left out like a blank row (`ImportTemplates.LEFT_OUT_CODES`: the preview counts it blank, the commit never writes it,
+  the reconciliation counts it blank).
+- **Register-specific behaviour as mapping row rules (spec section 4.2).** `row_rules.subheader_month: true` classes a row
+  of at most two cells, none an amount, one a month label, as a sub-header that dates the rows below it (a month without a
+  year takes the next data row's year when every reading of its DATE has one); `row_rules.placeholder_rows` holds the
+  placeholder patterns of 13.5 (the mapping's, whole-cell, ignoring case). A row of amounts only is the template's own
+  class, whatever the mapping.
+- **The batch's branch and product (13.3), as the mapping's constants.** A mapping source may now give `defaults`: the
+  value of a field no column of it feeds (the schema allows only a field the set does not mark personal; a field both a
+  column and a default feed is `FIELD_MAPPED_TWICE`; a required field fed by a default is fed). The pilot register's
+  sources give `product` (and the second branch's `branch`), so one register file is one batch of one branch. The loans
+  officer is the person who opened the run (`import_runs.created_by`); a remark is kept as a collection note only when that
+  person is a staff user of the business.
+- **The pilot register as a fabricated fixture mapping.** `fixtures/imports/lending_loans_v1.pilot_register.mapping.json`
+  maps the 25 columns of `fixtures/pilot_loan_register_sample.csv` onto the template (source `register`), switches on the
+  two row rules, and names a second source `register_br2` for the fabricated second branch
+  (`fixtures/imports/lending/fab-register-branch-two.csv`). Real mappings are never committed.
+- **The disbursement decision (13.8 row 15) on the run.** The policy `disbursed_principal`, option
+  `requested_as_disbursed`, is needed by every register row: `ready`, the commit's request and the commit refuse a run
+  without it (`DISBURSEMENT_DECISION_MISSING`), recorded with the customer's confirmation like the receivable decision.
+  The loader writes the requested principal as approved and disbursed.
+- **Linking against the business's own members (13.9, the note of #130 on #136).** Each borrower is matched in the run's
+  order, as the loader matches it: the same key earlier in the same file is that member (`DUPLICATE_BORROWER`); else the
+  member with the NIN, or the one member holding the phone unless they differ (both NINs given and different, or a name
+  that differs when one has none), among the business's members (`MEMBER_MATCHED_EXISTING`) and those the run's earlier
+  rows make; a member on that phone who differs, or two on it, is `MEMBER_PHONE_CONFLICT` and a new member. The reads go
+  through the lending port `MemberImports` inside the validation's transaction, so only the business's own rows (each
+  lookup also names the business). A review's `link_member` reaches the loader (`ImportRefs.StagedRow.linkedMemberId`):
+  every row of the linked row's key in the batch takes that member, and a key whose rows are linked to two members fails
+  the batch. An existing member's fields are never changed.
+- **The loader (13.10 steps 1 to 7).** One batch, one transaction: every borrower matched or made (the details of the
+  key's latest row by date), then per row its next of kin (a duplicate for the member collapses; a kin whose NIN is a
+  member's is linked `nin`, `confirmed`), its collateral item (`pledged`, no value, "imported; verify custody and value";
+  a reference another active item holds is kept in the description; the item of a loan the register shows repaid is
+  `released`, its pledge too), the loan (`channel = import`, flat, per term, bullet; inserted as a draft so its pledge
+  is accepted, as the V8 trigger `lending_loan_collateral_guard` asks, then moved to its status from the balance), its
+  one bullet item, a historic disbursement and the historic repayment with its allocations by the product's order
+  (`is_historic`, no journal), the position as at the cutover day (DPD). Every record a row made is registered in
+  `import_refs`, the loan's own rows too: member, next of kin, collateral item, loan, status history, schedule item,
+  transaction, allocation, pledge and collection note. A row's branch must be open (`Branches.lockBranch`), or the batch
+  is refused (the branch limit of 1/16). No SMS, task or approval (the trigger of 7/16).
+- **One opening journal per branch, ever (the rule of #135).** After its rows, the batch posts, for each branch it wrote
+  that has no import opening journal of loans yet, one journal through `openingJournal` for every loan imported into the
+  branch (by any run) still owing principal: debit `loans_receivable`, one line per loan with the loan as subledger (the
+  framework's `ImportRefs.Opening.lines`), credit `opening_balance_equity` the total; and the same for members' credits
+  (`member_overpayments`). Valuing every imported loan of the branch makes the first journal after a stopped run value
+  everything imported. A branch that already has one takes none; the report lists its new loans for a correcting entry.
+  "Ever" holds under concurrency because every batch of the business first takes the business's import key
+  (`pg_try_advisory_xact_lock` in `ImportRunService`, Lead ruling 5 on #869), so two batches never check and post a
+  branch's journal at once. Within a run, a branch is one file: two files of one branch get `BRANCH_IN_TWO_FILES` on the
+  later file's rows, and a template's ready-blocking codes (the SPI `ImportTemplate.readyBlockingCodes`, none by default)
+  keep the run from `ready` while one is open on a row the review keeps.
+  The forecast applies the same rule (the branches opened by other runs, the principal their imported loans still hold,
+  and this run's rows by `LoanRegister.plan`), so the preview and the commit agree.
+- **The forecast and the books.** The forecast predicts per branch the loan principal outstanding, the loans and
+  principal per days-past-due bucket as at the cutover day (`current`, `1-30`, `31-60`, `61-90`, `over-90`) and the
+  opening journals; the books (`ImportBooks.arrears`) age the run's loans from their schedule items in the loan book.
+- **The trading probe.** Lending's `LiveRecordProbe` no longer counts the historic transactions of a loan the framework
+  imported (`import_refs`, `lending.loan`), so a resumed or later run is not refused for what an earlier one wrote.
+- **Proven by** `LendingLoansV1TemplateTest` (the pilot register through its mapping gives the issues, suggestions and
+  values of 13.12 exactly; after the standard resolutions only rows 7, 9 and 13 stay blocked; a register of fabricated
+  edge cases gives every other code of the catalogue; the codes are pinned; no message holds a value of the register; the
+  normalisers read the tables of 13.6; the forecast predicts the journal of 2,810,000 in six lines and the days past due
+  of 13.12; a branch another run opened is predicted none) and `LendingLoansV1TemplateIT` (on PostgreSQL as `bms_app`,
+  at two branches: the dry run writes nothing and matches the preview; the commit creates what 13.12 lists; the preview's
+  loan principal per branch equals the loan book and the `loans_receivable` lines, its loans and principal per bucket the
+  loan book aged to the cutover day, each opening journal's debit and credit its `journal_lines`; every record is in
+  `import_refs`; the reconciliation ties; the same register as a workbook gives the books the CSV gives; a re-run and a
+  resume after a kill post no second journal and write nothing twice; a business with a member and a loan keeps them,
+  has its borrowers linked to that member and journals only the imported loans; a run without the decision is not
+  ready), with `ImportCatalogueTest` (the two shared codes and the lending catalogue pinned).

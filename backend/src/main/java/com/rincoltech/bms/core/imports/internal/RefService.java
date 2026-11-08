@@ -128,7 +128,8 @@ class RefService {
                     r.typed(),
                     ref,
                     targets.isEmpty() ? ImportRefs.Status.NEW : ImportRefs.Status.EXISTING,
-                    targets));
+                    targets,
+                    r.linkedMemberId()));
         }
         return out;
     }
@@ -182,6 +183,14 @@ class RefService {
         content.put("debit", o.debit());
         content.put("amount", o.amountMinor());
         content.put("date", o.entryDate().toString());
+        if (!o.lines().isEmpty()) {
+            // The account side's lines (issue #136): a journal of other lines is another journal.
+            content.put(
+                    "lines",
+                    o.lines().stream()
+                            .map(l -> l.subledgerType() + ":" + l.subledgerId() + ":" + l.amountMinor())
+                            .toList());
+        }
         // One per batch (review of f3be0a6 on #872): two batches of a run that both hold a branch's stock post a
         // journal each, never one that collides with the other's.
         String ref = ImportRefs.sourceRef(
@@ -206,9 +215,25 @@ class RefService {
                 .orElseThrow(() -> ApiException.rule(
                         "account_not_postable", "The business has no opening balance equity account."));
         Money amount = Money.of(o.amountMinor(), account.currency());
-        List<Line> lines = o.debit()
-                ? List.of(Line.debit(account.id(), amount), Line.credit(equity.id(), amount))
-                : List.of(Line.debit(equity.id(), amount), Line.credit(account.id(), amount));
+        // JUSTIFICATION-A3: chapter 13 section 13.10 step 7, one loans_receivable line per open loan (issue #136).
+        // The account side as one line, or as one line per record with its subledger, against one equity line.
+        List<Line> side = new ArrayList<>();
+        if (o.lines().isEmpty()) {
+            side.add(o.debit() ? Line.debit(account.id(), amount) : Line.credit(account.id(), amount));
+        }
+        for (ImportRefs.OpeningLine l : o.lines()) {
+            Money part = Money.of(l.amountMinor(), account.currency());
+            side.add((o.debit() ? Line.debit(account.id(), part) : Line.credit(account.id(), part))
+                    .withSubledger(l.subledgerType(), l.subledgerId()));
+        }
+        List<Line> lines = new ArrayList<>();
+        if (o.debit()) {
+            lines.addAll(side);
+            lines.add(Line.credit(equity.id(), amount));
+        } else {
+            lines.add(Line.debit(equity.id(), amount));
+            lines.addAll(side);
+        }
         LedgerPosting.PostedEntry entry = ledger.post(new EntryRequest(
                 o.branchId(),
                 o.entryDate(),

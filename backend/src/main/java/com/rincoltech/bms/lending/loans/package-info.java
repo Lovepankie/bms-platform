@@ -27,7 +27,8 @@
             "lending.members",
             "core.help",
             "lending.products",
-            "lending.collateral"
+            "lending.collateral",
+            "core.imports"
         })
 package com.rincoltech.bms.lending.loans;
 

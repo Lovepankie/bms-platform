@@ -1,0 +1,85 @@
+{
+  "template": "lending_loans",
+  "template_version": 1,
+  "date_convention": "iso",
+  "time_zone": "Africa/Kampala",
+  "currency": "UGX",
+  "sources": {
+    "register": {
+      "entity_set": "loans",
+      "file": "pilot_loan_register_sample.csv",
+      "header_row": "auto",
+      "columns": {
+        "DATE": {"field": "disbursed_on"},
+        "CUSTOMER NAME": {"field": "customer_name"},
+        "LOCATION": {"field": "location"},
+        "CUSTOMER PHONE": {"field": "customer_phone"},
+        "CUSTOMER ID": {"field": "customer_nin"},
+        "MARITAL STATUS": {"field": "marital_status"},
+        "NEXT OF KIN": {"field": "kin_name"},
+        "NEXT OF KIN PHONE": {"field": "kin_phone"},
+        "NEXT OF KIN ID": {"field": "kin_nin"},
+        "RELATIONSHIP OF NEXT OF KIN": {"field": "kin_relationship"},
+        "LOCATION OF NEXT OF KIN": {"field": "kin_location"},
+        "OCCUPATION": {"field": "occupation"},
+        "OTHER SOURCE OF INCOME": {"field": "other_income"},
+        "REASON": {"field": "purpose"},
+        "PRINCIPAL REQUESTED": {"field": "principal"},
+        "PERCENTAGE": {"field": "rate"},
+        "DURATION": {"field": "duration"},
+        "EXPECTED DATE OF RETURN": {"field": "due_on"},
+        "AMOUNT TO BE RETURNED": {"field": "return_amount"},
+        "COLLATERAL/ PLEDGE": {"field": "collateral"},
+        "CURRENT PAYMENT": {"field": "payment"},
+        "DATE OF CURRENT PAY": {"field": "paid_on"},
+        "OUTSTANDING BALANCE": {"field": "outstanding"},
+        "STATUS": {"field": "status"},
+        "REMARKS": {"field": "remarks"}
+      },
+      "row_rules": {
+        "subheader_month": true,
+        "placeholder_rows": ["^x+$", "^-+$", "^\\.+$", "^\\?+$", "^(n/?a|none|nil|name|tbd|test)$"]
+      },
+      "defaults": {"product": "TEST-REG"},
+      "source_ref": {"rule": "row_hash"}
+    },
+    "register_br2": {
+      "entity_set": "loans",
+      "file": "fab-register-branch-two.csv",
+      "header_row": "auto",
+      "columns": {
+        "DATE": {"field": "disbursed_on"},
+        "CUSTOMER NAME": {"field": "customer_name"},
+        "LOCATION": {"field": "location"},
+        "CUSTOMER PHONE": {"field": "customer_phone"},
+        "CUSTOMER ID": {"field": "customer_nin"},
+        "MARITAL STATUS": {"field": "marital_status"},
+        "NEXT OF KIN": {"field": "kin_name"},
+        "NEXT OF KIN PHONE": {"field": "kin_phone"},
+        "NEXT OF KIN ID": {"field": "kin_nin"},
+        "RELATIONSHIP OF NEXT OF KIN": {"field": "kin_relationship"},
+        "LOCATION OF NEXT OF KIN": {"field": "kin_location"},
+        "OCCUPATION": {"field": "occupation"},
+        "OTHER SOURCE OF INCOME": {"field": "other_income"},
+        "REASON": {"field": "purpose"},
+        "PRINCIPAL REQUESTED": {"field": "principal"},
+        "PERCENTAGE": {"field": "rate"},
+        "DURATION": {"field": "duration"},
+        "EXPECTED DATE OF RETURN": {"field": "due_on"},
+        "AMOUNT TO BE RETURNED": {"field": "return_amount"},
+        "COLLATERAL/ PLEDGE": {"field": "collateral"},
+        "CURRENT PAYMENT": {"field": "payment"},
+        "DATE OF CURRENT PAY": {"field": "paid_on"},
+        "OUTSTANDING BALANCE": {"field": "outstanding"},
+        "STATUS": {"field": "status"},
+        "REMARKS": {"field": "remarks"}
+      },
+      "row_rules": {
+        "subheader_month": true,
+        "placeholder_rows": ["^x+$", "^-+$", "^\\.+$", "^\\?+$", "^(n/?a|none|nil|name|tbd|test)$"]
+      },
+      "defaults": {"product": "TEST-REG", "branch": "BR2"},
+      "source_ref": {"rule": "row_hash"}
+    }
+  }
+}

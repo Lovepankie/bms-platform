@@ -30,3 +30,13 @@ The retail template (issue #135) adds:
 |---|---|
 | `retail_v1.shop_book.mapping.json` | A mapping of a fabricated shop book in another shape than the export (one CSV per tab under `fixtures/retail/import-shapes/sheet/`, headers of its own, day-first dates, sale and entry types mapped by `enum_maps`, a derived column ignored, a quantity per shop as `BRANCH=qty` pairs) onto the production template `retail_v1`. `RetailV1TemplateIT` imports it through the framework and compares the books with the command's import of the same data as a JSON Lines export (`fixtures/retail/import-shapes/export/`). The totals line of the product master is left out in the review |
 | `issue-codes.txt`, lines `retail_v1` | The codes of `retail_v1`, pinned by `RetailV1TemplateTest` |
+
+The lending template (issue #136) adds:
+
+| File | What it is |
+|---|---|
+| `lending_loans_v1.pilot_register.mapping.json` | The pilot register as the first mapping of `lending_loans_v1`: its 25 columns onto the template's fields, the row rules `subheader_month` and `placeholder_rows` (the patterns of SDD chapter 13 section 13.5), the loan product as the source's `defaults`, and a second source `register_br2` for a register of the second branch (`branch` as a default too). `LendingLoansV1TemplateTest` and `LendingLoansV1TemplateIT` read it over `fixtures/pilot_loan_register_sample.csv` |
+| `lending/fab-register-branch-two.csv` | A fabricated register of the second branch (three loans: one overdue, one current with a part payment, one repaid), for the golden test at two branches |
+| `lending/fab-register-overpaid.csv` | Two fabricated loans at the head office: one repaid with 40,000 more than it owed (the member credit journal), one still owing |
+| `lending/fab-register-edge-cases.csv` | Fabricated rows, each producing the codes of the catalogue the pilot sample does not (with `BRANCH` and `PRODUCT` columns) |
+| `issue-codes.txt`, lines `lending_loans_v1` | The codes of `lending_loans_v1`, pinned by `LendingLoansV1TemplateTest` |

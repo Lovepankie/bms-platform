@@ -238,13 +238,92 @@ public interface ImportTemplate {
         List<RowFinding> check(Map<String, Object> values);
     }
 
-    /** One finding of a {@link RowCheck}: a code, the field it is on (or null for the row), and non-personal parameters. */
-    record RowFinding(String code, String field, Map<String, String> params) {
+    /**
+     * One finding of a {@link RowCheck} or of {@link SetRules}: a code, the field it is on (or null for the row),
+     * non-personal parameters, and since issue #136 the value it proposes for the field ({@code suggestion}, the text an
+     * {@code accept_suggestion} puts in place of the field's cell), or null. The engine keeps a suggestion only on a field
+     * that is not personal, so a suggestion never holds a personal value.
+     */
+    record RowFinding(String code, String field, Map<String, String> params, String suggestion) {
 
         public RowFinding {
             Objects.requireNonNull(code, "code");
             params = params == null ? Map.of() : Map.copyOf(params);
         }
+
+        public RowFinding(String code, String field, Map<String, String> params) {
+            this(code, field, params, null);
+        }
+    }
+
+    // JUSTIFICATION-A3: issue #136 needs rules that read the run's rows together (chapter 13.5, 13.6.3, 13.9).
+    /**
+     * The rules of one entity set that read the run's rows together rather than one row alone (issue #136): the row classes
+     * of chapter 13 section 13.5 (a sub-header row gives the month of the rows below it, a placeholder row, a row of amounts
+     * only), dates resolved against that month (13.6.3), and the borrowers linked across rows and to the business's own
+     * members (13.9). The engine makes one per validation ({@link ImportTemplate#setRules}) and calls it in its two passes,
+     * each in commit order (batch, then line), with every row that is not blank and not left out by the review.
+     *
+     * <p>{@link #index} sees every such row in pass 1. In pass 2, {@link #classify} comes first: a row it classes is not a
+     * record, so the engine checks none of its fields (no {@code REQUIRED_MISSING} on a sub-header) and reports only the
+     * class's finding; a class reported with an {@code info} code ({@code SUBHEADER_ROW}) leaves the row out as
+     * {@code BLANK_ROW} does ({@link ImportTemplates#LEFT_OUT_CODES}). Otherwise, after the fields and the
+     * {@link RowCheck}s, {@link #check} answers the row's findings and the values that replace its typed ones (a date the
+     * rules resolved, as its ISO text), so the preview, the forecast and the loader read the resolved value. Only fields of
+     * the set may be replaced. A partial validation (one row after an edit) runs pass 1 over the whole run, so a row is
+     * always checked against every other.
+     */
+    interface SetRules {
+
+        /** Pass 1: one row of the run, before any is checked. */
+        void index(SetRow row);
+
+        /** Pass 2, first: the finding that classes the row as no record, or null for a record. */
+        RowFinding classify(SetRow row);
+
+        /** Pass 2, last: the row's findings and the values that replace its typed values. */
+        SetResult check(SetRow row);
+    }
+
+    /**
+     * One row as {@link SetRules} reads it: its batch and line, its cell texts by field (edits in force read in place of
+     * their cells, value maps applied, before any normaliser), its typed values as the fields' checks left them, the row rules
+     * the batch's mapping source switches on (spec section 4.2, the {@code row_rules} object as written), and the business
+     * date: the day of the run's cutover moment in the mapping's zone, or null while no cutover is agreed.
+     */
+    record SetRow(
+            UUID batchId,
+            int line,
+            Map<String, String> texts,
+            Map<String, Object> values,
+            Map<String, Object> rowRules,
+            java.time.LocalDate businessDate) {
+
+        public SetRow {
+            texts = texts == null ? Map.of() : java.util.Collections.unmodifiableMap(new java.util.HashMap<>(texts));
+            values = values == null ? Map.of() : java.util.Collections.unmodifiableMap(new java.util.HashMap<>(values));
+            rowRules = rowRules == null ? Map.of() : Map.copyOf(rowRules);
+        }
+
+        /** The cell text of a field, or null when it is empty. */
+        public String text(String field) {
+            String s = texts.get(field);
+            return s == null || s.isBlank() ? null : s;
+        }
+    }
+
+    /** What {@link SetRules#check} answers for a row: its findings, in order, and the values that replace its typed ones. */
+    record SetResult(List<RowFinding> findings, Map<String, Object> values) {
+
+        public SetResult {
+            findings = findings == null ? List.of() : List.copyOf(findings);
+            values = values == null ? Map.of() : java.util.Collections.unmodifiableMap(new java.util.HashMap<>(values));
+        }
+    }
+
+    /** A new {@link SetRules} for one validation of one entity set, or null when the set has none (the default). */
+    default SetRules setRules(String entitySet) {
+        return null;
     }
 
     /** The cross-field rules of one entity set, run in this order; none by default. */
@@ -305,6 +384,14 @@ public interface ImportTemplate {
      */
     default List<Policy> policies() {
         return List.of();
+    }
+
+    /**
+     * The blocking codes of the run as a whole (issue #136): while an issue of one of them is open on a row the review keeps,
+     * the run is not {@code ready} (409 with the code), so leaving the rows out has to be a decision. None by default.
+     */
+    default Set<String> readyBlockingCodes() {
+        return Set.of();
     }
 
     /**

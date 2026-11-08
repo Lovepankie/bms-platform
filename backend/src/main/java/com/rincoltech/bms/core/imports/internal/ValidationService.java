@@ -521,7 +521,8 @@ class ValidationService implements ImportValidation {
                         : decided.excludedBy() != null ? decided.excludedBy() : decided.resolution(f.code(), f.field());
                 String key = row.rowId() + "|" + ReviewState.key(f.code(), f.field());
                 Kept before = info ? null : kept.get(key + "|" + nthOnRow.merge(key, 1, Integer::sum));
-                String suggestion = engine.suggestion(input, f);
+                // The template's own suggestion (a repaired date, an implied rate: issue #136), else the engine's.
+                String suggestion = f.suggestion() != null ? f.suggestion() : engine.suggestion(input, f);
                 Map<String, Object> suggested = "ROW_CHANGED_SINCE_REVIEW".equals(f.code())
                         ? Map.of("review", "as_uploaded")
                         : suggestion == null ? null : Map.of("value", suggestion);

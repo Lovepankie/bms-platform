@@ -46,6 +46,10 @@ class ImportCatalogueTest {
     static final Path FIXTURES = Path.of("../fixtures/imports");
     static final Path TESTS = Path.of("src/test/java/com/rincoltech/bms/core/imports");
 
+    /** The lending template's golden run (#136), which classes the sample's sub-header and placeholder rows. */
+    static final String LENDING_GOLDEN =
+            "../../lending/loans/internal/LendingLoansV1TemplateTest.java#thePilotRegisterGivesTheIssuesOfSection1312";
+
     /**
      * Codes another stage of the pipeline reports, each with the test method that produces it from a fabricated file,
      * mapping or run and asserts it: the upload and parse (#128), the mapping validator (#129) and the commit guards (#127).
@@ -112,7 +116,11 @@ class ImportCatalogueTest {
                     "internal/ImportCommitIT.java#aRowImportedBeforeWithOtherContentIsChangedSinceImportAndNotWrittenTwice"),
             Map.entry(
                     "CREDIT_DECISION_MISSING",
-                    "internal/ImportCommitIT.java#theCommitIsRefusedWithoutTheDumpTheApprovalOrADecisionAndByTheMakerAsChecker"));
+                    "internal/ImportCommitIT.java#theCommitIsRefusedWithoutTheDumpTheApprovalOrADecisionAndByTheMakerAsChecker"),
+            // The shared row rules (#136): the lending register's sub-headers and placeholder rows, through the
+            // lending template's golden run.
+            Map.entry("SUBHEADER_ROW", LENDING_GOLDEN),
+            Map.entry("PLACEHOLDER_ROW", LENDING_GOLDEN));
 
     /**
      * Codes whose producer is a later build step of spec section 9. Each step adds its fixture row or its named test and
@@ -239,9 +247,9 @@ class ImportCatalogueTest {
                 continue;
             }
             String[] parts = line.trim().split("\\s+");
-            assertThat(parts[0]).isIn("shared", "fixture_shop_v1", "retail_v1");
-            if ("retail_v1".equals(parts[0])) {
-                // The production retail template's own codes (#135), pinned against it by RetailV1TemplateTest.
+            assertThat(parts[0]).isIn("shared", "fixture_shop_v1", "retail_v1", "lending_loans_v1");
+            if ("retail_v1".equals(parts[0]) || "lending_loans_v1".equals(parts[0])) {
+                // The production templates' own codes (#135, #136), pinned against each by its own template test.
                 continue;
             }
             pinned.put(

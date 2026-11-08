@@ -123,16 +123,30 @@ final class RowValidator {
      * One issue: its code, the code's severity, the field (null for the whole row), the message, and the original cell text
      * the issue is about (null when there is none). The original may be personal; it is never in the message.
      */
-    record Finding(String code, String severity, String field, String message, String original) {}
+    record Finding(String code, String severity, String field, String message, String original, String suggestion) {
+
+        Finding(String code, String severity, String field, String message, String original) {
+            this(code, severity, field, message, original, null);
+        }
+    }
 
     /** What a row gives: its typed values by field, ready for JSON, its {@code source_ref}, and its issues in order. */
     record RowResult(Map<String, Object> normalised, String sourceRef, List<Finding> findings) {}
 
     private record Location(UUID batchId, String file, int line) {}
 
-    private record Pending(String code, String field, Map<String, String> params, String original) {}
+    private record Pending(String code, String field, Map<String, String> params, String original, String suggestion) {
+
+        Pending(String code, String field, Map<String, String> params, String original) {
+            this(code, field, params, original, null);
+        }
+    }
 
     private final ImportTemplate template;
+
+    /** The template's rules over the run's rows, one per entity set that has them, for this validation (issue #136). */
+    private final Map<String, Optional<ImportTemplate.SetRules>> setRules = new HashMap<>();
+
     private final Map<String, IssueCode> catalogue = new HashMap<>();
     private final Instant cutoverAt;
     private final Map<UUID, Plan> plans = new HashMap<>();
@@ -177,6 +191,51 @@ final class RowValidator {
         if (t.sourceRef != null) {
             firstRef.computeIfAbsent(p.set.key(), k -> new HashMap<>()).putIfAbsent(t.sourceRef, here);
         }
+        ImportTemplate.SetRules rules = rules(p);
+        if (rules != null) {
+            rules.index(setRow(batch, row, p, t));
+        }
+    }
+
+    // JUSTIFICATION-A3: issue #136 runs the template's rules over the run's rows (SetRules) in both passes.
+    /** The template's rules over the run's rows for the batch's entity set, made once per validation; null for none. */
+    private ImportTemplate.SetRules rules(Plan p) {
+        return setRules.computeIfAbsent(p.set.key(), k -> Optional.ofNullable(template.setRules(k)))
+                .orElse(null);
+    }
+
+    /** The row as the set's rules read it: cell texts by field (value maps applied), typed values, row rules, the day. */
+    private ImportTemplate.SetRow setRow(BatchInput batch, SourceRow row, Plan p, Typed t) {
+        return new ImportTemplate.SetRow(
+                batch.batchId(),
+                row.line(),
+                t.mapped,
+                t.values,
+                p.rowRules,
+                cutoverAt == null ? null : LocalDate.ofInstant(cutoverAt, p.zone));
+    }
+
+    /**
+     * A finding of the template's own rules as the engine reports it: its parameters only numbers, codes and names, never a
+     * personal value of the row (shown as {@link #HIDDEN}), and its suggestion kept only on a field that is not personal and
+     * when it holds no personal value of the row.
+     */
+    private Pending pending(Plan p, RowFinding finding, List<String> personal) {
+        Map<String, String> params = new LinkedHashMap<>();
+        finding.params().forEach((k, v) -> params.put(k, safeParam(v) && !holds(v, personal) ? v : HIDDEN));
+        String suggestion = finding.suggestion();
+        if (suggestion != null) {
+            Field field = finding.field() == null
+                    ? null
+                    : p.set.fields().stream()
+                            .filter(f -> f.name().equals(finding.field()))
+                            .findFirst()
+                            .orElse(null);
+            if (field == null || field.isPersonal() || holds(suggestion, personal)) {
+                suggestion = null;
+            }
+        }
+        return new Pending(finding.code(), finding.field(), params, null, suggestion);
     }
 
     /** Between the passes: per entity set, in key order, the codes references name that no row of the run holds. */
@@ -207,6 +266,15 @@ final class RowValidator {
         }
         Plan p = plan(batch);
         Typed t = type(p, row);
+        ImportTemplate.SetRules rules = rules(p);
+        if (rules != null) {
+            // A row the template classes as no record (a sub-header, a placeholder): none of its fields is checked.
+            RowFinding classed = rules.classify(setRow(batch, row, p, t));
+            if (classed != null) {
+                Finding finding = render(batch.file(), row.line(), pending(p, classed, personalValues(p, t)));
+                return new RowResult(Map.of(), t.sourceRef, List.of(finding));
+            }
+        }
         Location here = new Location(batch.batchId(), batch.file(), row.line());
         if (t.sourceRef != null) {
             Location first = firstRef.getOrDefault(p.set.key(), Map.of()).get(t.sourceRef);
@@ -252,10 +320,22 @@ final class RowValidator {
         List<String> personal = personalValues(p, t);
         for (RowCheck check : template.rowChecks(p.set.key())) {
             for (RowFinding finding : check.check(values)) {
-                Map<String, String> params = new LinkedHashMap<>();
-                finding.params().forEach((k, v) -> params.put(k, safeParam(v) && !holds(v, personal) ? v : HIDDEN));
-                t.add(finding.code(), finding.field(), params, null);
+                t.pending.add(pending(p, finding, personal));
             }
+        }
+        if (rules != null) {
+            ImportTemplate.SetResult result = rules.check(setRow(batch, row, p, t));
+            result.findings().forEach(f -> t.pending.add(pending(p, f, personal)));
+            result.values().forEach((field, v) -> {
+                if (p.set.fields().stream().noneMatch(f -> f.name().equals(field))) {
+                    throw new IllegalStateException("a set rule replaced a value that is not a field: " + field);
+                }
+                if (v == null) {
+                    t.values.remove(field);
+                } else {
+                    t.values.put(field, v);
+                }
+            });
         }
         List<Finding> findings = new ArrayList<>(t.pending.size());
         for (Pending pending : t.pending) {
@@ -319,7 +399,7 @@ final class RowValidator {
             m.appendReplacement(message, Matcher.quoteReplacement(v == null ? m.group() : v));
         }
         m.appendTail(message);
-        return new Finding(f.code(), severity, f.field(), cap(message.toString()), f.original());
+        return new Finding(f.code(), severity, f.field(), cap(message.toString()), f.original(), f.suggestion());
     }
 
     /** The digits of a value without a leading 256 or 0, so one phone written three ways compares equal. */
@@ -402,6 +482,9 @@ final class RowValidator {
 
         final Map<String, Object> values = new LinkedHashMap<>();
         final Map<String, String> texts = new HashMap<>();
+        /** Each field's text with the mapping's value map applied, before any normaliser: what the set's rules read. */
+        final Map<String, String> mapped = new HashMap<>();
+
         final List<Pending> pending = new ArrayList<>();
         String sourceRef;
 
@@ -416,9 +499,10 @@ final class RowValidator {
         Typed t = new Typed();
         for (Field f : p.set.fields()) {
             String column = p.columnOf.get(f.name());
+            // A field no column feeds takes the source's constant, if it has one (issue #136, `defaults`).
             String text = row.edits().containsKey(f.name())
                     ? edited(row.edits().get(f.name()))
-                    : text(column == null ? null : cells.get(column));
+                    : column == null ? p.defaults.get(f.name()) : text(cells.get(column));
             if (text == null) {
                 if (f.required()) {
                     t.add("REQUIRED_MISSING", f.name(), Map.of(), null);
@@ -430,6 +514,7 @@ final class RowValidator {
             if (f.type().kind() == Kind.ENUM) {
                 mapped = mapValue(p.enumMaps.get(f.name()), mapped);
             }
+            t.mapped.put(f.name(), mapped);
             Object value = typed(p, f, mapped, text, t);
             if (value != null) {
                 t.values.put(f.name(), value);
@@ -870,6 +955,10 @@ final class RowValidator {
         final Map<String, Map<String, String>> valueMaps;
         final Map<String, Map<String, String>> enumMaps;
         final String refColumn;
+        /** The source's constants by field (issue #136) and the row rules it switches on, as written. */
+        final Map<String, String> defaults;
+
+        final Map<String, Object> rowRules;
 
         Plan(BatchInput batch) {
             this.sourceKey = batch.sourceKey();
@@ -898,6 +987,12 @@ final class RowValidator {
             this.refColumn = source.get("source_ref") instanceof Map<?, ?> ref && "column".equals(ref.get("rule"))
                     ? Parsing.key(String.valueOf(ref.get("column")))
                     : null;
+            this.defaults = MappingValidator.defaults(source);
+            Map<String, Object> rules = new LinkedHashMap<>();
+            if (source.get("row_rules") instanceof Map<?, ?> r) {
+                r.forEach((k, v) -> rules.put(String.valueOf(k), v));
+            }
+            this.rowRules = rules;
         }
 
         private static Map<String, Map<String, String>> labels(Object maps) {

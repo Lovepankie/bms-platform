@@ -81,6 +81,8 @@ final class TemplateSchema {
                 RowRule.PLACEHOLDER_ROWS.key(),
                 object("type", "array", "minItems", 1, "maxItems", 50, "items", text(1, 100)));
         p.put("row_rules", closed(rules));
+        // A constant per field no column feeds (issue #136): a code such as the branch or the loan product.
+        p.put("defaults", labels(text(1, 64), text(1, 200)));
         p.put("source_ref", ref("source_ref"));
         Map<String, Object> source = closed(p, "entity_set", "header_row", "columns", "source_ref");
         List<Object> narrowing = new ArrayList<>();
@@ -110,6 +112,16 @@ final class TemplateSchema {
         p.put("enum_maps", object("propertyNames", oneOf(List.copyOf(enumMaps.keySet())), "properties", enumMaps));
         List<String> rules = set.rowRules().stream().map(RowRule::key).sorted().toList();
         p.put("row_rules", object("propertyNames", oneOf(rules)));
+        // A constant only for a field of the set that is not personal: a mapping never holds a customer's value.
+        List<String> constants = set.fields().stream()
+                .filter(f -> !f.isPersonal())
+                .map(Field::name)
+                .toList();
+        p.put(
+                "defaults",
+                constants.isEmpty()
+                        ? object("additionalProperties", false)
+                        : object("propertyNames", oneOf(constants)));
         return object("properties", p);
     }
 

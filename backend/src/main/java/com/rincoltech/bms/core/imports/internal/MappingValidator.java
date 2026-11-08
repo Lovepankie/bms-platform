@@ -142,8 +142,17 @@ final class MappingValidator {
                 }
             }
         }
+        // A field the source gives a constant (issue #136, `defaults`): fed, unless a column feeds it too.
+        for (String field : defaults(source).keySet()) {
+            String column = feeds.get(field);
+            if (column != null) {
+                out.add(problem("FIELD_MAPPED_TWICE", key, column, field, null, Map.of("other", "defaults")));
+            }
+        }
         for (Field f : set.fields()) {
-            if (f.required() && !feeds.containsKey(f.name())) {
+            if (f.required()
+                    && !feeds.containsKey(f.name())
+                    && !defaults(source).containsKey(f.name())) {
                 out.add(problem("REQUIRED_FIELD_UNMAPPED", key, null, f.name(), null, Map.of("entity", set.key())));
             }
         }
@@ -189,6 +198,19 @@ final class MappingValidator {
     @SuppressWarnings("unchecked")
     static Map<String, Map<String, Object>> sources(Map<String, Object> document) {
         return document.get("sources") instanceof Map<?, ?> m ? (Map<String, Map<String, Object>>) m : Map.of();
+    }
+
+    /**
+     * The constants of one source by field (issue #136): the value of a field no column of the source feeds, such as the
+     * branch and the loan product of a register that has no column for them (chapter 13 section 13.3). Codes, never a
+     * personal value: the schema refuses a personal field here.
+     */
+    static Map<String, String> defaults(Map<String, Object> source) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (source != null && source.get("defaults") instanceof Map<?, ?> m) {
+            m.forEach((field, value) -> out.put(String.valueOf(field), String.valueOf(value)));
+        }
+        return out;
     }
 
     @SuppressWarnings("unchecked")

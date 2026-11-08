@@ -18,7 +18,7 @@ done by hand as the notes say.
 | Field | Value |
 |---|---|
 | Tenant slug | |
-| Modules and template versions | for example `retail` with `retail_v1` |
+| Modules and template versions | for example `retail` with `retail_v1`, or `lending` with `lending_loans_v1` |
 | Mapping version used for the final run | |
 | Customer contact who answers questions and signs off | (name kept in the record only) |
 | Operator (maker) | |
@@ -53,6 +53,24 @@ done by hand as the notes say.
 - [ ] Every source column mapped or ignored with a reason; personal columns not needed are ignored.
 - [ ] Mapping validator passes (framework), or the export script produces the canonical export
       format and its line check passes (`docs/runbooks/import-retail.md` step 1).
+- [ ] Lending loan register (`lending_loans_v1`, SDD chapter 13 section 13.14.1 10/16; the fabricated
+      example is `fixtures/imports/lending_loans_v1.pilot_register.mapping.json`):
+      - one mapping source per register file and branch; the source's `defaults` give the loan product
+        code (`product`, an active product of the business) and, for a branch other than the head office,
+        the branch code (`branch`), unless the sheet has a column for them;
+      - `row_rules` switch on `subheader_month` when the sheet has month rows (`MARCH 2026`) and list the
+        sheet's placeholder texts in `placeholder_rows`;
+      - the run is opened by the staff user who will be the loans officer of the imported loans (their
+        remarks are kept as collection notes only then), and its cutover moment is the day the loans are
+        aged to (days past due) and the opening journal is dated;
+      - the decision `disbursed_principal` (`requested_as_disbursed`: the register has no disbursed
+        amount, so the requested principal is taken as disbursed in full) is recorded with the
+        customer's confirmation, like the receivable decision; the run is not ready without it.
+- [ ] Lending: each branch gets one import opening journal of loans, ever. Import a branch's whole
+      register in one run (one file per branch is one batch; a second file of the same branch gets
+      `BRANCH_IN_TWO_FILES` and the run is not ready until its rows are left out, so merge the files
+      first); a later run that adds loans to a branch already opened posts no journal and its report
+      lists them for a correcting entry.
 
 ### 2.3 Cleaning and review (stage 3)
 

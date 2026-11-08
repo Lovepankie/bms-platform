@@ -738,11 +738,13 @@ class ReconciliationService implements ImportReconciliation {
                     String overridden,
                     String blocked) {}
             // A row the review left out, and a row an open blocking issue held back (the commit writes neither, as the
-            // preview counts them), with their codes; and the warnings overridden on a row.
+            // preview counts them), with their codes; and the warnings overridden on a row. A row a code of
+            // ImportTemplates.LEFT_OUT_CODES leaves out (blank, or a sub-header since #136) counts as blank.
             List<Staged> chunk = jdbc.sql("""
                             SELECT r.source_row_no, r.source_ref, r.normalised::text, r.excluded_by IS NOT NULL,
                                    (SELECT res.code FROM import_issue_resolutions res WHERE res.id = r.excluded_by),
-                                   EXISTS (SELECT 1 FROM import_issues i WHERE i.row_id = r.id AND i.code = 'BLANK_ROW'),
+                                   EXISTS (SELECT 1 FROM import_issues i WHERE i.row_id = r.id
+                                                                       AND i.code IN ('BLANK_ROW', 'SUBHEADER_ROW')),
                                    (SELECT string_agg(DISTINCT i.code, ' ' ORDER BY i.code)
                                       FROM import_issues i JOIN import_issue_resolutions res ON res.id = i.resolution_id
                                      WHERE i.row_id = r.id AND res.resolution = 'override'),

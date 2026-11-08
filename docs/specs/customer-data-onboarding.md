@@ -366,6 +366,16 @@ the four retail codes above, the receivable decision with `treat_as_settled` and
 amount per buyer), its forecast and books, and the code of `import-retail` as its loader; `import-retail` is its wrapper, a
 run of the framework of its own origin recording the export's mapping. The cash book files stay outside it.
 
+Built for lending in #136 (SDD chapter 13 section 13.14.1, 10/16): `lending_loans_v1` has one entity set, `loans`, a row per
+loan of a register carrying its member, next of kin, collateral and historic payment (the flat sheet of chapter 13 section
+13.8; its loader creates the members, next of kin, collateral, loans and historic repayments of the planned sets), the codes
+of chapter 13 section 13.7, the rules of 13.5, 13.6 and 13.9 over the run's rows (sub-header rows and placeholder patterns as
+the mapping's row rules), the disbursement decision (`disbursed_principal`, `requested_as_disbursed`) as a policy of the run,
+its forecast and books, and one opening journal of loans per branch, ever. The pilot register is its first mapping, as the
+fabricated `fixtures/imports/lending_loans_v1.pilot_register.mapping.json`. A mapping source may give `defaults`, a constant
+for a field no column feeds (the branch and loan product of a register). `lending_savings_v1` and `lending_investments_v1`
+are later work, not built.
+
 ### 4.2 Mappings (data, one per customer source and version)
 
 A mapping is a JSON document, validated against the canonical template's schema, stored per tenant

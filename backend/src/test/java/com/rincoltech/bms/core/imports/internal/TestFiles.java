@@ -23,7 +23,7 @@ import java.util.zip.ZipOutputStream;
  * hand as a spreadsheet program writes them (shared strings, a styles part with date formats, the sheet before the shared
  * strings in the zip, so the reader's two passes are exercised). No real person, phone or business is in any of them.
  */
-final class TestFiles {
+public final class TestFiles {
 
     private TestFiles() {}
 
@@ -91,7 +91,8 @@ final class TestFiles {
     }
 
     /** An XLSX workbook in memory with one sheet, {@code Items}, after a hidden sheet {@code Notes}. */
-    static byte[] xlsx(List<String> header, List<List<Object>> rows) {
+    /** Public since #136: the lending template's golden test builds its workbook here too. */
+    public static byte[] xlsx(List<String> header, List<List<Object>> rows) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writeXlsx(out, header, rows.iterator(), true);
         return out.toByteArray();

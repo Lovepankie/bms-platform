@@ -180,7 +180,33 @@ public interface ImportTemplates {
                     "NIN_DUPLICATE",
                     Severity.WARNING,
                     "{field} on {file} line {line} is the same national ID number as line {other}; check whether they"
-                            + " are one person."));
+                            + " are one person."),
+            // The codes of the shared row rules subheader_month and placeholder_rows (issue #136, chapter 13 section
+            // 13.5), as BLANK_ROW is the code of a blank row: a template that offers the rule reports them through
+            // ImportTemplate.SetRules#classify. JUSTIFICATION-A3: the catalogue is data; #136 adds these two.
+            new IssueCode(
+                    "SUBHEADER_ROW",
+                    Severity.INFO,
+                    "Line {line} of {file} is a sub-header with a month; it is left out and dates the rows below it."),
+            new IssueCode(
+                    "PLACEHOLDER_ROW",
+                    Severity.BLOCKING,
+                    "Line {line} of {file} holds only placeholder text and zeros; leave it out, or complete it."));
+
+    /**
+     * The codes that leave a row out without a decision of the review (issue #136): a blank row, and a sub-header row of the
+     * rule {@code subheader_month}. The preview counts such a row {@code blank}, the commit never writes it and the
+     * reconciliation counts it as blank.
+     */
+    Set<String> LEFT_OUT_CODES = Set.of("BLANK_ROW", "SUBHEADER_ROW");
+
+    /** {@link #LEFT_OUT_CODES} as a SQL list, for the queries that tell a left-out row from one to write. */
+    static String leftOutSql() {
+        return LEFT_OUT_CODES.stream()
+                .sorted()
+                .map(c -> "'" + c + "'")
+                .collect(java.util.stream.Collectors.joining(", ", "(", ")"));
+    }
 
     /**
      * The only placeholders a message template may hold (issue #130, spec section 3.4): where an issue is and what rule it
