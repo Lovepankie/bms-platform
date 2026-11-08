@@ -40,3 +40,13 @@ The lending template (issue #136) adds:
 | `lending/fab-register-overpaid.csv` | Two fabricated loans at the head office: one repaid with 40,000 more than it owed (the member credit journal), one still owing |
 | `lending/fab-register-edge-cases.csv` | Fabricated rows, each producing the codes of the catalogue the pilot sample does not (with `BRANCH` and `PRODUCT` columns) |
 | `issue-codes.txt`, lines `lending_loans_v1` | The codes of `lending_loans_v1`, pinned by `LendingLoansV1TemplateTest` |
+
+The error-proofing suite (issue #137) adds:
+
+| File | What it is |
+|---|---|
+| `retail/fab-edge-cases/` | A fabricated export in the shape of `fixtures/retail/import-sample/`, each row of products, sales and balances made to produce one issue code: every code of `retail_v1`'s own and the shared row codes. Line 8 of `products.jsonl` holds a bell character (U+0007) in its code, on purpose (`CODE_CONTROL_CHAR`) |
+| `retail/fab-edge-cases.expected-codes.txt` | Its golden report: file, line and code, one per line. `RetailV1TemplateIT` runs the edge cases through the framework with the export's mapping and checks every line, then commits them as the dry run predicts |
+
+The property tests (`RetailImportPropertiesIT`), the fuzzed files (`MalformedFilesTest`, `ImportMalformedFilesIT`) and the big
+file test (`ImportBigFileIT`) generate their fabricated files in the test and keep none here.

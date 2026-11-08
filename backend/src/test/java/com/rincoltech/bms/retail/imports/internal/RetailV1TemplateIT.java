@@ -13,7 +13,10 @@ import com.rincoltech.bms.core.imports.ImportReview;
 import com.rincoltech.bms.core.imports.ImportRuns;
 import com.rincoltech.bms.core.imports.ImportRuns.DryRun;
 import com.rincoltech.bms.core.imports.ImportRuns.PolicyDecision;
+import com.rincoltech.bms.core.imports.ImportTemplate.IssueCode;
 import com.rincoltech.bms.core.imports.ImportTemplate.Policy;
+import com.rincoltech.bms.core.imports.ImportTemplate.Severity;
+import com.rincoltech.bms.core.imports.ImportTemplates;
 import com.rincoltech.bms.core.imports.ImportUploads;
 import com.rincoltech.bms.core.imports.ImportUploads.Upload;
 import com.rincoltech.bms.core.imports.ImportValidation;
@@ -33,8 +36,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,6 +73,31 @@ class RetailV1TemplateIT extends IntegrationTest {
 
     static final Path SHEET_MAPPING = Path.of("../fixtures/imports/retail_v1.shop_book.mapping.json");
 
+    static final Path EDGE_CASES = Path.of("../fixtures/imports/retail/fab-edge-cases");
+
+    static final Path EDGE_EXPECTED = Path.of("../fixtures/imports/retail/fab-edge-cases.expected-codes.txt");
+
+    // JUSTIFICATION-A3: the review of 74bfe3e (must-fix 2) asks the golden to cover the catalogue.
+    /**
+     * The row codes of the {@code retail_v1} catalogue that a validation of an export cannot carry, with where each is
+     * produced: the mapping's checks, the parse, the review, the commit, and the shared rules no retail set uses.
+     */
+    static final Map<String, String> OTHER_STAGES = Map.ofEntries(
+            Map.entry("COLUMN_UNMAPPED", "the mapping's check of a file's headers (MappingValidatorTest)"),
+            Map.entry("REQUIRED_FIELD_UNMAPPED", "the mapping's check (MappingValidatorTest)"),
+            Map.entry("FIELD_MAPPED_TWICE", "the mapping's check (MappingValidatorTest)"),
+            Map.entry("COLUMN_DUPLICATE", "the mapping's check (MappingValidatorTest)"),
+            Map.entry("MAP_FIELD_UNMAPPED", "the mapping's check (MappingValidatorTest)"),
+            Map.entry("SOURCE_REF_COLUMN_UNKNOWN", "the mapping's check (MappingValidatorTest)"),
+            Map.entry("ZONE_UNKNOWN", "the mapping's check (MappingValidatorTest)"),
+            Map.entry("REQUIRED_COLUMN_MISSING", "the mapping's check of a file's headers (MappingValidatorTest)"),
+            Map.entry("ENCODING_CONVERTED", "a parse warning of the batch (SourceParserTest, ImportMalformedFilesIT)"),
+            Map.entry("ROW_CHANGED_SINCE_REVIEW", "a new upload after a review (ImportReviewIT)"),
+            Map.entry("CHANGED_SINCE_IMPORT", "a row a framework run imported with other content (ImportCommitIT)"),
+            Map.entry("NIN_DUPLICATE", "no retail_v1 field is a NIN (the lending golden)"),
+            Map.entry("SUBHEADER_ROW", "a row rule no retail_v1 set offers (the lending golden)"),
+            Map.entry("PLACEHOLDER_ROW", "a row rule no retail_v1 set offers (the lending golden)"));
+
     static final String SHA = "e".repeat(64);
 
     /** The tenant administrator's permissions for the sign-off route. */
@@ -94,6 +125,9 @@ class RetailV1TemplateIT extends IntegrationTest {
 
     @Autowired
     ImportReconciliation reconciliation;
+
+    @Autowired
+    ImportTemplates templates;
 
     @Autowired
     BusinessClock clock;
@@ -169,6 +203,82 @@ class RetailV1TemplateIT extends IntegrationTest {
         ResponseEntity<JsonNode> signed = signOff(t, run, r);
         assertThat(signed.getStatusCode()).as("%s", signed.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(as(t, () -> runs.get(run)).status()).isEqualTo("signed_off");
+    }
+
+    // JUSTIFICATION-A3: issue #137 asks a golden test per template (spec section 5.1), retail_v1's here.
+    /**
+     * The golden report of {@code retail_v1} (issue #137, spec section 5.1): the fabricated edge cases of
+     * {@code fixtures/imports/retail/fab-edge-cases/}, read with the export's mapping, give every line of
+     * {@code fab-edge-cases.expected-codes.txt}, which holds every code of the template's own on one fixture row each. Then,
+     * reviewed, the dry run writes nothing, the commit reports what it predicted, the run reconciles, and another business
+     * is untouched.
+     */
+    @Test
+    void theGoldenEdgeCasesGiveEveryRetailCodeOnItsLineAndCommitAsTheDryRunPredicts(@TempDir Path seed)
+            throws IOException {
+        // GE-EX1 already imported, with other prices.
+        Files.writeString(seed.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(seed.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        Files.writeString(
+                seed.resolve("products.jsonl"),
+                "{\"code\": \"GE-EX1\", \"description\": \"Test golden existing item\", \"category\": \"Test Category\","
+                        + " \"unit\": \"piece\", \"cost_minor\": 500, \"sell_minor\": 800}\n");
+        ImportReport seeded = importer.run(t.slug(), seed, false);
+        assertThat(seeded.failed()).as(seeded.render()).isFalse();
+
+        UUID run = uploaded(t, "golden-edge-cases", exportMapping(), EDGE_CASES, exportFiles());
+        TestDatabase.owner()
+                .sql("UPDATE import_runs SET cutover_at = ? WHERE id = ?")
+                .params(java.sql.Timestamp.from(Instant.parse("2026-09-30T21:00:00Z")), run)
+                .update();
+        as(t, () -> validation.validate(run));
+        List<String> found = new ArrayList<>();
+        for (ImportUploads.Batch b : as(t, () -> uploads.batches(run))) {
+            for (Issue i : as(t, () -> validation.issues(b.id()))) {
+                found.add(b.fileName() + "|" + i.line() + "|" + i.code());
+            }
+        }
+        List<String> expected = Files.readAllLines(EDGE_EXPECTED).stream()
+                .filter(l -> !l.isBlank() && !l.startsWith("#"))
+                .toList();
+        // Exactly the golden report, as a multiset: no line missing and none added (review of 74bfe3e).
+        assertThat(found)
+                .as(
+                        "the run's report:%n%s",
+                        String.join("\n", found.stream().sorted().toList()))
+                .containsExactlyInAnyOrderElementsOf(expected);
+        // Every code of the catalogue a row can carry is on a line of it, but those another stage produces.
+        Set<String> rowCodes = templates.catalogue(RetailV1Template.KEY, RetailV1Template.VERSION).stream()
+                .filter(c -> !c.retired())
+                .filter(c -> List.of(Severity.INFO, Severity.WARNING, Severity.BLOCKING)
+                        .contains(c.severity()))
+                .map(IssueCode::code)
+                .collect(Collectors.toCollection(TreeSet::new));
+        assertThat(rowCodes).containsAll(OTHER_STAGES.keySet());
+        Set<String> golden = expected.stream()
+                .map(l -> l.substring(l.lastIndexOf('|') + 1))
+                .collect(Collectors.toCollection(TreeSet::new));
+        assertThat(golden).doesNotContainAnyElementsOf(OTHER_STAGES.keySet());
+        rowCodes.removeAll(OTHER_STAGES.keySet());
+        assertThat(golden).as("every row code of retail_v1 on a golden line").containsAll(rowCodes);
+
+        settle(t, run);
+        Map<String, Long> before = TestDatabase.rowCounts(t.tenantId());
+        Map<String, Long> untouched = TestDatabase.rowCounts(other.tenantId());
+        DryRun dry = as(t, () -> runs.dryRun(run, operator));
+        assertThat(TestDatabase.rowCounts(t.tenantId()))
+                .as("the dry run writes nothing")
+                .isEqualTo(before);
+        committed(t, run);
+        CommitReport real = as(t, () -> runs.commitReport(run));
+        assertThat(real.sameAs(dry.report()))
+                .as("real:%n%s%ndry:%n%s", real.render(), dry.report().render())
+                .isTrue();
+        ImportReconciliation.Report r = as(t, () -> reconciliation.latest(run)).orElseThrow();
+        assertThat(r.signable()).as(r.render()).isTrue();
+        assertThat(TestDatabase.rowCounts(other.tenantId()))
+                .as("another business")
+                .isEqualTo(untouched);
     }
 
     @Test
@@ -433,6 +543,12 @@ class RetailV1TemplateIT extends IntegrationTest {
             TestDatabase.Fixture f, String name, Map<String, Object> document, Path dir, Map<String, String> files)
             throws IOException {
         UUID run = uploaded(f, name, document, dir, files);
+        settle(f, run);
+        return run;
+    }
+
+    /** The review of {@link #reviewed} on a run already uploaded and validated. */
+    void settle(TestDatabase.Fixture f, UUID run) {
         for (int pass = 0; pass < 500; pass++) {
             Issue next = as(f, () -> openIssue(run));
             if (next == null) {
@@ -448,7 +564,7 @@ class RetailV1TemplateIT extends IntegrationTest {
                                         operator,
                                         null,
                                         null)));
-                return run;
+                return;
             }
             String kind = "blocking".equals(next.severity()) || "CODE_DUPLICATE".equals(next.code())
                     ? "exclude_row"

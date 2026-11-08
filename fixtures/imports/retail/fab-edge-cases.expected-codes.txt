@@ -1,0 +1,23 @@
+# The golden report of retail_v1 over fab-edge-cases/ (issue #137, spec section 5.1): file, line and code of every issue the
+# run gives, read with the export's mapping, the run's cutover at midnight of 1 October 2026 in Kampala, and GE-EX1 already
+# imported with other prices. RetailV1TemplateIT checks that the run gives exactly these lines, no more and no fewer, and
+# that every row code of the retail_v1 catalogue is on one of them, but those RetailV1TemplateIT.OTHER_STAGES names with
+# the stage that produces them. Fabricated values only.
+products.jsonl|2|NAME_MISSING
+products.jsonl|3|CODE_DUPLICATE
+products.jsonl|4|PRICE_DIFFERS_EXISTING
+products.jsonl|5|MONEY_FRACTION
+products.jsonl|6|TYPE_INVALID
+products.jsonl|7|VALUE_OUT_OF_RANGE
+products.jsonl|8|CODE_CONTROL_CHAR
+products.jsonl|9|VALUE_NORMALISED
+products.jsonl|10|TEXT_TOO_LONG
+products.jsonl|10|NAME_MISSING
+products.jsonl|11|BLANK_ROW
+products.jsonl|12|REQUIRED_MISSING
+sales.jsonl|1|CREDIT_SALE_UNPAID
+sales.jsonl|2|DUPLICATE_SOURCE_REF
+sales.jsonl|3|REF_UNKNOWN
+sales.jsonl|4|QTY_PRECISION
+sales.jsonl|5|DATE_AFTER_CUTOVER
+balances.jsonl|1|NEGATIVE_BALANCE

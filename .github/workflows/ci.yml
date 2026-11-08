@@ -87,6 +87,31 @@ jobs:
           mvn -B verify -Dit.test=ReportMemoryIT -Dreports.memory.run=true
           -Dtest=NoUnitTestsHere -Dsurefire.failIfNoSpecifiedTests=false
 
+  # JUSTIFICATION-A3: issue #137 asks a big file test with recorded times; like the memory proof it is too long for `mvn verify`.
+  # The big file test of customer data onboarding (ImportBigFileIT, issue #137, spec section 5.3): files at the row, size
+  # and column limits uploaded, validated, previewed and committed in a child JVM on the 224 MB staging heap, with the
+  # times of each step in the log (SDD chapter 15 section 15.7 records them). Run it from Actions, CI, "Run workflow",
+  # before a limit is raised.
+  import-big-file:
+    name: Import big file test (on request)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
+    timeout-minutes: 240
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: ImportBigFileIT
+        run: >-
+          mvn -B verify -Dit.test=ImportBigFileIT -Dimports.bigfile.run=true
+          -Dtest=NoUnitTestsHere -Dsurefire.failIfNoSpecifiedTests=false
+
   frontend:
     name: Frontend (types, tests, build)
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}

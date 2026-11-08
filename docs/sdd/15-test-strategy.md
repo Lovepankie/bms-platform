@@ -44,9 +44,16 @@ ADR-010 (section 15.3.1).
 | Unit and architecture | JUnit 6 in Maven Surefire, classes named `*Test`; Spring Modulith `ApplicationModules.verify()`; ArchUnit | Vitest (`*.test.ts`) |
 | Integration and API | JUnit 6 in Maven Failsafe, classes named `*IT`; Spring Boot test on a random port with `TestRestTemplate`; Testcontainers 2, PostgreSQL 16 (`TestDatabase`, one container per test JVM) | |
 | Contract | `OpenApiSnapshotIT` against `docs/api/openapi.json` | The generated `schema.d.ts` must match (CI) |
+| Property | jqwik 1.9.3 (`net.jqwik:jqwik-api` and `jqwik-engine`, test scope), a JUnit Platform engine beside Jupiter: Surefire runs its properties in `*Test` classes, Failsafe in `*IT` classes; an `*IT` property class gets its beans from the shared Spring test context through `TestContextManager` | |
 | End to end | | Playwright, later |
 
 `mvn verify` runs all backend levels; `npm test` the frontend unit tests (`make test` runs both).
+
+Every property names its seed and its tries in `@Property`, so a run is the same on every machine and a failure is
+reproduced by its seed; jqwik prints the shrunk counterexample. `src/test/resources/junit-platform.properties` keeps the
+failure database under `target`, never replays a stored sample first, and bounds shrinking at 120 seconds; a property that
+commits imports also asserts its own run time (`RetailImportPropertiesIT.PROPERTY_LIMIT`). jqwik 1.9.3 is the release line
+checked on JUnit Platform 6 for this stack (issue #137).
 
 ## 15.4 Isolation tests (RLS)
 
@@ -321,6 +328,71 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   date of its source row and the legacy balances the import date, that a valuation `as_of` the day
   before the import counts the imported history by business date, and that product codes are
   normalised exactly as the catalogue normalises them (review F9).
+- **Customer data onboarding error-proofing** (issue #137, spec `docs/specs/customer-data-onboarding.md` section 5).
+  - *Golden per template and per known mapping.* The test template `fixture_shop` over `fixtures/imports/golden/`
+    (`ImportCatalogueTest`, `ImportValidationIT`, exactly `expected-issues.txt`); `retail_v1` with the export's mapping
+    over `fixtures/retail/import-sample/` and over `fixtures/imports/retail/fab-edge-cases/`, whose rows give every
+    line of `fab-edge-cases.expected-codes.txt` (every code of the template's own and the shared row codes on a
+    fixture row; then the dry run writes nothing, the commit reports what it predicted, the run reconciles and another
+    business is untouched), and with the shop book mapping (`RetailV1TemplateIT`); `lending_loans_v1` with the pilot
+    register mapping (`LendingLoansV1TemplateTest`, `LendingLoansV1TemplateIT`, section 13.12).
+  - *Properties* (`RetailImportPropertiesIT`, jqwik, section 15.3.1) over generated fabricated shop books (one to three
+    items, restocks, sales and usage at two branches, a balance per branch and item from -2 to 40), through the
+    framework on PostgreSQL: importing twice equals once (the second run posts no journal, one import opening journal
+    per branch ever, writes nothing and reports every row existing); a permuted row order gives the same state and the
+    same reconciliation; the sales and usage split over two runs give the state of one; a dry run then a real run
+    reports what a real run alone reports (through `import-retail`, the one path that commits without a dry run); the
+    derived balance is the source balance for every branch and item (an item that never moved at a branch has no balance
+    row, so zero), the checksum matches and the reconciliation ties. Seeds 137001 to 137006 with 15 to 24 tries each;
+    every commit's report equals its dry run's. The split of the restocks as well found #881 (a restock's price change
+    is looked for within its batch only, so a split loses it; shrunk to one item restocked at 100, 100 and 200 with the
+    cut after the second) and is disabled with that number.
+  - *Fuzzed files.* `MalformedFilesTest` (seed 137101, 1,500 files) breaks generated CSV, JSON Lines and XLSX item lists
+    with one to three mutations (cut short, a byte order mark, a quote, a line break, a NUL, invalid UTF-8, a
+    right-to-left mark or override, a cell over 32,767 characters, bytes deleted or flipped) and reads them as the upload
+    does: every one ends in a refusal or a failure with a code of the shared catalogue, or in rows, and the same bytes
+    always give the same outcome. `ImportMalformedFilesIT` takes 18 named cases through the upload, validation and
+    preview of `retail_v1` with the shop book mapping: truncation, UTF-16, Windows-1252, a byte that is not UTF-8, two
+    exports joined with a byte order mark mid-file, an unbalanced quote, long and too long cells, control, zero-width
+    and right-to-left characters and a NUL in codes, merged cells, formulas with a value, with an error, without a
+    value and with empty text as their value (an empty cell, as shown), a hidden sheet before the items and a workbook
+    whose only sheet is hidden, and dates as a serial, in a date cell, as text and as an impossible text. Each ends in
+    exactly the codes it names (as a multiset), a failed batch holds no rows, a refused file leaves no batch, neither
+    leaves a quarantined object, and nothing outside the import tables and the audit log is written.
+    The formulas found a defect, fixed in the same change (chapter 13 section 13.14.1, 11/16).
+  - *Big file test* (`ImportBigFileIT`, on request: the CI job `import-big-file`, "Run workflow"; too long for
+    `mvn verify`). It runs `retail_v1` product masters through the whole path in a child JVM at the staging API's heap
+    of 224 MB (`-XX:+UseSerialGC`, old generation 149 MB, the application alone 67 MB after a collection) and judges
+    the old generation's peak a tenth below its limit. It found #880 at the row limit of 100,000, and the cases there are
+    disabled with that number; until #880 the configured row limit per batch is **2,500** (spec section 3.1,
+    `bms.imports.max-rows`), and it goes back up with #880. 5,000 passed too, but one run took 473 s of the 10 minute
+    batch timeout and the same file took half that on another run, so 5,000 leaves too thin a margin for a slower
+    host. Times on the CI runner (`ubuntu-latest`, GitHub-hosted), November 2026, the range of the runs where there
+    were several. At and below the measured sizes, the whole path, judged:
+
+    | File | Heap | Upload | Validation | Preview | Dry run | Commit | Old generation peak |
+    |---|---|---|---|---|---|---|---|
+    | CSV, 1,250 rows, 7 columns, 0.3 MB | 224 MB | 0.3 s | 0.9 s | 0.1 s | 24 s | 30 s | 71 of 149 MB |
+    | CSV, 2,500 rows, 7 columns, 0.6 MB (configured row limit) | 224 MB | 0.3 to 0.6 s | 0.9 to 1.9 s | 0.1 s | 43 to 85 s | 53 to 125 s | 84 of 149 MB |
+    | CSV, 2,500 rows, 200 columns (193 ignored), 2.6 MB (row and column limits) | 224 MB | 0.8 s | 2.0 s | 0.1 s | 82 s | 130 s | 84 of 149 MB |
+    | CSV, 5,000 rows, 7 columns, 1.3 MB | 224 MB | 0.4 s | 1.8 s | 0.2 s | 155 to 309 s | 234 to 473 s | 103 of 149 MB |
+    | CSV, 5,000 rows, 200 columns (193 ignored), 5.2 MB | 224 MB | 0.7 s | 1.5 s | 0.1 s | 167 to 310 s | 243 to 467 s | 106 to 107 of 149 MB |
+    | CSV, 10,000 rows, 7 columns, 2.6 MB (measured once, over both bounds) | 224 MB | 0.7 s | 4.0 s | 0.4 s | 617 s | 1,036 s, over the 10 minute batch timeout | 137 of 149 MB, over 90 percent |
+
+    The loader's time grows about fourfold for twice the rows (#880). At the row limit of 100,000, recorded for #880:
+
+    | File | Heap | Upload | Validation | Preview | Dry run | Old generation peak |
+    |---|---|---|---|---|---|---|
+    | CSV, 100,000 rows, 7 columns, 25.8 MB (row and size limits) | 224 MB | 8.5 to 9.3 s | 122 to 123 s | 19 to 20 s | out of memory | 149 of 149 MB by the preview, 21 s in the collector |
+    | XLSX, the same rows, 3.3 MB | 224 MB | 10.7 s | 324 s | 1.5 s | not run | 149 of 149 MB |
+    | CSV, 20,000 rows, 200 columns (193 ignored), 20.6 MB (column limit) | 224 MB | 2.9 to 3.0 s | 8.7 to 15.7 s | 1.1 to 1.2 s | stopped at its 900 s limit | 106 of 149 MB by the preview, 134 in the dry run |
+    | CSV, 100,000 rows, 7 columns, 25.8 MB | 448 MB | 9.0 s | 55 s | 1.4 s | stopped at its 900 s limit | 293 of 298 MB |
+
+    The cases at half the configured limit and at the limit (seven columns, and the limit at the 200 of the column
+    limit), their sizes taken from `UploadSettings.DEFAULT_MAX_ROWS`, run in every `import-big-file` job, with one row
+    over the limit refused with `TOO_MANY_ROWS` in the same child. Such a file is split (the cutover runbook, stage 2)
+    until #880 restores 100,000. The cases disabled for #880 need the limit raised first: at 2,500 their files are
+    refused at the upload.
 - **Normalisation tables.** Every table of examples in chapter 13 section 13.6 is a
   parametrised unit test.
 - **Loan servicing golden tests** (`ServicingTest`, #108). Fabricated schedules from worked

@@ -1,0 +1,12 @@
+{"code": "GE-001", "description": "Test golden item 01", "category": "Test Category", "unit": "piece", "cost_minor": 700, "sell_minor": 1200, "active": true}
+{"code": "GE-002", "category": "Test Category", "unit": "piece", "cost_minor": 700, "sell_minor": 1200, "active": true}
+{"code": "ge-001", "description": "Test golden item 01 again", "category": "Test Category", "unit": "piece", "cost_minor": 700, "sell_minor": 1200, "active": true}
+{"code": "GE-EX1", "description": "Test golden existing item", "category": "Test Category", "unit": "piece", "cost_minor": 900, "sell_minor": 1500, "active": true}
+{"code": "GE-005", "description": "Test golden item 05", "category": "Test Category", "unit": "piece", "cost_minor": 7.5, "sell_minor": 1200, "active": true}
+{"code": "GE-006", "description": "Test golden item 06", "category": "Test Category", "unit": "piece", "cost_minor": "seven hundred", "sell_minor": 1200, "active": true}
+{"code": "GE-007", "description": "Test golden item 07", "category": "Test Category", "unit": "piece", "cost_minor": -5, "sell_minor": 1200, "active": true}
+{"code": "GE-\u0007008", "description": "Test golden item 08", "category": "Test Category", "unit": "piece", "cost_minor": 700, "sell_minor": 1200, "active": true}
+{"code": "  GE-009 ", "description": "Test golden item 09", "category": "Test Category", "unit": "piece", "cost_minor": 700, "sell_minor": 1200, "active": true}
+{"code": "GE-010", "description": "Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, Test golden description, ", "category": "Test Category", "unit": "piece", "cost_minor": 700, "sell_minor": 1200, "active": true}
+{}
+{"code": "GE-012", "description": "Test golden item 12", "unit": "piece", "cost_minor": 700, "sell_minor": 1200, "active": true}

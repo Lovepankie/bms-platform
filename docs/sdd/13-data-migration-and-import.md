@@ -754,7 +754,7 @@ retail command. ADR-027 makes the framework the one pipeline for every tenant's 
 - **Quarantine.** Uploaded files are encrypted with a per-run key under a quarantine prefix. The
   `import_*` tables are the staging area; no vertical or ledger table is written before commit.
   Columns a mapping ignores are not stored in `import_rows.raw`. Limits: 25 MB per file, 100,000
-  rows per batch, 200 columns, streaming parsers.
+  rows per batch (2,500 until #880, section 13.14.1 11/16), 200 columns, streaming parsers.
 - **Canonical templates and mappings.** A template (`retail_v1`, `lending_loans_v1`, later savings
   and investments) is code in its vertical, registered with the core. A customer's sheet is a
   versioned mapping document in `import_mappings` (append-only), validated against the template:
@@ -869,7 +869,7 @@ tooling, as the commit is. Every call works on the bound business only: a run or
   keys the columns). The header is the first of the first 20 rows that holds every header the mapping requires, or the first
   row that is not blank (`HEADER_NOT_FOUND`). Every row below it becomes one `import_rows` row with its cells in `raw`, blank
   rows included and trailing blank rows not, and columns the mapping ignores are dropped. Rows are written 1,000 at a time in
-  one transaction, so the limits (`TOO_MANY_ROWS` over 100,000, `TOO_MANY_COLUMNS` over 200) and a damaged file
+  one transaction, so the limits (`TOO_MANY_ROWS` over 100,000, 2,500 until #880, `TOO_MANY_COLUMNS` over 200) and a damaged file
   (`FILE_UNREADABLE`: an unclosed quote, a cell over 32,767 characters, a broken zip or XML) roll every row back: the batch
   is `failed` with its code and a reason that names a limit, a row or a column, never a value, and its file is deleted. A
   batch can be parsed again with other options before the run is ready; its rows are replaced. Since #129 the required
@@ -1551,3 +1551,24 @@ section 4.1; coordinated with #110, which builds no second framework).**
   resume after a kill post no second journal and write nothing twice; a business with a member and a loan keeps them,
   has its borrowers linked to that member and journals only the imported loans; a run without the decision is not
   ready), with `ImportCatalogueTest` (the two shared codes and the lending catalogue pinned).
+
+**11/16, the error-proofing suite (#137, no migration, spec section 5).** Tests, and one fix the fuzzing found:
+
+- **A formula is read as the sheet shows it, or reported.** A workbook cell that holds a formula's error (`#N/A`, `#REF!`)
+  was read as that text, and a formula saved without its value (a file a program wrote and no spreadsheet calculated) as
+  an empty field, so an optional field lost it in silence. The reader now marks the second as a cell of type `formula`
+  (`XlsxRows.FORMULA`, empty value), and the validation reports both, on any field, as `TYPE_INVALID`
+  (`RowValidator.UNREAD_CELLS`); an operator's edit of the field replaces the cell as before. A formula with its value is
+  read by its value, unchanged.
+- **The suite** is SDD chapter 15 section 15.7: the golden report of `retail_v1` over fabricated edge cases, the property
+  tests on generated shop books, the fuzzed files, and the big file test at each limit of 13.14 on the staging heap, with
+  its times.
+- **Open findings.** #880: on the staging heap the dry run of a `retail_v1` batch at the row limit runs out of memory,
+  validating 100,000 rows fills the old generation, and 20,000 items do not finish their dry run in its 15 minutes (the
+  loader holds every staged row of the batch). #881: a restock's price change is looked for within its batch only, so
+  splitting the restocks over two runs loses it. The tests that show them are disabled with those numbers.
+- **The row limit is 2,500 per batch until #880** (`bms.imports.max-rows`, `BMS_IMPORTS_MAX_ROWS`): the big file test
+  dry runs it in 43 to 85 s and commits it in 53 to 130 s on the staging heap with the old generation at 56 percent, at
+  seven columns and at the 200 of the column limit; 5,000 took up to 473 s of the 10 minute batch timeout, too thin a margin
+  (chapter 15 section 15.7). It goes back up to 100,000
+  with #880. The test profile keeps 100,000 for the readers' streaming proofs; `UploadServiceTest` pins production's.

@@ -96,6 +96,9 @@ final class RowValidator {
     private static final Set<String> TRUE = Set.of("true", "yes", "y", "1");
     private static final Set<String> FALSE = Set.of("false", "no", "n", "0");
 
+    /** The reader's types of a cell that holds no value: a formula's error, and a formula saved without its value. */
+    static final Set<String> UNREAD_CELLS = Set.of("error", XlsxRows.FORMULA);
+
     /** One batch: its id, its file name, and the mapping version and source it was parsed with. */
     record BatchInput(UUID batchId, String file, Map<String, Object> mapping, String sourceKey) {}
 
@@ -503,6 +506,13 @@ final class RowValidator {
             String text = row.edits().containsKey(f.name())
                     ? edited(row.edits().get(f.name()))
                     : column == null ? p.defaults.get(f.name()) : text(cells.get(column));
+            RawCell cell = column == null ? null : cells.get(column);
+            if (!row.edits().containsKey(f.name()) && cell != null && UNREAD_CELLS.contains(cell.type())) {
+                // A formula's error (#N/A, #REF!) or a formula saved without its value is not what the sheet shows:
+                // never a value and never an empty field (issue #137, spec section 5.3).
+                t.add("TYPE_INVALID", f.name(), Map.of("type", f.type().spec()), text);
+                continue;
+            }
             if (text == null) {
                 if (f.required()) {
                     t.add("REQUIRED_MISSING", f.name(), Map.of(), null);

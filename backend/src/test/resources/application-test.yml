@@ -9,6 +9,10 @@ spring:
       idle-timeout: 10000
 
 bms:
+  # The readers' streaming proofs (ImportUploadsIT, issue #128) stage a file of 100,000 rows, the row limit #880 will
+  # restore; production holds 2,500 until then (application.yml), and ImportBigFileIT runs its child at that limit.
+  imports:
+    max-rows: 100000
   tenancy:
     # Hyphenated hosts under one zone, as on staging (ADR-018). TestRestTemplate calls localhost,
     # which is the platform host here.
