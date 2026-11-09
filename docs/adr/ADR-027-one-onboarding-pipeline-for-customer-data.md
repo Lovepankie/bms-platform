@@ -83,6 +83,17 @@ use it); the batch transaction timeout against real volumes (the big file test s
 mappings drifting from the template version a run started with; operators bypassing the app with
 host-side files after self service exists.
 
+## Note (8 November 2026, issue #138): decision 9 as built
+
+The rehearsal is `deploy/restore-drill.sh --rehearse-import <run id>`, opt in by its flag; with no argument the script is
+the weekly drill, unchanged. In the throwaway database the run is dry run again and committed by the same commit as any
+run, which waives two guards only there: the checker's approval of `import_commit` and the verified pre-import dump, both
+of which protect a live database that a rehearsal never writes and mean nothing in one dropped minutes later. The
+application waives them only after finding the rehearsal's one-time token in the database, a table the script makes in
+its throwaway database and no migration makes, so the live database can never take a commit without them. Staging's
+environment guard is the run's `fabricated` flag, said when the run opens and fixed after (V146). The rehearsal is stored
+on the live run as one append-only `import_rehearsals` row, the only write it makes there.
+
 ## Note (7 November 2026, issue #134, review of #873)
 
 Decision 8's reconciliation is "stored as a document" (spec section 3.10) as a JSONB row with the SHA-256 of its plain

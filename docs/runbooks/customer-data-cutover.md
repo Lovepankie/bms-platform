@@ -93,12 +93,20 @@ done by hand as the notes say.
 ### 2.4 Rehearsal (stage 4)
 
 - [ ] Last night's production backup restored into a throwaway database and the real commit run
-      against it (spec section 5.5; framework: the restore drill's rehearsal mode; today: the
-      scratch database steps of `docs/runbooks/import-retail.md`, "If the real run was wrong",
-      step 2, then the command pointed at the scratch database).
-- [ ] Rehearsal reconciliation ties; timings recorded; total commit time fits the cutover window
-      with at least half the window spare.
-- [ ] Throwaway database dropped.
+      against it (spec section 5.5, ADR-027 decision 9): for a run of the import screens, on the
+      production host, `cd /opt/bms && ./restore-drill.sh --rehearse-import <run id>`
+      (`docs/runbooks/restore-from-backup.md` section 5.2), the run in review or ready, once
+      last night's backup holds the business (the run's rows are copied live); exit 0. For the
+      `import-retail` command, which the rehearsal refuses: the scratch database steps of
+      `docs/runbooks/import-retail.md`, "If the real run was wrong", step 2, then the command
+      pointed at the scratch database.
+- [ ] Rehearsal stored on the run (`import_rehearsals`): `outcome` committed, `matches_dry_run`
+      true (or each difference explained: journal entry numbers move when the business posted
+      after the backup), the reconciliation in it signable, every difference itemised.
+- [ ] Timings recorded from its `timings` (`dry_run_ms`, `commit_ms`); total commit time fits the
+      cutover window with at least half the window spare.
+- [ ] Throwaway database dropped: the script's last line says it removed what it made, and
+      `docker ps -aq --filter name=bms-rehearsal-` is empty.
 
 ### 2.5 Readiness checklist (go to cutover day only when every line is ticked)
 

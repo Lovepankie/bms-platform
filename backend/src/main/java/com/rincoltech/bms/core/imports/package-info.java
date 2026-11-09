@@ -37,7 +37,12 @@
  * ({@link com.rincoltech.bms.core.imports.ImportReconciliation}): made by the commit as it finishes, from the staged rows
  * measured by the template's forecast and the books (the ledger's port and the template's
  * {@link com.rincoltech.bms.core.imports.ImportBooks}), every difference itemised, stored append-only, and signed in the
- * app by the tenant admin, which moves the run to {@code signed_off}. The operator screens follow in #141. Public API:
+ * app by the tenant admin, which moves the run to {@code signed_off}. The twelfth (issue #138, migration V146) is the
+ * rehearsal ({@link com.rincoltech.bms.core.imports.ImportRehearsals} and the host command
+ * {@link com.rincoltech.bms.core.imports.RehearseImportCommand}): the real dry run and commit of a run in the throwaway
+ * database {@code deploy/restore-drill.sh --rehearse-import} restores from last night's backup, which alone may waive the
+ * checker's approval and the pre-import dump, stored in {@code import_rehearsals}; on staging only a run marked fabricated
+ * ({@code import_runs.fabricated}). The operator screens follow in #141. Public API:
  * {@link com.rincoltech.bms.core.imports.ImportRuns}, {@link com.rincoltech.bms.core.imports.ImportRefs},
  * {@link com.rincoltech.bms.core.imports.ImportUploads}, {@link com.rincoltech.bms.core.imports.ImportTemplates},
  * {@link com.rincoltech.bms.core.imports.ImportMappings}, {@link com.rincoltech.bms.core.imports.ImportValidation},

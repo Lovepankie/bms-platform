@@ -71,7 +71,8 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_collection_actions` (except `promise_status`), `lending_savings_transactions`,
 `lending_savings_daily_balances`, `lending_savings_interest_postings`,
 `lending_investment_transactions`, `import_issue_resolutions` (V141, #131), `import_mappings` (V139, #129),
-`import_refs` (V143, #133), `import_reconciliations` and `import_signoffs` (V144, #134).
+`import_refs` (V143, #133), `import_reconciliations` and `import_signoffs` (V144, #134), `import_rehearsals` (V146,
+#138).
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
 `reject_mutation()` raises on `UPDATE` or `DELETE` for every role, `bms_owner` included,
@@ -1435,6 +1436,21 @@ expand only:
   document stays the newest for good.
 - **`imports_erase_personal_data()`** (definer, the removal of a closed business, ADR-090): the typed name of every
   sign-off of the business becomes "Removed".
+- **`import_runs.fabricated`** (V146, #138): `boolean NOT NULL DEFAULT false`, the uploader's word, given when the run
+  opens (`ImportRuns.open(createdBy, fabricated)`), that its files hold fabricated data only; staging rehearses only such a
+  run. The trigger `import_runs_fabricated_fixed` (`BEFORE UPDATE OF fabricated`) refuses any change after.
+- **`import_rehearsals`** (V146, #138; RLS forced, `SELECT, INSERT`, append-only by `reject_mutation`): one row per
+  rehearsal of a run on last night's backup (chapter 13 section 13.14.1, 12/16), written by the `rehearse-import` command
+  in the throwaway database and copied onto the live run by `deploy/restore-drill.sh --rehearse-import` as `bms_app`:
+  `id`, `tenant_id`, `run_id` (FK `(tenant_id, run_id)`), `created_at`, `backup varchar(200)` (the restored object's
+  name), `build varchar(300)` (the API build that committed), `outcome` (`committed`, `halted` or `failed`), `failure
+  varchar(300)` (a code or the kind of failure, never a message; set exactly when not committed, the CHECK
+  `import_rehearsals_failure_named`), `report jsonb` (the commit's `CommitReport`, or the rehearsal's dry run's when the
+  commit did not start), `reconciliation jsonb` (the newest reconciliation the commit made: version, as-at day, SHA-256,
+  signable and the document), `matches_dry_run boolean` (the report against the run's stored dry run, apart from its mode)
+  and `timings jsonb` (milliseconds per step). Codes, counts and amounts only. Index `(tenant_id, run_id, created_at)`.
+  The table `bms_rehearsal_marker (token)`, which lets the application commit without the checker and the dump, is made
+  only by the script in its throwaway database, never by a migration.
 
 ## 6.6 General ledger (RLS)
 
@@ -2326,6 +2342,8 @@ tables). `V145__retail_import_refs_into_import_refs.sql` (#135; directly after `
 `retail_import_refs` into `import_refs`: `import_runs.origin`, the index `import_runs_one_backfill`, the functions
 `bms_retail_import_ref_key` and `bms_backfill_retail_import_refs` (owned by `bms_owner`, not granted to the application),
 the backfill in batches of 5,000 under `lock_timeout` 5s, and the index `import_refs_by_run` (sections 6.5 and 6.11.4).
+`V146__import_rehearsals.sql` (#138; directly after `V145`) is expand only: `import_runs.fabricated` with its trigger
+`import_runs_fabricated_fixed`, and `import_rehearsals` with its index (section 6.5, Import tables), under `lock_timeout` 5s.
 The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 

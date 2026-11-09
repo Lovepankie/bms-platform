@@ -107,7 +107,7 @@ class ImportRunService implements ImportRuns {
     private static final String RUN_COLUMNS = """
             id, status, version, cutover_at, halt_requested, allow_trading_tenant, allow_trading_set_by,
             allow_trading_approved_by, pre_import_dump_file, committing_at, committed_at,
-            pre_import_dump_verified_at, commit_requested_by, commit_approved_by, commit_approved_version""";
+            pre_import_dump_verified_at, commit_requested_by, commit_approved_by, commit_approved_version, fabricated""";
 
     private final JdbcClient jdbc;
     private final DataSource dataSource;
@@ -198,6 +198,11 @@ class ImportRunService implements ImportRuns {
         return (build == null ? "-" : build.getVersion() + "@" + build.getTime()) + "|" + (sha == null ? "-" : sha);
     }
 
+    /** The build this server runs, as a dry run stamps it; null when unknown. Named on a rehearsal (issue #138). */
+    String build() {
+        return codeVersion;
+    }
+
     /** For a test of the time limit only. */
     void tradingDryRunLimit(Duration limit) {
         this.tradingDryRunLimit = limit;
@@ -227,12 +232,17 @@ class ImportRunService implements ImportRuns {
 
     @Override
     public Run open(UUID createdBy) {
+        return open(createdBy, false);
+    }
+
+    @Override
+    public Run open(UUID createdBy, boolean fabricated) {
         return tx.execute(s -> {
             UUID id = UUID.randomUUID();
             jdbc.sql("""
-                            INSERT INTO import_runs (id, tenant_id, created_by)
-                            VALUES (?, current_setting('app.tenant_id')::uuid, ?)
-                            """).params(id, createdBy).update();
+                            INSERT INTO import_runs (id, tenant_id, created_by, fabricated)
+                            VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?)
+                            """).params(id, createdBy, fabricated).update();
             audit.record(AuditLog.Entry.created(
                     "core.import_run.opened", "import_run", id, null, Map.of("status", RunStates.DRAFT)));
             return find(id, false);
@@ -641,12 +651,58 @@ class ImportRunService implements ImportRuns {
 
     @Override
     public CommitOutcome commit(UUID runId) {
+        return commit(runId, null);
+    }
+
+    // JUSTIFICATION-A3: issue #138's rehearsal reuses this commit, with its database guard beside it.
+    /**
+     * The rehearsal's commit (issue #138, ADR-027 decision 9): this same commit, in the throwaway database the rehearsal
+     * restored from last night's backup, without the checker's approval and the pre-import dump, which guard a live
+     * database and mean nothing in one that is dropped next. Every other guard holds. Refused with
+     * {@code not_a_rehearsal_database} in a database that does not hold the rehearsal's one-time token, the live one first.
+     */
+    CommitOutcome commitRehearsal(UUID runId, String token) {
+        if (token == null || token.isBlank()) {
+            throw notRehearsalDatabase();
+        }
+        return commit(runId, token);
+    }
+
+    /**
+     * Refuses unless this database holds the rehearsal's token (issue #138): the table {@code bms_rehearsal_marker} is made
+     * only by {@code deploy/restore-drill.sh --rehearse-import}, in its throwaway database, never by a migration.
+     */
+    void requireRehearsalDatabase(String token) {
+        boolean marked = token != null
+                && token.length() >= 32
+                && Boolean.TRUE.equals(jdbc.sql("SELECT to_regclass('public.bms_rehearsal_marker') IS NOT NULL")
+                        .query(Boolean.class)
+                        .single())
+                && jdbc.sql("SELECT count(*) FROM public.bms_rehearsal_marker WHERE token = ?")
+                                .param(token)
+                                .query(Long.class)
+                                .single()
+                        == 1;
+        if (!marked) {
+            throw notRehearsalDatabase();
+        }
+    }
+
+    private static ApiException notRehearsalDatabase() {
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "not_a_rehearsal_database",
+                "Not a rehearsal database",
+                "A rehearsal commits only in the throwaway database deploy/restore-drill.sh --rehearse-import made.");
+    }
+
+    private CommitOutcome commit(UUID runId, String rehearsalToken) {
         requireNoTransaction();
         requireKnownBuild();
         try (LoopClaim claim = claimLoop()) {
             List<String> trading;
             try {
-                trading = tx.execute(s -> start(runId));
+                trading = tx.execute(s -> start(runId, rehearsalToken));
             } catch (DuplicateKeyException e) {
                 // import_runs_one_committing: another run of this business is committing.
                 throw importInProgress();
@@ -667,7 +723,11 @@ class ImportRunService implements ImportRuns {
      * The guards and the move to {@code committing}, in one transaction. Returns the areas that trade when the guard
      * refuses, so the refusal's audit row commits before the caller throws; empty when the run moved on.
      */
-    private List<String> start(UUID runId) {
+    private List<String> start(UUID runId, String rehearsalToken) {
+        boolean rehearsal = rehearsalToken != null;
+        if (rehearsal) {
+            requireRehearsalDatabase(rehearsalToken);
+        }
         Run run = find(runId, true);
         if (RunStates.COMMITTING.equals(run.status())) {
             throw importInProgress();
@@ -676,7 +736,7 @@ class ImportRunService implements ImportRuns {
             throw invalidTransition(
                     "Only an import that is ready can start; this one is " + RunStates.words(run.status()) + ".");
         }
-        requireCommitPossible(run);
+        requireCommitPossible(run, rehearsal);
         // The run cannot change once ready, so this holds; checked again so no path commits without its dry run (#132),
         // and only with the writers the dry run rehearsed (Lead ruling 4 on #869).
         requireDryRun(runId, true);
@@ -691,8 +751,9 @@ class ImportRunService implements ImportRuns {
                     Map.of("code", "TENANT_TRADING", "areas", trading));
             return trading;
         }
-        // The maker's import_commit, approved by a different user, for the run as it is now (issue #133, ADR-015).
-        if (!run.commitApproved()) {
+        // The maker's import_commit, approved by a different user, for the run as it is now (issue #133, ADR-015); a
+        // rehearsal's throwaway database has no checker to ask (issue #138).
+        if (!rehearsal && !run.commitApproved()) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "commit_not_approved",
@@ -707,6 +768,9 @@ class ImportRunService implements ImportRuns {
         if (!trading.isEmpty()) {
             after.put("trading_override_used", true);
             after.put("areas", trading);
+        }
+        if (rehearsal) {
+            after.put("rehearsal", true);
         }
         audit(runId, "core.import_run.status_changed", Map.of("status", RunStates.READY), after);
         return List.of();
@@ -1667,12 +1731,20 @@ class ImportRunService implements ImportRuns {
     }
 
     private void requireCommitPossible(Run run) {
+        requireCommitPossible(run, false);
+    }
+
+    /** The kill switch, then, except in a rehearsal's throwaway database (issue #138), the verified pre-import dump. */
+    private void requireCommitPossible(Run run, boolean rehearsal) {
         if (!commitEnabled()) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "imports_disabled",
                     "Imports are switched off",
                     "The platform's import commit is switched off; ask the operator.");
+        }
+        if (rehearsal) {
+            return;
         }
         if (run.preImportDumpFile() == null) {
             throw new ApiException(
@@ -1730,7 +1802,8 @@ class ImportRunService implements ImportRuns {
                 rs.getTimestamp("pre_import_dump_verified_at") != null,
                 rs.getObject("commit_requested_by", UUID.class),
                 rs.getObject("commit_approved_by", UUID.class),
-                (Integer) rs.getObject("commit_approved_version"));
+                (Integer) rs.getObject("commit_approved_version"),
+                rs.getBoolean("fabricated"));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

@@ -198,6 +198,15 @@ jobs:
       - name: Host script tests
         if: steps.scope.outputs.run == 'true'
         run: bash deploy/tests/monitor-test.sh
+      - name: The weekly restore drill is unchanged with no argument (issue #138)
+        if: steps.scope.outputs.run == 'true'
+        run: bash deploy/tests/restore-drill-test.sh
+      - name: The import rehearsal refuses a live target, cleans up and stays in its limits (issue #138)
+        if: steps.scope.outputs.run == 'true'
+        run: bash deploy/tests/rehearse-import-test.sh
+      - name: The rehearsal's live sessions are named, bounded and ended on a real PostgreSQL (issue #138)
+        if: steps.scope.outputs.run == 'true'
+        run: bash deploy/tests/rehearsal-sessions-test.sh
       - name: Staging image clean-up and unit check
         if: steps.scope.outputs.run == 'true'
         # Issue #580: pull-staging.sh keeps every image a container uses and accepts the drill from cron.

@@ -17,8 +17,15 @@ import java.util.UUID;
  */
 public interface ImportRuns {
 
-    /** Opens a run in {@code draft}. */
+    /** Opens a run in {@code draft}, not marked fabricated. */
     Run open(UUID createdBy);
+
+    /**
+     * Opens a run in {@code draft}, with the uploader's word on whether its files hold fabricated data only (issue #138, spec
+     * section 5.4): on staging the rehearsal of {@link ImportRehearsals} takes only a fabricated run. It never changes after
+     * (migration V146, the trigger {@code import_runs_fabricated_fixed}).
+     */
+    Run open(UUID createdBy, boolean fabricated);
 
     Run get(UUID runId);
 
@@ -179,7 +186,8 @@ public interface ImportRuns {
             boolean preImportDumpVerified,
             UUID commitRequestedBy,
             UUID commitApprovedBy,
-            Integer commitApprovedVersion) {
+            Integer commitApprovedVersion,
+            boolean fabricated) {
 
         /** Whether {@code import_commit} is approved for the run as it is now: the run has not changed since. */
         public boolean commitApproved() {

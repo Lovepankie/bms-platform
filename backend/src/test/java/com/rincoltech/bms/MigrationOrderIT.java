@@ -3929,6 +3929,80 @@ class MigrationOrderIT {
                         "/docker-entrypoint-initdb.d/01-roles.sh");
     }
 
+    /**
+     * V146 (issue #138) is expand only: a run stored before it keeps its state and reads as not fabricated, which then never
+     * changes (the trigger {@code import_runs_fabricated_fixed}); {@code import_rehearsals} takes a rehearsal of the run, needs
+     * a failure for any outcome but committed, and is append-only under forced row-level security, read and inserted by
+     * bms_app only. JUSTIFICATION-A3: a new test case; no existing case covers V146.
+     */
+    @Test
+    void importRehearsalMigrationKeepsEveryRunAndGuardsTheRehearsals() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("146") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v146', 'Test Tenant V146',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, status) VALUES (?, ?, ?, 'ready')")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT status = 'ready' AND NOT fabricated FROM import_runs WHERE id = ?")
+                            .param(run)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThatThrownBy(() -> owner.sql("UPDATE import_runs SET fabricated = true WHERE id = ?")
+                            .param(run)
+                            .update())
+                    .hasMessageContaining("import_runs_fabricated_fixed");
+            assertThat(owner.sql("UPDATE import_runs SET status = 'in_review' WHERE id = ?")
+                            .param(run)
+                            .update())
+                    .isEqualTo(1);
+            assertThatThrownBy(() -> owner.sql("""
+                                    INSERT INTO import_rehearsals (id, tenant_id, run_id, backup, build, outcome, timings)
+                                    VALUES (?, ?, ?, 'bms-staging-fab.dump.enc', 'test-build', 'failed', '{}')
+                                    """)
+                            .params(UUID.randomUUID(), tenant, run)
+                            .update())
+                    .hasMessageContaining("import_rehearsals_failure_named");
+            assertThat(owner.sql("""
+                                    INSERT INTO import_rehearsals (id, tenant_id, run_id, backup, build, outcome, failure,
+                                                                   timings)
+                                    VALUES (?, ?, ?, 'bms-staging-fab.dump.enc', 'test-build', 'failed', 'TENANT_TRADING',
+                                            '{"restore_ms": 1}')
+                                    """).params(UUID.randomUUID(), tenant, run).update())
+                    .isEqualTo(1);
+            assertThatThrownBy(() -> owner.sql("DELETE FROM import_rehearsals WHERE run_id = ?")
+                            .param(run)
+                            .update())
+                    .hasStackTraceContaining("append-only");
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE relname ="
+                                    + " 'import_rehearsals'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT has_table_privilege('bms_app', 'import_rehearsals', 'SELECT')"
+                                    + " AND has_table_privilege('bms_app', 'import_rehearsals', 'INSERT')"
+                                    + " AND NOT has_table_privilege('bms_app', 'import_rehearsals', 'UPDATE')"
+                                    + " AND NOT has_table_privilege('bms_app', 'import_rehearsals', 'DELETE')")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+        }
+    }
+
     /** The migrator's settings, optionally stopped at a target version. */
     private static Flyway flyway(PostgreSQLContainer postgres, String target) {
         return flyway(postgres.getJdbcUrl(), target);

@@ -1270,6 +1270,12 @@ public class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), committedRun, reconciliation, hex64(reconciliation), user)
                 .update();
+        // The rehearsal of a run on last night's backup (migration V146, #138): one fabricated rehearsal's row.
+        owner.sql("""
+                        INSERT INTO import_rehearsals (id, tenant_id, run_id, backup, build, outcome, timings)
+                        VALUES (?, ?, ?, 'bms-staging-20261001T011500Z.dump.enc', 'test-build', 'committed',
+                                '{"commit_ms": 1}')
+                        """).params(UUID.randomUUID(), t.tenantId(), committedRun).update();
     }
 
     /**
@@ -2055,7 +2061,9 @@ public class RlsIsolationIT {
                 "import_refs",
                 // The reconciliation of an import and the customer's sign-off (#134).
                 "import_reconciliations",
-                "import_signoffs")) {
+                "import_signoffs",
+                // The rehearsals of a run (#138).
+                "import_rehearsals")) {
             assertThatThrownBy(() -> asApp(
                             a.tenantId(),
                             c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
