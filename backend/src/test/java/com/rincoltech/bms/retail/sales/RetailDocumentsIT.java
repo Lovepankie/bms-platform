@@ -234,16 +234,28 @@ class RetailDocumentsIT extends IntegrationTest {
                 .getBody();
     }
 
+    /** The text of a PDF as printed, line by line. */
+    static String raw(byte[] pdf) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            return new org.apache.pdfbox.text.PDFTextStripper().getText(d).replace("\r", "");
+        }
+    }
+
     /** The text of a PDF with every printed date replaced, so a golden file does not move with the calendar. */
     static String text(byte[] pdf) throws Exception {
-        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
-            String raw = new org.apache.pdfbox.text.PDFTextStripper().getText(d);
-            return raw.replaceAll("\\b\\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{4}\\b", "{DATE}")
-                    .replaceAll("ST-\\d{8}-[0-9A-F]{8}", "ST-{YYYYMMDD}-{ID}")
-                    .replaceAll("RS\\d{8}", "RS{N}")
-                    .replace("\r", "")
-                    .strip();
-        }
+        return raw(pdf).replaceAll("\\b\\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{4}\\b", "{DATE}")
+                .replaceAll("ST-\\d{8}-[0-9A-F]{8}", "ST-{YYYYMMDD}-{ID}")
+                .replaceAll("RS\\d{8}", "RS{N}")
+                .strip();
+    }
+
+    /** Dates a void at noon in Kampala on {@code day}; the API dates it by the database clock, which moves with the calendar. */
+    static void pinVoid(UUID sale, String day) {
+        TestDatabase.owner()
+                .sql("DO $$ BEGIN PERFORM set_config('bms.allow_mutation', 'on', true);"
+                        + " UPDATE retail_sales SET voided_at = (TIMESTAMP '" + day
+                        + " 12:00:00') AT TIME ZONE 'Africa/Kampala' WHERE id = '" + sale + "'; END $$")
+                .update();
     }
 
     /** With {@code -Dbms.documents.samples}: the PDF and a PNG of each page, for the visual check (ADR-034 item 8). */
@@ -1240,6 +1252,8 @@ class RetailDocumentsIT extends IntegrationTest {
         assertThat(api.post("/sales/" + s3 + "/void", Map.of("reason", "Wrong buyer"), DOCS)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
+        // The void is pinned to a two-digit day (issue #891), so the golden does not depend on the day the test runs.
+        pinVoid(s3, "2027-05-31");
         assertThat(api.postKeyed(
                                 "/customers/" + customer + "/payments/" + RetailTestSupport.id(receipt) + "/reverse",
                                 Map.of("reason", "Entered twice"),
@@ -1256,8 +1270,7 @@ class RetailDocumentsIT extends IntegrationTest {
                             1000, 700, 0, 'completed', true, gen_random_uuid())
                         """).params(t.tenantId(), hq, customer).update();
 
-        // A void is dated by the database clock (not the pinned one), so the range runs well past it: no test depends
-        // on the day it runs.
+        // The range runs past the pinned void.
         String range = "from=2026-10-01&to=2028-06-30";
         JsonNode screen =
                 api.get("/customers/" + customer + "/statement?" + range, DOCS).getBody();
@@ -1338,6 +1351,20 @@ class RetailDocumentsIT extends IntegrationTest {
                 api.postKeyed("/sales", body, DOCS, "*", UUID.randomUUID().toString());
         assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
         return RetailTestSupport.id(r);
+    }
+
+    /** Issue #891: a two-digit day in the widest month prints on one line in the statement's Date column. */
+    @Test
+    void aTwoDigitDayInTheWidestMonthPrintsOnOneLineOfTheStatement() throws Exception {
+        capability("customer_accounts", true);
+        UUID customer = RetailTestSupport.id(api.post("/customers", Map.of("name", "Test Buyer 04"), DOCS));
+        UUID s = creditSale(customer, hq, "2026-09-30", "2");
+        assertThat(api.post("/sales/" + s + "/void", Map.of("reason", "Wrong buyer"), DOCS)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        pinVoid(s, "2027-05-31");
+        String printed = raw(statementPdf(customer, "?from=2026-09-01&to=2028-06-30", DOCS));
+        assertThat(printed).contains("30 Sep 2026 RS", "31 May 2027 RS");
     }
 
     // ---- escaping and other scripts --------------------------------------------------------------

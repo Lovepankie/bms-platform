@@ -16,7 +16,7 @@
 
   <h2 th:text="${'Instalments (' + loan.currency + ')'}">Instalments</h2>
   <table class="grid">
-    <thead><tr><th>No</th><th>Due date</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Fees</th><th class="num">Total due</th><th class="num">Paid</th><th class="num">Outstanding</th><th>Status</th></tr></thead>
+    <thead><tr><th>No</th><th style="width: 14%;">Due date</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Fees</th><th class="num">Total due</th><th class="num">Paid</th><th class="num">Outstanding</th><th>Status</th></tr></thead>
     <tbody>
       <tr th:each="r : ${rows}">
         <td th:text="${r.no}">1</td><td th:text="${r.dueDate}">date</td><td class="num" th:text="${r.principal}">0</td><td class="num" th:text="${r.interest}">0</td><td class="num" th:text="${r.fees}">0</td><td class="num" th:text="${r.total}">0</td><td class="num" th:text="${r.paid}">0</td><td class="num" th:text="${r.outstanding}">0</td><td th:text="${r.status}">pending</td>
