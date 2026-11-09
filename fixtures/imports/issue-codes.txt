@@ -31,6 +31,7 @@ shared FIELD_MAPPED_TWICE blocking
 shared COLUMN_DUPLICATE blocking
 shared MAP_FIELD_UNMAPPED blocking
 shared SOURCE_REF_COLUMN_UNKNOWN blocking
+shared SOURCE_REF_COLUMN_PERSONAL blocking
 shared ZONE_UNKNOWN blocking
 shared SOURCE_UNKNOWN refused
 shared BATCH_HAS_NO_MAPPING refused

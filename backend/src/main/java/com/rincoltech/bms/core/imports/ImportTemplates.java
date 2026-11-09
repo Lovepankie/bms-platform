@@ -139,6 +139,11 @@ public interface ImportTemplates {
                     "SOURCE_REF_COLUMN_UNKNOWN",
                     Severity.BLOCKING,
                     "The reference column {column} of source {source} is not a column the mapping keeps."),
+            new IssueCode(
+                    "SOURCE_REF_COLUMN_PERSONAL",
+                    Severity.BLOCKING,
+                    "The reference column {column} of source {source} feeds {field}, which is personal data; choose a"
+                            + " business code such as an account or item number, or the row hash."),
             new IssueCode("ZONE_UNKNOWN", Severity.BLOCKING, "The time zone {zone} is not a known zone."),
             new IssueCode("SOURCE_UNKNOWN", Severity.REFUSED, "The mapping has no source {source}."),
             new IssueCode(

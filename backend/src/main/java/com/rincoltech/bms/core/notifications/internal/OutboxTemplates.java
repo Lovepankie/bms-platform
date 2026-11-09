@@ -649,6 +649,28 @@ class OutboxTemplates {
                     "Open Reports",
                     "You got this email because you asked for this report pack on BMS."));
 
+    // Issue #139, Lead ruling on #886 (M4): the copy of a business's data given for import is deleted on its deadline
+    // even when the week's warning never went; the Owner hears of it in the purge's own transaction. No value of a row.
+    private static final Map<String, Template> EMAIL_IMPORTS = Map.of(
+            "imports.purged_without_warning",
+            new Template(
+                    "{business_name}: the copy of your data given for import was deleted",
+                    """
+                    Hello {owner_name},
+
+                    The copy of your data that you gave Rincol Tech to import into {business_name} was deleted from \
+                    BMS on {day}, {reason}, as our data protection rules require. We meant to tell you a week before \
+                    and could not.
+
+                    The records BMS created from it are your business's own and are not touched. A certificate of \
+                    deletion, which lists the files deleted and what is kept, is stored with the import; ask Rincol \
+                    Tech for a copy.
+
+                    Rincol Tech
+                    """,
+                    null,
+                    "You got this email because you are the Owner of {business_name} on BMS."));
+
     private static final Map<String, Template> EMAIL = emailTemplates();
 
     private static Map<String, Template> emailTemplates() {
@@ -663,6 +685,7 @@ class OutboxTemplates {
         all.putAll(EMAIL_BILLING);
         all.putAll(EMAIL_CLOSURE);
         all.putAll(EMAIL_REPORTS);
+        all.putAll(EMAIL_IMPORTS);
         return Map.copyOf(all);
     }
 
@@ -772,6 +795,21 @@ class OutboxTemplates {
                             + " hour passes. Check the edge rule and the portal."),
             "insights.daily_digest",
             new Template(null, "{text}"),
+            // Spec section 6.4 (issue #139): the scheduled purge of an import run is announced a week ahead. Ids and
+            // the business's slug only, never a value of a row.
+            "imports.purge_warning",
+            new Template(
+                    null,
+                    "BMS import run {run} of {business} is purged on {day}: {reason}. To purge it at stage 9 with a"
+                            + " witness and the pre-import dump confirmed, run purge-import before then"
+                            + " (customer-data-cutover runbook, 6.2)."),
+            // Lead ruling on #886 (M4): the deadline wins over a warning that never went; the operators hear of it.
+            "imports.purged_without_warning",
+            new Template(
+                    null,
+                    "BMS import run {run} of {business} was purged on {day}, {reason}, without its warning (the job or"
+                            + " the outbox was down). Its certificate of deletion is on the run; the dump on the host"
+                            + " still needs deleting and confirming with purge-import."),
             // ADR-036 decision 13: the operator hears when SMS use reaches 80 percent of a daily cap or
             // a cap holds messages back. The scope is "platform" or a tenant id; no number, no text.
             "sms.provider_alert",

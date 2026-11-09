@@ -135,6 +135,22 @@ class MappingValidatorTest {
         assertThat(problems).allSatisfy(p -> assertThat(p.severity()).isEqualTo("blocking"));
     }
 
+    /** The reference stays in clear after the purge, so it is a business code (#139, review of #886, SF1). */
+    @Test
+    void aReferenceColumnThatFeedsAPersonalFieldIsRefused() {
+        for (String column : List.of("Fab Mobile", "Fab Buyer", " fab card no")) {
+            Map<String, Object> mapping = fixture("fixture_shop_v1.mapping.json");
+            source(mapping, "buyer_book").put("source_ref", Map.of("rule", "column", "column", column));
+
+            List<Problem> problems = check(mapping);
+            assertThat(codes(problems)).as(column).containsExactly("SOURCE_REF_COLUMN_PERSONAL");
+            assertThat(problems.getFirst().severity()).isEqualTo("blocking");
+        }
+        Map<String, Object> code = fixture("fixture_shop_v1.mapping.json");
+        source(code, "buyer_book").put("source_ref", Map.of("rule", "column", "column", "Fab Buyer No"));
+        assertThat(check(code)).as("the buyer's number is a business code").isEmpty();
+    }
+
     @Test
     void aColumnWrittenTwiceIgnoringCaseIsReported() {
         Map<String, Object> mapping = fixture("fixture_shop_v1.mapping.json");

@@ -42,12 +42,21 @@
  * {@link com.rincoltech.bms.core.imports.RehearseImportCommand}): the real dry run and commit of a run in the throwaway
  * database {@code deploy/restore-drill.sh --rehearse-import} restores from last night's backup, which alone may waive the
  * checker's approval and the pre-import dump, stored in {@code import_rehearsals}; on staging only a run marked fabricated
- * ({@code import_runs.fabricated}). The operator screens follow in #141. Public API:
+ * ({@code import_runs.fabricated}). The thirteenth (issue #139, migration V147) is retention
+ * ({@link com.rincoltech.bms.core.imports.ImportPurges}, the host command
+ * {@link com.rincoltech.bms.core.imports.PurgeImportCommand} and the daily job {@code core.imports.retention}): the purge of
+ * a run's quarantined files, data key and personal staged values, through the definer function {@code import_purge_run},
+ * the only way past the guards of a committed batch, with the certificate of deletion stored append-only in
+ * {@code import_deletion_certificates}; by the operator at stage 9, and by the schedule 30 days after the sign-off or 90
+ * days after the last activity of a run never signed off, warning the operators' chat a week before (and, if that warning
+ * never went, telling the operators and the business's Owner with the purge). The operator screens
+ * follow in #141. Public API:
  * {@link com.rincoltech.bms.core.imports.ImportRuns}, {@link com.rincoltech.bms.core.imports.ImportRefs},
  * {@link com.rincoltech.bms.core.imports.ImportUploads}, {@link com.rincoltech.bms.core.imports.ImportTemplates},
  * {@link com.rincoltech.bms.core.imports.ImportMappings}, {@link com.rincoltech.bms.core.imports.ImportValidation},
  * {@link com.rincoltech.bms.core.imports.ImportReview}, {@link com.rincoltech.bms.core.imports.ImportPreview},
- * {@link com.rincoltech.bms.core.imports.ImportReconciliation} and {@link com.rincoltech.bms.core.imports.CommitReport}, and
+ * {@link com.rincoltech.bms.core.imports.ImportReconciliation}, {@link com.rincoltech.bms.core.imports.ImportPurges} and
+ * {@link com.rincoltech.bms.core.imports.CommitReport}, and
  * the SPI {@link com.rincoltech.bms.core.imports.ImportTemplate} with {@link com.rincoltech.bms.core.imports.BatchWriter},
  * {@link com.rincoltech.bms.core.imports.ImportForecast} and {@link com.rincoltech.bms.core.imports.ImportBooks}.
  */
@@ -61,6 +70,7 @@
             "core.jobs",
             "core.approvals",
             "core.ledger",
+            "core.notifications",
             "core.tenancy"
         })
 package com.rincoltech.bms.core.imports;

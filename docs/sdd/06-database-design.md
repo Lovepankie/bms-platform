@@ -72,7 +72,7 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_savings_daily_balances`, `lending_savings_interest_postings`,
 `lending_investment_transactions`, `import_issue_resolutions` (V141, #131), `import_mappings` (V139, #129),
 `import_refs` (V143, #133), `import_reconciliations` and `import_signoffs` (V144, #134), `import_rehearsals` (V146,
-#138).
+#138), `import_deletion_certificates` (V147, #139).
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
 `reject_mutation()` raises on `UPDATE` or `DELETE` for every role, `bms_owner` included,
@@ -1429,7 +1429,7 @@ expand only:
 - **`import_signoffs`** (V144, #134; RLS forced, `SELECT, INSERT`, append-only): the customer's sign-off, one per run:
   `id`, `tenant_id`, `created_at`, `run_id` (unique), `reconciliation_id` (FK `(tenant_id, reconciliation_id)`),
   `report_sha256` (as read), `sections text[]` (the sections ticked), `signed_name varchar(120)` (the name typed: the only
-  personal value of these tables), `signed_on date` (the date typed) and `signed_by` (the staff user).
+  personal value of these tables, replaced by its salted hash when the run is purged, V147), `signed_on date` (the date typed) and `signed_by` (the staff user).
 - **`import_signoff_rules()`**, a `BEFORE INSERT` trigger on both tables, for every role: a sign-off needs the run
   `committed`, the run's newest reconciliation, `signable` true and the stored SHA-256; a reconciliation needs the run
   `committed` and not signed. Both take the run `FOR UPDATE` first, so the two never pass each other and the signed
@@ -1451,6 +1451,37 @@ expand only:
   and `timings jsonb` (milliseconds per step). Codes, counts and amounts only. Index `(tenant_id, run_id, created_at)`.
   The table `bms_rehearsal_marker (token)`, which lets the application commit without the checker and the dump, is made
   only by the script in its throwaway database, never by a migration.
+- **`import_runs.purge_warned_at`** (V147, #139): `timestamptz`, when the scheduled purge last warned the operators about
+  the run (NULL until then); a warning stands only while it is newer than the run's sign-off or last activity.
+- **`import_deletion_certificates`** (V147, #139; RLS forced, `SELECT, INSERT`, append-only by `reject_mutation`): the
+  certificate of deletion of a purged run, one row per version (chapter 13 section 13.14.1, 13/16): `id`, `tenant_id`,
+  `created_at` (the business clock's moment of the purge), `run_id` (FK `(tenant_id, run_id)`), `version` (unique per run;
+  2 and above only for the operator's later confirmation of the dump), `reason` (`operator`, `signed_off_30_days` or
+  `inactive_90_days`), `operator_id` and `witness_id` (platform operators, both or neither, never the same: the CHECKs
+  `import_deletion_certificates_people` and `import_deletion_certificates_witness_not_operator`), `dump_confirmed boolean`,
+  `body jsonb` (files with names, sizes, SHA-256, deletion time and staged row counts; the counts cleared; the dump), `document
+  text` (the plain text) and `sha256 char(64)` (of the text). The trigger `import_deletion_certificates_run_purged` refuses a
+  certificate of a run that is not `purged`. No value of a row.
+- **`import_purge_run(run uuid)`** (definer, V147, #139; `bms_app` may execute): the purge of one run of the business bound
+  to the transaction, every statement naming the business: the run `purged` with `purged_at = now()` and its
+  `data_key_wrapped` cleared, its `allow_trading_reason` and each policy decision's `confirmation` hashed; its
+  `import_rows.raw` `{}`, `normalised` NULL and `source_ref` hashed; its
+  `import_issues.original_value` and `suggested_value` NULL and `message` hashed; its batches' `sheet_name` and
+  `failure_reason` hashed; its resolutions' `before_value`, `after_value`, `row_key` and `note` hashed; its sign-off's
+  `signed_name` hashed; the `decision_note` and `execution_error` of the run's `import_commit` approval request hashed
+  (SHA-256 with a salt kept nowhere; one rule, every free-text column, listed in the V147 header and ADR-027). Refuses a run already purged or committing, and one whose batches still name a stored file (the
+  application deletes them first). Returns the counts.
+- **`import_runs_purged_by_purge`** (V147, #139): a `BEFORE INSERT OR UPDATE OF status` trigger on `import_runs`; a run
+  becomes `purged` only inside a definer function called by another role's session with `bms.purging_import_run` naming it
+  (`import_purge_run`), and never leaves `purged`; a migration's opt-in and `bms_erasing` keep their ways through.
+- **`imports_retention_tenants()`** (definer, V147, #139; `bms_app` may execute, unbound): the businesses holding a run not
+  purged and not committing, active or suspended, except one whose removal has begun; the daily job visits these.
+- **`bms_import_purging(table, old, new)`** (V147, #139): the only way past `import_rows_validation_kept`,
+  `import_issues_batch_kept` and, for `import_issue_resolutions` only, `reject_mutation`, beside V102's `bms_erasing`. True
+  only for an UPDATE inside a definer function called by another role's session (`import_purge_run`: `current_user` the
+  owner, `session_user` not) with the transaction-local `bms.purging_import_run`
+  naming the row's own run, the row of the bound business, that run purged in this transaction (`purged_at = now()`), and
+  only the personal columns changed to what the purge writes.
 
 ## 6.6 General ledger (RLS)
 
@@ -2344,6 +2375,10 @@ tables). `V145__retail_import_refs_into_import_refs.sql` (#135; directly after `
 the backfill in batches of 5,000 under `lock_timeout` 5s, and the index `import_refs_by_run` (sections 6.5 and 6.11.4).
 `V146__import_rehearsals.sql` (#138; directly after `V145`) is expand only: `import_runs.fabricated` with its trigger
 `import_runs_fabricated_fixed`, and `import_rehearsals` with its index (section 6.5, Import tables), under `lock_timeout` 5s.
+`V147__import_purge.sql` (#139; directly after `V146`) is expand only: `import_runs.purge_warned_at`,
+`import_deletion_certificates` with its trigger, the functions `bms_import_purged_value`, `bms_import_purging`,
+`import_purge_run` and `imports_retention_tenants`, the trigger `import_runs_purged_by_purge`, and the guards `import_issues_batch_kept`, `import_rows_validation_kept` and `reject_mutation` replaced
+by their own bodies with the purge's way through added (section 6.5, Import tables), under `lock_timeout` 5s.
 The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 

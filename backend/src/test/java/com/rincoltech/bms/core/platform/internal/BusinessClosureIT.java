@@ -757,7 +757,8 @@ class BusinessClosureIT extends IntegrationTest {
                 .isPositive();
         // The import run and its batch (V127, #127), seeded by RlsIsolationIT.seedOneRowInEveryTable. The batch names
         // its run with no ON DELETE CASCADE, so the purge's passes must delete the batch before the run (#736). The
-        // second run is the committed one whose reconciliation and sign-off (V144, #134) name it, deleted before it.
+        // second run is the signed one whose reconciliation and sign-off (V144, #134) and, once purged, certificate of
+        // deletion (V147, #139) name it, deleted before it.
         assertThat(count("SELECT count(*) FROM import_runs WHERE tenant_id = ?", t.tenantId()))
                 .isEqualTo(2);
         assertThat(count("SELECT count(*) FROM import_batches WHERE tenant_id = ?", t.tenantId()))

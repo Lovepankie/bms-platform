@@ -89,6 +89,7 @@ class RetailV1TemplateIT extends IntegrationTest {
             Map.entry("COLUMN_DUPLICATE", "the mapping's check (MappingValidatorTest)"),
             Map.entry("MAP_FIELD_UNMAPPED", "the mapping's check (MappingValidatorTest)"),
             Map.entry("SOURCE_REF_COLUMN_UNKNOWN", "the mapping's check (MappingValidatorTest)"),
+            Map.entry("SOURCE_REF_COLUMN_PERSONAL", "the mapping's check (MappingValidatorTest)"),
             Map.entry("ZONE_UNKNOWN", "the mapping's check (MappingValidatorTest)"),
             Map.entry("REQUIRED_COLUMN_MISSING", "the mapping's check of a file's headers (MappingValidatorTest)"),
             Map.entry("ENCODING_CONVERTED", "a parse warning of the batch (SourceParserTest, ImportMalformedFilesIT)"),

@@ -80,6 +80,9 @@ class EmailLayoutTest {
         // A report pack is ready (issue #229).
         p.put("name", "Test Staff 02");
         p.put("report_title", "monthly report pack");
+        // An import's copy deleted without its warning (issue #139).
+        p.put("day", "2026-11-09");
+        p.put("reason", "30 days after it was signed off");
         return p;
     }
 

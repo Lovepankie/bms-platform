@@ -1,6 +1,7 @@
 package com.rincoltech.bms;
 
 import com.rincoltech.bms.core.identity.ProvisioningKeys;
+import com.rincoltech.bms.core.imports.PurgeImportCommand;
 import com.rincoltech.bms.core.imports.RehearseImportCommand;
 import com.rincoltech.bms.lending.seed.LendingSeedCommand;
 import com.rincoltech.bms.retail.imports.RetailImportCommand;
@@ -26,6 +27,8 @@ import org.springframework.modulith.Modulithic;
  * {@code java -jar bms-api.jar rehearse-import --tenant <id> --run <id> --backup <name>} rehearses one import run in the
  * throwaway database of {@code deploy/restore-drill.sh --rehearse-import} and exits (issue #138); {@code java -jar
  * bms-api.jar stage-import-run --tenant <slug> --dir <path>} stages a fabricated run to rehearse, refused in production.
+ * {@code java -jar bms-api.jar purge-import --tenant <id> --run <id> --operator <email> --witness <email>} purges a signed
+ * off import run at stage 9 and prints its certificate of deletion (issue #139).
  * Neither command runs unless named: the image's default startup is the web application.
  */
 @SpringBootApplication
@@ -52,6 +55,9 @@ public class BmsApplication {
         }
         if (args.length > 0 && args[0].equals(StageImportRunCommand.NAME)) {
             System.exit(StageImportRunCommand.run(BmsApplication.class, args));
+        }
+        if (args.length > 0 && args[0].equals(PurgeImportCommand.NAME)) {
+            System.exit(PurgeImportCommand.run(BmsApplication.class, args));
         }
         SpringApplication.run(BmsApplication.class, args);
     }

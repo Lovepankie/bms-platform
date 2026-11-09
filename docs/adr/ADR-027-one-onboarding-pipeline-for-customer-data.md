@@ -83,6 +83,55 @@ use it); the batch transaction timeout against real volumes (the big file test s
 mappings drifting from the template version a run started with; operators bypassing the app with
 host-side files after self service exists.
 
+## Note (9 November 2026, issue #139): decision 8 as built
+
+The deletion is a purge of the run, not of its records: the staged rows and issues stay without their values, so every
+count of the run and its certificate can still be checked, and the review's resolutions keep a salted hash of each value
+(the salt kept nowhere) in place of the value. The append-only guards of a committed batch, which nothing else may pass,
+let the purge through only inside one definer function, for the run it purges and in its own transaction (Lead ruling on
+#867); the removal of a closed business keeps its own way. The dump lives on the host, out of the application's reach: the
+operator confirms its deletion by name and hash at stage 9, with a witness, and a scheduled purge's certificate says it was
+not confirmed until they do, which issues the certificate's next version. The certificate is stored append-only on the run
+as JSON and as the plain text the operator sends, with the text's SHA-256, as the reconciliation is (note of 7 November).
+
+The deadline wins over the warning (Lead ruling on #886, M4): personal data is not kept past 30 days after the sign-off,
+or past 90 days of inactivity, because a warning failed to go out. The operators are warned a week before each deadline;
+when that warning never went (the job or the outbox was down), the purge still happens on the deadline and enqueues a
+"purged without warning" notice to the operators and to the business's Owner in the same transaction as the purge, so they
+hear of it. The daily job purges a signed run on day 29, so it is never late by the hours between its run and the deadline
+(review of #886, S3). Every business with a run to purge is visited, a suspended one too. The references of imported records (`import_refs`) are kept unhashed:
+a later run of the business matches its rows on them, and their content hash covers a whole mapped row, so it can confirm
+a guess of an entire row but reveals no value.
+
+One rule for typed text (Lead on #886): the purge hashes or clears every free-text column a person can type on the run's
+tables and keeps in clear only codes, counts, hashes, statuses, ids and timestamps. Hashed or cleared:
+
+| Table | Columns |
+|---|---|
+| `import_rows` | `raw` (emptied), `normalised` (cleared), `source_ref` (hashed) |
+| `import_issues` | `original_value`, `suggested_value` (cleared), `message` (hashed) |
+| `import_issue_resolutions` | `before_value`, `after_value`, `row_key`, `note` (hashed) |
+| `import_batches` | `sheet_name`, `failure_reason` (hashed); the quarantined file and its `object_key` (deleted) |
+| `import_runs` | `allow_trading_reason` and each policy decision's confirmation (hashed), `data_key_wrapped` (cleared) |
+| `import_signoffs` | `signed_name` (hashed) |
+| `approval_requests` (the run's `import_commit`) | `decision_note`, `execution_error` (hashed) |
+
+The run has no notes and no halt or cancel reason (a boolean and a time, V127). The audit rows, never purged, hold no
+typed text and no unsalted hash of one, which a guess of every phone number would undo (review of #886, MF3): the
+override's reason and a policy's confirmation are audited only as given, with their length. Every other text column of
+these tables holds codes only, and `ImportPurgeIT` names each column in one list, so a new column fails CI until it is
+classed. Kept readable, each for one reason:
+
+| Column | Why |
+|---|---|
+| `import_batches.source_filename`, `size_bytes`, `source_sha256`; `import_runs.pre_import_dump_file`, `pre_import_dump_sha256` | the certificate names the files and the dump it deletes |
+| `import_batches.source_headers` | the sheet's column names, which the business's mapping (not of the run) holds and a later run is mapped by |
+| `import_refs.source_key`, `source_ref` | the file, tab and reference code a later run matches its rows on; the mapping refuses a reference column that feeds a personal field (`SOURCE_REF_COLUMN_PERSONAL`) |
+| `import_reconciliations.report` | the signed document, codes, counts and amounts only, that the sign-off's SHA-256 names |
+| `import_rehearsals`, the dry run and batch reports | made by the application, codes, counts and amounts only |
+| `import_deletion_certificates.document` | the certificate itself, naming the platform operator, the witness and the files |
+| `approval_requests.payload` of the run's `import_commit` | the run's id, its file count and the application's notice |
+
 ## Note (8 November 2026, issue #138): decision 9 as built
 
 The rehearsal is `deploy/restore-drill.sh --rehearse-import <run id>`, opt in by its flag; with no argument the script is

@@ -31,9 +31,9 @@ public interface ImportRuns {
 
     /**
      * Moves a run along the diagram of spec section 3.11, stamping the stage time: {@code draft} to {@code uploaded} to
-     * {@code in_review} to {@code ready}, {@code signed_off} to {@code purged}, and {@code cancelled} from any state before
-     * {@code committing}. {@code committing} and {@code committed} are reached only through {@link #commit}, and
-     * {@code signed_off} only through {@link ImportReconciliation#signOff} (issue #134). {@code ready} needs a stored dry run that still counts, did not fail and matched the preview
+     * {@code in_review} to {@code ready}, and {@code cancelled} from any state before {@code committing}.
+     * {@code committing} and {@code committed} are reached only through {@link #commit}, {@code signed_off} only through
+     * {@link ImportReconciliation#signOff} (issue #134), and {@code purged} only through {@link ImportPurges} (issue #139). {@code ready} needs a stored dry run that still counts, did not fail and matched the preview
      * (issue #132): 409 {@code dry_run_required}, {@code dry_run_failed} or {@code preview_differs} otherwise; the commit
      * checks the same again and, with the resume, refuses a run whose writers (its templates' loaders, their versions and
      * code) are not the ones the dry run rehearsed (409 {@code dry_run_writer_differs}).

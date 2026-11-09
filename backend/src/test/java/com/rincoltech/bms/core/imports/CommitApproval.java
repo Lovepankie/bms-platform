@@ -30,6 +30,12 @@ public final class CommitApproval {
     /** The number of entries a fabricated {@code pg_restore --list} shows. */
     public static final int LISTED = 42;
 
+    /** The checker's note on the approval by default. */
+    public static final String NOTE = "Checked the fabricated dry run";
+
+    /** The checker's note the next approvals carry; a test that changes it sets it back to {@link #NOTE} after. */
+    public static volatile String note = NOTE;
+
     private CommitApproval() {}
 
     /** Records the check of the dump already recorded on the run, with the SHA-256 it was recorded with. */
@@ -60,7 +66,7 @@ public final class CommitApproval {
         return http.exchange(
                 "/api/v1/approvals/" + approvalId + "/approve",
                 HttpMethod.POST,
-                new HttpEntity<>(Map.of("note", "Checked the fabricated dry run"), h),
+                new HttpEntity<>(Map.of("note", note), h),
                 JsonNode.class);
     }
 

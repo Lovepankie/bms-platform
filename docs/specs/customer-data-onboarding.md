@@ -162,6 +162,7 @@ Every issue has:
 | `COLUMN_DUPLICATE` | blocking | Column {column} of source {source} is written twice in the mapping, ignoring case and spaces. (#129) |
 | `MAP_FIELD_UNMAPPED` | blocking | Source {source} maps values of {field}, which no column of it feeds. (#129) |
 | `SOURCE_REF_COLUMN_UNKNOWN` | blocking | The reference column {column} of source {source} is not a column the mapping keeps. (#129) |
+| `SOURCE_REF_COLUMN_PERSONAL` | blocking | The reference column {column} of source {source} feeds {field}, which is personal data; choose a business code such as an account or item number, or the row hash. (#139: the reference stays in clear in `import_refs` after the purge) |
 | `ZONE_UNKNOWN` | blocking | The time zone {zone} is not a known zone. (#129) |
 | `SOURCE_UNKNOWN` | request refused | The mapping has no source {source}. (#129) |
 | `BATCH_HAS_NO_MAPPING` | request refused | The file was read without a mapping; read it again with one before checking its columns. (#129) |
@@ -521,6 +522,19 @@ customer's date of birth when the module does not use it) are ignored by default
   sizes, SHA-256 of each file deleted, staging row counts, the dump's file name and hash), when,
   by whom, witnessed by whom, and what is retained. It is stored on the run and sent to the
   customer.
+
+Built in #139 (migration V147, SDD chapter 13 section 13.14.1 13/16): the operator's stage 9 is the host command
+`purge-import` with a second platform operator as witness and the dump's file name and SHA-256 as recorded on the run; the
+daily job `core.imports.retention` purges on day 29 after the sign-off and 90 days after the last activity of a run never
+signed off (activity after the warning starts the clock again; a run `committing` is never purged), in every business,
+suspended ones too. The operators' chat is warned a week before; if that warning never went, the deadline still wins and
+the purge tells the operators and the Owner in its own transaction (Lead ruling on #886). The staged rows and issues stay as records without values, so every count stays; the
+resolutions' values, row keys and notes, the issues' messages, the batches' sheet names and failure reasons, the
+override reason, the policy confirmations and the signer's name become a hash salted with a value kept nowhere (one rule:
+every free-text column; ADR-027 lists them and the few kept readable for the certificate). The certificate is stored append-only
+(`import_deletion_certificates`) with its text and that text's SHA-256; a scheduled purge cannot reach the host, so its
+certificate says the dump is not confirmed until the operator confirms it with `purge-import`, which issues the next
+version. The operator sends the printed text to the customer; a download from the screens comes with #141.
 
 ### 6.5 Audit, logs and environments
 

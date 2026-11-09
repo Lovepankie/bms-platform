@@ -42,6 +42,12 @@ final class RunStates {
     /** The state only the customer's sign-off reaches (issue #134, spec section 3.10), never a plain transition. */
     static final Set<String> SIGN_OFF_ONLY = Set.of(SIGNED_OFF);
 
+    /**
+     * The state only the purge reaches (issue #139, spec section 6.4), never a plain transition: by the operator from
+     * {@code signed_off}, and by the scheduled purge from any state but {@code committing} ({@code PurgeService}).
+     */
+    static final Set<String> PURGE_ONLY = Set.of(PURGED);
+
     private RunStates() {}
 
     static boolean known(String status) {

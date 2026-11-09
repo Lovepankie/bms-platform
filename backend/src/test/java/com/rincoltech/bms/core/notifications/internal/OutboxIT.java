@@ -905,6 +905,9 @@ class OutboxIT extends IntegrationTest {
                 // A report pack is ready (issue #229).
                 Map.entry("name", "Test Staff 02"),
                 Map.entry("report_title", "monthly report pack"),
+                // The warning before the scheduled purge of an import run (issue #139).
+                Map.entry("run", "00000000-0000-4000-8000-000000000139"),
+                Map.entry("business", "test-shop"),
                 Map.entry("links", "Test Shop\nhttps://test-bms-staging.rincoltech.test/sign-in"));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {

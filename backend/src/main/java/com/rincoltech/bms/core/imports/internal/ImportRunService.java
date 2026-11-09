@@ -265,6 +265,9 @@ class ImportRunService implements ImportRuns {
         if (RunStates.SIGN_OFF_ONLY.contains(status)) {
             throw invalidTransition("A run is signed off only by the customer's sign-off of its reconciliation.");
         }
+        if (RunStates.PURGE_ONLY.contains(status)) {
+            throw invalidTransition("A run is purged only by the purge, which deletes its personal data (issue #139).");
+        }
         return tx.execute(s -> {
             Run run = find(runId, true);
             if (!RunStates.allowed(run.status(), status)) {
@@ -437,7 +440,13 @@ class ImportRunService implements ImportRuns {
                                    version = version + 1, updated_at = now()
                              WHERE id = ?
                             """).params(key, mapper.writeValueAsString(stored), runId).update();
-            audit(runId, "core.import_run.policy_recorded", Map.of(), Map.of("policy", key, "decision", stored));
+            // The confirmation is typed text the purge hashes; the append-only audit, which is never purged, keeps only
+            // that it was given and its length, never the text nor an unsalted hash of it (#139, review of #886, MF3).
+            Map<String, Object> audited = new LinkedHashMap<>(stored);
+            audited.remove("confirmation");
+            audited.put("confirmation_given", true);
+            audited.put("confirmation_length", confirmation.length());
+            audit(runId, "core.import_run.policy_recorded", Map.of(), Map.of("policy", key, "decision", audited));
             return find(runId, false);
         });
     }
@@ -604,7 +613,9 @@ class ImportRunService implements ImportRuns {
                             runId,
                             null,
                             Map.of(),
-                            Map.of("allow_trading_tenant", true, "reason", why)),
+                            // Typed text the purge hashes on the run; the append-only audit, never purged, keeps only
+                            // that a reason was given and its length, never an unsalted hash (review of #886, MF3).
+                            Map.of("allow_trading_tenant", true, "reason_given", true, "reason_length", why.length())),
                     platformUserId,
                     "platform");
             return find(runId, false);

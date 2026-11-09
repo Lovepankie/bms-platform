@@ -783,7 +783,7 @@ retail command. ADR-027 makes the framework the one pipeline for every tenant's 
 - **Reconciliation and deletion.** The reconciliation of 13.11 gains stock quantity and value,
   receivables, arrears buckets and a balanced ledger check, and is signed in the app. Sign-off starts
   the deletion of the quarantined files, the per-run key, the staging personal values and the
-  pre-import dump within 30 days, with a certificate of deletion.
+  pre-import dump within 30 days, with a certificate of deletion (built in #139, section 13.14.1 13/16).
 - **Rehearsal.** Each run is rehearsed against last night's production backup restored into a
   throwaway database before cutover day.
 
@@ -961,7 +961,8 @@ operator's tooling calls the services, as it calls the upload and the commit.
   missing field), what a schema cannot say: a required field no column feeds
   (`REQUIRED_FIELD_UNMAPPED`), one field fed by two columns (`FIELD_MAPPED_TWICE`), a column written twice ignoring case and
   spaces (`COLUMN_DUPLICATE`), a value or enum map for a field no column feeds (`MAP_FIELD_UNMAPPED`), a `source_ref` column
-  the source does not keep (`SOURCE_REF_COLUMN_UNKNOWN`), an unknown zone (`ZONE_UNKNOWN`). Against a file's headers,
+  the source does not keep (`SOURCE_REF_COLUMN_UNKNOWN`), a `source_ref` column that feeds a personal field, a name, a
+  phone or an ID number (`SOURCE_REF_COLUMN_PERSONAL`, #139: the reference outlives the purge in `import_refs`), an unknown zone (`ZONE_UNKNOWN`). Against a file's headers,
   compared trimmed and ignoring case: one `COLUMN_UNMAPPED` per header neither mapped nor ignored, and
   `REQUIRED_COLUMN_MISSING` per required field whose column the file lacks. A mapping is valid only with no problem at all,
   so a column left unmapped and not ignored makes it invalid. The messages are the catalogue's, filled with the source,
@@ -1602,3 +1603,80 @@ section 4.1; coordinated with #110, which builds no second framework).**
   containers in the background so a stop removes them at once.
 - **Not built here:** the upload form's fabricated confirmation (the operator screens, #141, pass it to `open`), and the
   production refusal of files carrying the fabricated fixture marker (spec section 5.4).
+
+**13/16, retention, purge and the certificate of deletion (#139, migration `V147`, ADR-027 decision 8, spec section 6.4).**
+
+- **What the purge deletes.** The run's quarantined files from object storage (each batch's `object_key` cleared and
+  `quarantine_deleted_at` stamped), its wrapped data key (`import_runs.data_key_wrapped`, so any copy of a file left
+  anywhere no longer opens), the cells and typed values of its staged rows (`import_rows.raw` becomes `{}`, `normalised`
+  NULL, `source_ref` its hash), the original and suggested values of its issues (`import_issues.original_value` and
+  `suggested_value` NULL, `message` its hash), its batches' `sheet_name` and `failure_reason` (their hash), the signer's
+  name (`import_signoffs.signed_name`, its hash), and the values
+  before and after, the row key and the operator's note of its resolutions (`import_issue_resolutions.before_value`,
+  `after_value`, `row_key` and `note`), which become their hash: SHA-256 over a salt made for the purge and kept nowhere, so equal values keep equal
+  hashes within the run and nobody can find a phone number again by hashing every number. The run becomes `purged` with
+  `purged_at`; a run is never purged twice.
+- **What it keeps.** The run, its batches with the file names, sizes and SHA-256, its staged rows and issues as records
+  without values (so every count stays), its resolutions with hashes, the dry run and commit reports, the signed
+  reconciliation and sign-off, the rehearsals, `import_refs` (the references of the records the import created, which a
+  later run of the business matches on: a mapping's reference column is a business code, never a personal value, and
+  the mapping refuses one that feeds a name, a phone or an ID number (`SOURCE_REF_COLUMN_PERSONAL`); its
+  content hash is the first 32 hex digits of the SHA-256 of the whole mapped row's canonical JSON (`ImportRefs.contentHash`),
+  which can confirm a guess of an entire row but reveals no value, and
+  is what tells a later run that a row changed since its import), and the audit trail. The records the import created are the business's own and are not touched.
+  One rule, no case by case (Lead on #886): every free-text column on the run's tables is hashed or cleared, and only
+  codes, counts, hashes, statuses, ids and timestamps stay in clear. Besides the above, that is the trading override's
+  reason and each policy decision's confirmation reference (`import_runs.allow_trading_reason` and the `confirmation` of
+  each entry of `import_runs.policy`), and the checker's note and any execution error on the run's `import_commit`
+  request (`approval_requests.decision_note` and `execution_error`). Their audit rows, never purged, record only that
+  the text was given and its length (`core.import_run.trading_override_set`, `core.import_run.policy_recorded`), never
+  an unsalted hash a guess of every phone number would undo; an approval's decision is audited without its note. A run
+  has no notes and no halt or cancel reason (V127). `ImportPurgeIT` names every text column of the run's tables and its
+  request as hashed, kept or codes only, so a new column fails CI until it is classed. The columns kept readable,
+  each with its one reason, are listed in the V147 header and the ADR-027 note of 9 November: the file names, sizes and
+  hashes and the dump's name and hash (the certificate names them), the sheets' column names, `import_refs`, and the
+  reports and certificate made by the application.
+- **The way past the guards** of a committed batch (Lead ruling on #867): the purge is one definer function,
+  `import_purge_run(run)`, called in the business's transaction, which refuses while a file of the run is still in
+  storage. `bms_import_purging` lets an UPDATE of a staged row, an issue or a resolution through
+  `import_rows_validation_kept`, `import_issues_batch_kept` and `reject_mutation` only inside a definer function called by
+  another role's session (`current_user` the owner, `session_user` not, so a session of the owner itself never passes),
+  with `bms.purging_import_run` naming the row's own run, the row of the bound business, that run purged in this very
+  transaction (`purged_at = now()`), and only the personal columns changed, to exactly what the purge writes. No delete, no
+  other run, no other table, nothing in a later transaction. The setting is a custom setting any session can set, so the
+  marker that matters is the definer context and the run purged in the same transaction; and the state `purged` itself is
+  guarded the same way (`import_runs_purged_by_purge`: only inside the purge, never left). The removal and purge of a
+  closed business keep their own way (`bms_erasing`), unchanged. `MigrationOrderIT` checks that each replaced guard is its
+  V146 body with only the purge's block added.
+- **Who and when.** The operator at stage 9 with the host command `purge-import --tenant <id> --run <id> --operator <email>
+  --witness <email> [--dump-file <name> --dump-sha256 <hex>]` (`ImportPurges.purge`): a `signed_off` run only
+  (`run_not_signed_off`), the operator and a different active platform operator as witness (`witness_is_operator`,
+  `platform_operator_unknown`), and the pre-import dump they deleted on the host by its file name and SHA-256 as recorded on
+  the run (`pre_import_dump_confirmation_required`, `pre_import_dump_differs`, `no_pre_import_dump`); the audit row records
+  the host and user the command ran as beside the two names, which are the operator's word. And the daily job
+  `core.imports.retention` (chapter 9 section 9.9), for every business with a run to purge, suspended ones too: on day 29
+  after the sign-off and 90 days after the last activity of a run never signed off, never a `committing` run (its way out
+  is a resume or the dev lead's restore). The operators are warned a week before; the deadline wins over a warning that
+  never went (Lead ruling on #886, ADR-027 decision 8): the purge goes ahead and enqueues `imports.purged_without_warning`
+  to the operators' chat and the Owner by email in its own transaction.
+- **Failures.** Files are deleted first, with no transaction open, then the run is purged in one transaction. Storage that
+  refuses a delete is 503 `storage_unavailable`, and any failure after the deletes rolls the transaction back: either way
+  some files may be gone while the run, its key and its rows are unchanged, and running the purge again finishes it (a
+  missing object is not an error). An upload that finishes after the purge is refused under the run's lock (the run is not
+  open), and its stored file, which no batch names, goes with the daily cleanup's orphans.
+- **The certificate of deletion** (`import_deletion_certificates`, append-only, chapter 6 section 6.5) is stored with the
+  purge in its transaction: the business, the run, when, why, the operator and the witness (none for the schedule), each file
+  with its name, size, SHA-256 and deletion time and its staged row count, the counts of rows cleared, issue values deleted
+  and resolutions hashed, the pre-import dump's name and hash and whether the operator confirmed its deletion, and what is
+  retained, as JSON and as the plain text the command prints, with the text's SHA-256. The scheduled purge cannot reach the
+  host, so its certificate says the dump's deletion is not confirmed; the operator's later `purge-import` with the dump
+  issues the next version, signed by them and the witness, and changes nothing else. The operator sends the text to the
+  customer (runbook section 6.2); a download from the screens comes with #141.
+- **Audit and logs.** `core.import_run.purged` (counts, the reason, whether the dump was confirmed and the certificate's
+  hash; actor `platform` with the operator, or `system`), `core.import_run.deletion_certificate_reissued` and
+  `core.import_run.purge_warned`; logs carry run ids, counts and classes of failure only.
+- **Tests.** `ImportPurgeIT` scans every text, JSON and text array column of every table that refers to the run (found from
+  the foreign keys, so a table added later is scanned too) and the object store, before and after; `ImportReconciliationIT`
+  does the same after the real commit, reconciliation and sign-off; `ImportRetentionIT` fixes the business clock for both
+  deadlines and the warning; `ImportPurgeIT` also proves the guards let nothing else through and that another run and
+  another business are untouched.

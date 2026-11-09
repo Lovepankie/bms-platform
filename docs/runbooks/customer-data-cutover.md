@@ -184,13 +184,49 @@ Record every decision, its time and who made it in the cutover record.
 ### 6.2 Source deletion (stage 9), within 30 days of sign-off
 
 - [ ] Plaintext export deleted from the host: `rm -r /opt/bms/import/<slug>`.
-- [ ] Pre-import dump deleted: `rm /opt/bms/backups/pre-import-<slug>.*`.
-- [ ] Quarantined files, per-run key and staging personal values purged (framework: run state
-      `purged`).
+- [ ] Note the pre-import dump's file name and SHA-256 recorded on the run (cutover record header),
+      then delete it: `rm /opt/bms/backups/pre-import-<slug>.*`.
+- [ ] Quarantined files, per-run key and staging personal values purged, with a second platform
+      operator as witness (issue #139; SDD chapter 13 section 13.14.1 13/16). On the host, from
+      `/opt/bms`, in a short-lived API container as `import-retail` runs (its runbook, section 3);
+      it starts no web server and no scheduler:
+
+      ```bash
+      cd /opt/bms
+      set -o pipefail   # so the exit status is purge-import's, not tee's
+      docker compose --project-name bms -f compose.yml run --rm --no-deps \
+        api purge-import --tenant <business id> --run <run id> \
+        --operator <your sign-in email> --witness <the witness's sign-in email> \
+        --dump-file <dump file name as recorded> --dump-sha256 <its SHA-256> \
+        | tee ~/certificate-of-deletion-<slug>.txt
+      ```
+
+      The certificate holds no value of a row, but it lists the files by the names the customer gave
+      them, as the run does: if a file name holds a person's name, rename the copy before upload
+      (stage 3) next time, and keep the certificate with the cutover record, not on the host, once
+      sent. Exit 3 with `storage_unavailable` or `purge-import failed` means some files may already be
+      deleted and nothing else changed: run the same command again until it prints the certificate.
+
+      Only a `signed_off` run is purged this way; a run without a dump takes no `--dump-*`. Exit 0
+      prints the certificate of deletion and its `sha256`. Exit 3 with `run_not_signed_off`,
+      `pre_import_dump_differs`, `pre_import_dump_confirmation_required`, `witness_is_operator` or
+      `platform_operator_unknown` is a refusal before anything is deleted: fix the command. Exit 3
+      with `storage_unavailable`, `run_changed`, `run_committing` or `purge-import failed` comes after
+      the files are being deleted: some files may already be gone while the run, its key and its
+      rows are unchanged, so run the same command again until it prints the certificate. Running it
+      after a purge prints the same certificate.
 - [ ] Any copy on the operator's own device deleted, and the channel's copy removed.
-- [ ] Certificate of deletion issued (spec section 6.4): files with sizes and SHA-256, staging row
-      counts, the dump's name and hash, time, operator and witness, what is retained. Sent to the
-      customer.
+- [ ] Certificate of deletion (spec section 6.4): the printed text, with files, sizes and SHA-256,
+      staging row counts, the dump's name and hash, time, operator and witness, what is retained.
+      Stored on the run; saved with the cutover record and sent to the customer.
+- [ ] If you do not purge within 30 days of the sign-off, the daily `core.imports.retention` does,
+      on day 29, whether the business is active or suspended. A warning reaches the operators'
+      Telegram chat a week before; if it never went, the purge still happens and a "purged without
+      warning" notice reaches the chat and the Owner's email. Its certificate says the dump
+      was not confirmed: delete the dump, then run `purge-import` as above with the dump, which
+      issues the certificate's next version with your confirmation and the witness. A run never
+      signed off is purged 90 days after its last activity, with the same warning; working on it
+      again starts that clock again.
 
 ### 6.3 Hypercare (stage 10), two weeks
 

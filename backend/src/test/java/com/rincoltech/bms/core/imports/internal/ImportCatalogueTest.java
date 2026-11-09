@@ -96,6 +96,9 @@ class ImportCatalogueTest {
             Map.entry(
                     "SOURCE_REF_COLUMN_UNKNOWN",
                     "internal/MappingValidatorTest.java#theInvalidFixtureHasEachProblemTheSchemaCannotSay"),
+            Map.entry(
+                    "SOURCE_REF_COLUMN_PERSONAL",
+                    "internal/MappingValidatorTest.java#aReferenceColumnThatFeedsAPersonalFieldIsRefused"),
             Map.entry("ZONE_UNKNOWN", "internal/MappingValidatorTest.java#anUnknownZoneAndAnUnknownSourceAreReported"),
             Map.entry(
                     "SOURCE_UNKNOWN", "internal/MappingValidatorTest.java#anUnknownZoneAndAnUnknownSourceAreReported"),

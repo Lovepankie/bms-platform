@@ -169,6 +169,17 @@ final class MappingValidator {
                 && "column".equals(ref.get("rule"))
                 && !kept.contains(Parsing.key((String) ref.get("column")))) {
             out.add(problem("SOURCE_REF_COLUMN_UNKNOWN", key, (String) ref.get("column"), null, null, Map.of()));
+        } else if (source.get("source_ref") instanceof Map<?, ?> ref && "column".equals(ref.get("rule"))) {
+            // The reference is kept in clear in import_refs after the run's purge, so it must be a business code, never
+            // a name, a phone or an ID number (#139, review of #886, SF1).
+            String column = (String) ref.get("column");
+            columns(source).forEach((c, target) -> {
+                if (Parsing.key(c).equals(Parsing.key(column))
+                        && target.get("field") instanceof String field
+                        && set.fields().stream().anyMatch(f -> f.name().equals(field) && f.isPersonal())) {
+                    out.add(problem("SOURCE_REF_COLUMN_PERSONAL", key, column, field, null, Map.of()));
+                }
+            });
         }
     }
 

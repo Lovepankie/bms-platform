@@ -1276,6 +1276,18 @@ public class RlsIsolationIT {
                         VALUES (?, ?, ?, 'bms-staging-20261001T011500Z.dump.enc', 'test-build', 'committed',
                                 '{"commit_ms": 1}')
                         """).params(UUID.randomUUID(), t.tenantId(), committedRun).update();
+        // The purge and its certificate of deletion (migration V147, #139): the same run purged by the schedule, with
+        // its certificate, which holds counts and no value. Purged only by the purge (the trigger
+        // import_runs_purged_by_purge of V147): the factory opts in as a migration does.
+        owner.sql("DO $$ BEGIN PERFORM set_config('bms.allow_mutation', 'on', true); UPDATE import_runs SET status ="
+                        + " 'purged', purged_at = now() WHERE id = '" + committedRun + "'; END $$")
+                .update();
+        owner.sql("""
+                        INSERT INTO import_deletion_certificates (id, tenant_id, run_id, version, reason, dump_confirmed,
+                                                                  body, document, sha256)
+                        VALUES (?, ?, ?, 1, 'signed_off_30_days', false, '{"staged_rows": 0}',
+                                'BMS certificate of deletion, version 1', repeat('c', 64))
+                        """).params(UUID.randomUUID(), t.tenantId(), committedRun).update();
     }
 
     /**
@@ -2063,7 +2075,9 @@ public class RlsIsolationIT {
                 "import_reconciliations",
                 "import_signoffs",
                 // The rehearsals of a run (#138).
-                "import_rehearsals")) {
+                "import_rehearsals",
+                // The certificates of deletion of purged runs (#139).
+                "import_deletion_certificates")) {
             assertThatThrownBy(() -> asApp(
                             a.tenantId(),
                             c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
