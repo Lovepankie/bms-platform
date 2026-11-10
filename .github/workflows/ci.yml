@@ -215,9 +215,25 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         # ADR-078, issue #525: three small web builds through deploy.sh's switch and both compose files.
         run: bash deploy/tests/keep-assets-test.sh
+      - name: Compose version of the no-gap test
+        id: compose
+        if: steps.scope.outputs.run == 'true'
+        # Issue #884: the cache key follows the version the script pins, so the two cannot drift apart.
+        run: |
+          version="$(grep -oP '^COMPOSE_VERSION=\K\S+' deploy/tests/no-gap-test.sh)"
+          [ -n "$version" ] || { echo "::error::no COMPOSE_VERSION= line in deploy/tests/no-gap-test.sh"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache the pinned Compose binary
+        if: steps.scope.outputs.run == 'true'
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/compose
+          key: compose-${{ steps.compose.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
       - name: Requests keep getting 200 while a deploy switches
         if: steps.scope.outputs.run == 'true'
         # ADR-083, issue #496: deploy.sh's switch, rollback and a refused release under GET and POST traffic, both compose files.
+        env:
+          COMPOSE_CACHE_DIR: ${{ runner.temp }}/compose
         run: bash deploy/tests/no-gap-test.sh
       - name: Compose files parse
         if: steps.scope.outputs.run == 'true'

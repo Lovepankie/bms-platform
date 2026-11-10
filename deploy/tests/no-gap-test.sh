@@ -7,7 +7,7 @@
 # of the script) against the real compose.yml and compose.pi-staging.yml while a client on the proxy's network sends GET
 # and POST requests every 50 ms and records every status. It also checks that an unchanged proxy is kept running, a
 # changed one is recreated, and that with too little free memory the api restarts in place instead. The staging Pi's
-# file runs under Compose 2.26.1, the version on the Pi (#533), downloaded and checked against its published SHA-256;
+# file runs under Compose 2.26.1, the version on the Pi (#533), downloaded (or cached in CI) and checked against its published SHA-256;
 # the production file runs under the runner's own Compose. A static check first proves both databases accept two API
 # pools at once.
 # Run: bash deploy/tests/no-gap-test.sh
@@ -71,18 +71,31 @@ for file in compose.yml compose.pi-staging.yml; do
     fi
 done
 
-# Compose 2.26.1 for the staging file, as on the Pi.
+# Compose 2.26.1 for the staging file, as on the Pi. CI keeps the binary in COMPOSE_CACHE_DIR with actions/cache, keyed
+# by this version and the runner's arch (issue #884); a kept file is used only while it matches the pinned SHA-256. Any
+# other run downloads it, retrying GitHub's transient errors (its 504s failed CI with no code cause), and checks it.
+COMPOSE_VERSION=2.26.1
 case "$(uname -m)" in
     x86_64) arch=x86_64 sum=2f61856d1b8c9de29ffdaedaa1c6d0a5fc5c79da45068f1f4310feed8d3a3f61 ;;
     aarch64 | arm64) arch=aarch64 sum=c86efb0d6347b72af6690f06fbd30ed17023fe67e23e28647cacb4b3f6bfb451 ;;
-    *) echo "FAIL no pinned Compose 2.26.1 for $(uname -m)"; exit 1 ;;
+    *) echo "FAIL no pinned Compose $COMPOSE_VERSION for $(uname -m)"; exit 1 ;;
 esac
-curl -fsSL -o "$WORK/docker-compose-2.26.1" \
-    "https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-linux-$arch" \
-    || { echo "FAIL could not download Compose 2.26.1"; exit 1; }
-echo "$sum  $WORK/docker-compose-2.26.1" | sha256sum --check --quiet || { echo "FAIL Compose 2.26.1 checksum"; exit 1; }
-chmod +x "$WORK/docker-compose-2.26.1"
-"$WORK/docker-compose-2.26.1" version | grep -q 'v2.26.1' || { echo "FAIL Compose 2.26.1 does not run"; exit 1; }
+compose_dir="${COMPOSE_CACHE_DIR:-$WORK}"
+COMPOSE_BIN="$compose_dir/docker-compose-$COMPOSE_VERSION-$arch"
+mkdir -p "$compose_dir"
+if echo "$sum  $COMPOSE_BIN" | sha256sum --check --quiet > /dev/null 2>&1; then
+    log "Compose $COMPOSE_VERSION from $compose_dir"
+else
+    rm -f "$COMPOSE_BIN"
+    curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 \
+        --max-time 300 -o "$COMPOSE_BIN" \
+        "https://github.com/docker/compose/releases/download/v$COMPOSE_VERSION/docker-compose-linux-$arch" \
+        || { rm -f "$COMPOSE_BIN"; echo "FAIL could not download Compose $COMPOSE_VERSION from GitHub in 6 tries"; exit 1; }
+    echo "$sum  $COMPOSE_BIN" | sha256sum --check --quiet \
+        || { rm -f "$COMPOSE_BIN"; echo "FAIL Compose $COMPOSE_VERSION does not match its pinned SHA-256"; exit 1; }
+fi
+chmod +x "$COMPOSE_BIN"
+"$COMPOSE_BIN" version | grep -q "v$COMPOSE_VERSION" || { echo "FAIL Compose $COMPOSE_VERSION does not run"; exit 1; }
 
 # The api stand-in: the port opens START_DELAY (8) seconds after start, as the JVM's does, and /readyz answers 200 from
 # then on. CRASH=1 is a release that never starts. Caddy closes its port the moment a graceful stop begins, as
@@ -241,8 +254,8 @@ ids() { "${COMPOSE[@]}" ps --all --quiet "$1" | sort | tr '\n' ' '; }
 for file in compose.yml compose.pi-staging.yml; do
     project="$ID-$(project_of "$file")"
     if [[ "$file" == compose.pi-staging.yml ]]; then
-        COMPOSE=("$WORK/docker-compose-2.26.1" --project-name "$project" --file "$REPO/deploy/$file" --env-file "$WORK/env")
-        log "$file under Compose $("$WORK/docker-compose-2.26.1" version --short)"
+        COMPOSE=("$COMPOSE_BIN" --project-name "$project" --file "$REPO/deploy/$file" --env-file "$WORK/env")
+        log "$file under Compose $("$COMPOSE_BIN" version --short)"
     else
         COMPOSE=(docker compose --project-name "$project" --file "$REPO/deploy/$file" --env-file "$WORK/env")
         log "$file under Compose $(docker compose version --short)"
