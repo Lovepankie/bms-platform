@@ -96,6 +96,25 @@ check "the migrate container is capped the same way" \
     grep -Eq '^run --rm --name bms-rehearsal-migrate-[0-9]+ --cgroup-parent bms\.slice --memory 448m --memory-swap 448m --cpus 1\.0 ' "$FAKE/calls.log"
 check "the network is internal: no route out of it, and the live database is not on it" \
     grep -Eq '^network create --internal bms-rehearsal-net-[0-9]+$' "$FAKE/calls.log"
+# Review of #890, Lead on point 3: the provider hosts the startup guards pin are kept, so this network is what keeps the
+# API container from them. isolated <calls log>: the network is created --internal; the throwaway database, the migrate
+# and the API containers each run with exactly one --network, that one; nothing is connected to another network later.
+isolated() {
+    local net line
+    net="$(sed -nE 's/^network create --internal (bms-rehearsal-net-[0-9]+)$/\1/p' "$1")"
+    [[ -n "$net" ]] && grep -Eq '^run .*--name bms-rehearsal-api-[0-9]+ ' "$1" || return 1
+    while IFS= read -r line; do
+        [[ "$(grep -o -- '--network [^ ]*' <<< "$line")" == "--network $net" ]] || return 1
+    done < <(grep -E '^run .*--name bms-rehearsal-(db|migrate|api)-[0-9]+ ' "$1")
+    ! grep -q '^network connect' "$1"
+}
+check "the database, migrate and API containers join the internal rehearsal network only" isolated "$FAKE/calls.log"
+# The check fails the other way: each way of giving the API a route out is caught.
+sed 's/^network create --internal /network create /' "$FAKE/calls.log" > "$WORK/no-internal.log"
+sed -E 's/^(run .*--name bms-rehearsal-api-[0-9]+ .*--network [^ ]+)/\1 --network bridge/' "$FAKE/calls.log" > "$WORK/two-networks.log"
+{ cat "$FAKE/calls.log"; echo "network connect bridge bms-rehearsal-api-4242"; } > "$WORK/connected.log"
+check "... and it fails without --internal, with a second --network on the API, or with a network connect" \
+    eval '! isolated "$WORK/no-internal.log" && ! isolated "$WORK/two-networks.log" && ! isolated "$WORK/connected.log"'
 check "the API runs the live API's image" grep -q 'ghcr.io/fake/bms-platform-api@sha256:fake rehearse-import --tenant' "$FAKE/calls.log"
 check "the API's only database is the throwaway one, its scheduler off, with the one-time token" \
     eval '[[ "$(grep -E "jdbc:|postgres(ql)?://" "$FAKE/api-env.seen")" =~ ^BMS_DB_URL=jdbc:postgresql://bms-rehearsal-db-[0-9]+:5432/bms$ ]] \
@@ -168,6 +187,14 @@ check "a failed migration exits 1, commits nothing and removes everything" \
 FAKE_API_EXIT=1 rehearse commit-fails
 check "a commit that fails is stored on the run as such, exits 1 and removes everything" \
     eval '[[ "$STATUS" == 1 ]] && [[ -s "$FAKE/live-writes" ]] && all_removed'
+FAKE_API_EXIT=1 FAKE_NO_OUTCOME=1 rehearse api-never-starts
+check "an API container that exits 1 without an outcome (#889) says nothing is stored, exits 1 and removes everything" \
+    eval '[[ "$STATUS" == 1 ]] && said "without recording an outcome" && ! said "is stored on the live run next" \
+        && no_live_write && all_removed'
+FAKE_API_EXIT=1 FAKE_NO_OUTCOME=fail rehearse outcome-unknown
+check "... and when the throwaway database does not answer, it says so (not 'without recording an outcome'), exits 1" \
+    eval '[[ "$STATUS" == 1 ]] && said "did not say whether it recorded an outcome" && ! said "without recording an outcome" \
+        && no_live_write && all_removed'
 FAKE_API_EXIT=3 rehearse command-refuses
 check "a command that refuses stores nothing, exits 3 (refused) and removes everything" \
     eval '[[ "$STATUS" == 3 ]] && no_live_write && all_removed'

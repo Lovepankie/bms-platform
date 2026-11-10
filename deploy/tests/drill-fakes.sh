@@ -13,6 +13,8 @@
 #   FAKE_SAME_ID=1          docker inspect gives the throwaway the live container's id;
 #   FAKE_RUN_ROW=<t|s|f|o>  the live run's tenant, status, fabricated flag and origin ("" for no such run);
 #   FAKE_API_EXIT=<n>       the rehearsal API container's exit status;  FAKE_MIGRATE_FAIL=1  migrate fails;
+#   FAKE_NO_OUTCOME=1       the throwaway database holds no rehearsal row (the API container never started); =fail: it
+#                           does not answer the count;
 #   FAKE_ENV_DB_URL=<url>   an extra SPRING_DATASOURCE_URL in the live API's environment;
 #   FAKE_LIVE_READ_FAIL=1   the live read of the run's rows dies part way; FAKE_COUNT_MISMATCH=1  the copy lost rows;
 #   FAKE_API_SIGNAL=<sig>   the commit sends the script that signal; FAKE_API_HANG=<s>  and then runs on for s seconds;
@@ -281,7 +283,9 @@ case "$1" in
                 # The read-back after a stop: the live database may not answer.
                 [[ -n "${FAKE_LIVE_SILENT:-}" && "$container" == "$live_db" ]] && exit 1
                 echo 1 ;;
-            *"count(*) FROM import_rehearsals"*) echo 1 ;;
+            *"count(*) FROM import_rehearsals"*)
+                [[ "${FAKE_NO_OUTCOME:-}" == fail ]] && exit 1
+                [[ -n "${FAKE_NO_OUTCOME:-}" ]] && echo 0 || echo 1 ;;
             *"TO STDOUT"*) echo "row of ${container}" ;;
             *) echo "stub docker: unexpected exec $container $sql" >&2; exit 2 ;;
         esac ;;

@@ -177,8 +177,14 @@ cron: those run the script with no argument, which is the weekly drill above, un
    224 MB heap) with the live API's image and settings, the database switched to the throwaway one, the scheduler and
    the clean-ups off, no import key, every key of an outside service (object storage, mail, SMS, payments, push, AI,
    chat) replaced by a placeholder (the data and signing keys stay: the application needs them to start), on the
-   internal network only. It moves the run back to review there, takes the dry run again on
-   the restored state and this build, makes the run ready and commits it with the real commit.
+   internal network only. A placeholder has the shape its setting is checked for at start, and its address is on
+   `.invalid`, which no resolver answers (the storage endpoint is `http://rehearsal-storage.invalid`, issue #889); a
+   value empty on the live API stays empty, so a service off there stays off; push is off. The Resend and AI URLs are
+   always set to `.invalid`, since empty means the provider's real host. Base URLs the startup guards hold to the
+   provider's own host (SMS, payments, Ask BMS) are kept, with placeholder keys, and rely on the internal network,
+   which `rehearse-import-test.sh` checks. CI starts the application with exactly these settings
+   (`RehearsalSettingsIT`). It moves the run back to review there, takes the dry run again on the restored state and
+   this build, makes the run ready and commits it with the real commit.
 7. Stores the rehearsal on the live run: one `import_rehearsals` row, inserted as `bms_app` under the business's
    row-level security. It is the only write the rehearsal makes on the live database.
 8. Removes the containers, the network, the volume and the temp dir on success, on failure, on Ctrl-C (INT) and on
@@ -187,7 +193,9 @@ cron: those run the script with no argument, which is the weekly drill above, un
    loss) leaves them behind: see below.
 
 Exit status: 0 rehearsed and stored; 1 failed (a commit that ran and failed or halted is stored with its failure's code;
-anything earlier stores nothing); 2 usage; 3 refused (the run, the target or the room). It writes none of the drill's
+anything earlier stores nothing, and so does an API container that exits 1 without starting: the script then says
+"without recording an outcome", or "did not say whether it recorded an outcome" when the throwaway database does not
+answer); 2 usage; 3 refused (the run, the target or the room). It writes none of the drill's
 state files, so `monitor.sh` never reads a rehearsal as a drill. The output (the report, codes, counts and amounts) has
 no personal value; keep it with the cutover notes.
 

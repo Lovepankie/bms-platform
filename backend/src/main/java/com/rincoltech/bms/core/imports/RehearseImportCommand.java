@@ -99,16 +99,21 @@ public final class RehearseImportCommand {
             System.err.println("BMS_REHEARSAL_TOKEN is required: the rehearsal runs only from deploy/restore-drill.sh");
             return 2;
         }
+        try (ConfigurableApplicationContext context = application(application).run()) {
+            TenantJobs tenants = context.getBean(TenantJobs.class);
+            return run(
+                    context.getBean(ImportRehearsals.class), tenants::callAs, options, token, System.out, System.err);
+        }
+    }
+
+    /** The application as the command starts it: no web server, no job scheduler (RehearsalSettingsIT starts the same). */
+    static SpringApplication application(Class<?> application) {
         SpringApplication app = new SpringApplication(application);
         app.setWebApplicationType(WebApplicationType.NONE);
         app.setDefaultProperties(Map.of(
                 "db-scheduler.enabled", "false",
                 "logging.level.root", "WARN"));
-        try (ConfigurableApplicationContext context = app.run()) {
-            TenantJobs tenants = context.getBean(TenantJobs.class);
-            return run(
-                    context.getBean(ImportRehearsals.class), tenants::callAs, options, token, System.out, System.err);
-        }
+        return app;
     }
 
     /** {@code asTenant} binds the business as a one-off command does ({@link TenantJobs#callAs}), outside a transaction. */
