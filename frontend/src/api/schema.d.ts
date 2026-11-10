@@ -726,6 +726,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/defects/{defect_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a defect with its fix's reference, once; audited */
+        post: operations["closeImportDefect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/issues/{issue_id}/ask-customer": {
         parameters: {
             query?: never;
@@ -760,6 +777,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/runs/{run_id}/defects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The defects logged against an import run, oldest first */
+        get: operations["listImportDefects"];
+        put?: never;
+        /** Log a defect found after the cutover against an imported run, with the code it should have had; audited */
+        post: operations["logImportDefect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/runs/{run_id}/issues": {
         parameters: {
             query?: never;
@@ -788,6 +823,23 @@ export interface paths {
         put?: never;
         /** Resolve every open issue of one code in the run, or in one of its files, the same way (FR-IMP-05) */
         post: operations["bulkResolveImportIssues"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The metrics of an import run, computed from its stored data (spec section 8); the same after the run is purged */
+        get: operations["getImportRunMetrics"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3711,6 +3763,40 @@ export interface paths {
         put?: never;
         /** Email the sign-in page of every business where this address is an active staff user; the answer never says whether any matched (issue #383) */
         post: operations["findStaffSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The import runs of every business with their metrics, newest first; since (a moment) and limit (1 to 500, default 100) */
+        get: operations["platformImportRunsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/report.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same as CSV, one row per run, at most 500, each business by its slug only; audited */
+        get: operations["platformExportImportRunsReport"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10400,6 +10486,31 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
+        /** @description Rows by outcome of one batch; the commit's counts null until committed */
+        ImportBatchRows: {
+            /**
+             * Format: int64
+             * @description Rows left out in the review
+             */
+            excluded?: number;
+            /** Format: int64 */
+            existing?: number;
+            mapping_source?: string;
+            /** Format: int64 */
+            read?: number;
+            /** Format: int64 */
+            rows?: number;
+            /** Format: int32 */
+            seq?: number;
+            /** Format: int64 */
+            skipped?: number;
+            status?: string;
+            template_key?: string;
+            /** Format: int32 */
+            template_version?: number;
+            /** Format: int64 */
+            written?: number;
+        };
         ImportBulkResolveOutcome: {
             /** Format: uuid */
             bulk_id?: string;
@@ -10419,6 +10530,71 @@ export interface components {
             /** @description edit_value, exclude_row, accept_suggestion, override or ask_customer */
             resolution: string;
             value?: string;
+        };
+        /** @description A defect found after the cutover, logged against the run */
+        ImportDefect: {
+            /** Format: date-time */
+            closed_at?: string;
+            /** Format: uuid */
+            closed_by?: string;
+            /** @description What went wrong, naming nobody; its hash once the run is purged (open or closed) */
+            description?: string;
+            /** @description The catalogue code the row should have had; null when a new code is needed */
+            expected_code?: string;
+            /** @description The fix: #123, a commit hash or a GitHub link; null while open */
+            fix_ref?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            logged_at?: string;
+            /** Format: uuid */
+            logged_by?: string;
+            /** @description True when no catalogue code fits; the code proposed is in the description */
+            new_code_needed?: boolean;
+            /** Format: uuid */
+            run_id?: string;
+            /** @description open or closed */
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        ImportDefectCloseRequest: {
+            /** @description The fix: an issue or pull request number (#123), a commit hash or a GitHub link */
+            fix_ref: string;
+            /**
+             * Format: int32
+             * @description The defect's version as read
+             */
+            version: number;
+        };
+        /** @description By catalogue code */
+        ImportDefectCodeCount: {
+            code?: string;
+            /** Format: int64 */
+            count?: number;
+        };
+        ImportDefectCounts: {
+            /** Format: int64 */
+            closed?: number;
+            /** @description By catalogue code */
+            codes?: components["schemas"]["ImportDefectCodeCount"][];
+            /**
+             * Format: int64
+             * @description Defects that need a code the catalogue does not have yet
+             */
+            new_codes_needed?: number;
+            /** Format: int64 */
+            open?: number;
+        };
+        ImportDefectList: {
+            items?: components["schemas"]["ImportDefect"][];
+        };
+        /** @description A defect found after the cutover */
+        ImportDefectRequest: {
+            /** @description What went wrong, by file, line, field and code; never a person's name, phone, ID number or email */
+            description: string;
+            /** @description The code of the issue-code catalogue the row should have had; leave it out when a new code is needed and propose that code in the description */
+            expected_code?: string;
         };
         /** @description One issue of the review queue; its message never holds a value of a row */
         ImportIssue: {
@@ -10456,9 +10632,26 @@ export interface components {
              */
             version?: number;
         };
+        ImportIssueCount: {
+            code?: string;
+            /** Format: int64 */
+            open?: number;
+            severity?: string;
+            /** Format: int64 */
+            total?: number;
+        };
         ImportIssuePage: {
             items?: components["schemas"]["ImportIssue"][];
             next_cursor?: string;
+        };
+        /** @description The mapping versions the run's batches were read with */
+        ImportMappingVersion: {
+            name?: string;
+            template_key?: string;
+            /** Format: int32 */
+            template_version?: number;
+            /** Format: int32 */
+            version?: number;
         };
         /** @description One question for the customer, without any value of a row */
         ImportQuestion: {
@@ -10473,6 +10666,17 @@ export interface components {
         };
         ImportQuestionList: {
             items?: components["schemas"]["ImportQuestion"][];
+        };
+        /** @description Questions to the customer and the days they took to answer */
+        ImportQuestions: {
+            /** Format: int64 */
+            answered?: number;
+            /** Format: int64 */
+            asked?: number;
+            max_days?: number;
+            median_days?: number;
+            /** Format: int64 */
+            open?: number;
         };
         /** @description The reconciliation of an imported run (FR-IMP-08) */
         ImportReconciliation: {
@@ -10539,6 +10743,28 @@ export interface components {
             key?: string;
             title?: string;
         };
+        /** @description Per source, each count of the newest committed rehearsal that differs from the cutover */
+        ImportRehearsalDifference: {
+            /** Format: int64 */
+            cutover?: number;
+            /** @description read, written, existing or skipped */
+            measure?: string;
+            /** Format: int64 */
+            rehearsal?: number;
+            source?: string;
+        };
+        ImportRehearsalSummary: {
+            /** Format: date-time */
+            at?: string;
+            matches_dry_run?: boolean;
+            outcome?: string;
+        };
+        ImportResolutionCount: {
+            /** Format: int64 */
+            count?: number;
+            /** @description edit_value, exclude_row, accept_suggestion, link_row, link_member, override, map_value or ask_customer */
+            kind?: string;
+        };
         ImportResolveOutcome: {
             /** @description The issues of the row as they now are */
             issues?: components["schemas"]["ImportIssue"][];
@@ -10578,6 +10804,99 @@ export interface components {
              * @description The issue's version as read
              */
             version: number;
+        };
+        /** @description The metrics of an import run, from its stored data (spec section 8) */
+        ImportRunMetrics: {
+            batches?: components["schemas"]["ImportBatchRows"][];
+            defects?: components["schemas"]["ImportDefectCounts"];
+            fabricated?: boolean;
+            issues?: components["schemas"]["ImportIssueCount"][];
+            /**
+             * Format: int64
+             * @description Versions of those mappings saved while the run was open
+             */
+            mapping_versions_made?: number;
+            /** @description The mapping versions the run's batches were read with */
+            mappings?: components["schemas"]["ImportMappingVersion"][];
+            /** @description framework, import_retail or retail_import_refs */
+            origin?: string;
+            questions?: components["schemas"]["ImportQuestions"];
+            /** @description Per source, each count of the newest committed rehearsal that differs from the cutover */
+            rehearsal_differences?: components["schemas"]["ImportRehearsalDifference"][];
+            /** @description The newest committed rehearsal's timings, by step */
+            rehearsal_timings?: components["schemas"]["ImportRunTiming"][];
+            rehearsals?: components["schemas"]["ImportRehearsalSummary"][];
+            resolutions?: components["schemas"]["ImportResolutionCount"][];
+            /** Format: uuid */
+            run_id?: string;
+            /** @description The ten stages of spec section 2, in order */
+            stages?: components["schemas"]["ImportRunStage"][];
+            stamps?: components["schemas"]["ImportRunStamps"];
+            status?: string;
+            /** @description The time each pipeline step took, as stored where it ended */
+            steps?: components["schemas"]["ImportRunStep"][];
+            templates?: components["schemas"]["ImportTemplateRows"][];
+        };
+        /** @description One stage of spec section 2 */
+        ImportRunStage: {
+            /** Format: date-time */
+            ended_at?: string;
+            /** @description discovery, field_mapping, cleaning_and_review, rehearsal, dry_run, cutover, reconciliation, sign_off, source_deletion or hypercare */
+            key?: string;
+            /** Format: int32 */
+            number?: number;
+            /**
+             * Format: int64
+             * @description Null unless both ends are recorded
+             */
+            seconds?: number;
+            /** Format: date-time */
+            started_at?: string;
+        };
+        /** @description The run's stamps; null for a stage not reached */
+        ImportRunStamps: {
+            /** Format: date-time */
+            cancelled_at?: string;
+            /** Format: date-time */
+            committed_at?: string;
+            /** Format: date-time */
+            committing_at?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            dry_run_at?: string;
+            /** Format: date-time */
+            in_review_at?: string;
+            /** Format: date-time */
+            purged_at?: string;
+            /** Format: date-time */
+            ready_at?: string;
+            /** Format: date-time */
+            reconciled_at?: string;
+            /** Format: date-time */
+            signed_off_at?: string;
+            /** Format: date-time */
+            uploaded_at?: string;
+            /** Format: date-time */
+            validated_at?: string;
+        };
+        /** @description One pipeline step */
+        ImportRunStep: {
+            /**
+             * Format: int32
+             * @description The batch, or null for a step of the whole run
+             */
+            batch_seq?: number;
+            /** Format: int64 */
+            millis?: number;
+            /** @description upload, parse, validate, dry_run or commit */
+            step?: string;
+        };
+        /** @description The newest committed rehearsal's timings, by step */
+        ImportRunTiming: {
+            /** Format: int64 */
+            millis?: number;
+            step?: string;
         };
         /** @description The sign-off: the typed name and date, the sections ticked */
         ImportSignOff: {
@@ -10635,6 +10954,26 @@ export interface components {
             /** @description Numbers separated by new lines, commas or semicolons; at most 2000 */
             numbers: string;
             scope: string;
+        };
+        /** @description Rows by outcome of a template's batches, not failed or cancelled */
+        ImportTemplateRows: {
+            /** Format: int64 */
+            batches?: number;
+            /** Format: int64 */
+            excluded?: number;
+            /** Format: int64 */
+            existing?: number;
+            /** Format: int64 */
+            read?: number;
+            /** Format: int64 */
+            rows?: number;
+            /** Format: int64 */
+            skipped?: number;
+            template_key?: string;
+            /** Format: int32 */
+            template_version?: number;
+            /** Format: int64 */
+            written?: number;
         };
         InsightsAgeingBucket: {
             /** Format: int64 */
@@ -12822,6 +13161,14 @@ export interface components {
             /** @description A reply the sender sees; null keeps the one there, an empty string clears it */
             reply_note?: string;
             status: string;
+        };
+        /** @description One run on the platform report; the business by its slug only */
+        PlatformImportRun: {
+            metrics?: components["schemas"]["ImportRunMetrics"];
+            tenant_slug?: string;
+        };
+        PlatformImportRunList: {
+            items?: components["schemas"]["PlatformImportRun"][];
         };
         PlatformMe: {
             email?: string;
@@ -23632,6 +23979,32 @@ export interface operations {
             };
         };
     };
+    closeImportDefect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                defect_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportDefectCloseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDefect"];
+                };
+            };
+        };
+    };
     askCustomerAboutImportIssue: {
         parameters: {
             query?: never;
@@ -23680,6 +24053,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportResolveOutcome"];
+                };
+            };
+        };
+    };
+    listImportDefects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDefectList"];
+                };
+            };
+        };
+    };
+    logImportDefect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportDefectRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDefect"];
                 };
             };
         };
@@ -23735,6 +24156,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportBulkResolveOutcome"];
+                };
+            };
+        };
+    };
+    getImportRunMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRunMetrics"];
                 };
             };
         };
@@ -28772,6 +29215,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FindSignInAccepted"];
+                };
+            };
+        };
+    };
+    platformImportRunsReport: {
+        parameters: {
+            query?: {
+                since?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunList"];
+                };
+            };
+        };
+    };
+    platformExportImportRunsReport: {
+        parameters: {
+            query?: {
+                since?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
         };

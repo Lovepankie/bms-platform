@@ -857,6 +857,7 @@ never by a tenant role:
 |---|---|
 | `platform.tenants.read` | List plans and tenants, read one tenant |
 | `platform.tenants.read` (also) | The applications queue and one application with its possible repeats; the outbox counts and failed rows (ADR-024) |
+| `platform.tenants.read` (also) | The platform report of every business's import runs and its CSV (`/platform/imports/report`, issue #140): each business by its slug, never its name; the CSV recorded in the platform audit log |
 | `platform.tenants.manage` | Create tenants, switch modules, move subscriptions, suspend and resume, reset a tenant admin's second factor |
 | `platform.tenants.manage` (also) | Verify, Needs info, Reject and Activate an application; send a failed outbox row again (ADR-024); clear the suppression of an email address after a bounce or complaint (`POST /platform/outbox/unsuppress`, ADR-117 decision 9) |
 
@@ -1208,6 +1209,18 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
   its own path (`bms_erasing`). Each purge stores a certificate of deletion with the files, sizes, SHA-256, row counts, the
   pre-import dump as the operator confirmed it, the operator and the witness; it names no customer's person. Tests scan
   every text and JSON column of every table of the run and the object store for the fixture's personal values.
+- Customer data onboarding, metrics and the defect log (issue #140, migration V148, chapter 13 section 13.14.1 14/16).
+  The metrics hold codes, counts and times only and are read from columns the purge keeps. A defect's description is an
+  operator's free text, so it is kept out of personal data twice: the service refuses one that names a personal value of
+  the run's staged rows, or in which the log redaction finds an email address, an ID number or a phone number, or that
+  holds seven digits in a row (422 `description_names_personal_data`); and it is one of the purge's free-text columns,
+  hashed with a salt kept nowhere when the run is purged (trigger `import_defects_purged`), open or closed, or, for a defect
+  logged against a run already purged, as it is stored, and written "Removed" by the removal of a closed business. Its audit rows hold the code and the
+  fix's reference, never the description. The code is only ever one of the platform's issue-code catalogue, refused
+  otherwise (a code still to be made is proposed in the description), so it holds nothing a business typed (Lead on
+  #888). The platform report reads every business's runs through one definer function
+  that refuses a call bound to a business (`platform_import_runs_report`), on the platform host only, and names each
+  business by its slug, never its name (`ImportMetricsIT` sends no token and a tenant's staff token to both routes).
 - Staff free text on a loan (purpose text, return, rejection and cancellation notes, visit notes)
   can hold personal data about the member or third parties. It is staff-only: the member area
   never returns it.

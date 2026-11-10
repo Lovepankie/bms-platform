@@ -136,6 +136,8 @@ class UploadService implements ImportUploads {
     }
 
     private Batch store(UUID runId, Upload upload, InputStream content) {
+        // The upload's time is stored on its batch for the run's metrics (issue #140).
+        long started = System.nanoTime();
         requireNoTransaction();
         UUID tenantId = TenantContext.require();
         if (upload.options() != null && upload.options().mappingId() != null) {
@@ -173,7 +175,8 @@ class UploadService implements ImportUploads {
             objectKey = quarantine.put(runId, batchId, temp);
             String key = objectKey;
             try {
-                tx.executeWithoutResult(s -> recordBatch(runId, batchId, fileName, type, written, key, upload));
+                tx.executeWithoutResult(s -> recordBatch(
+                        runId, batchId, fileName, type, written, key, upload, MetricsService.millisSince(started)));
             } catch (DuplicateKeyException e) {
                 throw alreadyUploadedError();
             }
@@ -211,7 +214,8 @@ class UploadService implements ImportUploads {
             FileType type,
             QuarantineWriter.Written written,
             String objectKey,
-            Upload upload) {
+            Upload upload,
+            int uploadMs) {
         RunRow run = run(runId, true);
         requireOpen(run.status());
         int seq = jdbc.sql("SELECT coalesce(max(seq), 0) + 1 FROM import_batches WHERE run_id = ?")
@@ -220,8 +224,9 @@ class UploadService implements ImportUploads {
                 .single();
         jdbc.sql("""
                         INSERT INTO import_batches (id, tenant_id, run_id, seq, status, source_filename, source_sha256,
-                                                    size_bytes, file_type, object_key, encoding, uploaded_by, uploaded_at)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, 'uploaded', ?, ?, ?, ?, ?, ?, ?, now())
+                                                    size_bytes, file_type, object_key, encoding, uploaded_by, uploaded_at,
+                                                    upload_ms)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, 'uploaded', ?, ?, ?, ?, ?, ?, ?, now(), ?)
                         """)
                 .params(
                         batchId,
@@ -233,7 +238,8 @@ class UploadService implements ImportUploads {
                         type.key,
                         objectKey,
                         type == FileType.XLSX ? null : written.utf8() ? "utf-8" : "windows-1252",
-                        upload.uploadedBy())
+                        upload.uploadedBy(),
+                        uploadMs)
                 .update();
         if (RunStates.DRAFT.equals(run.status())) {
             jdbc.sql("""
@@ -354,6 +360,7 @@ class UploadService implements ImportUploads {
 
     private SourceParser.Parsed readInto(
             Held held, Path temp, byte[] dataKey, Parsing.Limits limits, ParseOptions opts) {
+        long started = System.nanoTime();
         if (!stillOpen(held)) {
             throw invalidTransition("The batch or its import changed while its file was read; nothing was written.");
         }
@@ -392,7 +399,7 @@ class UploadService implements ImportUploads {
         jdbc.sql("""
                         UPDATE import_batches SET status = 'parsed', sheet_name = ?, header_row_no = ?, row_count = ?,
                                column_count = ?, parse_warnings = ?, parsed_at = now(), source_headers = ?,
-                               mapping_id = ?, mapping_source = ?, template_key = ?, template_version = ?
+                               mapping_id = ?, mapping_source = ?, template_key = ?, template_version = ?, parse_ms = ?
                          WHERE id = ?
                         """)
                 .params(
@@ -406,6 +413,7 @@ class UploadService implements ImportUploads {
                         opts.mappingSource(),
                         template == null ? null : template.key(),
                         template == null ? null : template.version(),
+                        MetricsService.millisSince(started),
                         held.id())
                 .update();
         Map<String, Object> after = new LinkedHashMap<>();

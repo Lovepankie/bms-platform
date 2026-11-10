@@ -8,6 +8,7 @@ import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.core.imports.CommitApproval;
 import com.rincoltech.bms.core.imports.CommitReport;
 import com.rincoltech.bms.core.imports.ImportMappings;
+import com.rincoltech.bms.core.imports.ImportMetrics;
 import com.rincoltech.bms.core.imports.ImportReconciliation;
 import com.rincoltech.bms.core.imports.ImportReview;
 import com.rincoltech.bms.core.imports.ImportRuns;
@@ -21,6 +22,7 @@ import com.rincoltech.bms.core.imports.ImportUploads;
 import com.rincoltech.bms.core.imports.ImportUploads.Upload;
 import com.rincoltech.bms.core.imports.ImportValidation;
 import com.rincoltech.bms.core.imports.ImportValidation.Issue;
+import com.rincoltech.bms.core.imports.internal.MetricsCheck;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -131,6 +133,9 @@ class RetailV1TemplateIT extends IntegrationTest {
     ImportTemplates templates;
 
     @Autowired
+    ImportMetrics metrics;
+
+    @Autowired
     BusinessClock clock;
 
     @Autowired
@@ -182,6 +187,8 @@ class RetailV1TemplateIT extends IntegrationTest {
         assertThat(real.sameAs(predicted))
                 .as("real:%n%s%ndry:%n%s", real.render(), predicted.render())
                 .isTrue();
+        // The run's metrics (issue #140), from its stored data: against its tables and the commit's report.
+        MetricsCheck.assertFromStoredData(as(t, () -> metrics.metrics(run)), run, real);
         // The opening stock journals are the framework's, of retail's own ledger type, and registered.
         assertThat(owner("""
                         SELECT count(*) FROM journal_entries e WHERE e.tenant_id = ?

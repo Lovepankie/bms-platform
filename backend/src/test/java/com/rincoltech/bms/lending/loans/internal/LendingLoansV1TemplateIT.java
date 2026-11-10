@@ -9,6 +9,7 @@ import com.rincoltech.bms.core.imports.CommitApproval;
 import com.rincoltech.bms.core.imports.CommitReport;
 import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportMappings;
+import com.rincoltech.bms.core.imports.ImportMetrics;
 import com.rincoltech.bms.core.imports.ImportPreview;
 import com.rincoltech.bms.core.imports.ImportReconciliation;
 import com.rincoltech.bms.core.imports.ImportReview;
@@ -21,6 +22,7 @@ import com.rincoltech.bms.core.imports.ImportValidation;
 import com.rincoltech.bms.core.imports.ImportValidation.Issue;
 import com.rincoltech.bms.core.imports.internal.CommitTestSeams;
 import com.rincoltech.bms.core.imports.internal.EngineRun;
+import com.rincoltech.bms.core.imports.internal.MetricsCheck;
 import com.rincoltech.bms.core.imports.internal.TestFiles;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.TenantContext;
@@ -110,6 +112,9 @@ class LendingLoansV1TemplateIT extends IntegrationTest {
 
     @Autowired
     ImportReconciliation reconciliation;
+
+    @Autowired
+    ImportMetrics metrics;
 
     @Autowired
     CommitTestSeams seams;
@@ -251,6 +256,8 @@ class LendingLoansV1TemplateIT extends IntegrationTest {
         assertThat(real.sameAs(dry.report()))
                 .as("real:%n%s%ndry:%n%s", real.render(), dry.report().render())
                 .isTrue();
+        // The run's metrics (issue #140), from its stored data: against its tables and the commit's report.
+        MetricsCheck.assertFromStoredData(as(t, () -> metrics.metrics(run)), run, real);
 
         // Every record the run wrote is in import_refs, a loan's own rows too; the reconciliation ties; another
         // business has nothing. The tables are those the commit made grow, read from the database, not a list alone.

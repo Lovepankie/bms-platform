@@ -394,6 +394,48 @@ the day confirmed) and per negative stock balance (`policy`). Signable when ever
 branches and products by code, rows by file and line, decisions by option and day. Test: `ImportReconciliationIT` (the
 golden files of `fixture_shop` against hand-computed system values; a broken balance; the decision as a policy item).
 
+### `core.import_run_metrics` (`core.imports.manage`)
+
+The metrics of one import run (spec `docs/specs/customer-data-onboarding.md` section 8, chapter 13 section 13.14.1 14/16;
+built in issue #140, migration `V148`), so each customer teaches something. Like the reconciliation it is not a run of the
+reports pack: `GET /imports/runs/{run_id}/metrics` answers it as JSON for the business of the host (chapter 7 section
+7.11.9). It is computed when asked by the database function `import_run_metrics` from what the run stored, never from logs,
+and only from columns the purge keeps, so a purged run answers the same figures.
+
+Parameters: the run. Sections:
+
+| Section | Figures | Stored data it reads |
+|---|---|---|
+| Stamps and stages | the run's stamps; per stage of spec section 2: number, key, start, end, seconds (discovery is not recorded) | `import_runs` stamps, the first upload, the newest rehearsal before the commit, the first reconciliation, the last defect closed |
+| Pipeline steps | milliseconds per step: upload and parse per batch, the run's validation and dry run, the commit per batch; the newest committed rehearsal's timings | `import_batches.upload_ms`, `parse_ms`, `commit_ms`; `import_runs.validate_ms`, `dry_run_ms`; `import_rehearsals.timings` |
+| Rows by outcome | per batch and per template: rows of the file, rows left out, read, written, existing, skipped | `import_batches.row_count` and `report`, `import_rows.excluded_by` |
+| Issues and resolutions | issues by code and severity (total and open); resolutions by kind | `import_issues`, `import_issue_resolutions.resolution` |
+| Questions to the customer | asked, answered, open, median and longest days to answer | `import_issues.ask_customer`, `status` and `resolution_id`; the times of the resolutions |
+| Mappings | the mapping versions the batches were read with; the versions of those mappings saved while the run was open | `import_batches.mapping_id`, `import_mappings` |
+| Rehearsal against cutover | each rehearsal's time, outcome and match with the dry run; per source, each count of the newest committed rehearsal that differs from the cutover | `import_rehearsals`, `import_batches.report` |
+| Defects | open and closed, by the catalogue code they should have had, and how many need a new code | `import_defects` |
+
+Holds no personal value: codes, counts, times, file sources by their mapping's source name. Tests: the golden runs of
+`retail_v1` (`RetailV1TemplateIT`) and `lending_loans_v1` (`LendingLoansV1TemplateIT`) check every figure against the
+run's tables queried on their own and the commit's report; `ImportPurgeIT` shows the same figures after the purge.
+
+### `platform.import_runs` (platform operators, `platform.tenants.read`)
+
+The import runs of every business with their metrics, newest first, so the platform team sees across customers how often
+mappings change, which codes recur, how long the customers take to answer and how long the cutovers take (issue #140). On
+the platform host only: `GET /platform/imports/report` (JSON, `since` and `limit` up to 500) and
+`GET /platform/imports/report.csv` (chapter 7 section 7.11.3). It reads across businesses through the definer function
+`platform_import_runs_report`, which refuses a call bound to a business, and names each business by its slug, never its
+name, in the JSON and the CSV; the business's own labels (mapping names, batches' mapping sources and rehearsal source
+file names) are left out of the JSON, in that function (`bms_import_platform_view`) and in the application (review of
+#888). Defect codes on it are always codes of the issue-code catalogue (Lead on #888). The JSON is a read like the other
+platform lists and is not audited; the CSV, which leaves the platform host as a file, is. The CSV, one row per run (slug, run, status, origin, fabricated, templates, the created,
+committed, signed off and purged moments, batches, rows, excluded, written, existing, skipped, issues, blocking issues,
+resolutions, questions asked and answered, median days to answer, mapping versions used and made, rehearsals, rehearsal
+differences, defects open and closed, cutover seconds), is recorded in the platform audit log
+(`platform.imports.report_exported`). Test: `ImportMetricsIT` (anonymous calls and a tenant's staff refused, the function
+refused under a business's binding, slugs and no names).
+
 ## 14.7 Compliance reports (`lending.reports.compliance`)
 
 The regulator's return formats for the pilot tenant are an open question

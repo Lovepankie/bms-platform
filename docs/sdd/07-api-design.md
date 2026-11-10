@@ -513,6 +513,13 @@ Feedback from every business (issue #447, ADR-065, FR-FBK-03), served by `core.p
 | PUT | `/platform/feedback/{feedback_id}/linked-issue` | `platform.tenants.manage` | `{linked_issue_number}`: the number of the issue opened for the item (a whole number above zero, else 422), or null to clear it; 404 when there is no such item; audited `platform.feedback.issue_linked` with before and after. Through `platform_feedback_set_linked_issue` (V80) |
 | GET | `/platform/feedback/{feedback_id}/screenshot` | `platform.tenants.read` | The picture (PNG or JPEG), read with the item's business bound (`TenantContext.callAs`); 404 when there is none |
 
+Import runs across businesses (issue #140, chapter 14 section 14.6 `platform.import_runs`):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/platform/imports/report` | `platform.tenants.read` | `?since=` (an ISO 8601 instant: runs opened since) and `limit` (1 to 500, default 100). `{items: [{tenant_slug, metrics}]}` newest first across every business, `metrics` as `GET /imports/runs/{run_id}/metrics` answers it (7.11.9) without the business's own labels (mapping names, mapping sources and rehearsal source names are null). Read through the definer function `platform_import_runs_report` (V148), which refuses a call bound to a business; each business by its slug, never its name |
+| GET | `/platform/imports/report.csv` | `platform.tenants.read` | The same, at most 500 runs, as CSV one row per run with the slug and the run's figures, never a business's name or label; recorded in the platform audit log as `platform.imports.report_exported` with the number of runs |
+
 Module requests and scheduled plan changes (ADR-073, issue #472):
 
 | Method | Path | Permission | Notes |
@@ -840,6 +847,17 @@ exact decimal strings, money in minor units.
 | GET | `/imports/runs/{run_id}/reconciliation.txt` | `core.imports.sign_off` | The same as the plain text whose SHA-256 is `sha256`, with the sign-off once signed (the typed name and date: the signed document), as an attachment |
 | POST | `/imports/runs/{run_id}/reconciliation` | `core.imports.manage` | Makes it again from the source and the books as the next version, audited `core.import_run.reconciled`. 409 `run_not_committed` (also once signed off) |
 | POST | `/imports/runs/{run_id}/sign-off` | `core.imports.sign_off` | `{reconciliation_id, sha256, sections, name, date}`: the reconciliation as read, every section key ticked, the typed name (at most 120 characters) and today's date on the business clock. 200 with the signed reconciliation; the run is `signed_off`; audited `core.import_run.signed_off` with the reconciliation, its version, its SHA-256 and the sections, never the name. 409 `run_not_committed`, `reconciliation_missing`, `reconciliation_changed` (made again since it was read, or the books, measured again in the sign-off's transaction, no longer give the reconciliation read; then that measurement is stored as the next version, and the refusal carries its `reconciliation_id` and `version`), `unitemised_difference`; 422 `sections_not_ticked`, `name_required`, `name_too_long`, `sign_off_date_not_today`; 503 `sign_off_too_big` (measuring again passed its 60-second limit per statement: too big to sign here at once; nothing is signed); 400 for an unknown property |
+
+As built (the metrics and the post-cutover defect log, #140, spec section 8, chapter 13 section 13.14.1 14/16, chapter 14
+section 14.6 `core.import_run_metrics`): every route needs `core.imports.manage` and works on the business of the host only
+(another business's run or defect is 404). No answer holds a value of a row.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/imports/runs/{run_id}/metrics` | `core.imports.manage` | The run's metrics from its stored data, the same after the purge: `{run_id, status, origin, fabricated, stamps, stages: [{number, key, started_at, ended_at, seconds}], steps: [{step, batch_seq, millis}], rehearsal_timings, batches: [{seq, status, template_key, template_version, mapping_source, rows, excluded, read, written, existing, skipped}], templates, issues: [{code, severity, total, open}], resolutions: [{kind, count}], questions: {asked, answered, open, median_days, max_days}, mappings: [{name, version, template_key, template_version}], mapping_versions_made, rehearsals: [{at, outcome, matches_dry_run}], rehearsal_differences: [{source, measure, rehearsal, cutover}], defects: {open, closed, new_codes_needed, codes: [{code, count}]}}` (codes of the catalogue only) |
+| GET | `/imports/runs/{run_id}/defects` | `core.imports.manage` | `{items: [{id, run_id, logged_at, logged_by, description, expected_code, new_code_needed, status, fix_ref, closed_by, closed_at, version}]}`, oldest first; a description is its hash once the run is purged, open or closed, and on a run already purged from the moment it is logged |
+| POST | `/imports/runs/{run_id}/defects` | `core.imports.manage` | `{description, expected_code?}`: a defect found after the cutover; the description 10 to 500 characters naming nobody; the code one of the issue-code catalogue of the run's template, or left out when none fits, which logs the defect with `new_code_needed` true and the code proposed in the description (Lead on #888). 201 with the defect; audited `core.import_run.defect_logged` with the code, never the description. 409 `run_not_imported` (not committed, signed off or purged); 422 `expected_code_unknown` (a code outside the catalogue), `description_names_personal_data`, `validation_failed` |
+| POST | `/imports/defects/{defect_id}/close` | `core.imports.manage` | `{version, fix_ref}`: closes it once with the fix (`#123`, a commit hash or a GitHub link to a pull request, issue or commit). 200 with the defect; audited `core.import_run.defect_closed` with the reference. 409 `version_conflict`, `defect_closed`; 422 `validation_failed` |
 
 ### 7.11.10 Payments
 

@@ -83,6 +83,25 @@ use it); the batch transaction timeout against real volumes (the big file test s
 mappings drifting from the template version a run started with; operators bypassing the app with
 host-side files after self service exists.
 
+## Note (10 November 2026, issue #140): metrics and the defect log
+
+The metrics of spec section 8 are computed when asked from what the run stored, never from logs, by one database function
+(`import_run_metrics`) that the business's route and the platform report share, so the two never disagree. It reads only
+columns the purge keeps, so a run's figures survive its purge. What was not stored before, the time each pipeline step
+took, is now written where the step ends (V148). The platform report reads across businesses through one definer function
+that refuses a call bound to a business and names each business by its slug only.
+
+The defect log is the one new place an operator types free text against a run, so the one rule for typed text of the
+note of 9 November covers it: `import_defects.description` joins the hashed list (hashed when the run is purged, open or
+closed, and stored hashed when logged against a run already purged, so a purged run never holds a defect's words; review of
+#888), and before that the application
+refuses a description that names a personal value of the run's staged rows, an email address, an ID number, a phone number
+or seven digits in a row. The code it should have had (`expected_code`) is only ever a code of the platform's own
+issue-code catalogue, refused otherwise when the defect is logged (Lead on #888): a code no template has yet is not typed
+into it; the defect says `new_code_needed` and its description, screened and hashed, proposes the code. So the code holds
+nothing a business typed, stays readable after the purge and may be shown on the platform report. The fix's reference
+(`fix_ref`) is held by a CHECK to an issue or pull request number, a commit hash or a GitHub link.
+
 ## Note (9 November 2026, issue #139): decision 8 as built
 
 The deletion is a purge of the run, not of its records: the staged rows and issues stay without their values, so every

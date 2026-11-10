@@ -1483,6 +1483,35 @@ expand only:
   naming the row's own run, the row of the bound business, that run purged in this transaction (`purged_at = now()`), and
   only the personal columns changed to what the purge writes.
 
+Added by `V148__import_metrics_and_defects.sql` (issue #140, spec section 8, chapter 13 section 13.14.1 14/16), expand only:
+
+- **The step times** the metrics need, written where each step ends, NULL for what ran before V148: `import_batches.upload_ms`,
+  `parse_ms` and `commit_ms`, and `import_runs.validated_at`, `validate_ms` and `dry_run_ms` (integers at or above 0,
+  milliseconds).
+- **`import_defects`** (RLS forced, `SELECT, INSERT`, and `UPDATE` on `status`, `fix_ref`, `closed_by`, `closed_at` and
+  `version` only, a column grant): the defect log of a run's hypercare. `id`, `tenant_id`, `created_at`, `version`,
+  `run_id` (FK `(tenant_id, run_id)`), `logged_by`, `description varchar(500)` (the operator's words, naming nobody),
+  `expected_code` (a code of the run's issue-code catalogue, checked by the application when logged; NULL when none fits)
+  and `new_code_needed` (true exactly when `expected_code` is NULL, the CHECK `import_defects_code_or_new`; the code
+  proposed then goes in the description; Lead on #888), `status`
+  [`open`, `closed`], `fix_ref varchar(200)` (`#123`, a commit hash or a GitHub link to a pull request, issue or commit, a
+  CHECK), `closed_by`, `closed_at` (the CHECK `import_defects_closed_whole`: closed exactly when all three are set). Plain
+  index `import_defects_by_run (tenant_id, run_id, created_at)`. The trigger `import_defects_kept` (every role): logged open
+  and only against a run `committed`, `signed_off` or `purged`; closed once and never opened again; its run, code, author
+  and time never change; its description changes only to its hash, as the owner, for a purged run's defect, and a defect
+  logged against a run already purged is stored with its description hashed. V102's ways through (a migration's opt-in,
+  `bms_erasing`) are kept.
+- **`import_defects_purged()`** (definer), an `AFTER UPDATE OF status` trigger on `import_runs` when a run becomes `purged`
+  (only inside `import_purge_run`): every description of the run's defects becomes `sha256:` and the SHA-256 over a salt
+  made there and kept nowhere, in the purge's transaction. `imports_erase_personal_data()` now also writes "Removed" over
+  every description of the business.
+- **`import_run_metrics(run)`** (plain, so row security applies; `bms_app` may execute): the run's metrics as one JSON
+  object (chapter 14 section 14.6), or NULL for a run not visible; it reads only columns the V147 purge keeps. With the
+  helpers `bms_import_utc(moment)` and `bms_import_stage(number, key, start, end)`.
+- **`platform_import_runs_report(since, limit)`** (definer; `bms_app` may execute): every business's runs, newest first, at
+  most 500, as `(tenant_slug, run_id, metrics)`; it raises `insufficient_privilege` when `app.tenant_id` is bound and never
+  returns a business's name.
+
 ## 6.6 General ledger (RLS)
 
 ### 6.6.1 Tables

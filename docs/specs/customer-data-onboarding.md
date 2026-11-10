@@ -589,6 +589,17 @@ Recorded on each run and summarised in a platform report, so each customer teach
 - defects found after cutover, logged against the run during hypercare with the code they should
   have had, so each one becomes a new rule or a new code.
 
+Built in #140 (migration V148, SDD chapter 13 section 13.14.1 14/16, chapter 14 section 14.6): the metrics are the
+database function `import_run_metrics`, computed from the run's stored data and only from columns the purge keeps, answered
+at `GET /imports/runs/{run_id}/metrics`; the time of each pipeline step is stored where the step ends. The defect log is
+`import_defects`: logged against an imported run with a description that names nobody and the code it should have had,
+which must be a code of the template's issue-code catalogue; when none fits the defect is marked "new code needed" and
+the code proposed goes in the description (Lead on #888). It is closed once with the fix's reference, both audited. The
+description is hashed with the run's other free text when the run is purged, and a defect logged against a run already
+purged is stored with its description hashed at once. The platform report (`GET /platform/imports/report` and its CSV)
+lists every business's runs with their metrics, for platform operators only, each business by its slug and without its
+own labels (mapping names, mapping sources and source file names left out).
+
 ## 9. Build plan
 
 The build is split into tasks under #125, in this order (#127 to #142, one per line). Each

@@ -720,9 +720,14 @@ class BusinessClosureIT extends IntegrationTest {
         assertThat(count("SELECT count(*) FROM help_ask_answers WHERE tenant_id = ?", t.tenantId()))
                 .isZero();
         // The imports (V144, #134): the name typed on the factory's sign-off goes with the removal; the sign-off stays.
-        assertThat(removed.getBody().get("erased").get("imports").asInt()).isEqualTo(1);
+        // And the description of the factory's defect (V148, #140); the defect stays.
+        assertThat(removed.getBody().get("erased").get("imports").asInt()).isEqualTo(2);
         assertThat(count(
                         "SELECT count(*) FROM import_signoffs WHERE tenant_id = ? AND signed_name = 'Removed'",
+                        t.tenantId()))
+                .isEqualTo(1);
+        assertThat(count(
+                        "SELECT count(*) FROM import_defects WHERE tenant_id = ? AND description = 'Removed'",
                         t.tenantId()))
                 .isEqualTo(1);
         assertThat(count("SELECT count(*) FROM help_ask_tickets WHERE tenant_id = ?", t.tenantId()))

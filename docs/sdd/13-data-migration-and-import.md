@@ -786,6 +786,8 @@ retail command. ADR-027 makes the framework the one pipeline for every tenant's 
   pre-import dump within 30 days, with a certificate of deletion (built in #139, section 13.14.1 13/16).
 - **Rehearsal.** Each run is rehearsed against last night's production backup restored into a
   throwaway database before cutover day.
+- **Metrics and hypercare.** Each run's metrics are computed from its stored data, and defects found after the cutover
+  are logged against it with the code they should have had (built in #140, section 13.14.1 14/16).
 
 The build order is the spec's section 9. FR-IMP-01 to FR-IMP-09 keep their meaning; the new
 requirements are written with the tasks that build them.
@@ -1680,3 +1682,49 @@ section 4.1; coordinated with #110, which builds no second framework).**
   does the same after the real commit, reconciliation and sign-off; `ImportRetentionIT` fixes the business clock for both
   deadlines and the warning; `ImportPurgeIT` also proves the guards let nothing else through and that another run and
   another business are untouched.
+
+**14/16, metrics and the post-cutover defect log (#140, migration `V148`, ADR-027, spec section 8).**
+
+- **Metrics from stored data, never from logs.** `ImportMetrics.metrics(run)` is the database function
+  `import_run_metrics(run)` read as JSON, one definition for the business's route and the platform report (chapter 14
+  section 14.6): the run's stamps; the ten stages of the spec's section 2, each from the stamps that bound it (discovery
+  happens before the run opens and is not recorded; field mapping from the run's opening to its first upload; cleaning and
+  review to `ready`; the rehearsal to the newest rehearsal before the commit; the dry run to `dry_run_at`; the cutover from
+  `committing_at` to `committed_at`; the reconciliation to the sign-off; the source deletion to `purged_at`; hypercare from
+  the sign-off to the last defect closed); the time of each pipeline step; rows by outcome per batch (the file's rows,
+  those left out in the review from `import_rows.excluded_by`, and read, written, existing and skipped from the batch's
+  report part) and per template; issues by code and severity with the open ones; resolutions by kind; the questions to the
+  customer (issues marked `ask_customer`, asked at the first `ask_customer` resolution of the same line, code and field,
+  answered when the issue was resolved) with the median and longest days to answer; the mapping versions the batches were
+  read with and the versions of those mappings saved while the run was open; the rehearsals and, for the newest committed
+  one, each source count that differs from the cutover's; and the defects by code. Every figure comes from a column the
+  purge of V147 keeps (codes, counts, statuses, ids, timestamps and the reports), so a purged run has the same metrics.
+- **Step times are stored where the step ends** (V148, they were not stored before): `import_batches.upload_ms` (the upload
+  request to the stored batch), `parse_ms` (reading the stored file into rows) and `commit_ms` (the batch's commit
+  transaction, written with its counts); `import_runs.validated_at` and `validate_ms` (the last full validation) and
+  `dry_run_ms` (the last stored dry run). NULL for what ran before V148; the metrics leave such a step out.
+- **The defect log** (`import_defects`, chapter 6 section 6.5): during hypercare a holder of `core.imports.manage` logs a
+  defect against an imported run (`committed`, `signed_off` or `purged`; otherwise 409 `run_not_imported`) with a
+  description that names nobody and the issue code it should have had, which must be a code of the issue-code catalogue
+  of the run's template (otherwise 422 `expected_code_unknown`; Lead on #888, so no business types a code). When no code
+  fits, the defect is logged with none and `new_code_needed`, and the code proposed goes in the description, which is
+  screened and hashed (spec section 8: each defect becomes a new rule or a new code). It closes once with the fix's reference (`#123`, a commit hash
+  or a GitHub link). Both are audited (`core.import_run.defect_logged` with the code, `core.import_run.defect_closed` with
+  the reference), never with the description. The trigger `import_defects_kept` holds the rules for every role: logged
+  open against an imported run, closed whole and never opened again, its run, code, author and time fixed.
+- **The description and personal data.** The service refuses one that names a personal value of the run's staged rows
+  (the commit's own `RunPrivacy`), or that the kernel's log redaction finds an email address, an ID number or a phone
+  number in, or that holds seven digits in a row (422 `description_names_personal_data`). And it follows the purge's one
+  rule for free text: the trigger `import_defects_purged` hashes every description of the run with a salt kept nowhere in
+  the purge's transaction, open or closed, and a defect logged against a run already purged is stored with its
+  description hashed at once, so a purged run never holds a defect's words (review of #888: a bare name is no pattern the
+  application can refuse once the staged values are gone). `ImportPurgeIT` classes the column as hashed; the removal of a closed business
+  writes "Removed" (`imports_erase_personal_data`).
+- **The platform report** (`GET /platform/imports/report` and `.../report.csv`, `platform.tenants.read`, on the platform
+  host only) reads every business's runs through the definer function `platform_import_runs_report`, which refuses a call
+  bound to a business and names each business by its slug, never its name; the CSV is recorded in the platform audit log.
+- **Tests.** The golden runs of `retail_v1` (`RetailV1TemplateIT`) and `lending_loans_v1` (`LendingLoansV1TemplateIT`)
+  check every figure against the run's tables queried on their own and against the commit's report (`MetricsCheck`);
+  `ImportPurgeIT` proves the metrics are the same after the purge and the descriptions hashed; `ImportMetricsIT` logs and
+  closes a defect with its audit rows, the refusals, another business's 404, and the platform report refused to anonymous
+  calls and to a tenant's staff; `MigrationOrderIT` and `RlsIsolationIT` cover V148.

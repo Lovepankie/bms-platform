@@ -914,6 +914,8 @@ class ImportRunService implements ImportRuns {
 
     @Override
     public DryRun dryRun(UUID runId, UUID by) {
+        // The dry run's time is stored with its report for the run's metrics (issue #140).
+        long started = System.nanoTime();
         requireNoTransaction();
         if (by == null) {
             throw new IllegalArgumentException("a dry run needs who runs it");
@@ -1009,11 +1011,18 @@ class ImportRunService implements ImportRuns {
             }
             jdbc.sql("""
                             UPDATE import_runs SET dry_run_report = CAST(? AS jsonb), dry_run_at = now(), dry_run_by = ?,
-                                   dry_run_stamp = ?, dry_run_preview_matches = ?, dry_run_writer = ?,
+                                   dry_run_stamp = ?, dry_run_preview_matches = ?, dry_run_writer = ?, dry_run_ms = ?,
                                    version = version + 1, updated_at = now()
                              WHERE id = ?
                             """)
-                    .params(mapper.writeValueAsString(report), by, inputs[0], matches, inputs[1], runId)
+                    .params(
+                            mapper.writeValueAsString(report),
+                            by,
+                            inputs[0],
+                            matches,
+                            inputs[1],
+                            MetricsService.millisSince(started),
+                            runId)
                     .update();
             return storedDryRun(runId).orElseThrow();
         });
@@ -1421,6 +1430,7 @@ class ImportRunService implements ImportRuns {
             PreviewService.Writers writers,
             long dryRunLimitSeconds,
             PreviewService.RunPrivacy privacy) {
+        long started = System.nanoTime();
         // A dry run's batch has its limit in seconds; a committed batch has none here (0).
         boolean dryRun = dryRunLimitSeconds > 0;
         BatchWriter writer = writers.of(batch.id());
@@ -1470,13 +1480,14 @@ class ImportRunService implements ImportRuns {
         CommitReport part = checkpoint.part(counts, (Integer) row.get("row_count"));
         jdbc.sql("""
                         UPDATE import_batches SET status = 'committed', committed_at = now(), counts = CAST(? AS jsonb),
-                               report = CAST(? AS jsonb), dependency_rank = ?
+                               report = CAST(? AS jsonb), dependency_rank = ?, commit_ms = ?
                          WHERE id = ?
                         """)
                 .params(
                         mapper.writeValueAsString(counts == null ? Map.of() : counts),
                         mapper.writeValueAsString(part),
                         writers.setRank(batch.id()),
+                        MetricsService.millisSince(started),
                         batch.id())
                 .update();
         return part;

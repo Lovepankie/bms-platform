@@ -3448,6 +3448,53 @@
         },
         "required" : [ "ask_customer", "version" ]
       },
+      "ImportBatchRows" : {
+        "description" : "Rows by outcome of one batch; the commit's counts null until committed",
+        "properties" : {
+          "excluded" : {
+            "description" : "Rows left out in the review",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "existing" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "mapping_source" : {
+            "type" : "string"
+          },
+          "read" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rows" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "seq" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "template_version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "written" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "ImportBulkResolveOutcome" : {
         "properties" : {
           "bulk_id" : {
@@ -3492,6 +3539,139 @@
           }
         },
         "required" : [ "code", "resolution" ]
+      },
+      "ImportDefect" : {
+        "description" : "A defect found after the cutover, logged against the run",
+        "properties" : {
+          "closed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "closed_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "What went wrong, naming nobody; its hash once the run is purged (open or closed)",
+            "type" : "string"
+          },
+          "expected_code" : {
+            "description" : "The catalogue code the row should have had; null when a new code is needed",
+            "type" : "string"
+          },
+          "fix_ref" : {
+            "description" : "The fix: #123, a commit hash or a GitHub link; null while open",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "logged_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "logged_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "new_code_needed" : {
+            "description" : "True when no catalogue code fits; the code proposed is in the description",
+            "type" : "boolean"
+          },
+          "run_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "open or closed",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportDefectCloseRequest" : {
+        "properties" : {
+          "fix_ref" : {
+            "description" : "The fix: an issue or pull request number (#123), a commit hash or a GitHub link",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "pattern" : "#[0-9]{1,7}|[0-9a-f]{7,40}|https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(pull|issues|commit)/[0-9a-f]{1,40}",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The defect's version as read",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "fix_ref", "version" ]
+      },
+      "ImportDefectCodeCount" : {
+        "description" : "By catalogue code",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportDefectCounts" : {
+        "properties" : {
+          "closed" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "codes" : {
+            "description" : "By catalogue code",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportDefectCodeCount"
+            },
+            "type" : "array"
+          },
+          "new_codes_needed" : {
+            "description" : "Defects that need a code the catalogue does not have yet",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "open" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportDefectList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportDefect"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ImportDefectRequest" : {
+        "description" : "A defect found after the cutover",
+        "properties" : {
+          "description" : {
+            "description" : "What went wrong, by file, line, field and code; never a person's name, phone, ID number or email",
+            "maxLength" : 500,
+            "minLength" : 10,
+            "type" : "string"
+          },
+          "expected_code" : {
+            "description" : "The code of the issue-code catalogue the row should have had; leave it out when a new code is needed and propose that code in the description",
+            "pattern" : "[A-Z][A-Z0-9_]{1,59}",
+            "type" : "string"
+          }
+        },
+        "required" : [ "description" ]
       },
       "ImportIssue" : {
         "description" : "One issue of the review queue; its message never holds a value of a row",
@@ -3557,6 +3737,24 @@
           }
         }
       },
+      "ImportIssueCount" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "open" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "total" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "ImportIssuePage" : {
         "properties" : {
           "items" : {
@@ -3567,6 +3765,25 @@
           },
           "next_cursor" : {
             "type" : "string"
+          }
+        }
+      },
+      "ImportMappingVersion" : {
+        "description" : "The mapping versions the run's batches were read with",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "template_version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -3602,6 +3819,29 @@
               "$ref" : "#/components/schemas/ImportQuestion"
             },
             "type" : "array"
+          }
+        }
+      },
+      "ImportQuestions" : {
+        "description" : "Questions to the customer and the days they took to answer",
+        "properties" : {
+          "answered" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "asked" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "max_days" : {
+            "type" : "number"
+          },
+          "median_days" : {
+            "type" : "number"
+          },
+          "open" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -3750,6 +3990,52 @@
           }
         }
       },
+      "ImportRehearsalDifference" : {
+        "description" : "Per source, each count of the newest committed rehearsal that differs from the cutover",
+        "properties" : {
+          "cutover" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "measure" : {
+            "description" : "read, written, existing or skipped",
+            "type" : "string"
+          },
+          "rehearsal" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportRehearsalSummary" : {
+        "properties" : {
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "matches_dry_run" : {
+            "type" : "boolean"
+          },
+          "outcome" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportResolutionCount" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "kind" : {
+            "description" : "edit_value, exclude_row, accept_suggestion, link_row, link_member, override, map_value or ask_customer",
+            "type" : "string"
+          }
+        }
+      },
       "ImportResolveOutcome" : {
         "properties" : {
           "issues" : {
@@ -3814,6 +4100,213 @@
           }
         },
         "required" : [ "resolution", "version" ]
+      },
+      "ImportRunMetrics" : {
+        "description" : "The metrics of an import run, from its stored data (spec section 8)",
+        "properties" : {
+          "batches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportBatchRows"
+            },
+            "type" : "array"
+          },
+          "defects" : {
+            "$ref" : "#/components/schemas/ImportDefectCounts"
+          },
+          "fabricated" : {
+            "type" : "boolean"
+          },
+          "issues" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportIssueCount"
+            },
+            "type" : "array"
+          },
+          "mapping_versions_made" : {
+            "description" : "Versions of those mappings saved while the run was open",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "mappings" : {
+            "description" : "The mapping versions the run's batches were read with",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportMappingVersion"
+            },
+            "type" : "array"
+          },
+          "origin" : {
+            "description" : "framework, import_retail or retail_import_refs",
+            "type" : "string"
+          },
+          "questions" : {
+            "$ref" : "#/components/schemas/ImportQuestions"
+          },
+          "rehearsal_differences" : {
+            "description" : "Per source, each count of the newest committed rehearsal that differs from the cutover",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRehearsalDifference"
+            },
+            "type" : "array"
+          },
+          "rehearsal_timings" : {
+            "description" : "The newest committed rehearsal's timings, by step",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRunTiming"
+            },
+            "type" : "array"
+          },
+          "rehearsals" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRehearsalSummary"
+            },
+            "type" : "array"
+          },
+          "resolutions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportResolutionCount"
+            },
+            "type" : "array"
+          },
+          "run_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "stages" : {
+            "description" : "The ten stages of spec section 2, in order",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRunStage"
+            },
+            "type" : "array"
+          },
+          "stamps" : {
+            "$ref" : "#/components/schemas/ImportRunStamps"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "steps" : {
+            "description" : "The time each pipeline step took, as stored where it ended",
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRunStep"
+            },
+            "type" : "array"
+          },
+          "templates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportTemplateRows"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ImportRunStage" : {
+        "description" : "One stage of spec section 2",
+        "properties" : {
+          "ended_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "discovery, field_mapping, cleaning_and_review, rehearsal, dry_run, cutover, reconciliation, sign_off, source_deletion or hypercare",
+            "type" : "string"
+          },
+          "number" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "seconds" : {
+            "description" : "Null unless both ends are recorded",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "started_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "ImportRunStamps" : {
+        "description" : "The run's stamps; null for a stage not reached",
+        "properties" : {
+          "cancelled_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "committed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "committing_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "dry_run_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "in_review_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "purged_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "ready_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reconciled_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "signed_off_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "uploaded_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "ImportRunStep" : {
+        "description" : "One pipeline step",
+        "properties" : {
+          "batch_seq" : {
+            "description" : "The batch, or null for a step of the whole run",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "millis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "step" : {
+            "description" : "upload, parse, validate, dry_run or commit",
+            "type" : "string"
+          }
+        }
+      },
+      "ImportRunTiming" : {
+        "description" : "The newest committed rehearsal's timings, by step",
+        "properties" : {
+          "millis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "step" : {
+            "type" : "string"
+          }
+        }
       },
       "ImportSignOff" : {
         "description" : "The sign-off: the typed name and date, the sections ticked",
@@ -3937,6 +4430,46 @@
           }
         },
         "required" : [ "numbers", "scope" ]
+      },
+      "ImportTemplateRows" : {
+        "description" : "Rows by outcome of a template's batches, not failed or cancelled",
+        "properties" : {
+          "batches" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "excluded" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "existing" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "read" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rows" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "template_version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "written" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
       },
       "InsightsAgeingBucket" : {
         "properties" : {
@@ -8849,6 +9382,27 @@
           }
         },
         "required" : [ "status" ]
+      },
+      "PlatformImportRun" : {
+        "description" : "One run on the platform report; the business by its slug only",
+        "properties" : {
+          "metrics" : {
+            "$ref" : "#/components/schemas/ImportRunMetrics"
+          },
+          "tenant_slug" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformImportRunList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformImportRun"
+            },
+            "type" : "array"
+          }
+        }
       },
       "PlatformMe" : {
         "properties" : {
@@ -29255,6 +29809,44 @@
         "tags" : [ "help" ]
       }
     },
+    "/api/v1/imports/defects/{defect_id}/close" : {
+      "post" : {
+        "operationId" : "closeImportDefect",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "defect_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportDefectCloseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportDefect"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Close a defect with its fix's reference, once; audited",
+        "tags" : [ "imports" ]
+      }
+    },
     "/api/v1/imports/issues/{issue_id}/ask-customer" : {
       "put" : {
         "operationId" : "askCustomerAboutImportIssue",
@@ -29328,6 +29920,70 @@
           }
         },
         "summary" : "Resolve one issue: edit, leave the row out, accept the suggestion, link, override a warning or map the value (FR-IMP-05)",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/defects" : {
+      "get" : {
+        "operationId" : "listImportDefects",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportDefectList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The defects logged against an import run, oldest first",
+        "tags" : [ "imports" ]
+      },
+      "post" : {
+        "operationId" : "logImportDefect",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportDefectRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportDefect"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Log a defect found after the cutover against an imported run, with the code it should have had; audited",
         "tags" : [ "imports" ]
       }
     },
@@ -29438,6 +30094,34 @@
           }
         },
         "summary" : "Resolve every open issue of one code in the run, or in one of its files, the same way (FR-IMP-05)",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/metrics" : {
+      "get" : {
+        "operationId" : "getImportRunMetrics",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportRunMetrics"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The metrics of an import run, computed from its stored data (spec section 8); the same after the run is purged",
         "tags" : [ "imports" ]
       }
     },
@@ -36809,6 +37493,70 @@
         },
         "summary" : "Email the sign-in page of every business where this address is an active staff user; the answer never says whether any matched (issue #383)",
         "tags" : [ "sign-up" ]
+      }
+    },
+    "/api/v1/platform/imports/report" : {
+      "get" : {
+        "operationId" : "platformImportRunsReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "since",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The import runs of every business with their metrics, newest first; since (a moment) and limit (1 to 500, default 100)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/report.csv" : {
+      "get" : {
+        "operationId" : "platformExportImportRunsReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "since",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The same as CSV, one row per run, at most 500, each business by its slug only; audited",
+        "tags" : [ "platform" ]
       }
     },
     "/api/v1/platform/me" : {

@@ -4112,6 +4112,133 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V148 (issue #140) is expand only: a run and a batch stored before it keep everything and have no step times; a defect
+     * is taken only against an imported run, logged open, closed whole, and its description becomes its hash when the run is
+     * purged; the defects are under forced row-level security, bms_app may update only the closing columns, and the metrics
+     * and the platform report are functions bms_app may call, the report alone a definer function.
+     * JUSTIFICATION-A3: a new test case; no existing case covers V148.
+     */
+    @Test
+    void importMetricsMigrationKeepsEveryRunAndGuardsTheDefects() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("148") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v148', 'Test Tenant V148',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID run = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by, status, signed_off_at)"
+                            + " VALUES (?, ?, ?, 'signed_off', now())")
+                    .params(run, tenant, UUID.randomUUID())
+                    .update();
+            UUID draft = UUID.randomUUID();
+            owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
+                    .params(draft, tenant, UUID.randomUUID())
+                    .update();
+            owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq, status, row_count) VALUES (?, ?, ?, 1,"
+                            + " 'parsed', 3)")
+                    .params(UUID.randomUUID(), tenant, run)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT row_count = 3 AND upload_ms IS NULL AND parse_ms IS NULL AND commit_ms IS NULL"
+                                    + " FROM import_batches WHERE run_id = ?")
+                            .param(run)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT status = 'signed_off' AND validated_at IS NULL AND validate_ms IS NULL"
+                                    + " AND dry_run_ms IS NULL FROM import_runs WHERE id = ?")
+                            .param(run)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT jsonb_array_length(import_run_metrics(?) -> 'stages')")
+                            .param(run)
+                            .query(Integer.class)
+                            .single())
+                    .isEqualTo(10);
+
+            String insert = """
+                    INSERT INTO import_defects (id, tenant_id, run_id, logged_by, description, expected_code,
+                                                new_code_needed, status)
+                    VALUES (?, ?, ?, ?, 'Test defect: line 2 was imported as line 3', 'TYPE_INVALID', false, ?)
+                    """;
+            // A code and a new code needed are never both, and never neither (import_defects_code_or_new).
+            assertThatThrownBy(() -> owner.sql("""
+                            INSERT INTO import_defects (id, tenant_id, run_id, logged_by, description, expected_code,
+                                                        new_code_needed)
+                            VALUES (?, ?, ?, ?, 'Test defect: no code and none needed', NULL, false)
+                            """)
+                            .params(UUID.randomUUID(), tenant, run, UUID.randomUUID())
+                            .update())
+                    .hasMessageContaining("import_defects_code_or_new");
+            assertThatThrownBy(() -> owner.sql(insert)
+                            .params(UUID.randomUUID(), tenant, draft, UUID.randomUUID(), "open")
+                            .update())
+                    .hasMessageContaining("a defect is logged only against an imported run");
+            assertThatThrownBy(() -> owner.sql(insert)
+                            .params(UUID.randomUUID(), tenant, run, UUID.randomUUID(), "closed")
+                            .update())
+                    .hasMessageContaining("a defect is logged open");
+            UUID defect = UUID.randomUUID();
+            assertThat(owner.sql(insert)
+                            .params(defect, tenant, run, UUID.randomUUID(), "open")
+                            .update())
+                    .isEqualTo(1);
+            assertThatThrownBy(() -> owner.sql("UPDATE import_defects SET status = 'closed', closed_by = ?,"
+                                    + " closed_at = now() WHERE id = ?")
+                            .params(UUID.randomUUID(), defect)
+                            .update())
+                    .hasMessageContaining("import_defects_closed_whole");
+            assertThat(owner.sql("UPDATE import_defects SET status = 'closed', closed_by = ?, closed_at = now(),"
+                                    + " fix_ref = '#140' WHERE id = ?")
+                            .params(UUID.randomUUID(), defect)
+                            .update())
+                    .isEqualTo(1);
+            // Purged (a migration's explicit opt-in standing in for import_purge_run): the description is its hash.
+            owner.sql("DO $$ BEGIN PERFORM set_config('bms.allow_mutation', 'on', true);"
+                            + " UPDATE import_runs SET status = 'purged', purged_at = now() WHERE id = '" + run + "';"
+                            + " END $$")
+                    .update();
+            assertThat(owner.sql("SELECT description ~ '^sha256:[0-9a-f]{64}$' AND fix_ref = '#140'"
+                                    + " FROM import_defects WHERE id = ?")
+                            .param(defect)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE relname ="
+                                    + " 'import_defects'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("""
+                            SELECT has_table_privilege('bms_app', 'import_defects', 'SELECT')
+                               AND has_table_privilege('bms_app', 'import_defects', 'INSERT')
+                               AND NOT has_table_privilege('bms_app', 'import_defects', 'DELETE')
+                               AND has_column_privilege('bms_app', 'import_defects', 'status', 'UPDATE')
+                               AND has_column_privilege('bms_app', 'import_defects', 'fix_ref', 'UPDATE')
+                               AND NOT has_column_privilege('bms_app', 'import_defects', 'description', 'UPDATE')
+                               AND NOT has_column_privilege('bms_app', 'import_defects', 'expected_code', 'UPDATE')
+                               AND has_function_privilege('bms_app', 'import_run_metrics(uuid)', 'EXECUTE')
+                               AND has_function_privilege('bms_app',
+                                       'platform_import_runs_report(timestamptz, integer)', 'EXECUTE')
+                               AND (SELECT prosecdef FROM pg_proc WHERE proname = 'platform_import_runs_report')
+                               AND NOT (SELECT prosecdef FROM pg_proc WHERE proname = 'import_run_metrics')
+                            """).query(Boolean.class).single()).isTrue();
+        }
+    }
+
     /** A function's definition with its whitespace collapsed, so two bodies compare by their words. */
     private static String functionBody(JdbcClient owner, String function) {
         return owner.sql("SELECT pg_get_functiondef(CAST(? AS regproc))")

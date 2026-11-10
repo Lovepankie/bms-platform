@@ -1288,6 +1288,14 @@ public class RlsIsolationIT {
                         VALUES (?, ?, ?, 1, 'signed_off_30_days', false, '{"staged_rows": 0}',
                                 'BMS certificate of deletion, version 1', repeat('c', 64))
                         """).params(UUID.randomUUID(), t.tenantId(), committedRun).update();
+        // The defect log of the run's hypercare (migration V148, #140): one open defect, its description fabricated.
+        owner.sql("""
+                        INSERT INTO import_defects (id, tenant_id, run_id, logged_by, description, expected_code,
+                                                    new_code_needed)
+                        VALUES (?, ?, ?, ?, 'Test defect: line 2 imported as line 3', NULL, true)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), committedRun, user)
+                .update();
     }
 
     /**

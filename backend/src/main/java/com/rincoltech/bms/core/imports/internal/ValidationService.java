@@ -211,8 +211,9 @@ class ValidationService implements ImportValidation {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("validation takes its own transactions");
         }
+        long started = System.nanoTime();
         Prepared p = prepare(runId, false);
-        List<BatchReport> reports = finish(runId, p);
+        List<BatchReport> reports = finish(runId, p, started);
         return p.template() == null
                 ? new RunReport(runId, null, 0, List.of())
                 : new RunReport(runId, p.template().key(), p.template().version(), reports);
@@ -370,7 +371,7 @@ class ValidationService implements ImportValidation {
      * values are replaced, an {@code uploaded} run moves to {@code in_review} (the run's own transition joins this
      * transaction, so a second validation that finishes later finds it in review), and the validation is audited.
      */
-    private List<BatchReport> finish(UUID runId, Prepared p) {
+    private List<BatchReport> finish(UUID runId, Prepared p, long started) {
         List<BatchReport> reports = tx.execute(s -> {
             String status = jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR UPDATE")
                     .param(runId)
@@ -396,6 +397,10 @@ class ValidationService implements ImportValidation {
             if (RunStates.UPLOADED.equals(status)) {
                 runs.transition(runId, RunStates.IN_REVIEW);
             }
+            // The run's last full validation and its time, for the run's metrics (issue #140); not the run's version.
+            jdbc.sql("UPDATE import_runs SET validated_at = now(), validate_ms = ? WHERE id = ?")
+                    .params(MetricsService.millisSince(started), runId)
+                    .update();
             Map<String, Integer> byCode = new TreeMap<>();
             out.forEach(r -> r.byCode().forEach((code, n) -> byCode.merge(code, n, Integer::sum)));
             Map<String, Object> after = new LinkedHashMap<>();

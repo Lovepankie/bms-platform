@@ -9,6 +9,11 @@ import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.QuarantineStorage;
 import com.rincoltech.bms.core.imports.ImportMappings;
 import com.rincoltech.bms.core.imports.ImportMappings.Mapping;
+import com.rincoltech.bms.core.imports.ImportMetrics;
+import com.rincoltech.bms.core.imports.ImportMetrics.Defect;
+import com.rincoltech.bms.core.imports.ImportMetrics.Metrics;
+import com.rincoltech.bms.core.imports.ImportMetrics.NewDefect;
+import com.rincoltech.bms.core.imports.ImportMetrics.Stage;
 import com.rincoltech.bms.core.imports.ImportPurges;
 import com.rincoltech.bms.core.imports.ImportPurges.Certificate;
 import com.rincoltech.bms.core.imports.ImportPurges.Purge;
@@ -378,6 +383,8 @@ class ImportPurgeIT extends IntegrationTest {
             "import_issue_resolutions.after_value",
             "import_issue_resolutions.note",
             "import_signoffs.signed_name",
+            // The operator's description of a defect (V148, #140): hashed by the purge, or on insert after it.
+            "import_defects.description",
             "approval_requests.decision_note",
             "approval_requests.execution_error");
 
@@ -436,6 +443,12 @@ class ImportPurgeIT extends IntegrationTest {
             "import_rehearsals.timings",
             "import_deletion_certificates.reason",
             "import_deletion_certificates.sha256",
+            // V148 (#140): a code of the platform's issue-code catalogue only, refused otherwise when logged (Lead on
+            // #888, never typed by the business), open or closed, and a fix reference's form (#123, a commit hash or a
+            // GitHub link) held by a CHECK.
+            "import_defects.expected_code",
+            "import_defects.status",
+            "import_defects.fix_ref",
             "approval_requests.action_type",
             "approval_requests.subject_type",
             "approval_requests.currency",
@@ -601,6 +614,89 @@ class ImportPurgeIT extends IntegrationTest {
         assertThat(audits.getFirst()).contains(certificate.sha256());
         String audit = audits.getFirst().toLowerCase(Locale.ROOT);
         assertThat(PERSONAL).noneMatch(v -> audit.contains(v.toLowerCase(Locale.ROOT)));
+    }
+
+    // JUSTIFICATION-A3: issue #140 asks that metrics work on a purged run and the defect's text is purged; a new case.
+    // ---- The metrics and the defect log across the purge (issue #140) ----
+
+    @Autowired
+    ImportMetrics metrics;
+
+    /** A defect of the run written as the owner, so its description may name a person, as the application refuses. */
+    UUID defect(UUID run, String description) {
+        UUID id = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO import_defects (id, tenant_id, run_id, logged_by, description, expected_code,
+                                                    new_code_needed)
+                        VALUES (?, ?, ?, ?, ?, 'TYPE_INVALID', false)
+                        """)
+                .params(id, t.tenantId(), run, operator, description)
+                .update();
+        return id;
+    }
+
+    @Test
+    void theMetricsOfARunAreTheSameAfterItsPurgeAndItsDefectsKeepNoDescription() throws IOException {
+        UUID run = signedRun(t);
+        // During hypercare: one defect closed and one still open, each description naming a person on purpose.
+        UUID closed = defect(run, "Fabricated Buyer Gamma " + TYPED_PHONE + " was imported twice");
+        TestDatabase.owner()
+                .sql("UPDATE import_defects SET status = 'closed', fix_ref = '#140', closed_by = ?, closed_at = now(),"
+                        + " version = 1 WHERE id = ?")
+                .params(operator, closed)
+                .update();
+        UUID open = defect(run, "Fabricated Buyer Beta was given the price of another item");
+        Metrics before = as(t, () -> metrics.metrics(run));
+        assertThat(before.issues()).isNotEmpty();
+        assertThat(before.resolutions()).isNotEmpty();
+        assertThat(before.batches()).hasSize(GoldenRun.FILES.size());
+
+        purge(t, run);
+
+        // Every figure comes from a column the purge keeps: only the state and the source deletion's end change.
+        Metrics after = as(t, () -> metrics.metrics(run));
+        assertThat(after.status()).isEqualTo("purged");
+        assertThat(after.stamps().purgedAt()).isNotNull();
+        assertThat(after)
+                .usingRecursiveComparison()
+                .ignoringFields("status", "stamps.purgedAt", "stages")
+                .isEqualTo(before);
+        assertThat(after.stages().stream().filter(s -> !"source_deletion".equals(s.key())))
+                .containsExactlyElementsOf(before.stages().stream()
+                        .filter(s -> !"source_deletion".equals(s.key()))
+                        .toList());
+        Stage deletion = after.stages().get(8);
+        assertThat(deletion.key()).isEqualTo("source_deletion");
+        assertThat(deletion.endedAt()).isEqualTo(after.stamps().purgedAt());
+
+        // The descriptions became their hash in the purge's transaction; nothing of the run names a person.
+        String hashed =
+                "SELECT count(*) FROM import_defects WHERE run_id = ? AND description ~ '^sha256:[0-9a-f]{64}$'";
+        assertThat(count(hashed, run)).isEqualTo(2);
+        assertThat(personalValuesOf(run, PERSONAL))
+                .as("columns still holding a personal value")
+                .isEmpty();
+
+        // The open one closes with its fix and stays a hash. One logged after the purge names a person the application
+        // cannot recognise any more (the staged values are gone; a bare name is no email, phone or ID number) and is
+        // left open: it is stored as its hash at once (review of #888), so the run never holds its words.
+        Defect closedNow = as(t, () -> metrics.closeDefect(open, 0, "#141", operator));
+        assertThat(closedNow.description()).matches("sha256:[0-9a-f]{64}");
+        Defect late = as(
+                t,
+                () -> metrics.logDefect(
+                        run, new NewDefect("Fabricated Buyer Gamma was imported twice", null), operator));
+        assertThat(late.description()).matches("sha256:[0-9a-f]{64}");
+        assertThat(late.status()).isEqualTo("open");
+        assertThat(late.newCodeNeeded()).isTrue();
+        assertThat(personalValuesOf(run, PERSONAL))
+                .as("columns holding a personal value after a defect logged on the purged run")
+                .isEmpty();
+        Defect lateClosed = as(t, () -> metrics.closeDefect(late.id(), late.version(), "0123abc", operator));
+        assertThat(lateClosed.description()).isEqualTo(late.description());
+        assertThat(lateClosed.fixRef()).isEqualTo("0123abc");
+        assertThat(as(t, () -> metrics.metrics(run)).defects().closed()).isEqualTo(3);
     }
 
     @Test
