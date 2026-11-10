@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.imports.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+import com.rincoltech.bms.kernel.ApiException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.net.SocketTimeoutException;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 /**
  * The audit of a failed batch never replaces the batch's own error (review of #736, issue #779), and the claim probe is
@@ -23,6 +25,10 @@ import org.junit.jupiter.api.Test;
 class ImportRunServiceTest {
 
     private static final String KEY = "core.imports.loop:fabricated";
+
+    private static final String MESSAGE = "The plan allows at most 1 (max_branches); the limit has been reached.";
+
+    private static final String SENTENCE = "the plan's limit refused this batch; move the business to a plan with room";
 
     @Test
     void aFailingAuditIsAddedAsSuppressedAndTheBatchErrorIsTheOneThrown() {
@@ -35,6 +41,20 @@ class ImportRunServiceTest {
 
         assertThat(thrown).isSameAs(batch);
         assertThat(thrown.getSuppressed()).containsExactly(lost);
+    }
+
+    // JUSTIFICATION-A3: review of #902 asks for a test that a value-bearing refusal keeps no message.
+    @Test
+    void aRefusalKeepsItsCodeAndAFixedSentenceNeverItsMessage() {
+        ApiException quoting = ApiException.rule("duplicate_sku", "SKU 'TST-0001' already exists for Test Sugar 1kg");
+        ApiException silent = new ApiException(HttpStatus.CONFLICT, "no_message", "Refused", null);
+        ApiException limit = ApiException.rule("plan_limit_reached", MESSAGE);
+
+        assertThat(ImportRunService.refused(2, quoting)).isEqualTo("batch 2 failed (refused with code duplicate_sku)");
+        assertThat(ImportRunService.refused(3, silent)).isEqualTo("batch 3 failed (refused with code no_message)");
+        String kept = ImportRunService.refused(1, limit);
+        assertThat(kept).isEqualTo("batch 1 failed (plan_limit_reached: " + SENTENCE + ")");
+        assertThat(kept).doesNotContain("max_branches");
     }
 
     @Test

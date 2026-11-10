@@ -94,7 +94,8 @@ public class FabricatedRunStager {
     /**
      * Stages the run for the business with this slug, which must have retail switched on and not trade yet (the dry run
      * of a trading business needs the approved override); answers the run's id, ready. {@link IllegalArgumentException}
-     * anywhere but staging, for an unknown business, or for a directory that is not the fabricated sample, unchanged.
+     * anywhere but staging, for an unknown business, or for a directory that is not the fabricated sample, unchanged;
+     * {@link IllegalStateException} with the dry run's failure when the dry run stopped at a batch (issue #885).
      */
     public UUID stage(String slug, Path dir) {
         // An allowlist (review of #882): an unset, blank or misspelt environment is refused like production.
@@ -121,7 +122,11 @@ public class FabricatedRunStager {
             files.forEach((set, bytes) -> upload(run, mapping, set, bytes));
             validation.validate(run);
             settle(run);
-            runs.dryRun(run, OPERATOR);
+            // A failed dry run is refused with its failure, which names a coded refusal's code and sentence (#885).
+            String failure = runs.dryRun(run, OPERATOR).report().failure();
+            if (failure != null) {
+                throw new IllegalStateException("dry_run_failed: " + failure);
+            }
             runs.transition(run, "ready");
             return run;
         });

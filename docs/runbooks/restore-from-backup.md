@@ -227,7 +227,19 @@ On the Pi, as `bms`, from `/opt/bms`, with nobody using staging meanwhile, not b
 The run to rehearse. Until the operator screens (#141) can upload one, `stage-import-run` stages it: the fabricated
 `fixtures/retail/import-sample/` of this repository as a run of the import screens, marked fabricated, reviewed, dry run
 on live staging and ready. It needs a staging business with retail switched on that has not traded (a new one,
-`docs/runbooks/onboard-tenant.md`), whose slug is `<slug>`. It runs only where `BMS_ENVIRONMENT` is exactly `staging`
+`docs/runbooks/onboard-tenant.md`), whose slug is `<slug>`, and two more things (issue #885):
+
+- **A plan with room for the sample's three branches**, for example `business`, not Starter (one shop). On a plan
+  without room, the plan limit refuses the branches' batch and `stage-import-run` answers
+  `refused: dry_run_failed: batch N failed (plan_limit_reached: the plan's limit refused this batch; move the business
+  to a plan with room)`. Move the business with the
+  operator's `PUT .../plan` (`docs/runbooks/onboard-tenant.md`) and stage again: the refused run stays in review and
+  blocks nothing; rehearse only the new run id the second staging prints, never the refused one.
+- **The business must be in last night's backup**: create it at least one nightly backup before the check. The
+  rehearsal refuses a business created today (`business <slug> is not in <backup>; rehearse after the next nightly
+  backup`).
+
+It runs only where `BMS_ENVIRONMENT` is exactly `staging`
 (unset, blank or anything else is refused) and stages only that sample, every file present and byte for byte the
 SHA-256 the code holds, so no real export can be marked fabricated. `docker compose run` starts it from the `api`
 service, so it gets the staging api's limits (448 MB inside `bms.slice`); run it, like the rehearsal, when no deploy runs.

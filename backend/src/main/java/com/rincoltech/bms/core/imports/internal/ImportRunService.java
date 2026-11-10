@@ -1042,8 +1042,7 @@ class ImportRunService implements ImportRuns {
                             // The business's import key is taken: answered at once, nothing stored (Lead ruling 5).
                             throw e;
                         }
-                        failure[0] = "batch " + batch.seq() + " failed ("
-                                + e.getClass().getSimpleName() + ")";
+                        failure[0] = refused(batch.seq(), e);
                         break;
                     } catch (RuntimeException e) {
                         // As a real run, the first batch that fails stops it; the report names the batch and the kind
@@ -1573,6 +1572,21 @@ class ImportRunService implements ImportRuns {
             failure.addSuppressed(auditFailure);
         }
         return failure;
+    }
+
+    // JUSTIFICATION-A3: the Lead on #902 asks for a fixed sentence per code, proven by a unit test.
+    /** A fixed plain sentence for a refusal's code, written here, never taken from the exception (Lead on #902). */
+    static final Map<String, String> REFUSAL_SENTENCES =
+            Map.of("plan_limit_reached", "the plan's limit refused this batch; move the business to a plan with room");
+
+    /**
+     * A dry run's failure for a batch a coded refusal stopped (issue #885): the batch, the refusal's code and the fixed
+     * sentence for it, or {@code refused with code <code>}. Never the exception's message, which may quote a row.
+     */
+    static String refused(int seq, ApiException e) {
+        String sentence = e.code() == null ? null : REFUSAL_SENTENCES.get(e.code());
+        return "batch " + seq + " failed ("
+                + (sentence == null ? "refused with code " + e.code() : e.code() + ": " + sentence) + ")";
     }
 
     /** Throws {@link Halted} when the kill switch is off or the run's halt is set, read with a fresh snapshot. */

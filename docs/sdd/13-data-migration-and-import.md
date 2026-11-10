@@ -1182,7 +1182,11 @@ commit only through test-only templates (`FixtureShopTemplate`, `ScriptedTemplat
   a personal field and those fields' typed values, of four characters or more as the validation's rule, found anywhere in
   the text in any case, and their digits, seven or more, found among the text's digits. One that holds one is kept as
   `CommitReport.HIDDEN`. A failure names the batch and the kind of failure (`batch 3 failed (IllegalStateException)`), never
-  the message, which may quote a row. Each batch's part is stored in `import_batches.report` in its commit transaction, so
+  the message of an unexpected error, which may quote a row; a dry run stopped by a coded refusal (an `ApiException`)
+  names its code and a fixed sentence written in the code for it (`ImportRunService.REFUSAL_SENTENCES`), never the
+  exception's message (#885, the Lead on #902): `batch N failed (plan_limit_reached: the plan's limit refused this
+  batch; move the business to a plan with room)`, and for any other code `batch N failed (refused with code
+  duplicate_sku)`. Each batch's part is stored in `import_batches.report` in its commit transaction, so
   `ImportRuns.commitReport(run)` is the committed batches' parts in order, resumed or not.
 - **The dry run** (`ImportRuns.dryRun(run, by)`, a run `in_review`, or `committing` for a resume on a new build, else 409
   `run_not_open`; 409 `batch_not_parsed`
@@ -1601,7 +1605,9 @@ section 4.1; coordinated with #110, which builds no second framework).**
   an `import-retail` export of fabricated data staged as a run of the import screens, marked fabricated, reviewed as an
   operator would, dry run and ready; only where `BMS_ENVIRONMENT` is exactly `staging`, and only the repository's
   `fixtures/retail/import-sample/`, checked file by file against the SHA-256 the code holds. It stands in for the upload
-  form until #141.
+  form until #141. A dry run that fails is refused with its failure (`refused: dry_run_failed: batch N failed
+  (plan_limit_reached: ...)`, #885), so a plan without room for the sample's three branches says so. The refused run
+  stays in review and blocks nothing: staging again after moving the business to a larger plan opens a new run.
 - **Running alone** (review of #882): the script holds its own lock and the puller's and deploy's locks to the end,
   starts nothing in the weekly drill's window or beside a drill, stops at its deadline (six hours, or Sunday 03:20 if sooner, by a watchdog), loads the copy in one transaction committed only when
   the live read succeeded and compares every table's count and ids, keeps keys off command lines, and runs its

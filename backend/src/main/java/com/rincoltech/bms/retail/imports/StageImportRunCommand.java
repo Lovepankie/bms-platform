@@ -18,7 +18,8 @@ import org.springframework.context.ConfigurableApplicationContext;
  * and only with the repository's fabricated {@code fixtures/retail/import-sample/}. Starts the application
  * without the web server and the job scheduler, connected as {@code bms_app} like the API.
  *
- * <p>Exit status: 0 staged, 1 refused or failed (the reason's code only), 2 for a usage error.
+ * <p>Exit status: 0 staged, 1 refused or failed, 2 for a usage error. A refusal of the API prints its code only; a
+ * failed dry run prints its failure, which names a coded refusal's code (issue #885).
  */
 public final class StageImportRunCommand {
 

@@ -391,6 +391,7 @@ class ImportPurgeIT extends IntegrationTest {
     /** Kept readable, each for the one reason the V147 header and ADR-027 give. */
     static final Set<String> KEPT_READABLE = Set.of(
             "import_runs.pre_import_dump_file",
+            // Its failure is a batch, a code or class name and a fixed sentence, never a message (#885, Lead on #902).
             "import_runs.dry_run_report",
             "import_batches.source_filename",
             "import_batches.source_headers",

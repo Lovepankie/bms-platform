@@ -43,6 +43,8 @@ class StageImportRunIT extends IntegrationTest {
 
     static final String BACKUP = "bms-staging-20261024T011500Z.dump.enc";
 
+    static final String PLAN_LIMIT = "the plan's limit refused this batch; move the business to a plan with room";
+
     @Autowired
     ImportRuns runs;
 
@@ -137,6 +139,49 @@ class StageImportRunIT extends IntegrationTest {
         Files.writeString(copy.resolve("products.jsonl"), "\n", StandardOpenOption.APPEND);
         assertThatThrownBy(() -> on("staging").stage(t.slug(), copy)).hasMessageContaining("only the fabricated");
         assertThat(openRuns()).isZero();
+    }
+
+    // JUSTIFICATION-A3: issue #885 asks for this new test case of a plan limit refusing the dry run.
+    /**
+     * A business whose plan has no room for the sample's branches (issue #885): the plan limit refuses a batch, and
+     * both the stored dry run's failure and the stager's refusal name the refusal's code and its fixed sentence, never
+     * the exception's class or message (Lead on #902).
+     */
+    @Test
+    void aPlanLimitRefusalInTheDryRunNamesItsCodeInTheReportAndTheRefusal() {
+        JdbcClient owner = TestDatabase.owner();
+        owner.sql("""
+                        INSERT INTO plans (id, code, name, max_branches, max_staff_users, max_active_members, allowed_modules)
+                        VALUES (?, ?, 'Test One Shop Plan', 1, 10, 0, '{retail}')
+                        """).params(UUID.randomUUID(), "one-shop-" + t.slug()).update();
+        owner.sql("UPDATE tenants SET plan_id = (SELECT id FROM plans WHERE code = ?) WHERE id = ?")
+                .params("one-shop-" + t.slug(), t.tenantId())
+                .update();
+
+        assertThatThrownBy(() -> on("staging").stage(t.slug(), RetailImportIT.SAMPLE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageStartingWith("dry_run_failed: batch ")
+                .hasMessageEndingWith(" failed (plan_limit_reached: " + PLAN_LIMIT + ")")
+                .hasMessageNotContaining("ApiException");
+
+        UUID run = owner.sql("SELECT id FROM import_runs WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single();
+        String failure = as(() -> runs.dryRunReport(run)).orElseThrow().report().failure();
+        assertThat(failure)
+                .startsWith("batch ")
+                .endsWith(" failed (plan_limit_reached: " + PLAN_LIMIT + ")")
+                .doesNotContain("max_branches");
+        assertThat(as(() -> runs.get(run)).status()).isNotEqualTo("ready");
+
+        // With room for the branches, staging again works beside the refused run (review of #902).
+        owner.sql("UPDATE plans SET max_branches = 10 WHERE code = ?")
+                .param("one-shop-" + t.slug())
+                .update();
+        UUID again = on("staging").stage(t.slug(), RetailImportIT.SAMPLE);
+        assertThat(again).isNotEqualTo(run);
+        assertThat(as(() -> runs.get(again)).status()).isEqualTo("ready");
     }
 
     /** The business's runs: none is opened by a refused staging. */

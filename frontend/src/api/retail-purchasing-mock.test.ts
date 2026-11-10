@@ -361,7 +361,8 @@ describe('supplier credit notes in the mock', () => {
     const { api, productId } = await shop();
     const order = await sentOrder(api, productId, '10');
     const receipt = await receiveAgainst(api, order.id ?? '', order.lines?.[0]?.id ?? '', '10', 3500);
-    const bill = await api.createSupplierBill(billFor(receipt.lines?.[0]?.id ?? '', '10', 3500), key());
+    // A due date that never ties with the seeded restock's (today), so a payment always clears the restock first.
+    const bill = await api.createSupplierBill(billFor(receipt.lines?.[0]?.id ?? '', '10', 3500, { due_date: '2099-12-31' }), key());
     return { api, productId, bill, lineId: bill.lines?.[0]?.id ?? '' };
   }
   const creditBody = (billId: string, lineId: string, over: Record<string, unknown> = {}) => ({
