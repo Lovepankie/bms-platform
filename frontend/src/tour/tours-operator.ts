@@ -290,4 +290,64 @@ export const feedbackInboxPage: Tour = {
   ],
 };
 
-export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage, dueForSuspensionPage, closuresPage, noOwnerPage, feedbackInboxPage];
+// Imports (issue #141): the run queue by state and stage, the kill switch, and one run's stop, start and resume.
+// JUSTIFICATION-A3: the page tours ADR-049 asks of the two new portal routes.
+export const importQueuePage: Tour = {
+  id: 'page-operator-imports',
+  version: 1,
+  title: 'This page: imports',
+  audience: forOperator,
+  autoStart: false,
+  page: '/platform/imports',
+  steps: [
+    {
+      id: 'kill-switch',
+      target: 'imports-kill-switch',
+      title: 'Stop every import',
+      body: 'One switch halts every import on the platform before its next file. What is already in stays in, and each can be resumed.',
+    },
+    {
+      id: 'queue',
+      target: 'imports-queue',
+      title: 'Grouped by state',
+      body: 'Imports being brought in come first, then those ready for approval, then those still being checked. Each says its stage.',
+    },
+    {
+      id: 'open',
+      target: 'imports-open',
+      title: 'Open one',
+      body: 'Tap the business to stop, start or resume its import, ask for the trading override or record the backup.',
+    },
+  ],
+};
+
+export const importRunPage: Tour = {
+  id: 'page-operator-import-run',
+  version: 1,
+  title: 'This page: one import',
+  audience: forOperator,
+  autoStart: false,
+  page: '/platform/imports/$slug/$runId',
+  steps: [
+    {
+      id: 'stages',
+      target: 'import-stages',
+      title: 'Where it stands',
+      body: 'The same steps the business sees: done, the step it is on, and what is left.',
+    },
+    {
+      id: 'facts',
+      target: 'import-run-facts',
+      title: 'Before it starts',
+      body: 'Check the approval, the backup and its check, and the trading override. All must be in place before the start.',
+    },
+    {
+      id: 'action',
+      target: 'import-run-action',
+      title: 'Stop, start or resume',
+      body: 'Stop halts it before the next file. Resume goes on from the first file not yet in. Start shows once everything above is ready.',
+    },
+  ],
+};
+
+export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage, dueForSuspensionPage, closuresPage, noOwnerPage, feedbackInboxPage, importQueuePage, importRunPage];

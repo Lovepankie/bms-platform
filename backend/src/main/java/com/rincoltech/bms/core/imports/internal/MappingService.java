@@ -138,6 +138,14 @@ class MappingService implements ImportMappings {
     }
 
     @Override
+    public List<Mapping> newest() {
+        return tx.execute(s -> jdbc.sql("SELECT DISTINCT ON (name) " + COLUMNS
+                        + " FROM import_mappings ORDER BY name, version DESC LIMIT 200")
+                .query(this::row)
+                .list());
+    }
+
+    @Override
     public List<Mapping> versions(String name) {
         return tx.execute(s -> jdbc.sql("SELECT " + COLUMNS + " FROM import_mappings WHERE name = ? ORDER BY version")
                 .param(name)

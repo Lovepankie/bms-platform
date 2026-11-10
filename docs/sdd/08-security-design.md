@@ -333,6 +333,7 @@ platform API and holds no tenant permissions.
 | `core.imports.manage` | Y | | | | Y | | | | | | | |
 | `core.imports.approve_commit` | Y | | | | Y | | | | | | | |
 | `core.imports.sign_off` | Y | | | | | | | | | | | |
+| `core.imports.view_raw` | Y | | | | | | | | | | | |
 | `core.payments.read` | Y | Y | | Y | Y | Y | | | | | | |
 | `core.payments.collect` | Y | Y | | Y | | | | | | | | |
 | `core.payments.allocate` | Y | | | Y | Y | | | | | | | |
@@ -540,6 +541,12 @@ Notes:
   figures tie, and a reconciliation with a difference that is not itemised is refused by the service and by the database
   (`import_signoff_rules`). Audited `core.import_run.signed_off` without the typed name, which is kept only in the append-only
   `import_signoffs` row. The operator's `core.imports.manage` makes the reconciliation again; it does not sign.
+  Built (issue #141, migration `V149`): `core.imports.view_raw`, the tenant admin's alone, shows the cells of one staged row as
+  uploaded and an issue's original value on the review screen (spec section 6.3), through `GET /imports/issues/{issue_id}/raw`;
+  every row opened is audited `core.import_row.raw_viewed` with the run, batch and line, never a value. No other answer of the
+  imports routes holds a value. The operator portal's import actions (stop, resume, start, the trading override, the dump
+  record and the kill switch) are platform routes under `platform.tenants.manage`, served only to a platform principal on the
+  platform host, so a tenant staff id never reaches `allowTradingTenant` or `approveTradingTenant` (comment on #141).
   Built (extras slice D5, issue #229): the monthly pack `lending.monthly_pack` runs under `lending.reports.portfolio` and the permission
   of each of its eight reports (`lending.reports.collections`, `lending.reports.members`, `lending.reports.compliance`), with
   `lending.insights.read`; a requester missing any is refused 403 and does not see the pack in the catalogue, and can still run the

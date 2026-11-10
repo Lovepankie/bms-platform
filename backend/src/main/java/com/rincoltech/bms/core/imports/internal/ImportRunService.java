@@ -34,6 +34,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
@@ -252,6 +254,14 @@ class ImportRunService implements ImportRuns {
     @Override
     public Run get(UUID runId) {
         return tx.execute(s -> find(runId, false));
+    }
+
+    @Override
+    public List<Run> list() {
+        return tx.execute(s -> jdbc.sql("SELECT " + RUN_COLUMNS
+                        + " FROM import_runs WHERE origin = 'framework' ORDER BY created_at DESC, id LIMIT 50")
+                .query(ImportRunService::run)
+                .list());
     }
 
     @Override
@@ -711,22 +721,72 @@ class ImportRunService implements ImportRuns {
         requireNoTransaction();
         requireKnownBuild();
         try (LoopClaim claim = claimLoop()) {
-            List<String> trading;
-            try {
-                trading = tx.execute(s -> start(runId, rehearsalToken));
-            } catch (DuplicateKeyException e) {
-                // import_runs_one_committing: another run of this business is committing.
-                throw importInProgress();
-            }
-            if (!trading.isEmpty()) {
-                throw new ApiException(
-                        HttpStatus.CONFLICT,
-                        "TENANT_TRADING",
-                        "Business already trades",
-                        "The tenant already has live transactions (" + String.join(", ", trading)
-                                + "); an import needs the trading override.");
-            }
+            begin(runId, rehearsalToken);
             return writeBatches(runId, claim);
+        }
+    }
+
+    /** The guards and the move to {@code committing}, with the commit's refusals; the loop is already claimed. */
+    private void begin(UUID runId, String rehearsalToken) {
+        List<String> trading;
+        try {
+            trading = tx.execute(s -> start(runId, rehearsalToken));
+        } catch (DuplicateKeyException e) {
+            // import_runs_one_committing: another run of this business is committing.
+            throw importInProgress();
+        }
+        if (!trading.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "TENANT_TRADING",
+                    "Business already trades",
+                    "The tenant already has live transactions (" + String.join(", ", trading)
+                            + "); an import needs the trading override.");
+        }
+    }
+
+    // JUSTIFICATION-A3: issue #141's portal start and resume: the guards in the request, the batches after.
+    @Override
+    public void startCommit(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background) {
+        requireNoTransaction();
+        requireKnownBuild();
+        LoopClaim claim = claimLoop();
+        try {
+            tx.executeWithoutResult(s -> requireOperator(platformUserId, "operator_required"));
+            begin(runId, null);
+        } catch (RuntimeException e) {
+            claim.close();
+            throw e;
+        }
+        handOff(runId, claim, background);
+    }
+
+    @Override
+    public void startResume(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background) {
+        requireNoTransaction();
+        requireKnownBuild();
+        LoopClaim claim = claimLoop();
+        try {
+            tx.executeWithoutResult(s -> requireOperator(platformUserId, "operator_required"));
+            prepareResume(runId);
+        } catch (RuntimeException e) {
+            claim.close();
+            throw e;
+        }
+        handOff(runId, claim, background);
+    }
+
+    /** Gives the batches and the loop claim to the caller's thread; the work gives the claim back when it ends. */
+    private void handOff(UUID runId, LoopClaim claim, Consumer<Supplier<CommitOutcome>> background) {
+        try {
+            background.accept(() -> {
+                try (claim) {
+                    return writeBatches(runId, claim);
+                }
+            });
+        } catch (RuntimeException e) {
+            claim.close();
+            throw e;
         }
     }
 
@@ -803,53 +863,58 @@ class ImportRunService implements ImportRuns {
         // A live commit loop owns the business's loop lock, inside a batch and between two: going on now would clear
         // the operator's halt under it, and the halt would be lost (reviews of #736, issue #779).
         try (LoopClaim claim = claimLoop()) {
-            tx.executeWithoutResult(s -> {
-                Run run = find(runId, true);
-                if (!RunStates.COMMITTING.equals(run.status())) {
-                    throw invalidTransition("Only an import being imported can go on; this one is "
-                            + RunStates.words(run.status()) + ".");
-                }
-                requireCommitPossible(run);
-                // A resume goes on with a commit that was approved (Lead ruling 8 on #872); the run's version
-                // moves with its own commit, so the approval is required, not its version.
-                if (run.commitApprovedBy() == null) {
-                    throw new ApiException(
-                            HttpStatus.CONFLICT,
-                            "commit_not_approved",
-                            "Commit not approved",
-                            "This import's commit has no second person's approval, so it does not go on.");
-                }
-                // The run's own commits make its dry run's stamp differ now, so the build and the writers are checked
-                // again: a resume goes on only on the build, and with the writers, the dry run rehearsed for the
-                // batches left (Lead ruling 4 and the review of d8d1e5b on #869).
-                requireSameWriters(runId);
-                // A dry run of the batches left, taken for a new build, must not have failed and must have matched the
-                // preview, as ready requires (review of 1c607ea on #869); on the normal path ready already did.
-                Optional<DryRun> dry = storedDryRun(runId);
-                if (dry.map(d -> d.report().failure() != null).orElse(false)) {
-                    throw new ApiException(
-                            HttpStatus.CONFLICT,
-                            "dry_run_failed",
-                            "Dry run failed",
-                            "The last dry run of this import stopped at a batch; fix the cause and run it again.");
-                }
-                if (dry.map(d -> !d.previewMatches()).orElse(false)) {
-                    throw new ApiException(
-                            HttpStatus.CONFLICT,
-                            "preview_differs",
-                            "Preview differs",
-                            "The balances of the last dry run differ from the preview's; the import does not go on.");
-                }
-                // The trading guard is not asked again: it was passed when the run started, and the batches this run
-                // already committed are the business's records now.
-                jdbc.sql(
-                                "UPDATE import_runs SET halt_requested = false, version = version + 1, updated_at = now() WHERE id = ?")
-                        .param(runId)
-                        .update();
-                audit(runId, "core.import_run.resumed", Map.of(), Map.of("halt_requested", false));
-            });
+            prepareResume(runId);
             return writeBatches(runId, claim);
         }
+    }
+
+    /** The resume's guards and the cleared halt, in one transaction; the loop is already claimed. */
+    private void prepareResume(UUID runId) {
+        tx.executeWithoutResult(s -> {
+            Run run = find(runId, true);
+            if (!RunStates.COMMITTING.equals(run.status())) {
+                throw invalidTransition(
+                        "Only an import being imported can go on; this one is " + RunStates.words(run.status()) + ".");
+            }
+            requireCommitPossible(run);
+            // A resume goes on with a commit that was approved (Lead ruling 8 on #872); the run's version
+            // moves with its own commit, so the approval is required, not its version.
+            if (run.commitApprovedBy() == null) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "commit_not_approved",
+                        "Commit not approved",
+                        "This import's commit has no second person's approval, so it does not go on.");
+            }
+            // The run's own commits make its dry run's stamp differ now, so the build and the writers are checked
+            // again: a resume goes on only on the build, and with the writers, the dry run rehearsed for the
+            // batches left (Lead ruling 4 and the review of d8d1e5b on #869).
+            requireSameWriters(runId);
+            // A dry run of the batches left, taken for a new build, must not have failed and must have matched the
+            // preview, as ready requires (review of 1c607ea on #869); on the normal path ready already did.
+            Optional<DryRun> dry = storedDryRun(runId);
+            if (dry.map(d -> d.report().failure() != null).orElse(false)) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "dry_run_failed",
+                        "Dry run failed",
+                        "The last dry run of this import stopped at a batch; fix the cause and run it again.");
+            }
+            if (dry.map(d -> !d.previewMatches()).orElse(false)) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "preview_differs",
+                        "Preview differs",
+                        "The balances of the last dry run differ from the preview's; the import does not go on.");
+            }
+            // The trading guard is not asked again: it was passed when the run started, and the batches this run
+            // already committed are the business's records now.
+            jdbc.sql(
+                            "UPDATE import_runs SET halt_requested = false, version = version + 1, updated_at = now() WHERE id = ?")
+                    .param(runId)
+                    .update();
+            audit(runId, "core.import_run.resumed", Map.of(), Map.of("halt_requested", false));
+        });
     }
 
     // ---------------------------------------------------------------------------------------------

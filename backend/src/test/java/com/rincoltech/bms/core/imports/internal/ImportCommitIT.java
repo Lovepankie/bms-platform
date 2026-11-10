@@ -1165,4 +1165,100 @@ class ImportCommitIT extends IntegrationTest {
                         .single())
                 .isTrue();
     }
+
+    @Autowired
+    javax.sql.DataSource dataSource;
+
+    // JUSTIFICATION-A3: issue #141's portal start, end to end; no existing case drives the commit from the portal.
+    /**
+     * The operator portal's start (issue #141, review of 1c9568b on #895): refused at once while another commit loop of the
+     * business is alive; otherwise the run is committing when the 202 answers, its move audited with the operator as
+     * actor, a second start meanwhile is 409; a background commit that dies after a batch is resumed from the portal once
+     * its loop is gone, the resume audited with the operator, and the run ends committed with every batch once.
+     */
+    @Test
+    void thePortalStartsTheCommitInTheRequestAndItsBatchesGoOnToCommitted() throws Exception {
+        UUID run = fullRun(t);
+        ready(t, run, Policy.OPEN_FROM_LIST);
+        Api platform = Api.platform(http);
+        String email = Api.email("portal-start");
+        UUID operatorId = Api.platformUser(email);
+        String token = platform.signIn(operatorId, email, Api.PASSWORD, null).accessToken();
+        String base = "/api/v1/platform/imports/businesses/" + t.slug() + "/runs/" + run;
+
+        // A live loop of the business (here held by the test's own session) refuses both at once, and nothing moves.
+        // The lock is a session lock on a pooled connection, so it is let go on that same connection before the
+        // connection goes back to the pool (review of e3f95b2 on #895).
+        String key = "core.imports.loop:" + t.tenantId();
+        try (java.sql.Connection held = dataSource.getConnection()) {
+            try (java.sql.PreparedStatement lock =
+                    held.prepareStatement("SELECT pg_advisory_lock(hashtextextended(?, 0))")) {
+                lock.setString(1, key);
+                lock.execute();
+            }
+            try {
+                for (String action : List.of("/start", "/resume")) {
+                    ResponseEntity<JsonNode> refused = platform.post(base + action, null, token);
+                    assertThat(refused.getStatusCode()).as(action).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(refused.getBody().get("code").asString()).isEqualTo("IMPORT_IN_PROGRESS");
+                }
+            } finally {
+                try (java.sql.PreparedStatement unlock =
+                        held.prepareStatement("SELECT pg_advisory_unlock(hashtextextended(?, 0))")) {
+                    unlock.setString(1, key);
+                    unlock.execute();
+                }
+            }
+        }
+        assertThat(status(run)).isEqualTo("ready");
+
+        // The background commit dies right after its second batch (batch 4), as a redeploy would end it.
+        seams.killAfter = 4;
+        ResponseEntity<JsonNode> started = platform.post(base + "/start", null, token);
+        assertThat(started.getStatusCode()).as("%s", started.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(started.getBody().get("run").get("status").asString()).isEqualTo("committing");
+        // A second start while it writes, or after it stopped, is refused; never a second writer.
+        assertThat(platform.post(base + "/start", null, token).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+        // Once the dead loop gave its claim back, the portal's resume goes on from the first batch not committed. While
+        // the loop is still alive the resume is 409 IMPORT_IN_PROGRESS, so it is asked until it is taken.
+        long until = System.currentTimeMillis() + 120_000;
+        ResponseEntity<JsonNode> resumed = platform.post(base + "/resume", null, token);
+        while (resumed.getStatusCode() != HttpStatus.ACCEPTED && System.currentTimeMillis() < until) {
+            assertThat(resumed.getBody().get("code").asString()).isEqualTo("IMPORT_IN_PROGRESS");
+            Thread.sleep(250);
+            resumed = platform.post(base + "/resume", null, token);
+        }
+        assertThat(resumed.getStatusCode()).as("%s", resumed.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        while (!"committed".equals(status(run)) && System.currentTimeMillis() < until) {
+            Thread.sleep(250);
+        }
+        assertThat(status(run)).isEqualTo("committed");
+        assertThat(committedOrder(run)).containsExactly(2, 4, 3, 1);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT actor_kind || '|' || actor_user_id FROM audit_log WHERE tenant_id = ?"
+                                + " AND entity_id = ? AND action = 'core.import_run.resumed'")
+                        .params(t.tenantId(), run)
+                        .query(String.class)
+                        .list())
+                .as("the resume names the operator who pressed it")
+                .containsExactly("platform|" + operatorId);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT actor_kind || '|' || actor_user_id FROM audit_log WHERE tenant_id = ?"
+                                + " AND entity_id = ? AND action = 'core.import_run.status_changed'"
+                                + " AND data -> 'after' ->> 'status' = 'committing'")
+                        .params(t.tenantId(), run)
+                        .query(String.class)
+                        .list())
+                .as("the move to committing names the operator who pressed start")
+                .containsExactly("platform|" + operatorId);
+    }
+
+    static String status(UUID runId) {
+        return TestDatabase.owner()
+                .sql("SELECT status FROM import_runs WHERE id = ?")
+                .param(runId)
+                .query(String.class)
+                .single();
+    }
 }

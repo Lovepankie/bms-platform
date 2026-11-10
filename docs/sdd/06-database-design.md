@@ -1512,6 +1512,11 @@ Added by `V148__import_metrics_and_defects.sql` (issue #140, spec section 8, cha
   most 500, as `(tenant_slug, run_id, metrics)`; it raises `insufficient_privilege` when `app.tenant_id` is bound and never
   returns a business's name.
 
+Added by `V149__import_view_raw.sql` (issue #141, spec section 6.3, chapter 13 section 13.14.1 15/16), expand only: the
+permission `core.imports.view_raw` (not money moving), granted to `tenant_admin` alone, which the raw row of an issue on the
+review screen needs (chapter 7 section 7.11.9); nothing else changes. The import screens need no other schema: they read and
+write through the tables of V127 to V148.
+
 ## 6.6 General ledger (RLS)
 
 ### 6.6.1 Tables

@@ -1892,7 +1892,9 @@ class MigrationOrderIT {
                                         // V132 (where an entry is made, #826): the owner's read of the distances.
                                         + " 'retail.entry_location.read',"
                                         // V144 (the sign-off of an import's reconciliation, #134).
-                                        + " 'core.imports.sign_off')")
+                                        + " 'core.imports.sign_off',"
+                                        // V149 (the raw row of the import screens, #141).
+                                        + " 'core.imports.view_raw')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")
@@ -4236,6 +4238,49 @@ class MigrationOrderIT {
                                AND (SELECT prosecdef FROM pg_proc WHERE proname = 'platform_import_runs_report')
                                AND NOT (SELECT prosecdef FROM pg_proc WHERE proname = 'import_run_metrics')
                             """).query(Boolean.class).single()).isTrue();
+        }
+    }
+
+    /**
+     * V149 (issue #141) is expand only: one permission, held by the tenant administrator alone, and every permission and
+     * grant before it stays as it was.
+     * JUSTIFICATION-A3: a new test case; no existing case covers V149.
+     */
+    @Test
+    void importViewRawMigrationAddsOnePermissionForTheAdministrator() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("149") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            long permissions = owner.sql("SELECT count(*) FROM permissions")
+                    .query(Long.class)
+                    .single();
+            long grants = owner.sql("SELECT count(*) FROM role_permissions")
+                    .query(Long.class)
+                    .single();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT count(*) FROM permissions")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(permissions + 1);
+            assertThat(owner.sql("SELECT count(*) FROM role_permissions")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(grants + 1);
+            assertThat(owner.sql("SELECT role_key FROM role_permissions WHERE permission_key = 'core.imports.view_raw'")
+                            .query(String.class)
+                            .list())
+                    .containsExactly("tenant_admin");
+            assertThat(owner.sql("SELECT NOT is_money_moving FROM permissions WHERE key = 'core.imports.view_raw'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
         }
     }
 

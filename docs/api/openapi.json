@@ -3435,6 +3435,36 @@
           }
         }
       },
+      "ImportAmountFigure" : {
+        "description" : "An amount of one branch in minor units",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportArrearsFigure" : {
+        "properties" : {
+          "branch" : {
+            "type" : "string"
+          },
+          "bucket" : {
+            "type" : "string"
+          },
+          "loans" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "ImportAskCustomerRequest" : {
         "properties" : {
           "ask_customer" : {
@@ -3447,6 +3477,41 @@
           }
         },
         "required" : [ "ask_customer", "version" ]
+      },
+      "ImportBalances" : {
+        "description" : "The balances the import gives, per branch",
+        "properties" : {
+          "arrears" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportArrearsFigure"
+            },
+            "type" : "array"
+          },
+          "journals" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportJournalFigure"
+            },
+            "type" : "array"
+          },
+          "loan_principal" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportAmountFigure"
+            },
+            "type" : "array"
+          },
+          "receivables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportAmountFigure"
+            },
+            "type" : "array"
+          },
+          "stock" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportStockFigure"
+            },
+            "type" : "array"
+          }
+        }
       },
       "ImportBatchRows" : {
         "description" : "Rows by outcome of one batch; the commit's counts null until committed",
@@ -3539,6 +3604,56 @@
           }
         },
         "required" : [ "code", "resolution" ]
+      },
+      "ImportCheckResult" : {
+        "description" : "The validation of a run: counts by severity and by code",
+        "properties" : {
+          "blocking" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "files" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportFileCheck"
+            },
+            "type" : "array"
+          },
+          "info" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "template_version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "warning" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportCodeCount" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportCommitRequest" : {
+        "description" : "The pending approval request of import_commit",
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
       },
       "ImportDefect" : {
         "description" : "A defect found after the cutover, logged against the run",
@@ -3673,6 +3788,183 @@
         },
         "required" : [ "description" ]
       },
+      "ImportDeletionCertificate" : {
+        "description" : "The certificate of deletion of a purged run",
+        "properties" : {
+          "document" : {
+            "description" : "The certificate as the plain text sent to the customer",
+            "type" : "string"
+          },
+          "dump_confirmed" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "issued_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "operator, signed_off_30_days or inactive_90_days",
+            "type" : "string"
+          },
+          "sha256" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportDryRun" : {
+        "description" : "The stored dry run: the commit rolled back, and its report",
+        "properties" : {
+          "anomalies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportReportAnomaly"
+            },
+            "type" : "array"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "balances" : {
+            "$ref" : "#/components/schemas/ImportBalances"
+          },
+          "checksum" : {
+            "type" : "string"
+          },
+          "current" : {
+            "description" : "False once anything of the run changed after it; run it again",
+            "type" : "boolean"
+          },
+          "failure" : {
+            "description" : "Which file failed and the kind of failure, or null",
+            "type" : "string"
+          },
+          "preview_matches" : {
+            "description" : "The dry run's balances equal the preview's",
+            "type" : "boolean"
+          },
+          "sources" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportReportSource"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ImportFile" : {
+        "description" : "One uploaded file of a run (a batch), without any value of a row",
+        "properties" : {
+          "column_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "failure_code" : {
+            "description" : "Why the file could not be read, when failed: a code of the catalogue",
+            "type" : "string"
+          },
+          "failure_reason" : {
+            "type" : "string"
+          },
+          "file_name" : {
+            "type" : "string"
+          },
+          "file_type" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mapping_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mapping_source" : {
+            "type" : "string"
+          },
+          "row_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "seq" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "size_bytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "description" : "uploaded, parsed, failed, committed or cancelled",
+            "type" : "string"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "uploaded_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ImportFileCheck" : {
+        "description" : "What the check found in one file",
+        "properties" : {
+          "batch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "blocking" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "codes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportCodeCount"
+            },
+            "type" : "array"
+          },
+          "info" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "seq" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "warning" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportFileList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportFile"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "ImportIssue" : {
         "description" : "One issue of the review queue; its message never holds a value of a row",
         "properties" : {
@@ -3768,6 +4060,78 @@
           }
         }
       },
+      "ImportJournalFigure" : {
+        "description" : "One opening journal: its debit and credit in minor units",
+        "properties" : {
+          "branch" : {
+            "type" : "string"
+          },
+          "credit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "debit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "kind" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportMappingChoice" : {
+        "description" : "The newest version of one of the business's mappings",
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "sources" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportMappingSource"
+            },
+            "type" : "array"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "template_version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportMappingChoiceList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportMappingChoice"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ImportMappingSource" : {
+        "description" : "One file or tab a mapping describes",
+        "properties" : {
+          "entity_set" : {
+            "type" : "string"
+          },
+          "file" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          }
+        }
+      },
       "ImportMappingVersion" : {
         "description" : "The mapping versions the run's batches were read with",
         "properties" : {
@@ -3782,6 +4146,72 @@
             "type" : "integer"
           },
           "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportPreview" : {
+        "description" : "What the import will create, from the staged rows only (FR-IMP-06)",
+        "properties" : {
+          "balances" : {
+            "$ref" : "#/components/schemas/ImportBalances"
+          },
+          "files" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportPreviewFile"
+            },
+            "type" : "array"
+          },
+          "records" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRecordCount"
+            },
+            "type" : "array"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "template_version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportPreviewFile" : {
+        "description" : "What one file's rows come to",
+        "properties" : {
+          "batch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "blank" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "blocked" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "entity_set" : {
+            "type" : "string"
+          },
+          "excluded" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "file" : {
+            "type" : "string"
+          },
+          "rows" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "seq" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "write" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -3842,6 +4272,53 @@
           "open" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        }
+      },
+      "ImportRawCell" : {
+        "description" : "One cell as uploaded",
+        "properties" : {
+          "column" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportRawRow" : {
+        "description" : "The row of an issue as uploaded; audited per row opened",
+        "properties" : {
+          "cells" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRawCell"
+            },
+            "type" : "array"
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "file" : {
+            "type" : "string"
+          },
+          "issue_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "original_value" : {
+            "description" : "The value the issue is about, as uploaded",
+            "type" : "string"
+          },
+          "row_id" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         }
       },
@@ -3990,6 +4467,17 @@
           }
         }
       },
+      "ImportRecordCount" : {
+        "properties" : {
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
       "ImportRehearsalDifference" : {
         "description" : "Per source, each count of the newest committed rehearsal that differs from the cutover",
         "properties" : {
@@ -4021,6 +4509,45 @@
           },
           "outcome" : {
             "type" : "string"
+          }
+        }
+      },
+      "ImportReportAnomaly" : {
+        "description" : "One anomaly with its file and line, never a value of a row",
+        "properties" : {
+          "file" : {
+            "type" : "string"
+          },
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ImportReportSource" : {
+        "description" : "One line of the report: a file and its rows by outcome",
+        "properties" : {
+          "existing" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "read" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "written" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -4100,6 +4627,71 @@
           }
         },
         "required" : [ "resolution", "version" ]
+      },
+      "ImportRun" : {
+        "description" : "An import run and where it stands",
+        "properties" : {
+          "commit_approved" : {
+            "description" : "import_commit is approved for the run as it is now",
+            "type" : "boolean"
+          },
+          "committed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "committing_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cutover_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "fabricated" : {
+            "type" : "boolean"
+          },
+          "halt_requested" : {
+            "description" : "The stop button was pressed; the commit stops before the next batch",
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "pre_import_dump_file" : {
+            "description" : "The file name of the pre-import dump recorded, or null",
+            "type" : "string"
+          },
+          "pre_import_dump_verified" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "description" : "draft, uploaded, in_review, ready, committing, committed, signed_off, purged or cancelled",
+            "type" : "string"
+          },
+          "trading_override_approved" : {
+            "description" : "A second platform operator approved that override",
+            "type" : "boolean"
+          },
+          "trading_override_set" : {
+            "description" : "A platform operator allowed this run into a business that already trades",
+            "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ImportRunList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ImportRun"
+            },
+            "type" : "array"
+          }
+        }
       },
       "ImportRunMetrics" : {
         "description" : "The metrics of an import run, from its stored data (spec section 8)",
@@ -4430,6 +5022,21 @@
           }
         },
         "required" : [ "numbers", "scope" ]
+      },
+      "ImportStockFigure" : {
+        "description" : "Stock of one branch: quantity and value at cost in minor units",
+        "properties" : {
+          "branch" : {
+            "type" : "string"
+          },
+          "qty" : {
+            "type" : "number"
+          },
+          "value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
       },
       "ImportTemplateRows" : {
         "description" : "Rows by outcome of a template's batches, not failed or cancelled",
@@ -9383,6 +9990,74 @@
         },
         "required" : [ "status" ]
       },
+      "PlatformImportDumpCheckRequest" : {
+        "description" : "The check of the dump: pg_restore --list and the hash",
+        "properties" : {
+          "listed_entries" : {
+            "description" : "The entries pg_restore --list listed",
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "sha256" : {
+            "description" : "The SHA-256 measured again",
+            "pattern" : "[0-9a-f]{64}",
+            "type" : "string"
+          }
+        },
+        "required" : [ "listed_entries", "sha256" ]
+      },
+      "PlatformImportDumpRequest" : {
+        "description" : "The pre-import dump as taken on the host",
+        "properties" : {
+          "file" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sha256" : {
+            "pattern" : "[0-9a-f]{64}",
+            "type" : "string"
+          },
+          "taken_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "file", "sha256", "taken_at" ]
+      },
+      "PlatformImportKillSwitch" : {
+        "properties" : {
+          "commit_enabled" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "PlatformImportKillSwitchRequest" : {
+        "properties" : {
+          "commit_enabled" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "description" : "Why, kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "commit_enabled", "reason" ]
+      },
+      "PlatformImportOverrideRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why this business may be imported into while it trades",
+            "maxLength" : 500,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "PlatformImportRun" : {
         "description" : "One run on the platform report; the business by its slug only",
         "properties" : {
@@ -9401,6 +10076,21 @@
               "$ref" : "#/components/schemas/PlatformImportRun"
             },
             "type" : "array"
+          }
+        }
+      },
+      "PlatformImportRunState" : {
+        "description" : "One run as the operator portal shows it, with the kill switch",
+        "properties" : {
+          "commit_enabled" : {
+            "description" : "The platform kill switch: false stops every commit before its next batch",
+            "type" : "boolean"
+          },
+          "run" : {
+            "$ref" : "#/components/schemas/ImportRun"
+          },
+          "tenant_slug" : {
+            "type" : "string"
           }
         }
       },
@@ -29847,6 +30537,34 @@
         "tags" : [ "imports" ]
       }
     },
+    "/api/v1/imports/files/{batch_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelImportFile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "batch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportFile"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take a file out of the run: its rows and its quarantined file are deleted; audited",
+        "tags" : [ "imports" ]
+      }
+    },
     "/api/v1/imports/issues/{issue_id}/ask-customer" : {
       "put" : {
         "operationId" : "askCustomerAboutImportIssue",
@@ -29885,6 +30603,34 @@
         "tags" : [ "imports" ]
       }
     },
+    "/api/v1/imports/issues/{issue_id}/raw" : {
+      "get" : {
+        "operationId" : "getImportRawRow",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "issue_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportRawRow"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The row of an issue as uploaded, with the issue's original value; audited per row opened (spec section 6.3)",
+        "tags" : [ "imports" ]
+      }
+    },
     "/api/v1/imports/issues/{issue_id}/resolve" : {
       "post" : {
         "operationId" : "resolveImportIssue",
@@ -29920,6 +30666,173 @@
           }
         },
         "summary" : "Resolve one issue: edit, leave the row out, accept the suggestion, link, override a warning or map the value (FR-IMP-05)",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/mappings" : {
+      "get" : {
+        "operationId" : "listImportMappings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportMappingChoiceList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The newest version of each of the business's mappings, with the sources each describes",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs" : {
+      "get" : {
+        "operationId" : "listImportRuns",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportRunList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The business's import runs, newest first, at most 50",
+        "tags" : [ "imports" ]
+      },
+      "post" : {
+        "operationId" : "openImportRun",
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportRun"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Start a new import run, in draft; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}" : {
+      "get" : {
+        "operationId" : "getImportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One import run and where it stands",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/certificate" : {
+      "get" : {
+        "operationId" : "getImportDeletionCertificate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportDeletionCertificate"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The newest certificate of deletion of a purged run; 404 until it is purged",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/check" : {
+      "post" : {
+        "operationId" : "checkImportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportCheckResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Check every file of the run against its template; the run moves to in review; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/commit-request" : {
+      "post" : {
+        "operationId" : "requestImportCommit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportCommitRequest"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask a second person to approve the import (import_commit, maker and checker)",
         "tags" : [ "imports" ]
       }
     },
@@ -29984,6 +30897,147 @@
           }
         },
         "summary" : "Log a defect found after the cutover against an imported run, with the code it should have had; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/dry-run" : {
+      "get" : {
+        "operationId" : "getImportDryRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportDryRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The run's stored dry run; 404 while none ran",
+        "tags" : [ "imports" ]
+      },
+      "post" : {
+        "operationId" : "dryRunImport",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportDryRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Run the commit inside one transaction that is rolled back, and store its report; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/files" : {
+      "get" : {
+        "operationId" : "listImportFiles",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportFileList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The files of an import run, in commit order",
+        "tags" : [ "imports" ]
+      },
+      "post" : {
+        "operationId" : "uploadImportFile",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "file_name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "mapping_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "source",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/octet-stream" : {
+              "schema" : {
+                "format" : "binary",
+                "type" : "string"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportFile"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Upload one file into the run's quarantine, read with one source of a mapping; the body is the file itself, streamed; audited",
         "tags" : [ "imports" ]
       }
     },
@@ -30125,6 +31179,34 @@
         "tags" : [ "imports" ]
       }
     },
+    "/api/v1/imports/runs/{run_id}/preview" : {
+      "get" : {
+        "operationId" : "previewImportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportPreview"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What the import will create, from the staged rows only, with the predicted balances (FR-IMP-06)",
+        "tags" : [ "imports" ]
+      }
+    },
     "/api/v1/imports/runs/{run_id}/questions" : {
       "get" : {
         "operationId" : "listImportQuestions",
@@ -30178,6 +31260,34 @@
           }
         },
         "summary" : "The same questions as a CSV file to send to the customer; audited",
+        "tags" : [ "imports" ]
+      }
+    },
+    "/api/v1/imports/runs/{run_id}/ready" : {
+      "post" : {
+        "operationId" : "markImportRunReady",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark the run ready: no open blocking or warning issue and a dry run that still counts and matched the preview",
         "tags" : [ "imports" ]
       }
     },
@@ -37493,6 +38603,362 @@
         },
         "summary" : "Email the sign-in page of every business where this address is an active staff user; the answer never says whether any matched (issue #383)",
         "tags" : [ "sign-up" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}" : {
+      "get" : {
+        "operationId" : "platformGetImportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One import run of a business, by its slug, with the kill switch",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/dump" : {
+      "post" : {
+        "operationId" : "platformRecordImportDump",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformImportDumpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record the pre-import dump taken on the host: file name, time and SHA-256; audited",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/dump/check" : {
+      "post" : {
+        "operationId" : "platformCheckImportDump",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformImportDumpCheckRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record the check of the dump: its SHA-256 again and the entries pg_restore --list listed; audited",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/resume" : {
+      "post" : {
+        "operationId" : "platformResumeImportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "Accepted"
+          }
+        },
+        "summary" : "Resume a stopped or interrupted commit from its first batch not committed; it runs on",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/start" : {
+      "post" : {
+        "operationId" : "platformStartImportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "Accepted"
+          }
+        },
+        "summary" : "Start the commit of a ready run whose import_commit is approved and whose dump is checked; it runs on, batch by batch",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/stop" : {
+      "post" : {
+        "operationId" : "platformStopImportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The stop button: the commit stops before the next batch, or within 1,000 rows; audited",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/trading-override" : {
+      "post" : {
+        "operationId" : "platformRequestImportTradingOverride",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformImportOverrideRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask to import into a business that already trades, with a reason; a second operator approves it; audited",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/trading-override/approve" : {
+      "post" : {
+        "operationId" : "platformApproveImportTradingOverride",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportRunState"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve the trading override; the operator who asked for it cannot; audited",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/imports/kill-switch" : {
+      "get" : {
+        "operationId" : "platformGetImportKillSwitch",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportKillSwitch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether imports may commit on this platform",
+        "tags" : [ "platform" ]
+      },
+      "put" : {
+        "operationId" : "platformSetImportKillSwitch",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformImportKillSwitchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformImportKillSwitch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stop every import commit before its next batch, or allow them again, with a reason; audited",
+        "tags" : [ "platform" ]
       }
     },
     "/api/v1/platform/imports/report" : {

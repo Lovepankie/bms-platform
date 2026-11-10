@@ -12,4 +12,5 @@ export const AREAS: MenuLink[] = [
   { to: '/platform/no-owner', label: 'Businesses with no owner', icon: icons.people },
   { to: '/platform/outbox', label: 'Messages not sent', icon: icons.bell },
   { to: '/platform/feedback', label: 'Feedback', icon: icons.chat },
+  { to: '/platform/imports', label: 'Imports', icon: icons.importer },
 ];

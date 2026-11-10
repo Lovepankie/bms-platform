@@ -108,6 +108,35 @@ vi.mock('../api/closure', async (original) => {
   };
 });
 
+// The import queue and one import (issue #141): a fabricated run of a test business, being brought in.
+// JUSTIFICATION-A3: the fixtures the two new portal tours need, in the same shape as the others above.
+const IMPORT_RUN = {
+  id: 'r-1', status: 'committing', version: 4, halt_requested: false, commit_approved: true,
+  pre_import_dump_file: 'test-pre-import.dump', pre_import_dump_verified: true, trading_override_set: false, trading_override_approved: false,
+};
+vi.mock('../api/imports', async (original) => {
+  const real = await original<typeof import('../api/imports')>();
+  return {
+    ...real,
+    platformRuns: () =>
+      Promise.resolve([
+        {
+          tenant_slug: 'test-shop-five',
+          metrics: { run_id: 'r-1', status: 'committing', fabricated: true, stamps: { created_at: '2026-11-01T08:00:00Z' }, stages: [{ number: 6, key: 'cutover', started_at: '2026-11-09T08:00:00Z' }] },
+        },
+      ]),
+    killSwitch: () => Promise.resolve(true),
+    platformRun: () => Promise.resolve({ tenant_slug: 'test-shop-five', run: IMPORT_RUN, commit_enabled: true }),
+  };
+});
+vi.mock('../api/onboarding', async (original) => {
+  const real = await original<typeof import('../api/onboarding')>();
+  return { ...real, platformMe: () => Promise.resolve({ full_name: 'Test Operator 01', permissions: ['platform.tenants.read', 'platform.tenants.manage'] }) };
+});
+
+const { ImportQueue } = await import('../areas/platform/imports');
+const { OperatorImportRun } = await import('../areas/platform/import-run');
+
 const { ClosuresPage } = await import('../areas/platform/closures');
 const { NoOwnerPage } = await import('../areas/platform/no-owner');
 
@@ -160,6 +189,8 @@ describe('operator page tours', () => {
     expect(pageTourFor(TOURS, OPERATOR, '/platform/billing')?.id).toBe('page-operator-billing');
     expect(pageTourFor(TOURS, OPERATOR, '/platform/closures')?.id).toBe('page-operator-closures');
     expect(pageTourFor(TOURS, OPERATOR, '/platform/no-owner')?.id).toBe('page-operator-no-owner');
+    expect(pageTourFor(TOURS, OPERATOR, '/platform/imports')?.id).toBe('page-operator-imports');
+    expect(pageTourFor(TOURS, OPERATOR, '/platform/imports/test-shop-five/r-1')?.id).toBe('page-operator-import-run');
     expect(pageTourFor(TOURS, mockMe('admin'), '/platform/plans')).toBeUndefined();
   });
 
@@ -174,6 +205,8 @@ describe('operator page tours', () => {
     ['page-operator-billing', () => <DueForSuspensionPage />, 'Test Shop Two'],
     ['page-operator-closures', () => <ClosuresPage />, 'Test Shop Three'],
     ['page-operator-no-owner', () => <NoOwnerPage />, 'Test Shop Four'],
+    ['page-operator-imports', () => <ImportQueue />, 'test-shop-five'],
+    ['page-operator-import-run', () => <OperatorImportRun slug="test-shop-five" runId="r-1" />, 'Stop the import'],
     [
       'page-operator-feedback',
       () => <FeedbackInbox load={() => Promise.resolve([FEEDBACK])} save={() => Promise.resolve(FEEDBACK)} loadScreenshot={() => Promise.resolve(new Blob())} />,

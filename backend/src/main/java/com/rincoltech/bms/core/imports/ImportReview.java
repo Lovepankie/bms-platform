@@ -55,6 +55,26 @@ public interface ImportReview {
     List<Question> questions(UUID runId, boolean export);
 
     /**
+     * The row of an issue as it was uploaded, for the review screen of a holder of {@code core.imports.view_raw} (issue #141,
+     * spec section 6.3): each kept cell by its column, in the file's order, and the issue's original value. Audited as
+     * {@code core.import_row.raw_viewed} with the run, the batch and the line, never a value, on every call. A purged run
+     * answers no cells.
+     */
+    RawRow raw(UUID issueId);
+
+    /** One cell as uploaded: its column, its value as text and the type the parser read. */
+    record RawValue(String column, String value, String type) {}
+
+    record RawRow(
+            UUID issueId,
+            UUID rowId,
+            String file,
+            int line,
+            String field,
+            String originalValue,
+            List<RawValue> cells) {}
+
+    /**
      * @param status {@code open} (the default), {@code resolved} or {@code all}
      * @param code one code, or null
      * @param batchId one batch of the run, or null

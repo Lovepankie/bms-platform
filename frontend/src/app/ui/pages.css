@@ -485,3 +485,96 @@
 .recon-items li {
   overflow-wrap: anywhere;
 }
+
+/* The steps of an import (issue #141): done, now and later, said in words beside each step so colour is never the only sign. */
+.import-stages ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-stage {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.import-stage-mark {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.import-stage.is-done .import-stage-mark {
+  color: var(--color-success);
+}
+
+.import-stage.is-now {
+  font-weight: var(--weight-semibold);
+}
+
+.import-stage.is-now .import-stage-mark {
+  color: var(--color-primary);
+}
+
+.import-stage.is-later {
+  color: var(--color-text-muted);
+}
+
+/* The figures of an import (issue #141): each label above its value, so a long amount or file name never squeezes its label
+   on a phone. */
+.import-figures {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+}
+
+.import-figures dt {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.import-figures dt:first-child {
+  margin-top: 0;
+}
+
+.import-figures dd {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* A searchable list of choices (the sheet layout of an upload): each choice a full 48px line (rule 12). */
+.import-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+.import-choice > input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.import-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The certificate of deletion as it is sent: its own lines, wrapped on a phone. */
+.import-certificate {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}

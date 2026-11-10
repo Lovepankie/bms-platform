@@ -1,8 +1,11 @@
 package com.rincoltech.bms.core.imports;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The runs of customer data onboarding (issue #127, spec sections 3.7, 3.11 and 5.4). Every method works for the business
@@ -28,6 +31,9 @@ public interface ImportRuns {
     Run open(UUID createdBy, boolean fabricated);
 
     Run get(UUID runId);
+
+    /** The business's runs of the import screens (origin {@code framework}), newest first, at most 50 (issue #141). */
+    List<Run> list();
 
     /**
      * Moves a run along the diagram of spec section 3.11, stamping the stage time: {@code draft} to {@code uploaded} to
@@ -115,6 +121,24 @@ public interface ImportRuns {
      * did not match the preview 409 {@code preview_differs}.
      */
     CommitOutcome resume(UUID runId);
+
+    /**
+     * The operator portal's start (issue #141): in the caller's thread, the business's commit loop is claimed and the guards
+     * and move to {@code committing} of {@link #commit} run, with every one of its refusals, audited as the commit audits
+     * them with the signed-in platform operator as actor ({@code platformUserId} must be an active one: 403
+     * {@code operator_required}). Only then are the batches handed to {@code background}, which runs the work for the
+     * business on its own thread; the work holds the loop claim until it ends, so a second start, or a resume while it
+     * writes, is refused at once with {@code IMPORT_IN_PROGRESS}.
+     */
+    void startCommit(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background);
+
+    /**
+     * The operator portal's resume (issue #141), as {@link #startCommit} for {@link #resume}: refused at once while any commit
+     * loop of the business is alive (a commit still finishing the batch the stop button caught, or another resume), so the
+     * halt of a live loop is never cleared under it; a run left {@code committing} by a halt, a failed batch or a restart has
+     * no live loop and goes on from its first batch not committed.
+     */
+    void startResume(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background);
 
     // JUSTIFICATION-A3: issue #132 adds the dry run and the stored reports to the run's API, new methods beside commit.
     /**

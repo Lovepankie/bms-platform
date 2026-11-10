@@ -54,6 +54,9 @@ import { BusinessNotificationsScreen } from '../areas/staff/notifications/busine
 import { BillingScreen } from '../areas/staff/billing/page';
 import { CloseScreen } from '../areas/staff/close/page';
 import { ImportsSignOff } from '../areas/staff/imports/page';
+import { ImportRuns } from '../areas/staff/imports/runs';
+import { ImportRunScreen } from '../areas/staff/imports/run';
+import { ImportProblems } from '../areas/staff/imports/problems';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { ApprovalRulesScreen } from '../areas/staff/approval-rules/page';
 import { UsersScreen } from '../areas/staff/users/page';
@@ -124,6 +127,12 @@ function screen(path: string | undefined): ReactElement {
       return <CloseScreen />;
     case '/staff/setup/imports':
       return <ImportsSignOff />;
+    case '/staff/setup/imports/runs':
+      return <ImportRuns />;
+    case '/staff/setup/imports/runs/$runId':
+      return <ImportRunScreen runId="run-2" />;
+    case '/staff/setup/imports/runs/$runId/problems':
+      return <ImportProblems runId="run-2" />;
     case '/staff/retail':
       return <RetailHome />;
     case '/staff/retail/sale':
@@ -225,6 +234,14 @@ function render(me: Me, path: string | undefined): string {
   });
   // What Imports to sign off reads (issue #134): one imported run, so its list is in the static markup.
   client.setQueryData(['imports-sign-off'], [{ run_id: 'run-1', status: 'committed', committed_at: '2026-10-01T07:00:00Z', version: 1, signable: true }]);
+  // What Bring in your data reads (issue #141): one import waiting for its files, and one problem of one kind.
+  client.setQueryData(['import-runs'], [{ id: 'run-2', status: 'draft', version: 1 }]);
+  client.setQueryData(['import-run', 'run-2'], { id: 'run-2', status: 'draft', version: 1 });
+  client.setQueryData(['import-files', 'run-2'], []);
+  client.setQueryData(['import-metrics', 'run-2'], { run_id: 'run-2', status: 'draft', issues: [] });
+  client.setQueryData(['import-issues', 'run-2'], [
+    { id: 'i-1', line: 4, code: 'TYPE_INVALID', severity: 'blocking', field: 'price', message: 'price on test-items.csv line 4 is not a valid money.', version: 1 },
+  ]);
   // What the approval rules read (issue #343): one rule, so the page and its save button are in the static markup.
   client.setQueryData(['approval-rules'], {
     currency: 'UGX', version: 1,
@@ -328,6 +345,9 @@ const REFERRER: Me = { ...ADMIN, full_name: 'Test Referrer 01', permissions: [..
 // The tenant administrator who signs the reconciliation of an import (issue #134).
 const SIGNER: Me = { ...ADMIN, full_name: 'Test Signer 01', permissions: [...(ADMIN.permissions ?? []), 'core.imports.sign_off'] } as Me;
 
+// The person who runs an import for the business (issue #141).
+const IMPORTER: Me = { ...ADMIN, full_name: 'Test Importer 01', permissions: [...(ADMIN.permissions ?? []), 'core.imports.manage'] } as Me;
+
 const AUDIENCE: Record<string, Me[]> = {
   'page-money': [ADMIN, SELLER],
   'page-more': [ADMIN, SELLER, OFFICER],
@@ -345,6 +365,9 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-billing': [ADMIN],
   'page-close': [ADMIN],
   'page-imports-sign-off': [SIGNER],
+  'page-import-runs': [IMPORTER],
+  'page-import-run': [IMPORTER],
+  'page-import-problems': [IMPORTER],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],

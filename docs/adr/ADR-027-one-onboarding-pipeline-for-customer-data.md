@@ -83,6 +83,22 @@ use it); the batch transaction timeout against real volumes (the big file test s
 mappings drifting from the template version a run started with; operators bypassing the app with
 host-side files after self service exists.
 
+## Note (10 November 2026, issue #141): the screens of the whole pipeline
+
+Three choices the screens make. The raw cells of a staged row are a permission of their own, `core.imports.view_raw` (V149),
+held by the tenant administrator, the role the operator runs a business's onboarding with and, in self service, the admin of
+the business whose sheet it is; the row is answered one issue at a time and every opening is audited without a value, so
+reading the quarantine leaves a trail per row, not per screen. The operator portal's actions on a run (stop, start, resume, the
+trading override, the dump record) are platform routes that name the business by its slug and run bound to it, rather than a
+second set of definer functions: the run's own service already holds every rule and the business's row-level security still
+applies, and only a platform principal reaches a platform path, so the operator ids the service records are always operators'.
+The commit and its resume take one transaction per batch and can outlast a request, so the portal splits them: the
+business's commit loop is claimed and the guards, the move to `committing` and its audit row (the operator as actor) run in
+the request, which answers every refusal, and only the batches go on on their own thread, holding the loop until they end.
+So a second start, or a resume while a loop is alive, is refused at once and never undoes a stop; a batch that fails
+afterwards is logged by run id and kind and leaves the run `committing` and resumable, as decision 4 already provides. The approval of the commit stays a tenant approval (decision 4); the platform operator as
+checker of a first import is self service's (#142).
+
 ## Note (10 November 2026, issue #140): metrics and the defect log
 
 The metrics of spec section 8 are computed when asked from what the run stored, never from logs, by one database function

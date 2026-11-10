@@ -1492,6 +1492,90 @@ export const importsSignOffPage: Tour = {
   ],
 };
 
+// Business set-up > Bring in your data (issue #141): the imports, one import's steps and its problems by kind, for the holder of
+// core.imports.manage.
+// JUSTIFICATION-A3: the page tours ADR-049 asks of the three new routes.
+export const importRunsPage: Tour = {
+  id: 'page-import-runs',
+  version: 1,
+  title: 'This page: bring in your data',
+  audience: (me) => held(me, 'core.imports.manage'),
+  autoStart: false,
+  page: '/staff/setup/imports/runs',
+  steps: [
+    {
+      id: 'intro',
+      target: 'import-runs-intro',
+      title: 'Checked before it counts',
+      body: 'Your sheets are checked here first. Nothing enters your books until a second person approves.',
+    },
+    {
+      id: 'list',
+      target: 'import-runs-list',
+      title: 'Each import and its step',
+      body: 'Each row is one import and says which step it is on. Tap it to carry on.',
+    },
+    {
+      id: 'start',
+      target: 'import-runs-start',
+      title: 'Start a new one',
+      body: 'Start a new import, then add each sheet or tab you keep your records in.',
+    },
+  ],
+};
+
+export const importRunPage: Tour = {
+  id: 'page-import-run',
+  version: 1,
+  title: 'This page: one import',
+  audience: (me) => held(me, 'core.imports.manage'),
+  autoStart: false,
+  page: '/staff/setup/imports/runs/$runId',
+  steps: [
+    {
+      id: 'steps',
+      target: 'import-stages',
+      title: 'The steps',
+      body: 'Done, the step it is on, and what is left. Each step must be finished before the next.',
+    },
+    {
+      id: 'files',
+      target: 'import-run-files',
+      title: 'Your files',
+      body: 'Each file is read with the layout of your sheet. A file that cannot be read says why.',
+    },
+    {
+      id: 'next',
+      target: 'import-run-next',
+      title: 'The next step',
+      body: 'The button at the bottom is always the next step: add a file, check, fix, try it, then ask for approval.',
+    },
+  ],
+};
+
+export const importProblemsPage: Tour = {
+  id: 'page-import-problems',
+  version: 1,
+  title: 'This page: problems to fix',
+  audience: (me) => held(me, 'core.imports.manage'),
+  autoStart: false,
+  page: '/staff/setup/imports/runs/$runId/problems',
+  steps: [
+    {
+      id: 'groups',
+      target: 'import-problems-groups',
+      title: 'Grouped by kind',
+      body: 'Problems of the same kind are together. Fix one line, or all of one kind the same way.',
+    },
+    {
+      id: 'questions',
+      target: 'import-problems-questions',
+      title: 'Questions for the owner',
+      body: 'What only the owner can answer goes on a numbered list with file and line, never a name or phone number.',
+    },
+  ],
+};
+
 // Business set-up > Close the business (issue #571, ADR-090): what closing means, then a review step and the owner's own proof.
 export const closePage: Tour = {
   id: 'page-close',
@@ -2135,7 +2219,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, purchasePage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, wholesaleGroup, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, importsSignOffPage, notificationsPage, feedbackPage, helpPage, helpArticlePage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, importsSignOffPage, importRunsPage, importRunPage, importProblemsPage, notificationsPage, feedbackPage, helpPage, helpArticlePage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;

@@ -1728,3 +1728,39 @@ section 4.1; coordinated with #110, which builds no second framework).**
   `ImportPurgeIT` proves the metrics are the same after the purge and the descriptions hashed; `ImportMetricsIT` logs and
   closes a defect with its audit rows, the refusals, another business's 404, and the platform report refused to anonymous
   calls and to a tenant's staff; `MigrationOrderIT` and `RlsIsolationIT` cover V148.
+
+**15/16, the screens of the whole pipeline (#141, migration `V149`, ADR-027, spec sections 2, 3 and 11).**
+
+- **In the business** (Business set-up, Bring in your data, `core.imports.manage`; chapter 7 section 7.11.9): the imports,
+  newest first, each with its step; one import's seven steps in plain words (upload, check, fix and try, approval, bring in,
+  compare and sign, delete the copies), its files with the sheet layout each was read with (a searchable choice of every
+  source of the business's newest mapping versions; a mapping is still made by the operator, spec section 11), the check, the
+  preview with the predicted balances per branch, the stored dry run, the approval request, the sign-off progress (brought in,
+  compared, signed, copies deleted, from the run's stamps) and the certificate of deletion, saved as the text sent to the
+  customer. The one main action is always the next step. The problems of an import are grouped by code with the plain
+  message the check wrote and fixed in place (a new value, the line left out with a reason, a warning accepted with a note, a
+  question for the owner), or every problem of one code the same way; the questions download as the numbered CSV. The
+  sign-off itself stays the screen of #134.
+- **The raw row** (`GET /imports/issues/{issue_id}/raw`, the new permission `core.imports.view_raw` of V149, the tenant
+  administrator's): the cells of the issue's row as uploaded and its original value, on the fix sheet only, audited
+  `core.import_row.raw_viewed` per opening with the issue, run, batch and line and never a value (spec section 6.3).
+- **In the operator portal** (Imports, platform routes of chapter 7 section 7.11.3): the run queue is the platform report of
+  #140 grouped by state, each run with its stage of spec section 2; the kill switch with a reason; one run's stop, resume and
+  start, the trading override asked by one operator and approved by another, and the pre-import dump recorded and checked.
+  Each action names the business by its slug and runs bound to it, so row-level security holds as on its own host; only a
+  platform principal reaches a platform path, so the operator ids the service records are always operators' (comment on
+  #141). The commit and its resume take one transaction per batch and may run for minutes, so the portal splits them
+  (`ImportRuns.startCommit`, `startResume`): the business's commit loop is claimed and the guards, the move to
+  `committing` (or the cleared halt) and its audit row, with the operator as actor, run in the request, whose answer is
+  every refusal; only the batches go on on their own thread, which holds the loop until they end, so a second start or a
+  resume while a loop is alive is refused at once (review of 1c9568b on #895). The queue follows the run's state. The `import_commit` approval is still given in the
+  business's Approvals by a holder of `core.imports.approve_commit`; the portal shows whether it is given.
+- **Not in this build:** recording a policy decision (spec section 3.8) and saving a mapping from a screen. A run that
+  needs a decision is refused with `CREDIT_DECISION_MISSING`, whose words the screen shows; the decision and the mapping
+  stay with the operator's host tools until #142.
+- **Tests.** `ImportScreensIT` (the business's routes, the raw row refused without `core.imports.view_raw` and audited
+  per opening without a value, another business's 404; the portal's routes refused to anonymous calls and a tenant's staff,
+  a stop refused in plain words and recorded, the override approved only by a second operator, the dump recorded and
+  checked, a start before the approval refused); `MigrationOrderIT` covers V149. In the frontend: the stage progress
+  (`pipeline.test.ts`, `stage-progress.dom.test.tsx`), the stop button (`import-run.dom.test.tsx`) and the sign-off flow
+  (`run.dom.test.tsx`).

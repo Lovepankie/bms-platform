@@ -743,6 +743,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/files/{batch_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a file out of the run: its rows and its quarantined file are deleted; audited */
+        post: operations["cancelImportFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/issues/{issue_id}/ask-customer": {
         parameters: {
             query?: never;
@@ -753,6 +770,23 @@ export interface paths {
         get?: never;
         /** Mark an issue as a question for the customer, or no longer one */
         put: operations["askCustomerAboutImportIssue"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/issues/{issue_id}/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The row of an issue as uploaded, with the issue's original value; audited per row opened (spec section 6.3) */
+        get: operations["getImportRawRow"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -777,6 +811,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The newest version of each of the business's mappings, with the sources each describes */
+        get: operations["listImportMappings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The business's import runs, newest first, at most 50 */
+        get: operations["listImportRuns"];
+        put?: never;
+        /** Start a new import run, in draft; audited */
+        post: operations["openImportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One import run and where it stands */
+        get: operations["getImportRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The newest certificate of deletion of a purged run; 404 until it is purged */
+        get: operations["getImportDeletionCertificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check every file of the run against its template; the run moves to in review; audited */
+        post: operations["checkImportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/commit-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask a second person to approve the import (import_commit, maker and checker) */
+        post: operations["requestImportCommit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/runs/{run_id}/defects": {
         parameters: {
             query?: never;
@@ -789,6 +926,42 @@ export interface paths {
         put?: never;
         /** Log a defect found after the cutover against an imported run, with the code it should have had; audited */
         post: operations["logImportDefect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The run's stored dry run; 404 while none ran */
+        get: operations["getImportDryRun"];
+        put?: never;
+        /** Run the commit inside one transaction that is rolled back, and store its report; audited */
+        post: operations["dryRunImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The files of an import run, in commit order */
+        get: operations["listImportFiles"];
+        put?: never;
+        /** Upload one file into the run's quarantine, read with one source of a mapping; the body is the file itself, streamed; audited */
+        post: operations["uploadImportFile"];
         delete?: never;
         options?: never;
         head?: never;
@@ -846,6 +1019,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/runs/{run_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the import will create, from the staged rows only, with the predicted balances (FR-IMP-06) */
+        get: operations["previewImportRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/runs/{run_id}/questions": {
         parameters: {
             query?: never;
@@ -874,6 +1064,23 @@ export interface paths {
         get: operations["exportImportQuestions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/runs/{run_id}/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark the run ready: no open blocking or warning issue and a dry run that still counts and matched the preview */
+        post: operations["markImportRunReady"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3763,6 +3970,160 @@ export interface paths {
         put?: never;
         /** Email the sign-in page of every business where this address is an active staff user; the answer never says whether any matched (issue #383) */
         post: operations["findStaffSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One import run of a business, by its slug, with the kill switch */
+        get: operations["platformGetImportRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/dump": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record the pre-import dump taken on the host: file name, time and SHA-256; audited */
+        post: operations["platformRecordImportDump"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/dump/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record the check of the dump: its SHA-256 again and the entries pg_restore --list listed; audited */
+        post: operations["platformCheckImportDump"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a stopped or interrupted commit from its first batch not committed; it runs on */
+        post: operations["platformResumeImportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start the commit of a ready run whose import_commit is approved and whose dump is checked; it runs on, batch by batch */
+        post: operations["platformStartImportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The stop button: the commit stops before the next batch, or within 1,000 rows; audited */
+        post: operations["platformStopImportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/trading-override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask to import into a business that already trades, with a reason; a second operator approves it; audited */
+        post: operations["platformRequestImportTradingOverride"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/businesses/{slug}/runs/{run_id}/trading-override/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve the trading override; the operator who asked for it cannot; audited */
+        post: operations["platformApproveImportTradingOverride"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/imports/kill-switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether imports may commit on this platform */
+        get: operations["platformGetImportKillSwitch"];
+        /** Stop every import commit before its next batch, or allow them again, with a reason; audited */
+        put: operations["platformSetImportKillSwitch"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10481,10 +10842,32 @@ export interface components {
             /** @description answers: this app answered /version there; not_found: the name has no DNS record; no_answer: the name exists but nothing answered in time or the connection failed; wrong_answer: something answered, but not this app (http_status says what) */
             outcome?: string;
         };
+        /** @description An amount of one branch in minor units */
+        ImportAmountFigure: {
+            /** Format: int64 */
+            amount_minor?: number;
+            branch?: string;
+        };
+        ImportArrearsFigure: {
+            branch?: string;
+            bucket?: string;
+            /** Format: int32 */
+            loans?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+        };
         ImportAskCustomerRequest: {
             ask_customer: boolean;
             /** Format: int32 */
             version: number;
+        };
+        /** @description The balances the import gives, per branch */
+        ImportBalances: {
+            arrears?: components["schemas"]["ImportArrearsFigure"][];
+            journals?: components["schemas"]["ImportJournalFigure"][];
+            loan_principal?: components["schemas"]["ImportAmountFigure"][];
+            receivables?: components["schemas"]["ImportAmountFigure"][];
+            stock?: components["schemas"]["ImportStockFigure"][];
         };
         /** @description Rows by outcome of one batch; the commit's counts null until committed */
         ImportBatchRows: {
@@ -10530,6 +10913,29 @@ export interface components {
             /** @description edit_value, exclude_row, accept_suggestion, override or ask_customer */
             resolution: string;
             value?: string;
+        };
+        /** @description The validation of a run: counts by severity and by code */
+        ImportCheckResult: {
+            /** Format: int32 */
+            blocking?: number;
+            files?: components["schemas"]["ImportFileCheck"][];
+            /** Format: int32 */
+            info?: number;
+            template_key?: string;
+            /** Format: int32 */
+            template_version?: number;
+            /** Format: int32 */
+            warning?: number;
+        };
+        ImportCodeCount: {
+            code?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        /** @description The pending approval request of import_commit */
+        ImportCommitRequest: {
+            /** Format: uuid */
+            approval_request_id?: string;
         };
         /** @description A defect found after the cutover, logged against the run */
         ImportDefect: {
@@ -10596,6 +11002,82 @@ export interface components {
             /** @description The code of the issue-code catalogue the row should have had; leave it out when a new code is needed and propose that code in the description */
             expected_code?: string;
         };
+        /** @description The certificate of deletion of a purged run */
+        ImportDeletionCertificate: {
+            /** @description The certificate as the plain text sent to the customer */
+            document?: string;
+            dump_confirmed?: boolean;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            issued_at?: string;
+            /** @description operator, signed_off_30_days or inactive_90_days */
+            reason?: string;
+            sha256?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        /** @description The stored dry run: the commit rolled back, and its report */
+        ImportDryRun: {
+            anomalies?: components["schemas"]["ImportReportAnomaly"][];
+            /** Format: date-time */
+            at?: string;
+            balances?: components["schemas"]["ImportBalances"];
+            checksum?: string;
+            /** @description False once anything of the run changed after it; run it again */
+            current?: boolean;
+            /** @description Which file failed and the kind of failure, or null */
+            failure?: string;
+            /** @description The dry run's balances equal the preview's */
+            preview_matches?: boolean;
+            sources?: components["schemas"]["ImportReportSource"][];
+        };
+        /** @description One uploaded file of a run (a batch), without any value of a row */
+        ImportFile: {
+            /** Format: int32 */
+            column_count?: number;
+            /** @description Why the file could not be read, when failed: a code of the catalogue */
+            failure_code?: string;
+            failure_reason?: string;
+            file_name?: string;
+            file_type?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            mapping_id?: string;
+            mapping_source?: string;
+            /** Format: int32 */
+            row_count?: number;
+            /** Format: int32 */
+            seq?: number;
+            /** Format: int64 */
+            size_bytes?: number;
+            /** @description uploaded, parsed, failed, committed or cancelled */
+            status?: string;
+            template_key?: string;
+            /** Format: date-time */
+            uploaded_at?: string;
+            warnings?: string[];
+        };
+        /** @description What the check found in one file */
+        ImportFileCheck: {
+            /** Format: uuid */
+            batch_id?: string;
+            /** Format: int32 */
+            blocking?: number;
+            codes?: components["schemas"]["ImportCodeCount"][];
+            /** Format: int32 */
+            info?: number;
+            /** Format: int32 */
+            rows?: number;
+            /** Format: int32 */
+            seq?: number;
+            /** Format: int32 */
+            warning?: number;
+        };
+        ImportFileList: {
+            items?: components["schemas"]["ImportFile"][];
+        };
         /** @description One issue of the review queue; its message never holds a value of a row */
         ImportIssue: {
             ask_customer?: boolean;
@@ -10644,6 +11126,36 @@ export interface components {
             items?: components["schemas"]["ImportIssue"][];
             next_cursor?: string;
         };
+        /** @description One opening journal: its debit and credit in minor units */
+        ImportJournalFigure: {
+            branch?: string;
+            /** Format: int64 */
+            credit_minor?: number;
+            /** Format: int64 */
+            debit_minor?: number;
+            kind?: string;
+        };
+        /** @description The newest version of one of the business's mappings */
+        ImportMappingChoice: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            sources?: components["schemas"]["ImportMappingSource"][];
+            template_key?: string;
+            /** Format: int32 */
+            template_version?: number;
+            /** Format: int32 */
+            version?: number;
+        };
+        ImportMappingChoiceList: {
+            items?: components["schemas"]["ImportMappingChoice"][];
+        };
+        /** @description One file or tab a mapping describes */
+        ImportMappingSource: {
+            entity_set?: string;
+            file?: string;
+            key?: string;
+        };
         /** @description The mapping versions the run's batches were read with */
         ImportMappingVersion: {
             name?: string;
@@ -10652,6 +11164,34 @@ export interface components {
             template_version?: number;
             /** Format: int32 */
             version?: number;
+        };
+        /** @description What the import will create, from the staged rows only (FR-IMP-06) */
+        ImportPreview: {
+            balances?: components["schemas"]["ImportBalances"];
+            files?: components["schemas"]["ImportPreviewFile"][];
+            records?: components["schemas"]["ImportRecordCount"][];
+            template_key?: string;
+            /** Format: int32 */
+            template_version?: number;
+        };
+        /** @description What one file's rows come to */
+        ImportPreviewFile: {
+            /** Format: uuid */
+            batch_id?: string;
+            /** Format: int32 */
+            blank?: number;
+            /** Format: int32 */
+            blocked?: number;
+            entity_set?: string;
+            /** Format: int32 */
+            excluded?: number;
+            file?: string;
+            /** Format: int32 */
+            rows?: number;
+            /** Format: int32 */
+            seq?: number;
+            /** Format: int32 */
+            write?: number;
         };
         /** @description One question for the customer, without any value of a row */
         ImportQuestion: {
@@ -10677,6 +11217,26 @@ export interface components {
             median_days?: number;
             /** Format: int64 */
             open?: number;
+        };
+        /** @description One cell as uploaded */
+        ImportRawCell: {
+            column?: string;
+            type?: string;
+            value?: string;
+        };
+        /** @description The row of an issue as uploaded; audited per row opened */
+        ImportRawRow: {
+            cells?: components["schemas"]["ImportRawCell"][];
+            field?: string;
+            file?: string;
+            /** Format: uuid */
+            issue_id?: string;
+            /** Format: int32 */
+            line?: number;
+            /** @description The value the issue is about, as uploaded */
+            original_value?: string;
+            /** Format: uuid */
+            row_id?: string;
         };
         /** @description The reconciliation of an imported run (FR-IMP-08) */
         ImportReconciliation: {
@@ -10743,6 +11303,11 @@ export interface components {
             key?: string;
             title?: string;
         };
+        ImportRecordCount: {
+            /** Format: int32 */
+            count?: number;
+            type?: string;
+        };
         /** @description Per source, each count of the newest committed rehearsal that differs from the cutover */
         ImportRehearsalDifference: {
             /** Format: int64 */
@@ -10758,6 +11323,25 @@ export interface components {
             at?: string;
             matches_dry_run?: boolean;
             outcome?: string;
+        };
+        /** @description One anomaly with its file and line, never a value of a row */
+        ImportReportAnomaly: {
+            file?: string;
+            /** Format: int32 */
+            line?: number;
+            message?: string;
+        };
+        /** @description One line of the report: a file and its rows by outcome */
+        ImportReportSource: {
+            /** Format: int32 */
+            existing?: number;
+            name?: string;
+            /** Format: int32 */
+            read?: number;
+            /** Format: int32 */
+            skipped?: number;
+            /** Format: int32 */
+            written?: number;
         };
         ImportResolutionCount: {
             /** Format: int64 */
@@ -10804,6 +11388,36 @@ export interface components {
              * @description The issue's version as read
              */
             version: number;
+        };
+        /** @description An import run and where it stands */
+        ImportRun: {
+            /** @description import_commit is approved for the run as it is now */
+            commit_approved?: boolean;
+            /** Format: date-time */
+            committed_at?: string;
+            /** Format: date-time */
+            committing_at?: string;
+            /** Format: date-time */
+            cutover_at?: string;
+            fabricated?: boolean;
+            /** @description The stop button was pressed; the commit stops before the next batch */
+            halt_requested?: boolean;
+            /** Format: uuid */
+            id?: string;
+            /** @description The file name of the pre-import dump recorded, or null */
+            pre_import_dump_file?: string;
+            pre_import_dump_verified?: boolean;
+            /** @description draft, uploaded, in_review, ready, committing, committed, signed_off, purged or cancelled */
+            status?: string;
+            /** @description A second platform operator approved that override */
+            trading_override_approved?: boolean;
+            /** @description A platform operator allowed this run into a business that already trades */
+            trading_override_set?: boolean;
+            /** Format: int32 */
+            version?: number;
+        };
+        ImportRunList: {
+            items?: components["schemas"]["ImportRun"][];
         };
         /** @description The metrics of an import run, from its stored data (spec section 8) */
         ImportRunMetrics: {
@@ -10954,6 +11568,13 @@ export interface components {
             /** @description Numbers separated by new lines, commas or semicolons; at most 2000 */
             numbers: string;
             scope: string;
+        };
+        /** @description Stock of one branch: quantity and value at cost in minor units */
+        ImportStockFigure: {
+            branch?: string;
+            qty?: number;
+            /** Format: int64 */
+            value_minor?: number;
         };
         /** @description Rows by outcome of a template's batches, not failed or cancelled */
         ImportTemplateRows: {
@@ -13162,6 +13783,35 @@ export interface components {
             reply_note?: string;
             status: string;
         };
+        /** @description The check of the dump: pg_restore --list and the hash */
+        PlatformImportDumpCheckRequest: {
+            /**
+             * Format: int32
+             * @description The entries pg_restore --list listed
+             */
+            listed_entries: number;
+            /** @description The SHA-256 measured again */
+            sha256: string;
+        };
+        /** @description The pre-import dump as taken on the host */
+        PlatformImportDumpRequest: {
+            file: string;
+            sha256: string;
+            /** Format: date-time */
+            taken_at: string;
+        };
+        PlatformImportKillSwitch: {
+            commit_enabled?: boolean;
+        };
+        PlatformImportKillSwitchRequest: {
+            commit_enabled: boolean;
+            /** @description Why, kept in the platform audit log */
+            reason: string;
+        };
+        PlatformImportOverrideRequest: {
+            /** @description Why this business may be imported into while it trades */
+            reason: string;
+        };
         /** @description One run on the platform report; the business by its slug only */
         PlatformImportRun: {
             metrics?: components["schemas"]["ImportRunMetrics"];
@@ -13169,6 +13819,13 @@ export interface components {
         };
         PlatformImportRunList: {
             items?: components["schemas"]["PlatformImportRun"][];
+        };
+        /** @description One run as the operator portal shows it, with the kill switch */
+        PlatformImportRunState: {
+            /** @description The platform kill switch: false stops every commit before its next batch */
+            commit_enabled?: boolean;
+            run?: components["schemas"]["ImportRun"];
+            tenant_slug?: string;
         };
         PlatformMe: {
             email?: string;
@@ -24005,6 +24662,28 @@ export interface operations {
             };
         };
     };
+    cancelImportFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportFile"];
+                };
+            };
+        };
+    };
     askCustomerAboutImportIssue: {
         parameters: {
             query?: never;
@@ -24031,6 +24710,28 @@ export interface operations {
             };
         };
     };
+    getImportRawRow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRawRow"];
+                };
+            };
+        };
+    };
     resolveImportIssue: {
         parameters: {
             query?: never;
@@ -24053,6 +24754,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportResolveOutcome"];
+                };
+            };
+        };
+    };
+    listImportMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportMappingChoiceList"];
+                };
+            };
+        };
+    };
+    listImportRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRunList"];
+                };
+            };
+        };
+    };
+    openImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRun"];
+                };
+            };
+        };
+    };
+    getImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRun"];
+                };
+            };
+        };
+    };
+    getImportDeletionCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDeletionCertificate"];
+                };
+            };
+        };
+    };
+    checkImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCheckResult"];
+                };
+            };
+        };
+    };
+    requestImportCommit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitRequest"];
                 };
             };
         };
@@ -24101,6 +24950,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportDefect"];
+                };
+            };
+        };
+    };
+    getImportDryRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDryRun"];
+                };
+            };
+        };
+    };
+    dryRunImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDryRun"];
+                };
+            };
+        };
+    };
+    listImportFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportFileList"];
+                };
+            };
+        };
+    };
+    uploadImportFile: {
+        parameters: {
+            query: {
+                file_name: string;
+                mapping_id: string;
+                source: string;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportFile"];
                 };
             };
         };
@@ -24182,6 +25127,28 @@ export interface operations {
             };
         };
     };
+    previewImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreview"];
+                };
+            };
+        };
+    };
     listImportQuestions: {
         parameters: {
             query?: never;
@@ -24222,6 +25189,28 @@ export interface operations {
                 };
                 content: {
                     "text/csv": string;
+                };
+            };
+        };
+    };
+    markImportRunReady: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRun"];
                 };
             };
         };
@@ -29215,6 +30204,246 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FindSignInAccepted"];
+                };
+            };
+        };
+    };
+    platformGetImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformRecordImportDump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformImportDumpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformCheckImportDump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformImportDumpCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformResumeImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformStartImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformStopImportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformRequestImportTradingOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformImportOverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformApproveImportTradingOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportRunState"];
+                };
+            };
+        };
+    };
+    platformGetImportKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportKillSwitch"];
+                };
+            };
+        };
+    };
+    platformSetImportKillSwitch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformImportKillSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformImportKillSwitch"];
                 };
             };
         };

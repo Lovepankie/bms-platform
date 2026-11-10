@@ -116,6 +116,17 @@ const staffImportsSignOffRoute = createRoute({
   staticData: { crumb: 'Imports to sign off' },
   validateSearch: (s: Record<string, unknown>): { run?: string } => ({ run: typeof s.run === 'string' ? s.run : undefined }),
 }).lazy(() => import('../areas/staff/imports/page').then((m) => m.Route));
+// Bring in your data (issue #141): the business's imports, one import's steps, and its problems grouped by kind. Under Business
+// set-up; run by the holder of core.imports.manage (each page checks IMPORT_ROUTE_PERMISSION).
+const staffImportRunsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/imports/runs', staticData: { crumb: 'Bring in your data' } }).lazy(() =>
+  import('../areas/staff/imports/runs').then((m) => m.Route),
+);
+const staffImportRunRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/imports/runs/$runId', staticData: { crumb: 'Import' } }).lazy(() =>
+  import('../areas/staff/imports/run').then((m) => m.Route),
+);
+const staffImportProblemsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/imports/runs/$runId/problems', staticData: { crumb: 'Problems' } }).lazy(() =>
+  import('../areas/staff/imports/problems').then((m) => m.Route),
+);
 // The Money and More pages of the phone's bottom tabs (issue #539).
 const staffMoneyRoute = createRoute({ getParentRoute: () => staffRoute, path: '/money', staticData: { crumb: 'Money' } }).lazy(() =>
   import('../areas/staff/tab-pages').then((m) => m.MoneyRoute),
@@ -430,6 +441,13 @@ const platformNoOwnerRoute = createRoute({ getParentRoute: () => platformRoute, 
 const platformFeedbackRoute = createRoute({ getParentRoute: () => platformRoute, path: '/feedback' }).lazy(() =>
   import('../areas/platform/feedback').then((m) => m.Route),
 );
+// The import run queue and one run's stop, resume, start, trading override and dump record (issue #141, spec section 11).
+const platformImportsRoute = createRoute({ getParentRoute: () => platformRoute, path: '/imports' }).lazy(() =>
+  import('../areas/platform/imports').then((m) => m.Route),
+);
+const platformImportRunRoute = createRoute({ getParentRoute: () => platformRoute, path: '/imports/$slug/$runId' }).lazy(() =>
+  import('../areas/platform/import-run').then((m) => m.Route),
+);
 
 const memberRoute = createRoute({ getParentRoute: () => rootRoute, path: '/member' }).lazy(() =>
   import('../areas/member/route').then((m) => m.Route),
@@ -442,7 +460,7 @@ export const router = createRouter({
     forgotPasswordRoute,
     resetPasswordRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffMoneyRoute, staffMoreRoute, staffKitRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffApprovalRulesRoute, staffBusinessNotificationsRoute, staffBillingRoute, staffCloseRoute, staffReferralsRoute, staffImportsSignOffRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
+    staffRoute.addChildren([staffHomeRoute, staffMoneyRoute, staffMoreRoute, staffKitRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffApprovalRulesRoute, staffBusinessNotificationsRoute, staffBillingRoute, staffCloseRoute, staffReferralsRoute, staffImportsSignOffRoute, staffImportRunsRoute, staffImportRunRoute, staffImportProblemsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
         retailCreditSalesRoute,
@@ -579,6 +597,8 @@ export const router = createRouter({
       platformClosuresRoute,
       platformNoOwnerRoute,
       platformFeedbackRoute,
+      platformImportsRoute,
+      platformImportRunRoute,
     ]),
   ]),
   // A phone on the app from before a deploy reloads itself instead of showing the raw error.

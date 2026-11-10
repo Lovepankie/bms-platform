@@ -931,4 +931,70 @@ class ReviewService implements ImportReview {
             return out;
         });
     }
+
+    // JUSTIFICATION-A3: issue #141 asks the raw row for holders of core.imports.view_raw, audited per row.
+    @Override
+    public RawRow raw(UUID issueId) {
+        TenantContext.require();
+        record Found(RawRow row, UUID runId, UUID batchId) {}
+        return tx.execute(s -> {
+            Found found = jdbc.sql("""
+                            SELECT i.row_id, i.batch_id, b.run_id, b.seq, b.source_filename, r.source_row_no, i.field,
+                                   i.original_value::text AS original, r.raw::text AS raw
+                              FROM import_issues i
+                              JOIN import_batches b ON b.id = i.batch_id
+                              JOIN import_rows r ON r.id = i.row_id
+                             WHERE i.id = ?
+                            """)
+                    .param(issueId)
+                    .query((rs, n) -> {
+                        String file = rs.getString("source_filename");
+                        List<RawValue> cells = new ArrayList<>();
+                        // The purge leaves {} (V147); a row read with no cells answers none, never a failure.
+                        String raw = rs.getString("raw");
+                        Map<String, Object> kept = raw == null ? Map.of() : JSON.readValue(raw, OBJECT);
+                        kept.forEach((column, cell) -> {
+                            Object value = cell instanceof Map<?, ?> m ? m.get("value") : cell;
+                            Object type = cell instanceof Map<?, ?> m ? m.get("type") : null;
+                            cells.add(new RawValue(
+                                    column,
+                                    value == null ? null : String.valueOf(value),
+                                    type == null ? null : type.toString()));
+                        });
+                        String original = rs.getString("original");
+                        return new Found(
+                                new RawRow(
+                                        issueId,
+                                        rs.getObject("row_id", UUID.class),
+                                        RowValidator.shortName(file == null ? "batch " + rs.getInt("seq") : file),
+                                        rs.getInt("source_row_no"),
+                                        rs.getString("field"),
+                                        original == null ? null : plain(JSON.readValue(original, Object.class)),
+                                        cells),
+                                rs.getObject("run_id", UUID.class),
+                                rs.getObject("batch_id", UUID.class));
+                    })
+                    .optional()
+                    .orElseThrow(ApiException::notFound);
+            RawRow row = found.row();
+            // Every row opened is audited (spec section 6.3), with where it is and never what it holds.
+            audit.record(AuditLog.Entry.created(
+                    "core.import_row.raw_viewed",
+                    "import_row",
+                    row.rowId(),
+                    null,
+                    Map.of(
+                            "issue_id", issueId.toString(),
+                            "run_id", found.runId().toString(),
+                            "batch_id", found.batchId().toString(),
+                            "line", row.line())));
+            return row;
+        });
+    }
+
+    /** An original value as text: a cell object's value, or the JSON value itself. */
+    private static String plain(Object original) {
+        Object value = original instanceof Map<?, ?> m && m.containsKey("value") ? m.get("value") : original;
+        return value == null ? null : String.valueOf(value);
+    }
 }

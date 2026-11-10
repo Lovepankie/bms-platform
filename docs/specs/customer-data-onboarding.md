@@ -62,6 +62,12 @@ A stage can loop back: a review answer that changes the mapping returns to stage
 mapping version; a rehearsal that does not tie returns to stage 3. Looping back is normal; skipping
 a stage is not allowed without the dev lead's written exception in the cutover record.
 
+The screens (#141) show these ten stages to the operator (the portal's run queue gives each run its stage, from the run's
+stamps, `import_run_metrics`) and seven plain steps to the business, from the run's state: upload your files (`draft`),
+check the files (`uploaded`), fix the problems and try it (`in_review`), a second person approves (`ready`), bring the data
+in (`committing`), compare and sign (`committed`), delete the copies (`signed_off`); `purged` has every step done. Each
+step says done, now or later in words, so the state never rests on colour.
+
 ## 3. The technical pipeline
 
 This generalises the import framework of chapter 13 (`core.imports`) so that the lending register,
@@ -206,6 +212,14 @@ Built in #131 (SDD chapter 13 section 13.14.1, 5/16; routes in chapter 7 section
 optimistic versions on issues (`version_conflict`), the resolutions carried to the identical rows of a new upload and
 `ROW_CHANGED_SINCE_REVIEW` on a changed one, and the question list as JSON and CSV. `reclassify` comes with the row classes.
 
+The screen (#141, Problems to fix): the open issues grouped by code, the groups that must be fixed first, then the biggest,
+each with a plain title for its code (an unknown code reads as its words) and the message the engine wrote. Fixed in place in
+a sheet over the list: a new value (`edit_value`), the line left out with a reason (`exclude_row`), a warning accepted with a
+note (`override`, offered on warnings only) or a question for the owner (`ask_customer`); or every issue of one code the same
+way (`bulk-resolve`: the suggestion, offered only when every issue has one, leaving out, accepting a warning or asking). The
+questions download as the numbered CSV. A holder of `core.imports.view_raw` may open the line as uploaded in the same sheet;
+`link_row`, `link_member` and `map_value` stay with the operator's tools for now.
+
 ### 3.6 Preview and dry run
 
 The preview computes what commit will create: records by type, rows by outcome per batch, and the
@@ -333,6 +347,10 @@ database. It is stored in `import_signoffs`, append-only, one per run; the run b
 it) and no new reconciliation of it is stored; audited `core.import_run.signed_off` without the name. The deletion it
 starts is #139.
 
+The screens (#141): the run's screen shows the sign-off's progress to whoever runs the import (brought in, figures compared,
+signed by the owner, copies deleted, each with its day from the run's stamps), and its one main action while the run is
+`committed` opens the sign-off above; someone who may not sign is told the owner signs.
+
 ### 3.11 Run states
 
 ```
@@ -344,6 +362,16 @@ draft -> uploaded -> in_review -> ready -> committing -> committed -> signed_off
 recorded; a dry run whose report is stored. `committing` needs: an approved `import_commit` and a
 verified pre-import dump recorded on the run. `purged` means the staging rows' personal data and
 the quarantined files are deleted (section 6.4); counts, hashes, resolutions and reports stay.
+
+On the screens (#141) the one main action of a run's screen is always its next step: add a file (`draft`), check the files
+(`uploaded`), fix the open blocking and warning issues, then try the import (a dry run, again while the stored one no longer
+counts, failed or did not match the preview), then mark it ready (`in_review`); ask for approval (`ready`). The operator
+portal then records the dump and its check, asks for and approves the trading override when the business trades, and
+starts the commit once the approval and the checked dump are both on the run. The start and a resume check and move the run
+in the request, with the operator named in the audit row, and only the batches go on in the background (one transaction
+per batch can take minutes) while the portal follows the state; a second start, or a resume while a commit is still
+writing, is refused at once. The stop button is offered while the run is
+`committing` and the halt is not yet asked; once asked, Resume (while the kill switch allows commits).
 
 ## 4. Templates as versioned data
 
@@ -511,6 +539,12 @@ customer's date of birth when the module does not use it) are ignored by default
 | Issue messages, counts, reports | `core.imports.manage` | No personal values in them (section 3.4) |
 | Production data in staging, CI, a laptop or the repository | Nobody | Never |
 
+Built in #141 (migration V149): `core.imports.view_raw`, granted to the tenant administrator (the operator runs a business's
+onboarding signed in to it with that role; in self service it is the business's own admin, looking at its own sheet). The
+review screen's fix sheet offers "See the line as uploaded" to its holder alone: `GET /imports/issues/{issue_id}/raw` answers
+the row's kept cells and the issue's original value, and every call is audited `core.import_row.raw_viewed` with the issue,
+the run, the batch and the line, never a value. The download of the original file stays the host's.
+
 ### 6.4 Retention and the certificate of deletion
 
 - The plaintext export, the quarantined files, the per-run data key and the raw and normalised
@@ -534,7 +568,8 @@ override reason, the policy confirmations and the signer's name become a hash sa
 every free-text column; ADR-027 lists them and the few kept readable for the certificate). The certificate is stored append-only
 (`import_deletion_certificates`) with its text and that text's SHA-256; a scheduled purge cannot reach the host, so its
 certificate says the dump is not confirmed until the operator confirms it with `purge-import`, which issues the next
-version. The operator sends the printed text to the customer; a download from the screens comes with #141.
+version. The operator sends the printed text to the customer; since #141 the run's screen shows the newest certificate once
+the run is purged (`GET /imports/runs/{run_id}/certificate`) and saves it as that text file.
 
 ### 6.5 Audit, logs and environments
 
@@ -704,6 +739,13 @@ admins, and platform permissions `platform.imports.approve_commit`, `platform.im
 UI: an import area in the tenant's settings (upload, issue list grouped by code with plain
 messages, fix in place, progress through the stages of section 2, sign-off), and a run queue in
 the operator portal (ADR-024) with the approve, stop and resume actions.
+
+Built for the operator path in #141 (chapter 13 section 13.14.1 15/16): the import area (Business set-up, Bring in your data,
+`core.imports.manage`) and the run queue (operator portal, Imports). As built, the approval of the commit stays a tenant
+approval (`core.imports.approve_commit` in the business's Approvals); the portal shows whether it is given and starts the
+commit once it is. The upload chooses one source of the business's newest mapping versions in a searchable list; making or
+editing a mapping and recording a policy decision stay operator work on the host until #142, so the permissions of the table
+above (`core.imports.request_commit`, `platform.imports.approve_commit`, `platform.imports.override`) come with self service.
 
 ## Appendix A. What we do for the next retail customer
 

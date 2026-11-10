@@ -46,6 +46,9 @@ public interface ImportMappings {
     /** The newest version of the named mapping. */
     Optional<Mapping> latest(String name);
 
+    /** The newest version of every mapping of the business, by name (issue #141: the mapping choice of the upload screen). */
+    List<Mapping> newest();
+
     /** Every version of the named mapping, oldest first. */
     List<Mapping> versions(String name);
 

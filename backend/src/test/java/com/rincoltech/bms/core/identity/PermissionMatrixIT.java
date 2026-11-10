@@ -180,8 +180,14 @@ class PermissionMatrixIT extends IntegrationTest {
             // otherwise, as uploads do), so only the missing permission can refuse it.
             boolean multipart = e.getKey().getConsumesCondition().getConsumableMediaTypes().stream()
                     .anyMatch(MediaType.MULTIPART_FORM_DATA::includes);
+            // The import upload streams the file itself as the body (issue #141).
+            boolean stream = e.getKey().getConsumesCondition().getConsumableMediaTypes().stream()
+                    .anyMatch(MediaType.APPLICATION_OCTET_STREAM::includes);
             Object body;
-            if (multipart) {
+            if (stream) {
+                h.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+                body = new byte[] {'x'};
+            } else if (multipart) {
                 MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
                 form.add("placeholder", "x");
                 h.setContentType(MediaType.MULTIPART_FORM_DATA);

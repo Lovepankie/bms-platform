@@ -37,7 +37,8 @@
             "core.documents",
             "core.jobs",
             "core.referrals",
-            "core.reporting"
+            "core.reporting",
+            "core.imports"
         })
 package com.rincoltech.bms.core.platform;
 
