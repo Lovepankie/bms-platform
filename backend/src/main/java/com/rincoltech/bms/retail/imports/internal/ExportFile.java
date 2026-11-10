@@ -103,7 +103,13 @@ final class ExportFile {
      */
     static ExportFile staged(String name, List<Map.Entry<Integer, Map<String, Object>>> rows) {
         ExportFile file = new ExportFile(name, true);
-        for (Map.Entry<Integer, Map<String, Object>> r : rows) {
+        file.addStaged(rows);
+        return file;
+    }
+
+    /** Adds staged rows after the file's last, as {@link #staged} reads them: the loader's next page (issue #880). */
+    void addStaged(List<Map.Entry<Integer, Map<String, Object>>> staged) {
+        for (Map.Entry<Integer, Map<String, Object>> r : staged) {
             ObjectNode node = JSON.createObjectNode();
             r.getValue().forEach((field, v) -> {
                 switch (v) {
@@ -117,9 +123,8 @@ final class ExportFile {
                     default -> node.put(field, v.toString());
                 }
             });
-            file.rows.add(new Row(r.getKey(), node));
+            rows.add(new Row(r.getKey(), node));
         }
-        return file;
     }
 
     /**

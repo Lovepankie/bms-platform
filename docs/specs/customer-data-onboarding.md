@@ -90,7 +90,7 @@ An **import run** (`import_runs`, one per onboarding attempt of a tenant) owns o
   as data dictionary section 3 learned), JSON Lines (the retail export format). Anything else is
   refused with `FILE_TYPE_UNSUPPORTED`.
 - Limits, sized for the staging stack's 900 MB cap (ADR-018) and the same on production: at most
-  25 MB per file, 100,000 rows per batch and 200 columns (2,500 rows per batch until #880: the
+  25 MB per file, 100,000 rows per batch and 200 columns (25,000 rows per batch until #900: the
   size the big file test of #137 measured as safe on the staging heap); XLSX is read with a streaming reader;
   the API never holds more than one chunk of 1,000 rows in memory. A file over a limit is refused
   at upload with `FILE_TOO_LARGE` or `TOO_MANY_ROWS` and the operator splits it. These limits are
@@ -475,8 +475,9 @@ golden report of `retail_v1` over fabricated edge cases next to the existing gol
 template; the five properties of 5.2 with jqwik on `retail_v1`; the fuzzed files of 5.3 at the readers and through the
 upload, validation and preview; and the big file test on the staging heap, on request. The fuzzing found that a formula's
 error and a formula saved without its value were read as a value and as an empty field; both are now `TYPE_INVALID`.
-Two findings are open: #880 (a `retail_v1` batch at the row limit does not validate, dry run or commit within the staging
-heap and the time limits) and #881 (a restock's price change is lost when the restocks are split over two runs); their
+Two findings are open: #900 (a `retail_v1` batch at the row limit validates and previews within the staging heap since
+#880, but does not yet dry run and commit within the staging heap and the time limits, so the row limit is 25,000 until
+it closes) and #881 (a restock's price change is lost when the restocks are split over two runs); their
 tests are disabled with those numbers.
 
 ### 5.4 Guards in the product

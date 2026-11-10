@@ -1,8 +1,9 @@
 package com.rincoltech.bms.retail.catalogue;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -37,11 +38,19 @@ public interface CatalogueHistory {
             boolean active);
 
     /**
-     * Issue #352: the code of another product of the tenant with the same name (folded to lower case, spaces and
-     * punctuation collapsed) in the same unit, for the importer to report as an anomaly. The product with the given
-     * code never counts. Empty when the name is not repeated.
+     * Issue #880: creates these products, each with its {@code initial} history row, one statement batch per table, so a
+     * page of an import costs two round trips and no lookup. The caller read the tenant's products
+     * ({@link #productsByCode}) and found none with any of these codes ignoring case; the unique index on the code refuses
+     * one made meanwhile, and with it the caller's transaction.
      */
-    Optional<String> otherWithSameName(String code, String description, UUID unitId);
+    void createProducts(List<NewProduct> products);
+
+    /**
+     * Issue #352, for a page of products in one query (issue #880): for each product given whose name (folded to lower
+     * case, spaces and punctuation collapsed) and unit other products of the tenant share, those others in code order, for
+     * the importer to report as an anomaly. A product never counts as its own twin; one without twins is absent.
+     */
+    Map<UUID, List<Product>> sameName(Collection<UUID> productIds);
 
     /** Every product of the tenant by its code, lower case. */
     Map<String, Product> productsByCode();
@@ -65,4 +74,15 @@ public interface CatalogueHistory {
     record Ensured(UUID id, boolean created, boolean changed) {}
 
     record Product(UUID id, String code, long costMinor, long sellMinor) {}
+
+    /** A product {@link #createProducts} makes: the code as {@link RetailCatalogue#normaliseCode} leaves it. */
+    record NewProduct(
+            UUID id,
+            String code,
+            String description,
+            UUID categoryId,
+            UUID unitId,
+            long costMinor,
+            long sellMinor,
+            boolean active) {}
 }

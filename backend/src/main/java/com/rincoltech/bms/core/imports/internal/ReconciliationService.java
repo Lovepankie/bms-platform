@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.imports.ImportBooks;
 import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportMappings;
 import com.rincoltech.bms.core.imports.ImportReconciliation;
+import com.rincoltech.bms.core.imports.ImportRefs;
 import com.rincoltech.bms.core.imports.ImportTemplate;
 import com.rincoltech.bms.core.imports.ImportTemplate.EntitySet;
 import com.rincoltech.bms.core.imports.ImportTemplates;
@@ -37,6 +38,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -565,11 +567,15 @@ class ReconciliationService implements ImportReconciliation {
         // batches nets to one balance.
         ImportForecast whole = template == null ? null : template.forecast(open, runId);
         Map<CheckId, BigDecimal> writtenParts = new LinkedHashMap<>();
+        // Each row's part is a fresh forecast of that row alone; what the template reads for one is read once (#880).
+        Supplier<ImportForecast> openParts = template == null ? null : template.forecasts(open, runId);
+        Supplier<ImportForecast> decidedParts =
+                template == null || sameDecision ? openParts : template.forecasts(actual, runId);
         for (BatchInfo b : batches) {
             if (whole != null) {
                 whole.batch(b.seq());
             }
-            rows(runId, b, template, open, actual, sameDecision, privacy, whole, writtenParts, sheet);
+            rows(runId, b, template, openParts, decidedParts, sameDecision, privacy, whole, writtenParts, sheet);
         }
         together(whole, writtenParts, sheet);
         resolutions(runId, batches, privacy, sheet);
@@ -706,8 +712,8 @@ class ReconciliationService implements ImportReconciliation {
             UUID runId,
             BatchInfo b,
             ImportTemplate template,
-            Map<String, String> open,
-            Map<String, String> actual,
+            Supplier<ImportForecast> openParts,
+            Supplier<ImportForecast> decidedParts,
             boolean sameDecision,
             PreviewService.RunPrivacy privacy,
             ImportForecast whole,
@@ -783,10 +789,19 @@ class ReconciliationService implements ImportReconciliation {
             }
             Map<String, Boolean> byThisRun = new HashMap<>();
             if (!refs.isEmpty()) {
-                jdbc.sql("SELECT source_ref, bool_or(run_id = ?) FROM import_refs WHERE source_ref = ANY(?)"
-                                + " GROUP BY source_ref")
-                        .params(runId, refs.values().stream().distinct().toArray(String[]::new))
-                        .query((rs, n) -> byThisRun.put(rs.getString(1), rs.getBoolean(2)))
+                // By the indexed key (import_refs_by_key), never by source_ref, which no index covers.
+                Set<String> wanted = new HashSet<>(refs.values());
+                // Each key by the index, as RefService reads a page of them (issue #880).
+                jdbc.sql("SELECT r.source_ref, r.run_id = ?" + RefService.BY_KEYS)
+                        .params(
+                                runId,
+                                wanted.stream()
+                                        .map(ImportRefs::keyOf)
+                                        .distinct()
+                                        .toArray(String[]::new))
+                        .query((rs, n) -> wanted.contains(rs.getString(1))
+                                ? byThisRun.merge(rs.getString(1), rs.getBoolean(2), Boolean::logicalOr)
+                                : null)
                         .list();
             }
             for (Staged s : chunk) {
@@ -806,7 +821,7 @@ class ReconciliationService implements ImportReconciliation {
                 String unmeasurable = null;
                 if (template != null && stored.containsKey(s.line())) {
                     try {
-                        part = part(template, open, runId, b, stored.get(s.line()));
+                        part = part(openParts, b, stored.get(s.line()));
                     } catch (RuntimeException e) {
                         unmeasured++;
                         unmeasurable = e.getClass().getSimpleName();
@@ -872,7 +887,7 @@ class ReconciliationService implements ImportReconciliation {
                     // itemised, so its difference stays unexplained and holds the sign-off.
                     Map<CheckId, BigDecimal> asDecided = null;
                     try {
-                        asDecided = part(template, actual, runId, b, stored.get(s.line()));
+                        asDecided = part(decidedParts, b, stored.get(s.line()));
                     } catch (RuntimeException e) {
                         // Named like any other row the rules cannot measure (review of 391e1dc, point 3).
                         unmeasured++;
@@ -1009,8 +1024,8 @@ class ReconciliationService implements ImportReconciliation {
      * rules cannot measure it (a row left out for a value they need); the caller counts and names that row.
      */
     private static Map<CheckId, BigDecimal> part(
-            ImportTemplate template, Map<String, String> policy, UUID runId, BatchInfo b, Map<String, Object> stored) {
-        ImportForecast f = template.forecast(policy, runId);
+            Supplier<ImportForecast> forecasts, BatchInfo b, Map<String, Object> stored) {
+        ImportForecast f = forecasts.get();
         f.batch(b.seq());
         f.row(b.set().key(), PreviewService.typed(b.set(), stored));
         return parts(f);

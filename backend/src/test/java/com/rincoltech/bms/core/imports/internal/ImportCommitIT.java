@@ -1074,6 +1074,91 @@ class ImportCommitIT extends IntegrationTest {
     @Autowired
     RefService refs;
 
+    // JUSTIFICATION-A3: the review of 12e9d33 on #898 asks registerAll proven against register on each refusal.
+    /**
+     * A page's registration (issue #880, {@code registerAll}) does what registering each record in turn does: the same
+     * rows, and the same refusal for a key held with another reference (before, or earlier in the list), a journal, and a
+     * record registered twice. Each case runs both ways in a transaction that is rolled back.
+     */
+    @Test
+    void registeringAPageIsRegisteringEachRecordInTurn() {
+        UUID run = itemsRun(t, ITEMS_A);
+        UUID batch = as(
+                t,
+                () -> new TransactionTemplate(transactionManager)
+                        .execute(s -> jdbc.sql("SELECT id FROM import_batches WHERE run_id = ? LIMIT 1")
+                                .param(run)
+                                .query(UUID.class)
+                                .single()));
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        BatchWriter.Registration first = new BatchWriter.Registration("fab|-|line:2#h1", "retail.product", a);
+        BatchWriter.Registration sameRowOtherType = new BatchWriter.Registration("fab|-|line:2#h1", "retail.unit", b);
+        BatchWriter.Registration next = new BatchWriter.Registration("fab|-|line:3#h2", "retail.product", b);
+        BatchWriter.Registration sameKeyOtherRef = new BatchWriter.Registration("fab|-|line:2#h9", "retail.product", b);
+        BatchWriter.Registration journal =
+                new BatchWriter.Registration("fab|-|line:4#h3", RefService.JOURNAL, UUID.randomUUID());
+
+        List<List<BatchWriter.Registration>> cases = List.of(
+                List.of(first, sameRowOtherType, next),
+                List.of(first, sameKeyOtherRef),
+                List.of(next, journal),
+                List.of(first, first));
+        for (List<BatchWriter.Registration> records : cases) {
+            String inTurn = registered(run, batch, List.of(), records, false);
+            assertThat(registered(run, batch, List.of(), records, true))
+                    .as("the page %s", records)
+                    .isEqualTo(inTurn);
+        }
+        // A key held before with another reference is refused both ways, with the operator's message.
+        String held = registered(run, batch, List.of(first), List.of(next, sameKeyOtherRef), false);
+        assertThat(held).startsWith("CHANGED_SINCE_IMPORT ");
+        assertThat(registered(run, batch, List.of(first), List.of(next, sameKeyOtherRef), true))
+                .isEqualTo(held);
+        assertThat(registered(run, batch, List.of(), List.of(first, sameRowOtherType, next), true))
+                .contains("fab|-|line:2#h1 retail.product", "fab|-|line:2#h1 retail.unit", "fab|-|line:3#h2");
+        assertThat(registered(run, batch, List.of(), List.of(first, first), true))
+                .isEqualTo("refused by the unique key");
+    }
+
+    /**
+     * Registers {@code before} in turn, then {@code records} one at a time or as a page, in a transaction rolled back:
+     * the run's rows as {@code key ref type target}, or the refusal (its code and message, or the unique key's).
+     */
+    private String registered(
+            UUID run,
+            UUID batch,
+            List<BatchWriter.Registration> before,
+            List<BatchWriter.Registration> records,
+            boolean page) {
+        return as(
+                t,
+                () -> new TransactionTemplate(transactionManager).execute(s -> {
+                    s.setRollbackOnly();
+                    try {
+                        before.forEach(r -> refs.register(run, batch, r.sourceRef(), r.targetType(), r.targetId()));
+                        if (page) {
+                            refs.registerAll(run, batch, records);
+                        } else {
+                            records.forEach(
+                                    r -> refs.register(run, batch, r.sourceRef(), r.targetType(), r.targetId()));
+                        }
+                    } catch (ApiException e) {
+                        return e.code() + " " + e.getMessage();
+                    } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                        return "refused by the unique key";
+                    } catch (IllegalArgumentException e) {
+                        return "refused: " + e.getMessage();
+                    }
+                    return jdbc.sql("SELECT string_agg(source_key || ' ' || source_ref || ' ' || target_type || ' '"
+                                    + " || target_id, ',' ORDER BY source_ref, target_type, target_id)"
+                                    + " FROM import_refs WHERE run_id = ?")
+                            .param(run)
+                            .query(String.class)
+                            .single();
+                }));
+    }
+
     // ---------------------------------------------------------------------------------------------
     // No side effects, and isolation.
     // ---------------------------------------------------------------------------------------------

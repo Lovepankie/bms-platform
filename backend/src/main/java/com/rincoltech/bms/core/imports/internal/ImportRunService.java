@@ -1532,6 +1532,10 @@ class ImportRunService implements ImportRuns {
                 .query()
                 .singleRow();
         jdbc.sql("SET LOCAL app.import_commit = 'on'").update();
+        // A batch fills tables that were near empty when its statements were first prepared (the foreign key checks'
+        // too); a plan cached then would scan them on every row from then on, which the big file test measured as a
+        // batch four times as long for twice the rows (issue #880). Each statement is planned for the table as it is.
+        jdbc.sql("SET LOCAL plan_cache_mode = force_custom_plan").update();
         // And every event the batch publishes is an imported record's: its listeners send nothing (Lead ruling 3).
         ImportedRecords.markTransaction();
         String file = row.get("source_filename") == null
@@ -1639,6 +1643,11 @@ class ImportRunService implements ImportRuns {
         @Override
         public void register(String sourceRef, String targetType, UUID targetId) {
             refs.register(runId, batchId, sourceRef, targetType, targetId);
+        }
+
+        @Override
+        public void registerAll(List<BatchWriter.Registration> records) {
+            refs.registerAll(runId, batchId, records);
         }
 
         @Override

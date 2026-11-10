@@ -7,11 +7,16 @@ import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
+import javax.sql.DataSource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -24,11 +29,13 @@ class JdbcCatalogueHistory implements CatalogueHistory {
     static final UUID IMPORT_ACTOR = new UUID(0L, 0L);
 
     private final JdbcClient jdbc;
+    private final JdbcTemplate batch;
     private final CatalogueRepository repo;
     private final CurrentTenant tenant;
 
-    JdbcCatalogueHistory(JdbcClient jdbc, CatalogueRepository repo, CurrentTenant tenant) {
+    JdbcCatalogueHistory(JdbcClient jdbc, DataSource dataSource, CatalogueRepository repo, CurrentTenant tenant) {
         this.jdbc = jdbc;
+        this.batch = new JdbcTemplate(dataSource);
         this.repo = repo;
         this.tenant = tenant;
     }
@@ -127,14 +134,76 @@ class JdbcCatalogueHistory implements CatalogueHistory {
         return new Ensured(id, true, false);
     }
 
+    // JUSTIFICATION-A3: issue #880 replaces three round trips per imported item with two batches and one query.
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<String> otherWithSameName(String code, String description, UUID unitId) {
-        String own = RetailCatalogue.normaliseCode(code).orElse(code);
-        return repo.sameName(description, null).stream()
-                .filter(m -> m.unitId().equals(unitId) && !m.code().equalsIgnoreCase(own))
-                .map(CatalogueRepository.NameMatch::code)
-                .findFirst();
+    public void createProducts(List<NewProduct> products) {
+        if (products.isEmpty()) {
+            return;
+        }
+        String currency = tenant.profile().currency();
+        List<Object[]> rows = new ArrayList<>(products.size());
+        List<Object[]> history = new ArrayList<>(products.size());
+        for (NewProduct p : products) {
+            String normal = RetailCatalogue.normaliseCode(p.code())
+                    .orElseThrow(() -> new IllegalArgumentException("product code is not acceptable: " + p.code()));
+            rows.add(new Object[] {
+                p.id(),
+                normal,
+                CatalogueNames.display(p.description()),
+                p.categoryId(),
+                p.unitId(),
+                p.costMinor(),
+                p.sellMinor(),
+                currency,
+                p.active(),
+                IMPORT_ACTOR
+            });
+            // The initial history row ensureProduct writes through repo.insertHistory, with the same columns.
+            history.add(new Object[] {UUID.randomUUID(), p.id(), p.costMinor(), p.sellMinor(), currency});
+        }
+        batch.batchUpdate("""
+                INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                             sell_minor, currency, active, created_by)
+                VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, rows);
+        batch.batchUpdate("""
+                INSERT INTO retail_price_history (id, tenant_id, created_at, product_id, source, source_id,
+                    old_cost_minor, new_cost_minor, old_sell_minor, new_sell_minor, currency, reason, changed_by)
+                VALUES (?, current_setting('app.tenant_id')::uuid, clock_timestamp(), ?, 'initial', NULL, NULL, ?, NULL,
+                    ?, ?, NULL, NULL)
+                """, history);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, List<Product>> sameName(Collection<UUID> productIds) {
+        Map<UUID, List<Product>> out = new HashMap<>();
+        if (productIds.isEmpty()) {
+            return out;
+        }
+        // Each product by its id, then its twins by the name key (V63), each an index lookup of its own: OFFSET 0 keeps
+        // the planner from joining them by a scan of every product, which the big file test measured (issue #880).
+        // Never lower(code), which row-level security keeps from its index, nor id = ANY(?).
+        jdbc.sql("""
+                        SELECT n.id AS product, o.id, o.code, o.cost_minor, o.sell_minor
+                          FROM unnest(CAST(? AS uuid[])) AS made(id)
+                         CROSS JOIN LATERAL (SELECT p.id, p.name_key, p.unit_id FROM retail_products p
+                                              WHERE p.id = made.id OFFSET 0) n
+                         CROSS JOIN LATERAL (SELECT p.id, p.code, p.cost_minor, p.sell_minor FROM retail_products p
+                                              WHERE p.name_key = n.name_key AND p.unit_id = n.unit_id AND p.id <> n.id
+                                             OFFSET 0) o
+                         ORDER BY o.code, o.id
+                        """)
+                .param(productIds.toArray(UUID[]::new))
+                .query((rs, n) -> out.computeIfAbsent(rs.getObject("product", UUID.class), k -> new ArrayList<>())
+                        .add(new Product(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("code"),
+                                rs.getLong("cost_minor"),
+                                rs.getLong("sell_minor"))))
+                .list();
+        return out;
     }
 
     @Override

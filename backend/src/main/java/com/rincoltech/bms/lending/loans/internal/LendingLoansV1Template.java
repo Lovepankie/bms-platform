@@ -426,8 +426,14 @@ class LendingLoansV1Template implements ImportTemplate {
      */
     @Override
     public ImportForecast forecast(Map<String, String> policy, UUID runId) {
+        return forecasts(policy, runId).get();
+    }
+
+    /** What {@link #forecast(Map, UUID)} reads, read once for every forecast the supplier makes (issue #880). */
+    @Override
+    public java.util.function.Supplier<ImportForecast> forecasts(Map<String, String> policy, UUID runId) {
         Loaded l = readOnly.execute(s -> load(runId));
-        return new LoanForecast(l.orders(), l.codes(), l.headOffice(), l.asAt(), l.opened(), l.others());
+        return () -> new LoanForecast(l.orders(), l.codes(), l.headOffice(), l.asAt(), l.opened(), l.others());
     }
 
     private record Loaded(

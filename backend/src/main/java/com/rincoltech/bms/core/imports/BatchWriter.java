@@ -88,6 +88,14 @@ public interface BatchWriter {
         void register(String sourceRef, String targetType, UUID targetId);
 
         /**
+         * {@link #register} of each record, in order, with the same refusals, as one read and one insert for the lot
+         * (issue #880): what a writer that registers a page of rows at a time calls.
+         */
+        default void registerAll(List<Registration> records) {
+            records.forEach(r -> register(r.sourceRef(), r.targetType(), r.targetId()));
+        }
+
+        /**
          * Posts one opening journal (spec section 3.7) through {@code post_entry} against {@code opening_balance_equity},
          * registers it in {@code import_refs} in the same transaction, once per batch, branch and kind (two batches that
          * hold a branch's stock post a journal each, and a template's forecast predicts one per batch), and tells the
@@ -100,4 +108,7 @@ public interface BatchWriter {
         /** The option of a policy decision recorded on the run (spec section 3.8), for example {@code treat_as_settled}. */
         Optional<String> policy(String key);
     }
+
+    /** A record a writer created or matched for a row, to register in {@code import_refs} ({@link Checkpoint#register}). */
+    record Registration(String sourceRef, String targetType, UUID targetId) {}
 }

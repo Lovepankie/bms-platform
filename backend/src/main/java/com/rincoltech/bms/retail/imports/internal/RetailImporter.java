@@ -12,10 +12,10 @@ import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.kernel.CompactKeys;
 import com.rincoltech.bms.retail.cashbook.CashBookHistory;
 import com.rincoltech.bms.retail.cashbook.CashBookHistory.ExpenseItem;
 import com.rincoltech.bms.retail.catalogue.CatalogueHistory;
-import com.rincoltech.bms.retail.catalogue.CatalogueHistory.Ensured;
 import com.rincoltech.bms.retail.catalogue.CatalogueHistory.Product;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.imports.internal.ExportFile.Row;
@@ -216,6 +216,12 @@ public class RetailImporter {
 
     private static final Logger log = LoggerFactory.getLogger(RetailImporter.class);
 
+    /**
+     * The rows read and written at a time (issue #880): a page of the checkpoint's rows, and of the items a file makes. Small
+     * enough that a page's objects die young on the staging heap, so the old generation holds no page.
+     */
+    static final int PAGE = 250;
+
     private final TenantJobs tenants;
     private final TransactionTemplate transactions;
     private final JdbcClient jdbc;
@@ -314,39 +320,52 @@ public class RetailImporter {
             throw new IllegalArgumentException("retail_v1 has no entity set " + entitySet);
         }
         String name = entitySet + ".jsonl";
+        // A reference or balance row the business's imports already hold with this content was written by an earlier
+        // run: counted existing, written again for nothing. A history row goes through its file's code, which counts it
+        // existing in its place.
+        boolean history = RetailV1Template.BY_REFERENCE.contains(entitySet);
+        // Issue #880: a reference set is written a page at a time, holding one page. History and balances need the
+        // whole batch at once (a restock's price history reads every row in time order; one opening journal per branch
+        // from every balance row), so their pages are gathered into one file first, each row's values held once.
+        boolean whole = history || entitySet.equals("balances");
         return new BatchWriter() {
             @Override
             public Map<String, Object> write(UUID runId, UUID batchId, int seq, Checkpoint checkpoint) {
-                Map<Integer, ImportRefs.StagedRow> staged = new LinkedHashMap<>();
-                int after = 0;
-                while (true) {
-                    List<ImportRefs.StagedRow> chunk = checkpoint.rows(after, 1_000);
-                    if (chunk.isEmpty()) {
-                        break;
-                    }
-                    chunk.forEach(r -> staged.put(r.line(), r));
-                    after = chunk.getLast().line();
-                }
-                // A reference or balance row the business's imports already hold with this content was written by an
-                // earlier run: counted existing, written again for nothing. A history row goes through its file's
-                // code, which counts it existing in its place (a restock's price history reads every row in order).
-                boolean history = RetailV1Template.BY_REFERENCE.contains(entitySet);
-                List<ImportRefs.StagedRow> toWrite = staged.values().stream()
-                        .filter(r -> history || r.status() != ImportRefs.Status.EXISTING)
-                        .toList();
-                ExportFile file = ExportFile.staged(
-                        name,
-                        toWrite.stream()
-                                .map(r -> Map.entry(r.line(), r.values()))
-                                .toList());
                 ImportReport report = new ImportReport("", "", false);
-                Run run = new Run(Map.of(name, file), report, runId, null, false);
-                run.attach(checkpoint, batchId, new StagedRefs(checkpoint, staged));
+                StagedRefs refs = new StagedRefs(checkpoint);
+                Run run = new Run(Map.of(), report, runId, null, false);
+                run.attach(checkpoint, batchId, refs);
                 run.begin();
                 ImportReport.Counts counts = report.file(name);
-                counts.read = staged.size();
-                counts.existing = staged.size() - toWrite.size();
-                run.write(name, file);
+                ExportFile file = ExportFile.staged(name, List.of());
+                int after = 0;
+                while (true) {
+                    List<ImportRefs.StagedRow> page = checkpoint.rows(after, PAGE);
+                    if (page.isEmpty()) {
+                        break;
+                    }
+                    after = page.getLast().line();
+                    List<Map.Entry<Integer, Map<String, Object>>> toWrite = new ArrayList<>(page.size());
+                    for (ImportRefs.StagedRow r : page) {
+                        counts.read++;
+                        if (!history && r.status() == ImportRefs.Status.EXISTING) {
+                            counts.existing++;
+                            continue;
+                        }
+                        refs.hold(r);
+                        toWrite.add(Map.entry(r.line(), r.values()));
+                    }
+                    if (whole) {
+                        file.addStaged(toWrite);
+                    } else if (!toWrite.isEmpty()) {
+                        run.write(name, ExportFile.staged(name, toWrite));
+                        refs.flush();
+                    }
+                }
+                if (whole) {
+                    run.write(name, file);
+                    refs.flush();
+                }
                 if (name.equals("balances.jsonl")) {
                     run.checksum(file);
                 }
@@ -624,6 +643,19 @@ public class RetailImporter {
         final Set<String> namedCategories = new HashSet<>();
         final Set<String> namedUnits = new HashSet<>();
         final Set<String> namedSuppliers = new HashSet<>();
+
+        /**
+         * One file's own state across the pages a batch writes it in (issue #880), cleared with each file's lookups: the
+         * branch codes and credit buyers seen, the line of each item code, and the categories and units ensured by the
+         * name a row gave, so each is asked of the catalogue once.
+         */
+        final Set<String> branchCodes = new HashSet<>();
+
+        final Set<String> buyerNames = new HashSet<>();
+        CompactKeys itemLines = new CompactKeys();
+        final Map<String, UUID> categoryIds = new HashMap<>();
+        final Map<String, UUID> unitIds = new HashMap<>();
+
         ZoneId zone;
         Map<String, UUID> branchByCode = Map.of();
         /** Branches that keep no goods (issue #329): a balance for one is refused, never written. */
@@ -701,6 +733,11 @@ public class RetailImporter {
         }
 
         void begin() {
+            branchCodes.clear();
+            buyerNames.clear();
+            itemLines = new CompactKeys();
+            categoryIds.clear();
+            unitIds.clear();
             zone = currentTenant.profile().timezone();
             branchByCode = new HashMap<>();
             branches.all().forEach(b -> branchByCode.put(b.code().toUpperCase(Locale.ROOT), b.id()));
@@ -789,14 +826,13 @@ public class RetailImporter {
 
         void branches(ExportFile file) {
             ImportReport.Counts c = report.file(file.name);
-            Set<String> seen = new HashSet<>();
             each(file, row -> {
                 String code = row.requiredText("code", 10).toUpperCase(Locale.ROOT);
                 String name = row.requiredText("name", 200);
                 if (!code.matches("^[A-Z0-9]{2,10}$")) {
                     throw row.problem("branch code " + code + " is not 2 to 10 letters or digits");
                 }
-                if (!seen.add(code)) {
+                if (!branchCodes.add(code)) {
                     throw row.problem("duplicate branch code " + code);
                 }
                 if (branchByCode.containsKey(code)) {
@@ -831,75 +867,160 @@ public class RetailImporter {
             });
         }
 
-        /** Data dictionary rule 1: a code is matched trimmed and ignoring case; the first row wins. */
+        // JUSTIFICATION-A3: issue #880 writes the items a page at a time: a read per row, then one write per page.
+        /**
+         * Data dictionary rule 1: a code is matched trimmed and ignoring case; the first row wins. Since issue #880 a page of
+         * rows is read first, each item's code looked up in the products this file's lookups hold, then the page's new items
+         * are made in one statement batch and their twins of the same name found in one query, and each row is reported in
+         * line order as before. The lookup by {@code lower(code)} that row-level security keeps from its index made each
+         * row scan every item of the business, so the batch took four times as long for twice the rows.
+         */
         void products(ExportFile file) {
             ImportReport.Counts c = report.file(file.name);
-            Map<String, Integer> firstLine = new HashMap<>();
-            each(file, row -> {
-                // The length is checked on the normal form, which NFKC can make longer (issue #73).
-                String code = normalisedCode(row, row.requiredText("code", Integer.MAX_VALUE));
-                if (code.codePointCount(0, code.length()) > 40) {
-                    throw row.problem("code is longer than 40 characters after normalisation");
+            for (int from = 0; from < file.rows.size(); from += PAGE) {
+                productsPage(file.name, c, file.rows.subList(from, Math.min(file.rows.size(), from + PAGE)));
+            }
+        }
+
+        /** An item row once read: why it is skipped, or what its category and unit said and what it makes or matches. */
+        private record ItemRow(
+                Row row,
+                RowProblem problem,
+                String code,
+                List<String> anomalies,
+                CatalogueHistory.NewProduct made,
+                Product held,
+                boolean otherPrices) {}
+
+        private void productsPage(String name, ImportReport.Counts c, List<Row> rows) {
+            List<ItemRow> items = new ArrayList<>(rows.size());
+            for (Row row : rows) {
+                try {
+                    items.add(item(name, row));
+                } catch (RowProblem p) {
+                    items.add(new ItemRow(row, p, null, List.of(), null, null, false));
                 }
-                String key = code.toLowerCase(Locale.ROOT);
-                Integer first = firstLine.putIfAbsent(key, row.line());
-                if (first != null) {
-                    throw row.problem("duplicate product code " + code + " (same as line " + first
-                            + " ignoring case and spaces)");
+                if (checkpoint != null) {
+                    checkpoint.rowWritten();
                 }
-                String description = row.requiredText("description", 300);
-                String category = row.requiredText("category", 100);
-                String unit = row.requiredText("unit", 30);
-                long cost = row.money("cost_minor");
-                long sell = row.money("sell_minor");
-                boolean active = row.flag("active", true);
-                if (!listed(
-                        namedCategories,
-                        category,
-                        () -> made(catalogue.ensureCategory(category)),
-                        file.name,
-                        row,
-                        "retail.category")) {
-                    report.anomaly(file.name, row.line(), "category " + category + " is not in categories.jsonl");
+            }
+            List<CatalogueHistory.NewProduct> made = items.stream()
+                    .map(ItemRow::made)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            catalogue.createProducts(made);
+            Map<UUID, Integer> madeAt = new HashMap<>();
+            items.stream()
+                    .filter(i -> i.made() != null)
+                    .forEach(i -> madeAt.put(i.made().id(), i.row().line()));
+            Map<UUID, List<Product>> twins = catalogue.sameName(madeAt.keySet());
+            for (ItemRow i : items) {
+                int line = i.row().line();
+                if (i.problem() != null) {
+                    report.skip(name, i.problem().line, i.problem().getMessage());
+                    continue;
                 }
-                if (!listed(namedUnits, unit, () -> made(catalogue.ensureUnit(unit)), file.name, row, "retail.unit")) {
-                    report.anomaly(file.name, row.line(), "unit " + unit + " is not in units.jsonl");
-                }
-                UUID unitId = catalogue.ensureUnit(unit).id();
-                Ensured product = catalogue.ensureProduct(
-                        code, description, catalogue.ensureCategory(category).id(), unitId, cost, sell, active);
-                if (product.created()) {
-                    refs.created(file.name, row, "retail.product", product.id());
+                i.anomalies().forEach(a -> report.anomaly(name, line, a));
+                String code = i.code();
+                if (i.made() != null) {
+                    refs.created(name, i.row(), "retail.product", i.made().id());
                     c.written++;
                     // Issue #352: a name is kept once per unit. History needs every code, so both rows are kept; the
-                    // report tells the owner which items to look at.
-                    catalogue
-                            .otherWithSameName(code, description, unitId)
+                    // report tells the owner which items to look at. An item a later line of the page made did not
+                    // exist yet when this row was written.
+                    twins.getOrDefault(i.made().id(), List.of()).stream()
+                            .filter(o -> madeAt.getOrDefault(o.id(), 0) < line)
+                            .findFirst()
                             .ifPresent(other -> report.anomaly(
-                                    file.name,
-                                    row.line(),
-                                    "product " + code + " has the same name as product " + other
+                                    name,
+                                    line,
+                                    "product " + code + " has the same name as product " + other.code()
                                             + " in the same unit; both were kept, check whether they are one item"));
                 } else {
-                    refs.matched(file.name, row, "retail.product", product.id());
+                    refs.matched(name, i.row(), "retail.product", i.held().id());
                     c.existing++;
-                    if (product.changed()) {
+                    if (i.otherPrices()) {
                         report.anomaly(
-                                file.name,
-                                row.line(),
+                                name,
+                                line,
                                 "product " + code + " existed with other prices; its prices were left unchanged");
                     }
                 }
-            });
+            }
+        }
+
+        /** Reads one item row; a product of its code that this file's lookups hold is matched, never changed (#73). */
+        private ItemRow item(String name, Row row) {
+            // The length is checked on the normal form, which NFKC can make longer (issue #73).
+            String code = normalisedCode(row, row.requiredText("code", Integer.MAX_VALUE));
+            if (code.codePointCount(0, code.length()) > 40) {
+                throw row.problem("code is longer than 40 characters after normalisation");
+            }
+            String key = code.toLowerCase(Locale.ROOT);
+            Long first = itemLines.putIfAbsent(key, row.line());
+            if (first != null) {
+                throw row.problem(
+                        "duplicate product code " + code + " (same as line " + first + " ignoring case and spaces)");
+            }
+            String description = row.requiredText("description", 300);
+            String category = row.requiredText("category", 100);
+            String unit = row.requiredText("unit", 30);
+            long cost = row.money("cost_minor");
+            long sell = row.money("sell_minor");
+            boolean active = row.flag("active", true);
+            List<String> anomalies = new ArrayList<>(2);
+            if (!listed(namedCategories, category, () -> category(category), name, row, "retail.category")) {
+                anomalies.add("category " + category + " is not in categories.jsonl");
+            }
+            if (!listed(namedUnits, unit, () -> unit(unit), name, row, "retail.unit")) {
+                anomalies.add("unit " + unit + " is not in units.jsonl");
+            }
+            UUID categoryId = category(category).id();
+            UUID unitId = unit(unit).id();
+            Product held = productByCode.get(key);
+            if (held != null) {
+                boolean other = held.costMinor() != cost || held.sellMinor() != sell;
+                return new ItemRow(row, null, code, anomalies, null, held, other);
+            }
+            return new ItemRow(
+                    row,
+                    null,
+                    code,
+                    anomalies,
+                    new CatalogueHistory.NewProduct(
+                            UUID.randomUUID(), code, description, categoryId, unitId, cost, sell, active),
+                    null,
+                    false);
+        }
+
+        /** The category of this name, asked of the catalogue once per file: a later row finds it held. */
+        Made category(String name) {
+            UUID id = categoryIds.get(name);
+            if (id != null) {
+                return new Made(id, false);
+            }
+            Made made = made(catalogue.ensureCategory(name));
+            categoryIds.put(name, made.id());
+            return made;
+        }
+
+        /** The unit of this name, as {@link #category}; its key's lock is held from the first ask to the transaction's end. */
+        Made unit(String name) {
+            UUID id = unitIds.get(name);
+            if (id != null) {
+                return new Made(id, false);
+            }
+            Made made = made(catalogue.ensureUnit(name));
+            unitIds.put(name, made.id());
+            return made;
         }
 
         void customers(ExportFile file) {
             ImportReport.Counts c = report.file(file.name);
-            Set<String> seen = new HashSet<>();
             each(file, row -> {
                 String name = row.requiredText("name", 200);
                 String contact = row.optionalText("contact", 100);
-                if (!seen.add(name.toLowerCase(Locale.ROOT))) {
+                if (!buyerNames.add(name.toLowerCase(Locale.ROOT))) {
                     throw row.problem("duplicate credit buyer name");
                 }
                 SaleHistory.Ensured customer = sales.ensureCustomer(name, contact);
@@ -2150,11 +2271,34 @@ public class RetailImporter {
     private final class StagedRefs implements Refs {
 
         private final BatchWriter.Checkpoint checkpoint;
-        private final Map<Integer, ImportRefs.StagedRow> rows;
 
-        StagedRefs(BatchWriter.Checkpoint checkpoint, Map<Integer, ImportRefs.StagedRow> rows) {
+        /** The staged rows being written, by line, without their values (issue #880): one page, or a whole batch. */
+        private final Map<Integer, ImportRefs.StagedRow> rows = new HashMap<>();
+
+        /** What those rows made or matched, registered together when they are written ({@link #flush}). */
+        private final List<BatchWriter.Registration> made = new ArrayList<>();
+
+        StagedRefs(BatchWriter.Checkpoint checkpoint) {
             this.checkpoint = checkpoint;
-            this.rows = rows;
+        }
+
+        /** Holds a row about to be written, so the records it makes are registered under its reference. */
+        void hold(ImportRefs.StagedRow r) {
+            rows.put(
+                    r.line(),
+                    new ImportRefs.StagedRow(
+                            r.line(), Map.of(), r.sourceRef(), r.status(), r.targets(), r.linkedMemberId()));
+        }
+
+        /** Registers what the rows held made, in one call, and lets them go: they are written. */
+        void flush() {
+            checkpoint.registerAll(List.copyOf(made));
+            made.clear();
+            rows.clear();
+        }
+
+        private void register(Row row, String targetType, UUID targetId) {
+            made.add(new BatchWriter.Registration(staged(row).sourceRef(), targetType, targetId));
         }
 
         // JUSTIFICATION-A3: the review of 51cfb70 (nice-to-have 5) asks a framework batch to know the command's keys.
@@ -2181,25 +2325,24 @@ public class RetailImporter {
                     .params(historyKey(file, ref), file, ref)
                     .query()
                     .listOfRows();
-            held.forEach(
-                    h -> checkpoint.register(s.sourceRef(), (String) h.get("target_type"), (UUID) h.get("target_id")));
+            held.forEach(h -> register(row, (String) h.get("target_type"), (UUID) h.get("target_id")));
             return !held.isEmpty();
         }
 
         @Override
         public void remember(String file, Row row, String ref, String targetType, UUID targetId, String sourceUser) {
-            checkpoint.register(staged(row).sourceRef(), targetType, targetId);
+            register(row, targetType, targetId);
             legacy(file, ref, targetType, targetId, sourceUser);
         }
 
         @Override
         public void created(String file, Row row, String targetType, UUID targetId) {
-            checkpoint.register(staged(row).sourceRef(), targetType, targetId);
+            register(row, targetType, targetId);
         }
 
         @Override
         public void matched(String file, Row row, String targetType, UUID targetId) {
-            checkpoint.register(staged(row).sourceRef(), targetType, targetId);
+            register(row, targetType, targetId);
         }
 
         @Override

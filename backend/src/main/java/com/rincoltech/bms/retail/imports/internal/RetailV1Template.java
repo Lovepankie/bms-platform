@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.imports.ImportBooks;
 import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportTemplate;
 import com.rincoltech.bms.core.tenancy.Branches;
+import com.rincoltech.bms.kernel.CompactKeys;
 import com.rincoltech.bms.retail.catalogue.CatalogueHistory;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.stock.Quantities;
@@ -380,6 +381,12 @@ class RetailV1Template implements ImportTemplate {
      */
     @Override
     public ImportForecast forecast(Map<String, String> policy, UUID runId) {
+        return forecasts(policy, runId).get();
+    }
+
+    /** What {@link #forecast(Map, UUID)} reads, read once for every forecast the supplier makes (issue #880). */
+    @Override
+    public java.util.function.Supplier<ImportForecast> forecasts(Map<String, String> policy, UUID runId) {
         Map<String, Long> held = readOnly.execute(s -> {
             Map<String, Long> costs = new HashMap<>();
             catalogue.productsByCode().values().forEach(p -> costs.put(compare(p.code()), p.costMinor()));
@@ -392,11 +399,12 @@ class RetailV1Template implements ImportTemplate {
                 .filter(b -> !b.active())
                 .map(b -> compare(b.code()))
                 .collect(Collectors.toSet()));
-        return new StockForecast(
-                held == null ? Map.of() : held,
-                opened == null ? Set.of() : opened,
-                inactive == null ? Set.of() : inactive,
-                legacy == null ? Map.of() : legacy);
+        Map<String, Long> costs = held == null ? Map.of() : Map.copyOf(held);
+        Set<String> openedBefore = opened == null ? Set.of() : opened;
+        // Copied once here, so each forecast's own Set.copyOf and Map.copyOf return these (review of 12e9d33 on #898).
+        Set<String> closed = inactive == null ? Set.of() : Set.copyOf(inactive);
+        Map<String, Map<String, BigDecimal>> legacyBefore = legacy == null ? Map.of() : Map.copyOf(legacy);
+        return () -> new StockForecast(costs, openedBefore, closed, legacyBefore);
     }
 
     // JUSTIFICATION-A3: the Lead's steer for round 4 asks one function shared by the forecast and the loader.
@@ -480,7 +488,12 @@ class RetailV1Template implements ImportTemplate {
     /** The forecast of one run or one row: see {@link #forecast(Map)}. */
     static final class StockForecast implements ImportForecast {
 
-        private final Map<String, Long> cost;
+        /** The business's costs as read, shared by every forecast of one read and never changed (issue #880). */
+        private final Map<String, Long> held;
+
+        /** The costs of new items this forecast's own products rows gave: one per row of a product master (#880). */
+        private final CompactKeys added = new CompactKeys();
+
         private final Map<String, Map<String, BigDecimal>> qty = new TreeMap<>();
         private final Set<String> opened = new HashSet<>();
         private final List<Journal> journals = new ArrayList<>();
@@ -501,7 +514,7 @@ class RetailV1Template implements ImportTemplate {
                 Set<String> opened,
                 Set<String> inactive,
                 Map<String, Map<String, BigDecimal>> legacy) {
-            this.cost = new HashMap<>(held);
+            this.held = held;
             this.opened.addAll(opened);
             this.inactive = Set.copyOf(inactive);
             this.legacy = Map.copyOf(legacy);
@@ -510,8 +523,12 @@ class RetailV1Template implements ImportTemplate {
         /** The branch's opening, its rows at the quantities the loader values them at ({@link #openingQuantities}). */
         private BranchOpening opening(String branch, Map<String, BigDecimal> items) {
             return branchOpening(
-                    openingQuantities(items, legacy.getOrDefault(branch, Map.of())),
-                    product -> cost.getOrDefault(product, 0L));
+                    openingQuantities(items, legacy.getOrDefault(branch, Map.of())), product -> cost(product));
+        }
+
+        private long cost(String product) {
+            Long c = held.get(product);
+            return c != null ? c : added.get(product, 0L);
         }
 
         @Override
@@ -524,7 +541,10 @@ class RetailV1Template implements ImportTemplate {
             switch (entitySet) {
                 case "products" -> {
                     if (values.get("code") instanceof String code && values.get("cost_minor") instanceof Long c) {
-                        cost.putIfAbsent(compare(code), c);
+                        // An item the business holds keeps its own cost (issue #73); a new one its first row's.
+                        if (!held.containsKey(compare(code))) {
+                            added.putIfAbsent(compare(code), c);
+                        }
                     }
                 }
                 case "balances" -> {
@@ -540,7 +560,7 @@ class RetailV1Template implements ImportTemplate {
         }
 
         private long value(String product, BigDecimal q) {
-            return Quantities.value(q, cost.getOrDefault(product, 0L));
+            return Quantities.value(q, cost(product));
         }
 
         /**

@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.imports.internal;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,9 +69,16 @@ final class ReviewState {
     private final Map<String, List<Made>> byRow;
     private final long last;
 
+    /** The identities {@code link_row} resolutions link a row to. */
+    private final Set<String> linked = new HashSet<>();
+
     private ReviewState(Map<String, List<Made>> byRow, long last) {
         this.byRow = byRow;
         this.last = last;
+        byRow.values().stream()
+                .flatMap(List::stream)
+                .filter(m -> "link_row".equals(m.kind()) && m.after().get("row_key") != null)
+                .forEach(m -> linked.add(String.valueOf(m.after().get("row_key"))));
     }
 
     /** Every resolution of the run, read under the business's row-level security. */
@@ -102,6 +110,15 @@ final class ReviewState {
                 .forEach(m -> byRow.computeIfAbsent(m.rowKey(), k -> new ArrayList<>())
                         .add(m));
         return new ReviewState(byRow, last[0]);
+    }
+
+    /**
+     * Whether the review can say anything of a row of this identity, or needs to find it: a resolution was made on it, or
+     * links another row to it. The validation counts copies and cells for these identities only (issue #880), so a run
+     * with no resolution holds nothing per row for the review.
+     */
+    boolean concerns(String rowKey) {
+        return byRow.containsKey(rowKey) || linked.contains(rowKey);
     }
 
     /** Whether the run has no resolution at all. */

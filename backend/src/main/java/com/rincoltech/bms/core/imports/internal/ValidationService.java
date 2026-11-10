@@ -308,9 +308,12 @@ class ValidationService implements ImportValidation {
                     documents.get(b.mappingId()),
                     b.source()));
         }
+        engine.batches(inputs);
         // Each copy of a line repeated verbatim is counted in the run's order (batch, then line), so a decision on one
         // copy never reaches another, and the run's number of such copies is known before any decision is applied (Lead
         // ruling on #868). With no resolution in the run this is pass 1 itself; with some, the rows are read once more.
+        // Only the identities the review concerns are counted (issue #880): the review answers nothing for any other
+        // row, and four entries of long keys for every row of the run were held to the end of the validation.
         Map<String, UUID> rowsByCopy = new HashMap<>();
         Map<String, Set<String>> shasByKey = new HashMap<>();
         Map<String, Integer> copies = new HashMap<>();
@@ -318,12 +321,14 @@ class ValidationService implements ImportValidation {
         for (BatchInput input : inputs) {
             readRows(input.batchId(), here, staged -> {
                 String key = engine.rowKey(input, staged.row());
-                int occurrence = copies.merge(key + "|" + staged.sha(), 1, Integer::sum);
-                occurrences.put(staged.row().rowId(), occurrence);
-                rowsByCopy.put(
-                        ReviewState.copy(key, staged.sha(), occurrence),
-                        staged.row().rowId());
-                shasByKey.computeIfAbsent(key, k -> new HashSet<>()).add(staged.sha());
+                if (review.concerns(key)) {
+                    int occurrence = copies.merge(key + "|" + staged.sha(), 1, Integer::sum);
+                    occurrences.put(staged.row().rowId(), occurrence);
+                    rowsByCopy.put(
+                            ReviewState.copy(key, staged.sha(), occurrence),
+                            staged.row().rowId());
+                    shasByKey.computeIfAbsent(key, k -> new HashSet<>()).add(staged.sha());
+                }
                 if (review.isEmpty()) {
                     engine.index(input, staged.row());
                 }
@@ -338,8 +343,8 @@ class ValidationService implements ImportValidation {
                     ReviewState.Row decided = review.row(
                             key,
                             staged.sha(),
-                            occurrences.get(staged.row().rowId()),
-                            copies.get(key + "|" + staged.sha()));
+                            occurrences.getOrDefault(staged.row().rowId(), 1),
+                            copies.getOrDefault(key + "|" + staged.sha(), 1));
                     if (decided.excludedBy() == null) {
                         engine.index(input, reviewed(staged, decided));
                     }

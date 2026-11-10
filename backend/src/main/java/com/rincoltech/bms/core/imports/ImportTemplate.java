@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
@@ -376,6 +377,15 @@ public interface ImportTemplate {
      */
     default ImportForecast forecast(Map<String, String> policy, UUID runId) {
         return forecast(policy);
+    }
+
+    /**
+     * Fresh forecasts of one run, each as {@link #forecast(Map, UUID)} gives it, for a caller that feeds many forecasts a
+     * row each (the reconciliation's part of every row): a template that reads the database for its forecast reads it once
+     * here, not once per row (issue #880). {@link #forecast(Map, UUID)} each time by default.
+     */
+    default Supplier<ImportForecast> forecasts(Map<String, String> policy, UUID runId) {
+        return () -> forecast(policy, runId);
     }
 
     /**

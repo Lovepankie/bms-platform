@@ -162,9 +162,10 @@ bms:
   # files no batch names once older than orphan-age, and the files and staged rows of cancelled runs.
   imports:
     max-file-size: ${BMS_IMPORTS_MAX_FILE_SIZE:25MB}
-    # 2,500 rows per batch until #880: the big file test (#137) commits it on the staging heap in at most 130 s with the
-    # old generation at 56 percent; 5,000 took up to 473 s of the 10 minute batch timeout. Back up to 100,000 with #880.
-    max-rows: ${BMS_IMPORTS_MAX_ROWS:2500}
+    # 25,000 rows per batch until #900 lets it go to 100,000: the big file test (#137) dry runs it in 185 s and commits it
+    # in 246 s on the staging heap with the old generation at 60 percent; 50,000 stopped at the 900 s dry run limit in a
+    # database other businesses' imports already fill (SDD chapter 15 section 15.7).
+    max-rows: ${BMS_IMPORTS_MAX_ROWS:25000}
     max-columns: ${BMS_IMPORTS_MAX_COLUMNS:200}
     key: ${BMS_IMPORT_KEY:}
     work-dir: ${BMS_IMPORTS_WORK_DIR:}
