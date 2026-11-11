@@ -2985,7 +2985,8 @@ as `bms_app` under the tenant's row-level security:
 - **Prices**: each new product takes its cost and sell price from the product master, with an
   `initial` history row; an existing product's prices are never changed by the import, and no
   history row is written for it (#73). An `import` history row, dated at the restock, is written only where two
-  consecutive restocks of a product carried different prices.
+  consecutive restocks of a product carried different prices, consecutive by date and then `source_ref` among every
+  imported restock of the product, whatever run imported it (#881).
 - **The opening journal**: one per branch (section 6.11.2), for the positive balances only. Since #135 it is posted
   through the import framework's `openingJournal` (source module `core.imports`, ledger type `retail.import_opening`),
   registered in `import_refs` as `ledger.journal_entry`, for what the branch's balance rows above zero are worth. One per

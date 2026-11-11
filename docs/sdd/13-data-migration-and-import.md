@@ -684,7 +684,7 @@ transaction that is rolled back, and prints the same report.
 | Products | Matched by code normalised as the catalogue normalises it (`RetailCatalogue.normaliseCode`, review F9) and ignoring case (data dictionary rule 1); a duplicate is one product and is reported. New products take the master's prices with an `initial` history row. An existing product is never changed, prices included, and gets no history row, so a price edited in the app between two runs stays (#73); when the master's prices differ, the report lists it as information. The code is at most 40 characters after normalisation; a longer one is a skipped row |
 | Sales, restocks, usage and damage | Historical documents and movements, no journals, keyed by `source_ref` in `import_refs` by key alone (`sales.jsonl\|-\|ref:<source_ref>#by-key`, and still in `retail_import_refs` until the contract step, #135); each movement's `business_date` is the source row's sale, purchase or usage date in the tenant's zone, so valuation `as_of` and daily profit read them by business date |
 | Restocks of kind `adjustment` or `return` | `adjustment` or `return` movements, not purchases, with no supplier payable |
-| Restock price changes | An `import` history row where consecutive restocks of a product changed its cost or sell price |
+| Restock price changes | An `import` history row where consecutive restocks of a product changed its cost or sell price: consecutive by date, then by `source_ref`, among the batch's rows and the restocks earlier runs imported (read a page of items at a time, #881), so a split of the history over runs records what one run records. A restock dated before one an earlier run imported adds the change that later restock now calls for when the books lack it; one the books hold otherwise is kept, as history is append only, and reported as an anomaly |
 | Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly, dated with the import date as its business date; then one opening journal per branch, dated the same day, (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost, posted through the framework's `openingJournal` since #135, once per branch, ever: a later run posts none for a branch that has one (reported already posted) and lists each difference for a stock-take. A balance the history already gives (a zero difference) writes nothing and counts as existing |
 
 **Never guess, never lose a row (13.2).** A row with an unknown product or branch code, a missing
@@ -1575,9 +1575,9 @@ section 4.1; coordinated with #110, which builds no second framework).**
   looked up by its index, the reconciliation reads a template's forecast inputs once, and the per-row keys of the
   validation, the forecast and the loader are held compactly): the validation and preview of 100,000 rows fit the
   staging heap, but in a database other businesses' imports already fill the batch's lookups of `import_refs` and of
-  the items of the same name still grow with its rows, and the commit of 100,000 items fills the old generation. #881:
-  a restock's price change is looked for within its batch only, so splitting the restocks over two runs loses it. The
-  tests that show them are disabled with those numbers.
+  the items of the same name still grow with its rows, and the commit of 100,000 items fills the old generation. The
+  test that shows it is disabled with that number. #881 (a restock's price change looked for within its batch only, so
+  splitting the restocks over two runs lost it) is fixed: see the restock price changes in section 13.13's table.
 - **The row limit is 25,000 per batch until #900** (`bms.imports.max-rows`, `BMS_IMPORTS_MAX_ROWS`): the big file test
   dry runs it in 185 s and commits it in 246 s on the staging heap with the old generation at 60 percent; 50,000 stopped
   at the 900 s dry run limit (chapter 15 section 15.7). It goes up to 100,000 with #900. The test profile keeps 100,000

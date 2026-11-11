@@ -36,11 +36,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -221,6 +224,19 @@ public class RetailImporter {
      * enough that a page's objects die young on the staging heap, so the old generation holds no page.
      */
     static final int PAGE = 250;
+
+    /** The note of an imported restock before its {@code source_ref}, which issue #881 reads back as its tiebreak. */
+    static final String IMPORTED = "Imported ";
+
+    /**
+     * Restocks of an item in time order (issue #881): by date, then by {@code source_ref} as UTF-8 bytes, which the books
+     * hold as well as the batch, so every split of the history over runs orders them as one run does.
+     */
+    static final Comparator<Run.Restock> IN_TIME = Comparator.comparing(Run.Restock::at)
+            .thenComparing(
+                    Run.Restock::ref,
+                    (a, b) -> Arrays.compareUnsigned(
+                            a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
 
     private final TenantJobs tenants;
     private final TransactionTemplate transactions;
@@ -1064,33 +1080,34 @@ public class RetailImporter {
         /**
          * Restocks, and the stock-takes and returns the source recorded as restocks (data
          * dictionary section 3). Price history rows are written where consecutive purchases of a
-         * product changed its cost or sell price.
+         * product changed its cost or sell price: consecutive by date, then by {@code source_ref}, among this batch's
+         * rows and the restocks earlier runs imported (issue #881, {@link #neighbours}).
          */
         void purchases(ExportFile file) {
             ImportReport.Counts c = report.file(file.name);
             List<PurchaseRow> rows = new ArrayList<>();
             each(file, row -> rows.add(parsePurchase(row)));
-            Map<PurchaseRow, PurchaseRow> previous = new HashMap<>();
-            Map<UUID, PurchaseRow> last = new HashMap<>();
-            rows.stream()
-                    .filter(r -> r.kind().equals("purchase"))
-                    .sorted(Comparator.comparing(PurchaseRow::at)
-                            .thenComparing(r -> r.row().line()))
-                    .forEach(r -> {
-                        PurchaseRow before = last.put(r.product().id(), r);
-                        if (before != null) {
-                            previous.put(r, before);
-                        }
-                    });
+            // Whether each row is held already, before anything is written (issue #881): a restock this batch writes is
+            // placed among the item's imported restocks as the books hold them before the batch. Told in row order.
             Set<String> refs = new HashSet<>();
+            Map<PurchaseRow, Object> held = new HashMap<>();
             for (PurchaseRow r : rows) {
                 try {
-                    if (seen("purchases", r.row(), r.ref(), refs)) {
-                        c.existing++;
-                        continue;
-                    }
+                    held.put(r, seen("purchases", r.row(), r.ref(), refs));
                 } catch (RowProblem p) {
+                    held.put(r, p);
+                }
+            }
+            Neighbours neighbours = neighbours(rows.stream()
+                    .filter(r -> r.kind().equals("purchase") && Boolean.FALSE.equals(held.get(r)))
+                    .toList());
+            for (PurchaseRow r : rows) {
+                if (held.get(r) instanceof RowProblem p) {
                     report.skip(file.name, p.line, p.getMessage());
+                    continue;
+                }
+                if (Boolean.TRUE.equals(held.get(r))) {
+                    c.existing++;
                     continue;
                 }
                 UUID target;
@@ -1119,23 +1136,23 @@ public class RetailImporter {
                             r.qtyByBranch(),
                             r.on(),
                             r.at(),
-                            "Imported " + r.ref());
+                            IMPORTED + r.ref());
                     targetType = "retail.purchase";
-                    PurchaseRow before = previous.get(r);
-                    if (before != null) {
-                        long oldSell = before.sell() == null ? r.product().sellMinor() : before.sell();
-                        long newSell = r.sell() == null ? oldSell : r.sell();
-                        if (before.cost() != r.cost() || oldSell != newSell) {
-                            catalogue.importPriceChange(
-                                    r.product().id(),
-                                    before.cost(),
-                                    r.cost(),
-                                    oldSell,
-                                    newSell,
-                                    target,
-                                    r.at(),
-                                    "Imported restock " + r.ref());
-                        }
+                    Restock before = neighbours.before().get(r);
+                    PriceStep step = before == null
+                            ? null
+                            : PriceStep.between(
+                                    before, Restock.of(r), r.product().sellMinor());
+                    if (step != null) {
+                        catalogue.importPriceChange(
+                                r.product().id(),
+                                step.oldCost(),
+                                step.newCost(),
+                                step.oldSell(),
+                                step.newSell(),
+                                target,
+                                r.at(),
+                                "Imported restock " + r.ref());
                     }
                 } else {
                     List<HistoricalMovement> moves = new ArrayList<>();
@@ -1164,8 +1181,153 @@ public class RetailImporter {
                     continue;
                 }
                 remember("purchases", r.row(), r.ref(), targetType, target, r.user());
+                Restock next = neighbours.after().get(r);
+                if (next != null) {
+                    laterRestock(file.name, r, next, neighbours.recorded().get(next.purchase()));
+                }
                 c.written++;
             }
+        }
+
+        // JUSTIFICATION-A3: issue #881 places a restock among the item's restocks in the books; these are its parts.
+        /**
+         * A restock in time order (issue #881): a row of this batch ({@code purchase} null until written) or a restock an
+         * earlier run imported, its {@code source_ref} read back from the note {@link #IMPORTED} gave it.
+         */
+        record Restock(Instant at, String ref, long cost, Long sell, UUID purchase) {
+
+            static Restock of(PurchaseRow r) {
+                return new Restock(r.at(), r.ref(), r.cost(), r.sell(), null);
+            }
+
+            static Restock of(PurchaseHistory.ImportedRestock b) {
+                String note = b.note() == null ? "" : b.note();
+                return new Restock(
+                        b.purchasedAt(),
+                        note.startsWith(IMPORTED) ? note.substring(IMPORTED.length()) : note,
+                        b.costMinor(),
+                        b.sellMinor(),
+                        b.purchaseId());
+            }
+        }
+
+        /**
+         * The price change from one restock to the next (data dictionary section 3): a restock without a sell price keeps
+         * the one before it, and the first one the item's; null when neither price changed.
+         */
+        record PriceStep(long oldCost, long newCost, long oldSell, long newSell) {
+
+            static PriceStep between(Restock before, Restock after, long itemSell) {
+                long oldSell = before.sell() == null ? itemSell : before.sell();
+                long newSell = after.sell() == null ? oldSell : after.sell();
+                return before.cost() == after.cost() && oldSell == newSell
+                        ? null
+                        : new PriceStep(before.cost(), after.cost(), oldSell, newSell);
+            }
+
+            boolean same(CatalogueHistory.ImportedChange h) {
+                return h.oldCostMinor() == oldCost
+                        && h.newCostMinor() == newCost
+                        && h.oldSellMinor() == oldSell
+                        && h.newSellMinor() == newSell;
+            }
+        }
+
+        /**
+         * For each new restock row: the restock just before it ({@code before}), of this batch or the books; the restock
+         * of the books just after it when no new row comes between ({@code after}); and the {@code import} history row
+         * each such later restock already carries ({@code recorded}, by purchase).
+         */
+        record Neighbours(
+                Map<PurchaseRow, Restock> before,
+                Map<PurchaseRow, Restock> after,
+                Map<UUID, CatalogueHistory.ImportedChange> recorded) {}
+
+        /**
+         * Issue #881: each new restock row placed among its item's restocks, the books' (as they stand before this batch,
+         * whatever run imported them) and this batch's, by date and then by {@code source_ref}, so any split of the
+         * history over runs, in any order, finds the restock before it that one run would. The books are read for a page
+         * of items at a time, never a row at a time.
+         */
+        Neighbours neighbours(List<PurchaseRow> fresh) {
+            Map<UUID, List<PurchaseRow>> byItem = new LinkedHashMap<>();
+            for (PurchaseRow r : fresh) {
+                byItem.computeIfAbsent(r.product().id(), k -> new ArrayList<>()).add(r);
+            }
+            Map<PurchaseRow, Restock> before = new HashMap<>();
+            Map<PurchaseRow, Restock> after = new HashMap<>();
+            Map<UUID, CatalogueHistory.ImportedChange> recorded = new HashMap<>();
+            List<UUID> items = new ArrayList<>(byItem.keySet());
+            for (int from = 0; from < items.size(); from += PAGE) {
+                List<UUID> page = items.subList(from, Math.min(items.size(), from + PAGE));
+                Map<UUID, List<Restock>> line = new HashMap<>();
+                Map<Restock, PurchaseRow> mine = new IdentityHashMap<>();
+                for (PurchaseHistory.ImportedRestock b : purchases.importedRestocks(page)) {
+                    line.computeIfAbsent(b.productId(), k -> new ArrayList<>()).add(Restock.of(b));
+                }
+                Set<UUID> followed = new LinkedHashSet<>();
+                Set<UUID> later = new HashSet<>();
+                for (UUID item : page) {
+                    List<Restock> restocks = line.computeIfAbsent(item, k -> new ArrayList<>());
+                    for (PurchaseRow r : byItem.get(item)) {
+                        Restock s = Restock.of(r);
+                        mine.put(s, r);
+                        restocks.add(s);
+                    }
+                    restocks.sort(IN_TIME);
+                    for (int i = 1; i < restocks.size(); i++) {
+                        PurchaseRow previous = mine.get(restocks.get(i - 1));
+                        PurchaseRow current = mine.get(restocks.get(i));
+                        if (current != null) {
+                            before.put(current, restocks.get(i - 1));
+                        } else if (previous != null) {
+                            after.put(previous, restocks.get(i));
+                            followed.add(item);
+                            later.add(restocks.get(i).purchase());
+                        }
+                    }
+                }
+                if (!followed.isEmpty()) {
+                    catalogue.importedChanges(followed).forEach((purchase, change) -> {
+                        if (later.contains(purchase)) {
+                            recorded.put(purchase, change);
+                        }
+                    });
+                }
+            }
+            return new Neighbours(before, after, recorded);
+        }
+
+        /**
+         * Issue #881: restock {@code r} is dated before {@code next}, which an earlier run imported, with no restock between,
+         * so the change at {@code next} is now from {@code r}, as one run of the whole history records it. History is
+         * append only: a change the books lack is added (and registered with {@code r}), one they hold alike is left, and
+         * one they hold otherwise, or where none is due now, is kept and reported, since only a rewrite could correct it.
+         */
+        void laterRestock(String file, PurchaseRow r, Restock next, CatalogueHistory.ImportedChange recorded) {
+            PriceStep step = PriceStep.between(Restock.of(r), next, r.product().sellMinor());
+            if (step == null ? recorded == null : recorded != null && step.same(recorded)) {
+                return;
+            }
+            if (step != null && recorded == null) {
+                UUID id = catalogue.importPriceChange(
+                        r.product().id(),
+                        step.oldCost(),
+                        step.newCost(),
+                        step.oldSell(),
+                        step.newSell(),
+                        next.purchase(),
+                        next.at(),
+                        "Imported restock " + next.ref());
+                remember("purchases", r.row(), r.ref(), "retail.price_history", id, r.user());
+                return;
+            }
+            report.anomaly(
+                    file,
+                    r.row().line(),
+                    "dated before restock " + next.ref() + ", which an earlier run imported; the price change recorded"
+                            + " at " + next.ref() + " is kept as it is, since price history is never rewritten,"
+                            + " and differs from what one run of the whole history records");
         }
 
         private PurchaseRow parsePurchase(Row row) {

@@ -475,10 +475,13 @@ golden report of `retail_v1` over fabricated edge cases next to the existing gol
 template; the five properties of 5.2 with jqwik on `retail_v1`; the fuzzed files of 5.3 at the readers and through the
 upload, validation and preview; and the big file test on the staging heap, on request. The fuzzing found that a formula's
 error and a formula saved without its value were read as a value and as an empty field; both are now `TYPE_INVALID`.
-Two findings are open: #900 (a `retail_v1` batch at the row limit validates and previews within the staging heap since
+One finding is open: #900 (a `retail_v1` batch at the row limit validates and previews within the staging heap since
 #880, but does not yet dry run and commit within the staging heap and the time limits, so the row limit is 25,000 until
-it closes) and #881 (a restock's price change is lost when the restocks are split over two runs); their
-tests are disabled with those numbers.
+it closes); its test is disabled with that number. #881 (a restock's price change was lost when the restocks are split
+over two runs) is fixed: a restock's predecessor is looked for among the item's imported restocks in the books as well
+as the batch's rows, by date and then by `source_ref`. A later run that holds a restock dated before one an earlier run
+imported adds the change that later restock now calls for when the books lack it; where the books already hold a
+different one, it is kept (price history is append only) and the run reports it as an anomaly.
 
 ### 5.4 Guards in the product
 

@@ -3,6 +3,8 @@ package com.rincoltech.bms.retail.purchasing;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,6 +34,17 @@ public interface PurchaseHistory {
             LocalDate purchasedOn,
             Instant purchasedAt,
             String note);
+
+    /**
+     * Issue #881: every imported restock of these products in the books (the historical purchases
+     * {@link #importPurchase} wrote, whatever run wrote them), in one query, for the import to find
+     * a restock's neighbours across runs. Restocks made in the app are not included.
+     */
+    List<ImportedRestock> importedRestocks(Collection<UUID> productIds);
+
+    /** An imported restock: its purchase, its product, when it was made, its note and its line's prices. */
+    record ImportedRestock(
+            UUID purchaseId, UUID productId, Instant purchasedAt, String note, long costMinor, Long sellMinor) {}
 
     record Ensured(UUID id, boolean created) {}
 }

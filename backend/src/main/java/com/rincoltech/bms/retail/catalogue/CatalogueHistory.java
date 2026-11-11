@@ -60,8 +60,9 @@ public interface CatalogueHistory {
      * dated when it happened. The product's current prices are not touched.
      *
      * @param purchaseId the historical purchase that carried the new prices
+     * @return the history row's id
      */
-    void importPriceChange(
+    UUID importPriceChange(
             UUID productId,
             long oldCostMinor,
             long newCostMinor,
@@ -70,6 +71,16 @@ public interface CatalogueHistory {
             UUID purchaseId,
             Instant changedAt,
             String reason);
+
+    /**
+     * Issue #881: the {@code import} history rows of these products that name a historical purchase
+     * ({@link #importPriceChange}), by that purchase, in one query; a purchase without one is absent. The import compares
+     * one with the change a restock it adds just before that purchase calls for, since history is never rewritten.
+     */
+    Map<UUID, ImportedChange> importedChanges(Collection<UUID> productIds);
+
+    /** The prices an {@code import} history row of a purchase records the change from and to. */
+    record ImportedChange(long oldCostMinor, long newCostMinor, long oldSellMinor, long newSellMinor) {}
 
     record Ensured(UUID id, boolean created, boolean changed) {}
 

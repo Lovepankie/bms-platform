@@ -39,7 +39,7 @@ import java.util.function.Supplier;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
 import net.jqwik.api.Combinators;
-import net.jqwik.api.Disabled;
+import net.jqwik.api.Example;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.Provide;
@@ -60,8 +60,8 @@ import org.springframework.test.context.TestContextManager;
  *   <li>importing twice equals importing once: the second run posts no journal (one import opening journal per branch,
  *       ever), writes nothing and reports every row as existing;
  *   <li>a permuted row order within every file gives the same state and the same reconciliation;
- *   <li>splitting the history files into two runs gives the state of one run (with the restocks split, disabled by
- *       #881, which it found; the split of the sales and usage runs);
+ *   <li>splitting the history files into two runs gives the state of one run (with the restocks split, which found
+ *       #881, and its examples; the split of the sales and usage runs);
  *   <li>a dry run followed by a real run reports what a real run alone reports, and leaves the state a real run alone
  *       leaves (through the {@code import-retail} command, the one path that commits without a dry run first);
  *   <li>the derived balance equals the source balance for every branch and item, the checksum matches and the
@@ -176,7 +176,6 @@ class RetailImportPropertiesIT extends IntegrationTest {
     }
 
     @Property(tries = 15, seed = "137003")
-    @Disabled("#881: a restock's price change is found within its batch only, so a split loses it")
     void splittingTheHistoryIntoTwoRunsGivesTheStateOfOneRun(
             @ForAll("books") Book book, @ForAll @IntRange(min = 0, max = 6) int cut) {
         TestDatabase.Fixture whole = TestDatabase.tenant("prop-whole", false, true);
@@ -193,10 +192,128 @@ class RetailImportPropertiesIT extends IntegrationTest {
         assertDerivedIsSource(split, book, second);
     }
 
-    // JUSTIFICATION-A3: #881 disables the property above; this one keeps the split proven for the files it holds for.
+    // JUSTIFICATION-A3: #881 found that a restock's price change is lost across runs; these are its counterexamples.
     /**
-     * The split of spec section 5.2 over the sales and usage files, while #881 is open: the first run takes every restock
-     * and the sales and usage before the cut, the second the rest and the balances, and the state is that of one run.
+     * The shrunk counterexample of #881 (seed 137003): one item, three restocks at the head office, the third at a new
+     * cost, the history cut after the second. The second run finds the second restock in the books, so the change at
+     * {@code PUR-P03} is recorded once, as one run records it.
+     */
+    @Example
+    void theFirstRestockOfALaterRunFindsTheRestockBeforeItInTheBooks() {
+        Book book = issue881(100, 100, 200);
+        TestDatabase.Fixture whole = TestDatabase.tenant("prop-whole", false, true);
+        TestDatabase.Fixture split = TestDatabase.tenant("prop-split", false, true);
+        committed(whole, reviewed(whole, book.files(0)));
+        committed(split, reviewed(split, book.part(0, 2).files(0, false)));
+        UUID second =
+                committed(split, reviewed(split, book.part(2, Integer.MAX_VALUE).files(0)));
+
+        assertThat(importedChanges(whole)).containsExactly("Imported restock PUR-P03|100|200|600|700");
+        assertThat(importedChanges(split)).isEqualTo(importedChanges(whole));
+        assertThat(RetailV1TemplateIT.state(split)).isEqualTo(RetailV1TemplateIT.state(whole));
+        assertDerivedIsSource(split, book, second);
+    }
+
+    /**
+     * The reverse case of #881: the later run holds {@code PUR-P02}, dated before {@code PUR-P03}, which the first run
+     * imported. Where the change one run records at {@code PUR-P03} is the one the first run recorded, or one the books
+     * lack, the second run leaves it or adds it, and the price changes are those of one run.
+     */
+    @Example
+    void aRestockDatedBeforeOneAnEarlierRunImportedGivesThePriceChangesOfOneRun() {
+        // PUR-P02 at the old cost: the change at PUR-P03 the first run recorded is the one one run records.
+        reversed(issue881(100, 100, 200), List.of("Imported restock PUR-P03|100|200|600|700"));
+        // PUR-P02 at a new cost between two at the same: one run records two changes, the first run none.
+        UUID run = reversed(
+                issue881(100, 200, 100),
+                List.of("Imported restock PUR-P02|100|200|600|700", "Imported restock PUR-P03|200|100|700|600"));
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM import_refs WHERE run_id = ? AND target_type = ?")
+                        .params(run, "retail.price_history")
+                        .query(Long.class)
+                        .single())
+                .as("the change the second run adds at PUR-P03 is registered with PUR-P02")
+                .isEqualTo(1L);
+    }
+
+    /**
+     * The reverse case of #881 where only a rewrite gives the state of one run: the first run recorded the change from
+     * {@code PUR-P01} at {@code PUR-P03}, and one run records it at {@code PUR-P02}. History is append only, so the row the
+     * first run wrote is kept, and the second run says so in its report.
+     */
+    @Example
+    void aRestockThatMovesAChangeAnEarlierRunRecordedIsReportedAndTheRowKept() {
+        Book book = issue881(100, 200, 200);
+        TestDatabase.Fixture split = TestDatabase.tenant("prop-split", false, true);
+        committed(split, reviewed(split, only(book, 0, 2).files(0, false)));
+        UUID second = committed(split, reviewed(split, only(book, 1).files(0)));
+
+        assertThat(importedChanges(split))
+                .containsExactly(
+                        "Imported restock PUR-P02|100|200|600|700", "Imported restock PUR-P03|100|200|600|700");
+        CommitReport report = as(split, () -> runs.commitReport(second));
+        assertThat(report.anomalies())
+                .as(report.render())
+                .anySatisfy(a -> assertThat(a.message())
+                        .contains("restock PUR-P03, which an earlier run imported")
+                        .contains("is kept as it is"));
+        assertDerivedIsSource(split, book, second);
+    }
+
+    /**
+     * The first run holds {@code PUR-P01} and {@code PUR-P03}, the second {@code PUR-P02} and the balances; the import
+     * price changes are {@code expected}, as one run of the whole book records them. Returns the second run.
+     */
+    UUID reversed(Book book, List<String> expected) {
+        TestDatabase.Fixture whole = TestDatabase.tenant("prop-whole", false, true);
+        TestDatabase.Fixture split = TestDatabase.tenant("prop-split", false, true);
+        committed(whole, reviewed(whole, book.files(0)));
+        committed(split, reviewed(split, only(book, 0, 2).files(0, false)));
+        UUID second = committed(split, reviewed(split, only(book, 1).files(0)));
+
+        assertThat(importedChanges(whole)).containsExactlyElementsOf(expected);
+        assertThat(importedChanges(split)).isEqualTo(importedChanges(whole));
+        assertThat(RetailV1TemplateIT.state(split)).isEqualTo(RetailV1TemplateIT.state(whole));
+        assertDerivedIsSource(split, book, second);
+        return second;
+    }
+
+    /**
+     * The book of #881: item {@code PT-01} at cost 100 and sell 100, and three restocks of one piece at the head office,
+     * {@code PUR-P01} to {@code PUR-P03} on 1 to 3 July 2026, at these costs (sell is cost plus 500). Fabricated.
+     */
+    static Book issue881(long first, long second, long third) {
+        List<Restock> restocks =
+                List.of(new Restock(0, 1, 0, first), new Restock(0, 1, 0, second), new Restock(0, 1, 0, third));
+        return new Book(
+                List.of(new Item(100, 100)), indexed(restocks), List.of(), List.of(), List.of(3, 0, 0, 0, 0, 0), true);
+    }
+
+    /** The book with only the restocks at these positions, each keeping its reference and date. */
+    static Book only(Book book, int... positions) {
+        List<Indexed<Restock>> kept = new ArrayList<>();
+        for (int at : positions) {
+            kept.add(book.restocks().get(at));
+        }
+        return book.withRestocks(kept);
+    }
+
+    /** Every {@code import} price change of the tenant: its reason, then the costs and sell prices from and to. */
+    static List<String> importedChanges(TestDatabase.Fixture f) {
+        return TestDatabase.owner()
+                .sql("""
+                        SELECT reason || '|' || old_cost_minor || '|' || new_cost_minor || '|' || old_sell_minor || '|'
+                               || new_sell_minor
+                          FROM retail_price_history WHERE tenant_id = ? AND source = 'import' ORDER BY 1
+                        """)
+                .param(f.tenantId())
+                .query(String.class)
+                .list();
+    }
+
+    /**
+     * The split of spec section 5.2 over the sales and usage files alone: the first run takes every restock and the sales
+     * and usage before the cut, the second the rest and the balances, and the state is that of one run.
      */
     @Property(tries = 15, seed = "137006")
     void splittingSalesAndUsageIntoTwoRunsGivesTheStateOfOneRun(

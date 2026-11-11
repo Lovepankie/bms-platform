@@ -223,7 +223,7 @@ class JdbcCatalogueHistory implements CatalogueHistory {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void importPriceChange(
+    public UUID importPriceChange(
             UUID productId,
             long oldCostMinor,
             long newCostMinor,
@@ -232,13 +232,14 @@ class JdbcCatalogueHistory implements CatalogueHistory {
             UUID purchaseId,
             Instant changedAt,
             String reason) {
+        UUID id = UUID.randomUUID();
         jdbc.sql("""
                         INSERT INTO retail_price_history (id, tenant_id, created_at, product_id, source, source_id,
                             old_cost_minor, new_cost_minor, old_sell_minor, new_sell_minor, currency, reason)
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, 'import', ?, ?, ?, ?, ?, ?, ?)
                         """)
                 .params(
-                        UUID.randomUUID(),
+                        id,
                         Timestamp.from(changedAt),
                         productId,
                         purchaseId,
@@ -249,5 +250,37 @@ class JdbcCatalogueHistory implements CatalogueHistory {
                         tenant.profile().currency(),
                         reason)
                 .update();
+        return id;
+    }
+
+    // JUSTIFICATION-A3: issue #881 compares a later restock's recorded change, a page of items per query.
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, ImportedChange> importedChanges(Collection<UUID> productIds) {
+        Map<UUID, ImportedChange> out = new HashMap<>();
+        if (productIds.isEmpty()) {
+            return out;
+        }
+        // Through the history's product index (V10), one lookup per product, as importedRestocks reads the lines.
+        jdbc.sql("""
+                        SELECT h.source_id, h.old_cost_minor, h.new_cost_minor, h.old_sell_minor, h.new_sell_minor
+                          FROM unnest(CAST(? AS uuid[])) AS asked(id)
+                         CROSS JOIN LATERAL (SELECT h.source_id, h.old_cost_minor, h.new_cost_minor, h.old_sell_minor,
+                                                    h.new_sell_minor, h.created_at, h.id
+                                               FROM retail_price_history h
+                                              WHERE h.product_id = asked.id AND h.source = 'import'
+                                                AND h.source_id IS NOT NULL OFFSET 0) h
+                         ORDER BY h.created_at, h.id
+                        """)
+                .param(productIds.toArray(UUID[]::new))
+                .query((rs, n) -> out.putIfAbsent(
+                        rs.getObject("source_id", UUID.class),
+                        new ImportedChange(
+                                rs.getLong("old_cost_minor"),
+                                rs.getLong("new_cost_minor"),
+                                rs.getLong("old_sell_minor"),
+                                rs.getLong("new_sell_minor"))))
+                .list();
+        return out;
     }
 }
