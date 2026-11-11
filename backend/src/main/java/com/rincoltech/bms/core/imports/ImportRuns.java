@@ -128,9 +128,21 @@ public interface ImportRuns {
      * them with the signed-in platform operator as actor ({@code platformUserId} must be an active one: 403
      * {@code operator_required}). Only then are the batches handed to {@code background}, which runs the work for the
      * business on its own thread; the work holds the loop claim until it ends, so a second start, or a resume while it
-     * writes, is refused at once with {@code IMPORT_IN_PROGRESS}.
+     * writes, is refused at once with {@code IMPORT_IN_PROGRESS}. The work gives the claim back however it ends; a
+     * {@code background} that throws gives it back at once, and the background closes the work in a finally, so the claim
+     * is given back too when anything before the work fails and it never runs (issue #897).
      */
-    void startCommit(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background);
+    void startCommit(UUID runId, UUID platformUserId, Consumer<Work> background);
+
+    /**
+     * The batches of a portal start or resume, handed to the caller's background (issue #897): {@link #get} runs them for
+     * the business and gives the loop claim back when they end; {@link #close} gives it back if they never ran. Closing
+     * after they ran does nothing, so the background runs it in a try-with-resources.
+     */
+    interface Work extends Supplier<CommitOutcome>, AutoCloseable {
+        @Override
+        void close();
+    }
 
     /**
      * The operator portal's resume (issue #141), as {@link #startCommit} for {@link #resume}: refused at once while any commit
@@ -138,7 +150,7 @@ public interface ImportRuns {
      * halt of a live loop is never cleared under it; a run left {@code committing} by a halt, a failed batch or a restart has
      * no live loop and goes on from its first batch not committed.
      */
-    void startResume(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background);
+    void startResume(UUID runId, UUID platformUserId, Consumer<Work> background);
 
     // JUSTIFICATION-A3: issue #132 adds the dry run and the stored reports to the run's API, new methods beside commit.
     /**

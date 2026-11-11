@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import {
+  ImportError,
   askTradingOverride,
   checkDump,
   platformAction,
@@ -43,12 +44,20 @@ export function operatorAction(run: ImportRun, commitEnabled: boolean): { action
   return null;
 }
 
+/** How long a run may be committing before it may have stopped by itself: one file's time limit (10 minutes, issue #897). */
+export const STALE_AFTER_MS = 10 * 60 * 1000;
+
 /**
  * Whether to offer Resume beside Stop: a run being brought in whose stop was not pressed may have stopped by itself (a failed
- * file, a restart), with no loop alive. The server answers IMPORT_IN_PROGRESS while one is, so offering it is safe.
+ * file, a restart), with no loop alive. A healthy run is not offered it (issue #897): only once it has been committing longer
+ * than STALE_AFTER_MS, or once the server answered an action on it with the 409 IMPORT_IN_PROGRESS (`refused`), so the
+ * operator can try Resume. A run with no committing_at is not stale. The server still answers IMPORT_IN_PROGRESS while a
+ * loop lives, so offering it is safe.
  */
-export function stoppedBySelf(run: ImportRun, commitEnabled: boolean): boolean {
-  return run.status === 'committing' && !run.halt_requested && commitEnabled;
+export function stoppedBySelf(run: ImportRun, commitEnabled: boolean, now: number, refused = false): boolean {
+  if (run.status !== 'committing' || run.halt_requested || !commitEnabled) return false;
+  const since = run.committing_at ? Date.parse(run.committing_at) : Number.NaN;
+  return refused || (!Number.isNaN(since) && now - since > STALE_AFTER_MS);
 }
 
 /** The facts an operator checks before the start, each in plain words. */
@@ -178,7 +187,7 @@ export function OperatorImportRun({ slug, runId }: { slug: string; runId: string
             />
           )}
           {/* JUSTIFICATION-A3: the review of e3f95b2 asks Resume for a run that stopped by itself; one card beside Stop. */}
-          {canAct && stoppedBySelf(r, s.commit_enabled ?? false) && !confirming && (
+          {canAct && stoppedBySelf(r, s.commit_enabled ?? false, Date.now(), act.error instanceof ImportError && act.error.code === 'IMPORT_IN_PROGRESS') && !confirming && (
             <section className="card stack" aria-labelledby="resume-title">
               <h2 id="resume-title">Stopped by itself?</h2>
               <p>

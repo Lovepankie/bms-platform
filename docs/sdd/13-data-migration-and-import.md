@@ -1752,13 +1752,16 @@ section 4.1; coordinated with #110, which builds no second framework).**
 
 - **In the business** (Business set-up, Bring in your data, `core.imports.manage`; chapter 7 section 7.11.9): the imports,
   newest first, each with its step; one import's seven steps in plain words (upload, check, fix and try, approval, bring in,
-  compare and sign, delete the copies), its files with the sheet layout each was read with (a searchable choice of every
-  source of the business's newest mapping versions; a mapping is still made by the operator, spec section 11), the check, the
+  compare and sign, delete the copies), its files with the sheet layout each was read with (one searchable box, the choice
+  itself with its required asterisk, over every source of the business's newest mapping versions, at most 200 by name, and
+  the sheet says so when it holds 200, #897; a mapping is still made by the operator, spec section 11), the check, the
   preview with the predicted balances per branch, the stored dry run, the approval request, the sign-off progress (brought in,
   compared, signed, copies deleted, from the run's stamps) and the certificate of deletion, saved as the text sent to the
   customer. The one main action is always the next step. The problems of an import are grouped by code with the plain
   message the check wrote and fixed in place (a new value, the line left out with a reason, a warning accepted with a note, a
   question for the owner), or every problem of one code the same way; the questions download as the numbered CSV. The
+  screen lists at most 2,000 open lines, so the count of each code, and the N of "Fix all N", is the server's, from the
+  run's metrics (`issues[].open`), and Fix all waits for it (#897). The
   sign-off itself stays the screen of #134.
 - **The raw row** (`GET /imports/issues/{issue_id}/raw`, the new permission `core.imports.view_raw` of V149, the tenant
   administrator's): the cells of the issue's row as uploaded and its original value, on the fix sheet only, audited
@@ -1772,7 +1775,12 @@ section 4.1; coordinated with #110, which builds no second framework).**
   (`ImportRuns.startCommit`, `startResume`): the business's commit loop is claimed and the guards, the move to
   `committing` (or the cleared halt) and its audit row, with the operator as actor, run in the request, whose answer is
   every refusal; only the batches go on on their own thread, which holds the loop until they end, so a second start or a
-  resume while a loop is alive is refused at once (review of 1c9568b on #895). The queue follows the run's state. The `import_commit` approval is still given in the
+  resume while a loop is alive is refused at once (review of 1c9568b on #895). The work (`ImportRuns.Work`) is closeable:
+  the portal's thread closes it in a finally, so the loop is given back even if the work never runs, and a background that
+  throws, or never starts its thread, gives it back at once (#897). The kill
+  switch refuses a resume in the service (`prepareResume`), for every caller, not only in the portal's controller. A run
+  being brought in is offered Resume beside Stop only once it has been committing longer than one file's time limit (10
+  minutes) or after the server refused an action on it (#897). The queue follows the run's state. The `import_commit` approval is still given in the
   business's Approvals by a holder of `core.imports.approve_commit`; the portal shows whether it is given.
 - **Not in this build:** recording a policy decision (spec section 3.8) and saving a mapping from a screen. A run that
   needs a decision is refused with `CREDIT_DECISION_MISSING`, whose words the screen shows; the decision and the mapping
@@ -1780,6 +1788,8 @@ section 4.1; coordinated with #110, which builds no second framework).**
 - **Tests.** `ImportScreensIT` (the business's routes, the raw row refused without `core.imports.view_raw` and audited
   per opening without a value, another business's 404; the portal's routes refused to anonymous calls and a tenant's staff,
   a stop refused in plain words and recorded, the override approved only by a second operator, the dump recorded and
-  checked, a start before the approval refused); `MigrationOrderIT` covers V149. In the frontend: the stage progress
-  (`pipeline.test.ts`, `stage-progress.dom.test.tsx`), the stop button (`import-run.dom.test.tsx`) and the sign-off flow
-  (`run.dom.test.tsx`).
+  checked, a start before the approval refused, a chunked upload one byte over 25 MB refused 413 `FILE_TOO_LARGE` on the
+  bytes read); `ImportRunsIT` (the kill switch refuses every resume; a start or resume whose work never runs gives the loop
+  back); `MigrationOrderIT` covers V149. In the frontend: the stage progress (`pipeline.test.ts`,
+  `stage-progress.dom.test.tsx`), the stop button and when Resume is offered (`import-run.dom.test.tsx`), the sign-off flow
+  and the layout picker (`run.dom.test.tsx`) and the counts of large problem groups (`problems.dom.test.tsx`).

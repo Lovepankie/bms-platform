@@ -1356,7 +1356,11 @@ class ImportCommitIT extends IntegrationTest {
                 try (java.sql.PreparedStatement unlock =
                         held.prepareStatement("SELECT pg_advisory_unlock(hashtextextended(?, 0))")) {
                     unlock.setString(1, key);
-                    unlock.execute();
+                    try (java.sql.ResultSet unlocked = unlock.executeQuery()) {
+                        assertThat(unlocked.next() && unlocked.getBoolean(1))
+                                .as("the test's own session held the loop key and gave it back")
+                                .isTrue();
+                    }
                 }
             }
         }
@@ -1367,8 +1371,13 @@ class ImportCommitIT extends IntegrationTest {
         ResponseEntity<JsonNode> started = platform.post(base + "/start", null, token);
         assertThat(started.getStatusCode()).as("%s", started.getBody()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(started.getBody().get("run").get("status").asString()).isEqualTo("committing");
-        // A second start while it writes, or after it stopped, is refused; never a second writer.
-        assertThat(platform.post(base + "/start", null, token).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        // A second start while it writes, or after it stopped, is refused; never a second writer. It is
+        // IMPORT_IN_PROGRESS either way, so it cannot race the killed loop: while the loop lives its claim refuses
+        // it, and once the loop is gone the run is still committing, which the start refuses with the same code
+        // (issue #897).
+        ResponseEntity<JsonNode> second = platform.post(base + "/start", null, token);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(second.getBody().get("code").asString()).isEqualTo("IMPORT_IN_PROGRESS");
 
         // Once the dead loop gave its claim back, the portal's resume goes on from the first batch not committed. While
         // the loop is still alive the resume is 409 IMPORT_IN_PROGRESS, so it is asked until it is taken.

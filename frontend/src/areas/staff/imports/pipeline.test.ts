@@ -9,6 +9,7 @@ import {
   holding,
   mayOpen,
   nextStep,
+  openOfKind,
   quantity,
   stepLine,
   stepStates,
@@ -109,6 +110,22 @@ describe('problems by kind', () => {
     const blocking = { code: 'MONEY_FRACTION', severity: 'blocking', issues: [issue('MONEY_FRACTION', 'blocking', { suggestion: { value: '1501' } as unknown as ImportIssue['suggestion'] })] };
     expect(bulkWays(warnings).map((w) => w.value)).toEqual(['exclude_row', 'override', 'ask_customer']);
     expect(bulkWays(blocking).map((w) => w.value)).toEqual(['accept_suggestion', 'exclude_row', 'ask_customer']);
+    // Issue #897: with more open than are listed, nobody can see that every one has a suggestion, so it is not offered.
+    expect(bulkWays(blocking, 2500).map((w) => w.value)).toEqual(['exclude_row', 'ask_customer']);
+  });
+
+  it('counts a kind from the server, every severity of the code, never from the listed lines (issue #897)', () => {
+    const metrics = {
+      issues: [
+        { code: 'TYPE_INVALID', severity: 'blocking', total: 4000, open: 3100 },
+        { code: 'TYPE_INVALID', severity: 'warning', total: 10, open: 2 },
+        { code: 'REQUIRED_MISSING', severity: 'blocking', total: 5, open: 0 },
+      ],
+    };
+    expect(openOfKind(metrics, 'TYPE_INVALID')).toBe(3102);
+    expect(openOfKind(metrics, 'REQUIRED_MISSING')).toBe(0);
+    expect(openOfKind(metrics, 'NOT_THERE')).toBe(0);
+    expect(openOfKind(undefined, 'TYPE_INVALID')).toBeNull();
   });
 });
 

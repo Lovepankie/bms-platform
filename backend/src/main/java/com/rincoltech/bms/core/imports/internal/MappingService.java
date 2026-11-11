@@ -137,10 +137,16 @@ class MappingService implements ImportMappings {
                 .optional());
     }
 
+    /**
+     * The most mappings {@link #newest()} lists, by name. Not silent (issue #897): the upload sheet says the list holds at
+     * most this many when it holds this many ({@code MAPPINGS_LISTED} in {@code frontend/src/api/imports.ts}).
+     */
+    static final int NEWEST_LIMIT = 200;
+
     @Override
     public List<Mapping> newest() {
         return tx.execute(s -> jdbc.sql("SELECT DISTINCT ON (name) " + COLUMNS
-                        + " FROM import_mappings ORDER BY name, version DESC LIMIT 200")
+                        + " FROM import_mappings ORDER BY name, version DESC LIMIT " + NEWEST_LIMIT)
                 .query(this::row)
                 .list());
     }

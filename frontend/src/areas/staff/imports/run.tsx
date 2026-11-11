@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import {
+  MAPPINGS_LISTED,
   askApproval,
   certificateOf,
   checkFiles,
@@ -306,24 +307,28 @@ export interface LayoutChoice {
   hint: string;
 }
 
-/** Every file or tab of every sheet layout, each a choice, narrowed by the words typed. */
-export function layoutChoices(mappings: MappingChoice[], term: string): LayoutChoice[] {
-  const all = mappings.flatMap((m) =>
-    (m.sources ?? []).map((s) => ({
+/**
+ * Every file or tab of every sheet layout, each a choice; the browser narrows them by the words typed. A choice is found by
+ * its words, so two sources of one layout that name the same file (two tabs) carry their key as well and never share them.
+ */
+export function layoutChoices(mappings: MappingChoice[]): LayoutChoice[] {
+  return mappings.flatMap((m) =>
+    (m.sources ?? []).map((s, _, all) => ({
       mappingId: m.id ?? '',
       source: s.key ?? '',
-      label: `${m.name ?? ''}: ${s.file ?? s.key ?? ''}`,
+      label: `${m.name ?? ''}: ${s.file ?? s.key ?? ''}${all.filter((o) => (o.file ?? o.key) === (s.file ?? s.key)).length > 1 ? `, ${s.key ?? ''}` : ''}`,
       hint: `Version ${m.version ?? 1}, ${(s.entity_set ?? '').split('_').join(' ')}`,
     })),
   );
-  const words = term.trim().toLowerCase();
-  return words === '' ? all : all.filter((c) => `${c.label} ${c.hint}`.toLowerCase().includes(words));
 }
 
 function UploadForm({ runId, onDone }: { runId: string; onDone: () => Promise<void> }) {
   const mappings = useQuery({ queryKey: ['import-mappings'], queryFn: mappingChoices });
+  // One searchable choice (issue #897): the box is the choice, so its red asterisk and its error are about the layout picked.
+  // The browser lists the layouts under the box as it is typed in; the layout is the one whose words the box holds.
   const [term, setTerm] = useState('');
-  const [chosen, setChosen] = useState<LayoutChoice | null>(null);
+  const all = layoutChoices(mappings.data ?? []);
+  const chosen = all.find((c) => c.label === term) ?? null;
   const [file, setFile] = useState<File | null>(null);
   const [tried, setTried] = useState(false);
   const upload = useMutation({
@@ -331,8 +336,6 @@ function UploadForm({ runId, onDone }: { runId: string; onDone: () => Promise<vo
     mutationFn: () => uploadFile(runId, file as File, chosen?.mappingId ?? '', chosen?.source ?? ''),
     onSuccess: onDone,
   });
-  const choices = layoutChoices(mappings.data ?? [], term);
-
   function submit(e: FormEvent) {
     e.preventDefault();
     setTried(true);
@@ -345,37 +348,30 @@ function UploadForm({ runId, onDone }: { runId: string; onDone: () => Promise<vo
       <Field
         label="Sheet layout"
         required
-        type="search"
         value={term}
+        list="import-layouts"
+        autoComplete="off"
         onChange={(e) => setTerm(e.target.value)}
-        hint="Type part of the name to find it"
-        error={chosen ? null : 'Pick the layout of this file.'}
+        hint={chosen ? chosen.hint : 'Type part of the name, then pick it from the list'}
+        error={chosen ? null : term.trim() === '' ? 'Pick the layout of this file.' : 'Pick a layout from the list.'}
         showError={tried}
       />
+      <datalist id="import-layouts">
+        {all.map((c) => (
+          <option key={`${c.mappingId}-${c.source}`} value={c.label} label={c.hint} />
+        ))}
+      </datalist>
       {mappings.isError && (
         <p role="alert" className="alert alert-danger">
           Could not load the sheet layouts.
         </p>
       )}
       {mappings.data && mappings.data.length === 0 && <p>No sheet layout yet. Rincol Tech makes one from the columns of your sheet first.</p>}
-      <fieldset className="stack import-choices" aria-label="Sheet layouts">
-        {choices.map((c) => (
-          <label key={`${c.mappingId}-${c.source}`} className="import-choice">
-            <input
-              type="radio"
-              name="import-layout"
-              checked={chosen?.mappingId === c.mappingId && chosen.source === c.source}
-              onChange={() => setChosen(c)}
-            />
-            <span>
-              {c.label}
-              <br />
-              <small>{c.hint}</small>
-            </span>
-          </label>
-        ))}
-        {mappings.data && mappings.data.length > 0 && choices.length === 0 && <p>No layout matches &quot;{term}&quot;.</p>}
-      </fieldset>
+      {mappings.data && mappings.data.length >= MAPPINGS_LISTED && (
+        <p className="alert alert-info">
+          This list holds at most {MAPPINGS_LISTED} layouts, by name. If yours is not in it, ask Rincol Tech.
+        </p>
+      )}
       <Field
         label="File"
         required

@@ -550,27 +550,6 @@
   overflow-wrap: anywhere;
 }
 
-/* A searchable list of choices (the sheet layout of an upload): each choice a full 48px line (rule 12). */
-.import-choice {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: var(--tap);
-  cursor: pointer;
-}
-
-.import-choice > input {
-  flex: none;
-  width: 20px;
-  height: 20px;
-}
-
-.import-choices {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
 /* The certificate of deletion as it is sent: its own lines, wrapped on a phone. */
 .import-certificate {
   margin: 0;

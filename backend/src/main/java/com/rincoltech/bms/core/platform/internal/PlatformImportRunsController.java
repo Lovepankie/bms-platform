@@ -253,10 +253,14 @@ class PlatformImportRunsController {
         }
     }
 
-    /** Runs a commit or a resume for one business on its own thread; a failure is logged by run id and kind only. */
-    private static void background(UUID tenant, UUID runId, String what, Supplier<ImportRuns.CommitOutcome> work) {
+    /**
+     * Runs a commit or a resume for one business on its own thread; a failure is logged by run id and kind only. The work is
+     * closed in the try-with-resources, so its loop claim is given back even if the tenant binding fails and the work never
+     * runs (issue #897).
+     */
+    private static void background(UUID tenant, UUID runId, String what, ImportRuns.Work work) {
         Thread.ofVirtual().name("import-" + what + "-" + runId).start(() -> {
-            try {
+            try (work) {
                 ImportRuns.CommitOutcome outcome = TenantContext.callAs(tenant, work);
                 log.info("import {} of run {} ended {}", what, runId, outcome);
             } catch (RuntimeException e) {

@@ -14,6 +14,8 @@ import { router as appRouter } from '../../app/router';
 const base: ImportRun = {
   id: 'r-1',
   status: 'committing',
+  // Started a minute ago: a healthy run, not stale (issue #897).
+  committing_at: new Date(Date.now() - 60_000).toISOString(),
   version: 4,
   halt_requested: false,
   commit_approved: true,
@@ -25,6 +27,9 @@ const base: ImportRun = {
 let state: PlatformRunState;
 const sent: RunAction[] = [];
 let release: (() => void) | null = null;
+/** When set, the server refuses every action with a 409 and these words. */
+let refusal: string | null = null;
+let refusalCode = 'IMPORT_IN_PROGRESS';
 
 vi.mock('../../api/imports', async (original) => {
   const real = await original<typeof import('../../api/imports')>();
@@ -33,6 +38,7 @@ vi.mock('../../api/imports', async (original) => {
     platformRun: () => Promise.resolve(state),
     platformAction: (_slug: string, _run: string, action: RunAction) => {
       sent.push(action);
+      if (refusal) return Promise.reject(new real.ImportError(refusal, refusalCode));
       return new Promise<PlatformRunState>((resolve) => {
         release = () => {
           state = { ...state, run: { ...state.run, halt_requested: action === 'stop' ? true : state.run?.halt_requested } };
@@ -66,6 +72,8 @@ beforeEach(() => {
   state = { tenant_slug: 'test-shop-five', run: { ...base }, commit_enabled: true };
   sent.length = 0;
   release = null;
+  refusal = null;
+  refusalCode = 'IMPORT_IN_PROGRESS';
   permissions = ['platform.tenants.read', 'platform.tenants.manage'];
 });
 
@@ -100,7 +108,43 @@ describe('the stop button', () => {
 });
 
 describe('a run that stopped by itself (review of e3f95b2 on #895)', () => {
-  it('offers Resume beside Stop and sends one resume', async () => {
+  it('offers no Resume on a healthy run being brought in (issue #897)', async () => {
+    show();
+    expect(await screen.findByRole('button', { name: 'Stop the import' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Stopped by itself?' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Resume the import' })).toBeNull();
+  });
+
+  it('offers no Resume on a run that has no committing_at (review of a5168f7)', async () => {
+    state = { ...state, run: { ...base, committing_at: undefined } };
+    show();
+    expect(await screen.findByRole('button', { name: 'Stop the import' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Stopped by itself?' })).toBeNull();
+  });
+
+  it('offers no Resume after a refusal that is not IMPORT_IN_PROGRESS (review of a5168f7)', async () => {
+    refusal = 'Only an active operator can do this.';
+    refusalCode = 'operator_required';
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop the import' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the import' }));
+    expect(await screen.findByText(refusal)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('heading', { name: 'Stopped by itself?' })).toBeNull();
+  });
+
+  it('offers Resume once the server answered IMPORT_IN_PROGRESS on it (issue #897)', async () => {
+    refusal = 'Another import is being committed for this business; wait for it or stop it.';
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop the import' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop the import' }));
+    expect(await screen.findByText(refusal)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByRole('heading', { name: 'Stopped by itself?' })).toBeTruthy();
+  });
+
+  it('offers Resume beside Stop once it has been committing past one file’s time limit, and sends one resume', async () => {
+    state = { ...state, run: { ...base, committing_at: new Date(Date.now() - 11 * 60_000).toISOString() } };
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Resume the import' }));
     await waitFor(() => expect(sent).toEqual(['resume']));

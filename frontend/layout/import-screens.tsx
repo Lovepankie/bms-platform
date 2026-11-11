@@ -45,7 +45,15 @@ const files: ImportFile[] = [
 const metrics: RunMetrics = {
   run_id: 'run-7',
   status: run.status,
-  issues: [{ code: 'NEGATIVE_BALANCE', severity: 'warning', total: 6, open: 0 }],
+  // The problems screen counts each kind from these (issue #897), so there they match the listed lines.
+  issues:
+    screen === 'problems'
+      ? [
+          { code: 'TYPE_INVALID', severity: 'blocking', total: 3, open: 3 },
+          { code: 'NAME_MISSING', severity: 'blocking', total: 2, open: 2 },
+          { code: 'NEGATIVE_BALANCE', severity: 'warning', total: 6, open: 4 },
+        ]
+      : [{ code: 'NEGATIVE_BALANCE', severity: 'warning', total: 6, open: 0 }],
   stamps: { created_at: '2026-11-01T08:00:00Z', committed_at: run.committed_at, reconciled_at: screen === 'committed' ? '2026-11-09T10:05:00Z' : undefined },
 };
 const balances = {
@@ -92,7 +100,7 @@ client.setQueryData(['import-files', 'run-7'], files);
 client.setQueryData(['import-metrics', 'run-7'], metrics);
 client.setQueryData(['import-dry-run', 'run-7'], dryRun);
 client.setQueryData(['import-preview', 'run-7'], preview);
-client.setQueryData(['import-issues', 'run-7'], issues);
+client.setQueryData(['import-issues', 'run-7'], { items: issues, more: false });
 client.setQueryData(['platform-me-imports'], { full_name: 'Test Operator 01', permissions: ['platform.tenants.read', 'platform.tenants.manage'] });
 client.setQueryData(['platform-import-runs'], platform);
 client.setQueryData(['platform-import-kill-switch'], true);

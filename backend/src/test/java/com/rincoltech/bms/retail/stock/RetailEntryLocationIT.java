@@ -361,10 +361,15 @@ class RetailEntryLocationIT extends IntegrationTest {
         setShop();
         sell(sale(fix(NEAR_LAT, SHOP_LNG, 12)));
         use(fix(SHOP_LAT, FAR_LNG, 30));
+        // Every column of the row but created_at, audit_log's one timestamp, whose seconds can hold these digits (a
+        // time such as 10:32.58 failed it); ids are hex UUIDs and hold no dot. Every coordinate of the fixture, both
+        // latitudes too, as a short fragment, so a rounded or truncated value is caught as well. Shop locations are
+        // audited without coordinates.
         assertThat(TestDatabase.owner()
-                        .sql("SELECT count(*) FROM audit_log a WHERE a.tenant_id = ? AND (a::text LIKE '%32.58%'"
-                                + " OR a::text LIKE '%32.60%' OR a::text LIKE '%0.3139%')")
-                        .params(t.tenantId())
+                        .sql("SELECT count(*) FROM audit_log a WHERE a.tenant_id = ? AND EXISTS (SELECT 1 FROM"
+                                + " unnest(CAST(? AS text[])) f WHERE"
+                                + " (to_jsonb(a) - 'created_at')::text LIKE '%' || f || '%')")
+                        .params(t.tenantId(), new String[] {"0.3136", "0.3139", "32.58", "32.60"})
                         .query(Long.class)
                         .single())
                 .isZero();

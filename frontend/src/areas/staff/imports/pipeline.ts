@@ -210,6 +210,16 @@ export function groupByCode(issues: ImportIssue[]): IssueGroup[] {
   return [...groups.values()].sort((a, b) => rank(a.severity) - rank(b.severity) || b.issues.length - a.issues.length || a.code.localeCompare(b.code));
 }
 
+/**
+ * How many open problems of one kind the run has (issue #897): the server's count from the run's metrics, every severity of
+ * the code, which is what bulk-resolve acts on. Never the length of the listed lines, which stop at ISSUES_SHOWN. Null while
+ * the metrics are not in.
+ */
+export function openOfKind(metrics: Pick<RunMetrics, 'issues'> | undefined, code: string): number | null {
+  if (!metrics) return null;
+  return (metrics.issues ?? []).filter((i) => i.code === code).reduce((n, i) => n + (i.open ?? 0), 0);
+}
+
 /** "Line 7, phone": where an issue is. */
 export function issuePlace(issue: Pick<ImportIssue, 'line' | 'field'>): string {
   return issue.field ? `Line ${issue.line}, ${issue.field.split('_').join(' ')}` : `Line ${issue.line}`;
@@ -223,11 +233,14 @@ export const BULK_WAYS = [
   { value: 'ask_customer', label: 'Ask the owner' },
 ] as const;
 
-/** The ways open to one group: accepting as it is is for warnings only, the suggestion only where every issue has one. */
-export function bulkWays(group: IssueGroup) {
+/**
+ * The ways open to one group of `count` open problems: accepting as it is is for warnings only, the suggestion only where every
+ * issue has one, so only when every one of them is listed (issue #897); the server refuses the whole of it otherwise.
+ */
+export function bulkWays(group: IssueGroup, count = group.issues.length) {
   return BULK_WAYS.filter((w) => {
     if (w.value === 'override') return group.severity === 'warning';
-    if (w.value === 'accept_suggestion') return group.issues.every((i) => i.suggestion && Object.keys(i.suggestion).length > 0);
+    if (w.value === 'accept_suggestion') return count <= group.issues.length && group.issues.every((i) => i.suggestion && Object.keys(i.suggestion).length > 0);
     return true;
   });
 }

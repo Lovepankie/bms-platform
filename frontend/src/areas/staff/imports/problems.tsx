@@ -8,6 +8,7 @@ import {
   rawRow,
   resolveAll,
   resolveIssue,
+  runMetrics,
   type ImportIssue,
 } from '../../../api/imports';
 import { BusyButton } from '../../../app/ui/BusyButton';
@@ -18,13 +19,14 @@ import { Segmented } from '../../../app/ui/Segmented';
 import { Sheet } from '../../../app/ui/Sheet';
 import { Skeleton } from '../../../app/ui/Skeleton';
 import { useStaff } from '../context';
-import { VIEW_RAW, bulkWays, codeTitle, groupByCode, issuePlace, mayOpen, needsNote, severityWords, type IssueGroup } from './pipeline';
+import { VIEW_RAW, bulkWays, codeTitle, groupByCode, issuePlace, mayOpen, needsNote, openOfKind, severityWords, type IssueGroup } from './pipeline';
 
 // The problems of one import (issue #141, spec sections 3.4 and 3.5, FR-IMP-05): every open problem grouped by its kind, with the
 // plain message the check wrote, never a value of a row. A problem is fixed in place (a new value, the line left out with a
 // reason, a warning accepted with a note, or a question for the owner), or every problem of one kind the same way at once. The
 // questions for the owner download as a numbered list. The row as uploaded is shown only to a holder of core.imports.view_raw,
-// and the server records every opening.
+// and the server records every opening. The count of each kind, and so the number on Fix all, is the server's, from the run's
+// metrics (issue #897): the listed lines stop at ISSUES_SHOWN, while Fix all acts on every open problem of the kind.
 
 const issuesKey = (id: string) => ['import-issues', id] as const;
 
@@ -33,6 +35,7 @@ export function ImportProblems({ runId }: { runId: string }) {
   const allowed = mayOpen(me, '/staff/setup/imports/runs/$runId/problems');
   const seesRaw = (me.permissions ?? []).includes(VIEW_RAW);
   const issues = useQuery({ queryKey: issuesKey(runId), queryFn: () => openIssues(runId), enabled: allowed });
+  const metrics = useQuery({ queryKey: ['import-metrics', runId], queryFn: () => runMetrics(runId), enabled: allowed });
   const [fixing, setFixing] = useState<ImportIssue | null>(null);
   const [bulk, setBulk] = useState<IssueGroup | null>(null);
   // busy-exempt: the download button says Downloading itself and is disabled meanwhile
@@ -47,8 +50,10 @@ export function ImportProblems({ runId }: { runId: string }) {
       </main>
     );
   }
-  const groups = groupByCode(issues.data ?? []);
-  const asked = (issues.data ?? []).filter((i) => i.ask_customer).length;
+  const groups = groupByCode(issues.data?.items ?? []);
+  // Fix all never sends without the server's count of the kind (a refetch into an error leaves none).
+  const bulkCount = bulk ? openOfKind(metrics.data, bulk.code) : null;
+  const asked = metrics.data?.questions?.open ?? (issues.data?.items ?? []).filter((i) => i.ask_customer).length;
   return (
     <main className="stack">
       <h1>Problems to fix</h1>
@@ -58,11 +63,16 @@ export function ImportProblems({ runId }: { runId: string }) {
           Could not load the problems.
         </p>
       )}
+      {metrics.isError && (
+        <p role="alert" className="alert alert-danger">
+          Could not count the problems of each kind, so they cannot be fixed all at once now.
+        </p>
+      )}
       <Skeleton loading={issues.isPending} of="import-problems" rows={3}>
         {issues.data && groups.length === 0 && <EmptyState text="No problem is left. Go back to the import and try it." />}
         <div className="stack" data-tour="import-problems-groups">
           {groups.map((g) => (
-            <GroupCard key={g.code} group={g} onFix={setFixing} onBulk={() => setBulk(g)} />
+            <GroupCard key={g.code} group={g} count={openOfKind(metrics.data, g.code)} more={issues.data?.more ?? false} onFix={setFixing} onBulk={() => setBulk(g)} />
           ))}
         </div>
       </Skeleton>
@@ -81,30 +91,44 @@ export function ImportProblems({ runId }: { runId: string }) {
         {fixing && <FixForm runId={runId} issue={fixing} seesRaw={seesRaw} onDone={() => setFixing(null)} />}
       </Sheet>
       <Sheet open={bulk !== null} onClose={() => setBulk(null)} title="Fix them all the same way">
-        {bulk && <BulkForm runId={runId} group={bulk} onDone={() => setBulk(null)} />}
+        {bulk && (bulkCount === null ? (
+          <p role="alert" className="alert alert-danger">Could not count these problems. Close this and try again.</p>
+        ) : (
+          <BulkForm runId={runId} group={bulk} count={bulkCount} onDone={() => setBulk(null)} />
+        ))}
       </Sheet>
     </main>
   );
 }
 
-function GroupCard({ group, onFix, onBulk }: { group: IssueGroup; onFix: (issue: ImportIssue) => void; onBulk: () => void }) {
+/**
+ * `count` is the server's count of the kind, null until the metrics are in; Fix all waits for it. Meanwhile the card counts the
+ * listed lines, "or more" when the list stopped before the end (`more`).
+ */
+function GroupCard({ group, count, more, onFix, onBulk }: { group: IssueGroup; count: number | null; more: boolean; onFix: (issue: ImportIssue) => void; onBulk: () => void }) {
   const first = group.issues[0];
   const id = `import-group-${group.code}`;
+  const listed = group.issues.length;
   return (
     <section className="rt-card stack" aria-labelledby={id}>
       <h2 id={id}>
-        {codeTitle(group.code)} ({group.issues.length})
+        {codeTitle(group.code)} ({count ?? (more ? `${listed} or more` : listed)})
       </h2>
       <p>
         <strong>{severityWords(group.severity)}.</strong> {first?.message}
       </p>
-      {group.issues.length > 1 && (
+      {count !== null && count > 1 && (
         <button type="button" /* busy-exempt: opens the sheet, sends nothing */ className="btn" onClick={onBulk}>
-          Fix all {group.issues.length} the same way
+          Fix all {count} the same way
         </button>
       )}
       <details className="recon-items">
         <summary>See each line</summary>
+        {count !== null && count > listed && (
+          <p>
+            The first {listed} lines are listed here. Fix all {count} at once, or fix these and the next ones show.
+          </p>
+        )}
         <ul className="stack">
           {group.issues.map((i) => (
             <li key={i.id}>
@@ -212,9 +236,9 @@ function FixForm({ runId, issue, seesRaw, onDone }: { runId: string; issue: Impo
   );
 }
 
-function BulkForm({ runId, group, onDone }: { runId: string; group: IssueGroup; onDone: () => void }) {
+function BulkForm({ runId, group, count, onDone }: { runId: string; group: IssueGroup; count: number; onDone: () => void }) {
   const queryClient = useQueryClient();
-  const ways = bulkWays(group);
+  const ways = bulkWays(group, count);
   const [way, setWay] = useState<string>(ways[0]?.value ?? 'exclude_row');
   const [note, setNote] = useState('');
   const [tried, setTried] = useState(false);
@@ -238,7 +262,7 @@ function BulkForm({ runId, group, onDone }: { runId: string; group: IssueGroup; 
   return (
     <form className="stack" onSubmit={submit} noValidate>
       <p>
-        {group.issues.length} lines: {codeTitle(group.code).toLowerCase()}.
+        {count} lines: {codeTitle(group.code).toLowerCase()}.
       </p>
       <Segmented label="How to fix them" options={ways} value={way} onChange={setWay} />
       {needsNote(way) && <FieldsNeededNote />}
@@ -259,7 +283,7 @@ function BulkForm({ runId, group, onDone }: { runId: string; group: IssueGroup; 
         </p>
       )}
       <BusyButton type="submit" className="btn-primary btn-block" busy={save.isPending}>
-        Fix all {group.issues.length}
+        Fix all {count}
       </BusyButton>
     </form>
   );

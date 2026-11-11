@@ -4,8 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.core.imports.ImportMappings;
+import com.rincoltech.bms.kernel.TenantContext;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Session;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -272,5 +278,49 @@ class ImportScreensIT extends IntegrationTest {
         assertThat(platform.get("/api/v1/platform/imports/kill-switch", a.accessToken())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
+    }
+
+    @Autowired
+    ImportMappings mappings;
+
+    // JUSTIFICATION-A3: issue #897 item 5: the upload route had no case with a chunked body.
+    /**
+     * The 25 MB cap holds on the bytes read while the body streams (issue #897): a chunked body announces no length, so
+     * {@code getContentLengthLong()} is -1, and one byte over the cap is refused 413 {@code FILE_TOO_LARGE} with no file kept.
+     * The body is sent whole, so the answer is read and never a reset connection.
+     */
+    @Test
+    void aChunkedUploadOneByteOverTheCapIsRefusedOnTheBytesRead() throws Exception {
+        String runId = call(t, HttpMethod.POST, "/api/v1/imports/runs", MANAGE)
+                .getBody()
+                .get("id")
+                .asString();
+        UUID mapping = TenantContext.callAs(
+                t.tenantId(),
+                () -> mappings.save("fab-shop", ImportCatalogueTest.mapping(), staff, null)
+                        .id());
+        long over = (25L << 20) + 1;
+        HttpRequest request = HttpRequest.newBuilder(URI.create(http.getRootUri() + "/api/v1/imports/runs/" + runId
+                        + "/files?file_name=fab-big.csv&source=item_list&mapping_id=" + mapping))
+                .version(HttpClient.Version.HTTP_1_1)
+                .header("X-Tenant", t.slug())
+                .header("X-Dev-User-Id", staff.toString())
+                .header("X-Dev-Permissions", MANAGE)
+                .header("X-Dev-Branch-Ids", "*")
+                .header("Content-Type", MediaType.APPLICATION_OCTET_STREAM_VALUE)
+                // No length: the client sends the body chunked.
+                .POST(HttpRequest.BodyPublishers.ofInputStream(() -> new ImportUploadsIT.Repeating(over)))
+                .build();
+        HttpResponse<String> response;
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        }
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+        assertThat(response.body()).contains("FILE_TOO_LARGE");
+        assertThat(call(t, HttpMethod.GET, "/api/v1/imports/runs/" + runId + "/files", MANAGE)
+                        .getBody()
+                        .get("items"))
+                .as("no file kept")
+                .isEmpty();
     }
 }

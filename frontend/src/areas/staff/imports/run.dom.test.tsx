@@ -4,7 +4,7 @@ import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanst
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import type { Certificate, ImportRun, RunMetrics } from '../../../api/imports';
+import type { Certificate, ImportRun, MappingChoice, RunMetrics } from '../../../api/imports';
 import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
@@ -19,6 +19,9 @@ let metrics: RunMetrics;
 let certificate: Certificate | null = null;
 let approvals = 0;
 const saved: string[] = [];
+const uploads: string[] = [];
+const layout = (n: number): MappingChoice => ({ id: `m-${n}`, name: `test-shop-${n}`, version: 1, sources: [{ key: 'items', file: 'items.csv', entity_set: 'retail_items' }] });
+let layouts: MappingChoice[] = [];
 
 vi.mock('../../../api/imports', async (original) => {
   const real = await original<typeof import('../../../api/imports')>();
@@ -32,6 +35,11 @@ vi.mock('../../../api/imports', async (original) => {
     askApproval: () => {
       approvals += 1;
       return Promise.resolve();
+    },
+    mappingChoices: () => Promise.resolve(layouts),
+    uploadFile: (_run: string, file: File, mappingId: string, source: string) => {
+      uploads.push(`${file.name}|${mappingId}|${source}`);
+      return Promise.resolve({ id: 'b-2', seq: 2, status: 'uploaded', file_name: file.name });
     },
     saveFile: (_data: Blob, name: string) => {
       saved.push(name);
@@ -69,6 +77,60 @@ beforeEach(() => {
   certificate = null;
   approvals = 0;
   saved.length = 0;
+  uploads.length = 0;
+  layouts = [layout(1), layout(2)];
+});
+
+// JUSTIFICATION-A3: issue #897 item 2 and 4 need their own cases; the upload sheet had none.
+// Issue #897: the sheet layout is one searchable box, the choice itself, with the red asterisk and the error on it.
+describe('the sheet layout of an upload', () => {
+  async function openSheet() {
+    run = { id: 'run-3', status: 'draft', version: 1 };
+    metrics = { ...metrics, status: 'draft' };
+    show(importer);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Add a file' }))[0] as HTMLElement);
+    return screen.findByRole('combobox', { name: /Sheet layout/ });
+  }
+  const pickFile = () =>
+    fireEvent.change(screen.getByLabelText(/^File/), { target: { files: [new File(['code,name\n1,Test item'], 'test-items.csv')] } });
+
+  it('marks the box itself required and sends the layout picked from its list', async () => {
+    const box = await openSheet();
+    expect(box.getAttribute('aria-required')).toBe('true');
+    expect(box.closest('.field')?.querySelector('.field-star')).toBeTruthy();
+    expect(screen.queryByRole('radio')).toBeNull();
+    await waitFor(() => expect(document.querySelectorAll('#import-layouts option')).toHaveLength(2));
+    fireEvent.change(box, { target: { value: 'test-shop-2: items.csv' } });
+    pickFile();
+    fireEvent.click(screen.getByRole('button', { name: 'Upload the file' }));
+    await waitFor(() => expect(uploads).toEqual(['test-items.csv|m-2|items']));
+  });
+
+  it('refuses words that name no layout, on the box, and sends nothing', async () => {
+    const box = await openSheet();
+    fireEvent.change(box, { target: { value: 'test-shop' } });
+    pickFile();
+    fireEvent.click(screen.getByRole('button', { name: 'Upload the file' }));
+    expect(await screen.findByText('Pick a layout from the list.')).toBeTruthy();
+    expect(box.getAttribute('aria-invalid')).toBe('true');
+    expect(uploads).toEqual([]);
+  });
+
+  it('tells apart two tabs of one file, and sends the one picked (review of a5168f7)', async () => {
+    layouts = [{ id: 'm-9', name: 'test-shop-9', version: 1, sources: [{ key: 'items', file: 'book.xlsx' }, { key: 'buyers', file: 'book.xlsx' }] }];
+    const box = await openSheet();
+    await waitFor(() => expect(document.querySelectorAll('#import-layouts option')).toHaveLength(2));
+    fireEvent.change(box, { target: { value: 'test-shop-9: book.xlsx, buyers' } });
+    pickFile();
+    fireEvent.click(screen.getByRole('button', { name: 'Upload the file' }));
+    await waitFor(() => expect(uploads).toEqual(['test-items.csv|m-9|buyers']));
+  });
+
+  it('says so when the list holds as many layouts as the server sends (issue #897)', async () => {
+    layouts = Array.from({ length: 200 }, (_, i) => layout(i));
+    await openSheet();
+    expect(await screen.findByText(/This list holds at most 200 layouts, by name/)).toBeTruthy();
+  });
 });
 
 afterEach(() => cleanup());

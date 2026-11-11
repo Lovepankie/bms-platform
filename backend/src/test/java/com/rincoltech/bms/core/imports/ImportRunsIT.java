@@ -32,11 +32,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Import runs, their states and the guards of the commit (issue #127, spec sections 3.7, 3.11, 5.4 and 10.2 to 10.4),
@@ -366,6 +369,86 @@ class ImportRunsIT extends IntegrationTest {
         assertThat(journals()).isEqualTo(1);
         assertThat(batchStatus(run.id(), 1)).isEqualTo("committed");
         assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committed");
+    }
+
+    // JUSTIFICATION-A3: issue #897 items 3 and 6, each a case of its own beside the kill switch case above.
+    /**
+     * The kill switch refuses a resume for every caller, not only through the portal's controller (issue #897): the
+     * service's resume, the portal's startResume called directly (its background never handed the work) and the portal's
+     * route are each 409 {@code imports_disabled}, nothing is written, and none keeps the business's loop.
+     */
+    @Test
+    void theKillSwitchRefusesAResumeForEveryCaller() {
+        Run run = readyRun(1);
+        BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
+            postJournal(batchId, checkpoint);
+            for (int row = 1; row <= 1_500; row++) {
+                if (row == 500) {
+                    TestDatabase.owner()
+                            .sql("UPDATE platform_import_settings SET commit_enabled = false WHERE id = 1")
+                            .update();
+                }
+                checkpoint.rowWritten();
+            }
+            return Map.of("written", 1_500);
+        };
+        assertThat(as(t, () -> runs.commit(script(run.id(), writer)))).isEqualTo(CommitOutcome.HALTED);
+        String email = Api.email("switch-off-resume");
+        UUID operatorId = Api.platformUser(email);
+        AtomicBoolean handed = new AtomicBoolean();
+        as(t, () -> {
+            assertCode(() -> runs.resume(run.id()), "imports_disabled");
+            assertCode(() -> runs.startResume(run.id(), operatorId, work -> handed.set(true)), "imports_disabled");
+            return null;
+        });
+        assertThat(handed).as("the refused resume handed no work on").isFalse();
+        Api platform = Api.platform(http);
+        String token = platform.signIn(operatorId, email, Api.PASSWORD, null).accessToken();
+        ResponseEntity<JsonNode> refused = platform.post(
+                "/api/v1/platform/imports/businesses/" + t.slug() + "/runs/" + run.id() + "/resume", null, token);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("imports_disabled");
+        assertThat(journals()).as("nothing written by a refused resume").isZero();
+        assertThat(batchStatus(run.id(), 1)).isEqualTo("pending");
+
+        // Switched on again, the loop is free: the resume goes on and ends committed.
+        TestDatabase.owner()
+                .sql("UPDATE platform_import_settings SET commit_enabled = true WHERE id = 1")
+                .update();
+        assertThat(as(t, () -> runs.resume(script(run.id(), NOTHING)))).isEqualTo(CommitOutcome.COMMITTED);
+    }
+
+    /**
+     * A start or a resume whose background never runs the work (it throws, its thread cannot start: an Error, or it closes
+     * the work unrun) gives the business's loop back at once (issue #897), so the next resume claims it.
+     */
+    @Test
+    void aStartOrResumeWhoseWorkNeverRunsGivesTheLoopBack() {
+        Run run = readyRun(1);
+        UUID operatorId = Api.platformUser(Api.email("work-never-runs"));
+        IllegalStateException noThread = new IllegalStateException("fabricated: the thread did not start");
+        assertThatThrownBy(() -> as(t, () -> {
+                    runs.startCommit(script(run.id(), NOTHING), operatorId, work -> {
+                        throw noThread;
+                    });
+                    return null;
+                }))
+                .isSameAs(noThread);
+        assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committing");
+        // The portal's way when its thread fails before the work: the work is closed and never run.
+        as(t, () -> {
+            runs.startResume(run.id(), operatorId, ImportRuns.Work::close);
+            return null;
+        });
+        OutOfMemoryError noMemory = new OutOfMemoryError("fabricated: no memory for a thread");
+        assertThatThrownBy(() -> as(t, () -> {
+                    runs.startResume(run.id(), operatorId, work -> {
+                        throw noMemory;
+                    });
+                    return null;
+                }))
+                .isSameAs(noMemory);
+        assertThat(as(t, () -> runs.resume(run.id()))).isEqualTo(CommitOutcome.COMMITTED);
     }
 
     @Test

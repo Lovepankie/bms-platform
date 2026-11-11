@@ -34,8 +34,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
@@ -752,7 +752,7 @@ class ImportRunService implements ImportRuns {
 
     // JUSTIFICATION-A3: issue #141's portal start and resume: the guards in the request, the batches after.
     @Override
-    public void startCommit(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background) {
+    public void startCommit(UUID runId, UUID platformUserId, Consumer<Work> background) {
         requireNoTransaction();
         requireKnownBuild();
         LoopClaim claim = claimLoop();
@@ -767,7 +767,7 @@ class ImportRunService implements ImportRuns {
     }
 
     @Override
-    public void startResume(UUID runId, UUID platformUserId, Consumer<Supplier<CommitOutcome>> background) {
+    public void startResume(UUID runId, UUID platformUserId, Consumer<Work> background) {
         requireNoTransaction();
         requireKnownBuild();
         LoopClaim claim = claimLoop();
@@ -781,17 +781,32 @@ class ImportRunService implements ImportRuns {
         handOff(runId, claim, background);
     }
 
-    /** Gives the batches and the loop claim to the caller's thread; the work gives the claim back when it ends. */
-    private void handOff(UUID runId, LoopClaim claim, Consumer<Supplier<CommitOutcome>> background) {
+    /**
+     * Gives the batches and the loop claim to the caller's thread; the work gives the claim back when it ends, and closing
+     * the work gives it back if it never ran (issue #897). A background that throws or fails to start its thread (an Error
+     * too) gives it back here, in the finally.
+     */
+    private void handOff(UUID runId, LoopClaim claim, Consumer<Work> background) {
+        boolean handed = false;
         try {
-            background.accept(() -> {
-                try (claim) {
-                    return writeBatches(runId, claim);
+            background.accept(new Work() {
+                @Override
+                public CommitOutcome get() {
+                    try (claim) {
+                        return writeBatches(runId, claim);
+                    }
+                }
+
+                @Override
+                public void close() {
+                    claim.close();
                 }
             });
-        } catch (RuntimeException e) {
-            claim.close();
-            throw e;
+            handed = true;
+        } finally {
+            if (!handed) {
+                claim.close();
+            }
         }
     }
 
@@ -1342,6 +1357,8 @@ class ImportRunService implements ImportRuns {
 
         private final Connection connection;
         private final String key;
+        /** Closed once only: a background that throws after its thread took the work must not give the connection twice. */
+        private final AtomicBoolean closed = new AtomicBoolean();
 
         LoopClaim(Connection connection, String key) {
             this.connection = connection;
@@ -1358,6 +1375,9 @@ class ImportRunService implements ImportRuns {
 
         @Override
         public void close() {
+            if (!closed.compareAndSet(false, true)) {
+                return;
+            }
             try (PreparedStatement unlock =
                     connection.prepareStatement("SELECT pg_advisory_unlock(hashtextextended(?, 0))")) {
                 unlock.setString(1, key);
