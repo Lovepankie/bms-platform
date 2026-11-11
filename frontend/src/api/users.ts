@@ -14,6 +14,7 @@ export type InvitationLink = components['schemas']['InvitationLink'];
 export type InvitedUser = components['schemas']['InvitedUser'];
 export type InviteUserBody = components['schemas']['InviteUserRequest'];
 export type StaffBranch = components['schemas']['Branch'];
+export type UpdateUserBody = components['schemas']['UpdateUserRequest'];
 
 export class UsersError extends Error {
   constructor(
@@ -56,6 +57,7 @@ const MESSAGES: Record<string, string | undefined> = {
   password_required: 'Enter your own password to confirm.',
   invalid_password: 'That password is not right. Check it and try again; too many wrong tries lock your account for 15 minutes.',
   account_locked: 'Too many wrong tries. Your account is locked for 15 minutes. Try again later.',
+  version_conflict: 'These details were changed by someone else at the same moment. Close this, open it again and make your change.',
 };
 
 /** The words for a field problem the server sends with its own code (UserService.checkRoles and the contact check). */
@@ -140,6 +142,22 @@ export const users = {
     return unwrap(
       await sent(api.POST('/api/v1/users/{user_id}/transfer-ownership', { params: { path: { user_id: userId } }, body })),
       'Could not hand over ownership.',
+    );
+  },
+
+  async get(userId: string): Promise<StaffUser> {
+    return unwrap(await sent(api.GET('/api/v1/users/{user_id}', { params: { path: { user_id: userId } } })), 'Could not load these details.');
+  },
+
+  /**
+   * Change a person's name, email or phone (issue #883). `version` is the one read with the person and goes as If-Match. The Owner
+   * changing their own email or phone also sends the code from their authenticator app or their own password (ADR-062); neither is
+   * kept. The server decides who may change whom: an administrator's contact is the Owner's alone (403 owner_only, owner_protected).
+   */
+  async update(userId: string, version: number, change: UpdateUserBody): Promise<StaffUser> {
+    return unwrap(
+      await sent(api.PATCH('/api/v1/users/{user_id}', { params: { path: { user_id: userId }, header: { 'If-Match': `"${version}"` } }, body: change })),
+      'Could not save the change.',
     );
   },
 

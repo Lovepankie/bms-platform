@@ -169,6 +169,34 @@ export function emailProblem(raw: string): string | null {
   return EMAIL.test(text) ? null : 'Check the email address: it looks like name@example.com.';
 }
 
+/** A person's name, phone and email as typed in My details or Change email or phone (issue #883). */
+export type ContactDraft = { fullName: string; phone: string; email: string };
+
+export const contactDraftOf = (user: StaffUser): ContactDraft => ({ fullName: user.full_name ?? '', phone: user.phone_e164 ? showPhone(user.phone_e164) : '', email: user.email ?? '' });
+
+/**
+ * What a contact form would send, only what changed, and what is wrong with it in plain words. The server keeps a saved email or
+ * phone when the field is left out, so a field that had one cannot be emptied here; the name is asked only where `withName`.
+ * JUSTIFICATION-A3: the change form's own rules (only what changed, no emptying) beside inviteProblems, reusing its two checks.
+ */
+export function contactChange(user: StaffUser, draft: ContactDraft, withName: boolean) {
+  const problems: { fullName?: string; phone?: string; email?: string } = {};
+  const name = draft.fullName.trim();
+  const email = cleanEmail(draft.email);
+  const phone = draft.phone.trim() === '' ? '' : normaliseUganda(draft.phone) ?? '';
+  if (withName && name === '') problems.fullName = 'Type the full name.';
+  if (draft.phone.trim() !== '') problems.phone = phoneProblem(draft.phone) ?? undefined;
+  else if (user.phone_e164) problems.phone = 'Type the new phone number. A saved phone number cannot be left empty.';
+  if (email !== '') problems.email = emailProblem(draft.email) ?? undefined;
+  else if (user.email) problems.email = 'Type the new email. A saved email cannot be left empty.';
+  const body: { full_name?: string; phone?: string; email?: string } = {};
+  if (withName && name !== '' && name !== (user.full_name ?? '')) body.full_name = name;
+  if (phone !== '' && phone !== (user.phone_e164 ?? '')) body.phone = phone;
+  if (email !== '' && email !== (user.email ?? '')) body.email = email;
+  const contact = body.phone !== undefined || body.email !== undefined;
+  return { body, problems, contact, ready: !problems.fullName && !problems.phone && !problems.email };
+}
+
 /** What is wrong with the form, in plain words; empty when it can be sent. */
 export function inviteProblems(draft: InviteDraft): InviteProblems {
   const out: InviteProblems = {};

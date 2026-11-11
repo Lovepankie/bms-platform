@@ -123,3 +123,13 @@ yet built and stay open on #325 as follow-ups, all three tracked in #571. No new
 | Staff accounts are deactivated, never deleted | No route deletes a user (`UserController` has no `DELETE`); the application role holds no `DELETE` on `users` (`V1__foundation.sql`, `bms_grant_app('users', 'SELECT, INSERT, UPDATE')`) | `TenantOwnerIT.staffAccountsAreNeverDeleted` (a `DELETE /users/{user_id}` by the Owner answers 405 for a cashier, an administrator and the Owner, and the rows stay; `has_table_privilege` is false for `DELETE` and `TRUNCATE` on `users`, inherited roles and `PUBLIC` included). Not covered: a row removed by a foreign-key cascade or a definer function; none deletes users today |
 | Backfill to the first active administrator by `created_at` | `V79__tenant_owner.sql`. **Differs from #325:** the active administrator whose email is the recorded sign-up email comes first (the person who signed up, the point of #325), else the earliest active administrator by `created_at`; each assignment is a platform log row and a business left with none is a WARNING in the migration log | `MigrationOrderIT.ownerMigrationGivesEveryBusinessWithAnActiveAdministratorExactlyOneOwner` |
 | The backfilled businesses listed for the operator to confirm | Not yet built (#571): no screen lists the businesses the backfill gave an Owner, or left without one | None |
+
+## Note: a changed sign-in email is told at both addresses (issue #883, 11 Nov 2026)
+
+Decision 3 told only the Owner's old address. Since issue #883 a changed email of any active member of staff is also told at the
+new address (`identity.email_changed_new`), and the old address of anyone who is not the Owner gets `identity.email_changed_old`;
+the Owner's old address keeps `identity.contact_changed`, so it is not written twice. Neither note names an address, so a mailbox
+the person no longer holds learns nothing it could use. A phone change of someone who is not the Owner is not told by SMS: that
+would cost the business a message for every change and stays a follow-up. Nothing else in this decision changes: who may change a
+contact, the Owner's step-up and the day's wait are as above. The screens are My details in the person menu (one's own) and
+Change email or phone on the Users page (someone else's). Test: `TenantOwnerIT.aChangedEmailIsToldAtTheOldAndTheNewAddress`.

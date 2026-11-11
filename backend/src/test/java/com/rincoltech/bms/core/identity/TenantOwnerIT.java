@@ -624,6 +624,96 @@ class TenantOwnerIT extends IntegrationTest {
         assertThat(transfer(adminA, ownerSession, Api.PASSWORD).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
+    /**
+     * Issue #883: a changed sign-in email is told at the old address, which is never given the new one, and at the new address.
+     * The Owner's old address keeps its own note (ADR-062) and is not written twice.
+     * JUSTIFICATION-A3: a new test case for the new notes, in the file that already tests the contact change.
+     */
+    @Test
+    void aChangedEmailIsToldAtTheOldAndTheNewAddress() {
+        String oldEmail = TestDatabase.owner()
+                .sql("SELECT email FROM users WHERE id = ?")
+                .param(cashier)
+                .query(String.class)
+                .single();
+        // A change of the phone alone keeps the email, so no email note is written (review of #906).
+        String phoneTag = api.get("/api/v1/users/" + cashier, adminSession.accessToken())
+                .getHeaders()
+                .getETag();
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/api/v1/users/" + cashier,
+                                // Staff phones are unique per business (V98) and this test's business is new,
+                                // with no other staff phone, so a fixed number cannot collide.
+                                Map.of("phone", "0700000183"),
+                                adminSession.accessToken(),
+                                Map.of("If-Match", phoneTag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        // Every row of any status or due time: a note claimed, sent or delayed must not hide here.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM notification_outbox WHERE throttle_key LIKE ?")
+                        .param("contact-changed:" + cashier + ":%")
+                        .query(Long.class)
+                        .single())
+                .as("a phone-only change writes no note")
+                .isZero();
+
+        String newEmail = Api.email("cashier-new");
+        String etag = api.get("/api/v1/users/" + cashier, adminSession.accessToken())
+                .getHeaders()
+                .getETag();
+        ResponseEntity<JsonNode> changed = api.call(
+                HttpMethod.PATCH,
+                "/api/v1/users/" + cashier,
+                Map.of("email", newEmail),
+                adminSession.accessToken(),
+                Map.of("If-Match", etag));
+        assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(notes(cashier))
+                .containsExactly("identity.email_changed_new " + newEmail, "identity.email_changed_old " + oldEmail);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT params::text FROM notification_outbox WHERE throttle_key LIKE ?")
+                        .param("contact-changed:" + cashier + ":%")
+                        .query(String.class)
+                        .list())
+                .as("neither note names an address")
+                .allSatisfy(p -> assertThat(p).doesNotContain(newEmail).doesNotContain(oldEmail));
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(DISTINCT throttle_key) FROM notification_outbox WHERE throttle_key LIKE ?")
+                        .param("contact-changed:" + cashier + ":%")
+                        .query(Long.class)
+                        .single())
+                .as("each note has its own volume key")
+                .isEqualTo(2);
+
+        String ownerOld = TestDatabase.owner()
+                .sql("SELECT email FROM users WHERE id = ?")
+                .param(owner)
+                .query(String.class)
+                .single();
+        assertThat(patchEmail(owner, ownerSession, Map.of("password", Api.PASSWORD))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        List<String> ownerNotes = notes(owner);
+        assertThat(ownerNotes).hasSize(2).contains("identity.contact_changed " + ownerOld);
+        assertThat(ownerNotes.getFirst()).startsWith("identity.contact_changed ");
+        assertThat(ownerNotes.getLast())
+                .startsWith("identity.email_changed_new ")
+                .doesNotEndWith(ownerOld);
+    }
+
+    /** The email notes of a contact change that the sender will pick up: pending and due now. */
+    List<String> notes(UUID userId) {
+        return TestDatabase.owner()
+                .sql("SELECT template_key || ' ' || recipient FROM notification_outbox WHERE throttle_key LIKE ?"
+                        + " AND channel = 'email' AND status = 'pending' AND next_attempt_at <= now()"
+                        + " ORDER BY template_key")
+                .param("contact-changed:" + userId + ":%")
+                .query(String.class)
+                .list();
+    }
+
     @Test
     void aRecentPasswordChangeCoolsTheTransferForADay() {
         backdate("user_credentials", "password_changed_at", owner, "1 hour");

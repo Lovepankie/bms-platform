@@ -13,6 +13,7 @@ import { RoleEditor } from './role-editor';
 import { WhoCanDoWhat } from './who-can-do-what';
 import { ResetPanel } from './reset-panel';
 import { TransferOwner } from './transfer-owner';
+import { ContactEditor } from './contact-editor';
 import { canActOn, canManageUsers, canResetSignIn, contactLine, matchesSearch, offeredChoices, ownershipTargets, roleChoices, roleLines, showUsers, statusWords } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { sayDone } from '../retail/toast';
@@ -24,12 +25,13 @@ import { sayDone } from '../retail/toast';
 // The Owner (ADR-062) carries a badge; only the Owner is offered the actions on another administrator and Transfer ownership, and the
 // Owner's own card offers no action to anyone else. The server refuses the same with 403 owner_only and owner_protected. Sign out
 // their devices (issue #647) ends every session of an active person at once, for a lost or stolen phone; they stay active.
+// Change email or phone (issue #883) stands beside Change roles and opens the form My details uses (contact-editor.tsx).
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
 
 const BADGE: Record<string, string> = { invited: 'badge badge-warning', active: 'badge badge-success', deactivated: 'badge' };
 
-type Mode = { kind: 'roles' | 'deactivate' | 'reset' | 'sign-out'; id: string } | null;
+type Mode = { kind: 'roles' | 'contact' | 'deactivate' | 'reset' | 'sign-out'; id: string } | null;
 
 export function UsersScreen() {
   const { me } = useStaff();
@@ -238,6 +240,9 @@ export function UsersScreen() {
                         <button type="button" /* busy-exempt: opens a panel */ className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'roles', id: u.id ?? '' }); setError(null); }}>
                           Change roles
                         </button>
+                        <button type="button" /* busy-exempt: opens a panel */ className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'contact', id: u.id ?? '' }); setError(null); }}>
+                          Change email or phone
+                        </button>
                         {canResetSignIn(me, u) && (
                           <button type="button" /* busy-exempt: opens a panel */ className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'reset', id: u.id ?? '' }); setError(null); }}>
                             Reset sign-in
@@ -257,6 +262,14 @@ export function UsersScreen() {
                     )}
                     {mode?.id === u.id && mode?.kind === 'roles' && (
                       <RoleEditor user={u} self={u.id === me.user_id} roles={u.id === me.user_id ? allChoices : choices} branches={branchList} retail={!me.modules || me.modules.includes('retail')} onSave={(next) => saveRoles(u, next)} onCancel={() => setMode(null)} />
+                    )}
+                    {canManage && !canActOn(me, u, all) && u.status !== 'deactivated' && (
+                      <p className="hint">{u.is_owner === true ? 'Only the owner can change the owner\'s email or phone, from My details.' : 'Only the owner can change an administrator\'s email or phone.'}</p>
+                    )}
+                    {mode?.id === u.id && mode?.kind === 'contact' && (
+                      <div className="rt-card stack">
+                        <ContactEditor user={u} self={u.id === me.user_id} owner={me.is_owner === true} mfaEnabled={me.mfa_enabled === true} withName={false} onDone={() => setMode(null)} onCancel={() => setMode(null)} />
+                      </div>
                     )}
                     {mode?.id === u.id && mode?.kind === 'reset' && (
                       <ResetPanel user={u} mfaEnabled={me.mfa_enabled === true} openLinkFor={link?.name ?? null} onSend={(credential) => resetSignIn(u, credential)} onCancel={() => setMode(null)} />

@@ -2142,3 +2142,25 @@ dialler, messages or WhatsApp; the app sends nothing.
 - **Sizes.** `ContactLinks` (`contact-links.tsx`): 48 by 48px targets, `--tap-gap` (8px) apart, each as wide as its word on every
   screen, never stretched on a laptop; icons from the app's set (a round bubble for WhatsApp, no brand logo). The layout suite
   `layout/contact-links.layout.test.ts` measures them at 412 and 1366.
+
+## My details and Change email or phone (issue #883, ADR-062)
+
+A person changes their own sign-in email or phone, and an administrator changes someone else's, without the operator. No new
+route: My details is a sheet, and the Users page gains one action. The server keeps every rule (`PATCH /users/{user_id}`,
+`core.users.manage`); the screens only offer what can work and say any refusal in the client's plain words (`api/users.ts`).
+
+- **My details.** In the person menu at the top right, under the name. A sheet with Full name (required, red star), Phone number
+  and Email address, and Save. Someone without `core.users.manage` sees the three lines and "To change your name, phone or
+  email, ask an administrator of your business", since the server would refuse them.
+- **The Owner's own email or phone.** The button reads Next, and a second step asks for the authenticator code (with two-step
+  sign-in) or the Owner's own password, shows the new email or phone, says ownership can be handed over only a day later, and
+  saves with Save the change. Nothing typed as proof is kept; a wrong one empties the box. If the server asks for proof the
+  screen did not expect (`/me` out of date: `password_required`, `totp_required`, `step_up_required`), the form moves to that
+  step with the server's words.
+- **Users page.** Change email or phone stands on every card that already offers Change roles (one's own included). On the
+  Owner's card, and another administrator's for an administrator who is not the Owner, it is not offered and a line says
+  "Only the owner can change ...". A list read before the Owner changed may still offer it; the refusal (`owner_protected`,
+  `owner_only`) is shown in plain words under the form.
+- **The notes.** A changed email is told at the new address and, except for the Owner, whose old address keeps its own note, at
+  the old one, which names neither address (`identity.email_changed_new`, `identity.email_changed_old`).
+- **Tests.** `users/contact-editor.dom.test.tsx`, against the real typed client with a stand-in server.

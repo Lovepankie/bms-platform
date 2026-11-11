@@ -246,6 +246,40 @@ class OutboxTemplates {
                     """,
                     null,
                     "You got this email because you have a BMS sign-in at {tenant_name}."),
+            // Sent to the old address when someone's sign-in email changes (issue #883). It names no address.
+            // JUSTIFICATION-A3: two message texts are data in the existing template map, no new mechanism.
+            "identity.email_changed_old",
+            new Template(
+                    "Your BMS sign-in email was changed",
+                    """
+                    Hello,
+
+                    Your sign-in email for BMS at {tenant_name} was changed on {when}. From now on you sign in with \
+                    the new email, and messages about your sign-in go there, not to this address.
+
+                    If this was you or your administrator, nothing more is needed. If it was not, tell your \
+                    administrator at once.
+
+                    Rincol Tech
+                    """,
+                    null,
+                    "You got this email because this address was your BMS sign-in at {tenant_name}."),
+            // Sent to the new address when someone's sign-in email changes (issue #883). No link.
+            "identity.email_changed_new",
+            new Template(
+                    "This is now your BMS sign-in email",
+                    """
+                    Hello,
+
+                    This address became your sign-in email for BMS at {tenant_name} on {when}. Use it the next time \
+                    you sign in. Messages about your sign-in now come here.
+
+                    If you do not work at {tenant_name}, ignore this email.
+
+                    Rincol Tech
+                    """,
+                    null,
+                    "You got this email because this address was given as a BMS sign-in at {tenant_name}."),
             // The insights digest (ADR-030): the text is built by lending.insights as plain text from the tenant's own
             // figures, ready for a WhatsApp relay later.
             "insights.daily_digest",

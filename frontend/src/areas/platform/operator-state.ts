@@ -446,6 +446,8 @@ const MESSAGE_LABEL: Record<string, string> = {
   'identity.password_reset': 'Password reset link',
   'identity.password_reset_issued': 'Notice that a reset link was made',
   'identity.password_changed': 'Notice that the password changed',
+  'identity.email_changed_old': 'Notice to the old address that the sign-in email changed',
+  'identity.email_changed_new': 'Notice to the new sign-in email',
   'identity.find_sign_in': 'Their sign-in page',
   'identity.two_step_policy_weakened': 'Notice that two-step sign-in was relaxed',
   'payments.account_changed': 'Notice that the payment account changed',

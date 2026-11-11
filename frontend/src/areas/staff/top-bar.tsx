@@ -65,7 +65,7 @@ function ThemeChoices() {
  * The one menu at the right of the top bar. A disclosure, not a role=menu: it holds a status line and a Segmented as well as
  * buttons. It closes on Escape (focus back to its button) and on a press outside, and keeps its items mounted while closed. Help closes it and opens the Help sheet, which lives outside it.
  */
-export function TopMenu({ me, onSignOut, onSignOutEverywhere, busy, signOut, children }: { me: Me; onSignOut: () => void; onSignOutEverywhere?: () => void; busy: boolean; signOut: boolean; children?: ReactNode }) {
+export function TopMenu({ me, onSignOut, onSignOutEverywhere, onMyDetails, busy, signOut, children }: { me: Me; onSignOut: () => void; onSignOutEverywhere?: () => void; onMyDetails?: () => void; busy: boolean; signOut: boolean; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrap = useRef<HTMLDivElement>(null);
@@ -106,6 +106,22 @@ export function TopMenu({ me, onSignOut, onSignOutEverywhere, busy, signOut, chi
       </button>
       <div id={panelId} className="top-menu-panel" hidden={!open}>
         <p className="top-menu-user">{me.full_name}</p>
+        {onMyDetails && (
+          // Issue #883: the signed-in person's name, phone and email, in a sheet.
+          <button
+            type="button"
+            className="btn-ghost top-menu-item"
+            aria-haspopup="dialog"
+            data-tour="my-details"
+            onClick={() => {
+              setOpen(false);
+              onMyDetails();
+            }}
+          >
+            {icons.user}
+            My details
+          </button>
+        )}
         <button
           type="button"
           className="btn-ghost top-menu-item"

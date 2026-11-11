@@ -61,6 +61,8 @@ class UserService implements TenantAdmins {
     static final Duration INVITATION_TTL = Duration.ofHours(72);
     static final String TENANT_ADMIN = "tenant_admin";
     static final String CONTACT_CHANGED_TEMPLATE = "identity.contact_changed";
+    static final String EMAIL_CHANGED_OLD_TEMPLATE = "identity.email_changed_old";
+    static final String EMAIL_CHANGED_NEW_TEMPLATE = "identity.email_changed_new";
     private static final String MANAGE = "core.users.manage";
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 200;
@@ -457,24 +459,29 @@ class UserService implements TenantAdmins {
                     "contact-changed:" + userId,
                     now.plus(Duration.ofHours(1))));
         }
-        if (contactChanged && before.isOwner() && before.email() != null) {
-            // The old mailbox hears of it, so an Owner whose session was used by someone else finds out (ADR-062).
-            Instant now = clock.now();
-            outbox.enqueue(new Outbox.Message(
-                    Outbox.EMAIL,
-                    before.email(),
-                    CONTACT_CHANGED_TEMPLATE,
-                    Map.of(
-                            "tenant_name",
-                            tenant.profile().name(),
-                            "when",
-                            DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(
-                                            now.atOffset(ZoneOffset.UTC).withNano(0))
-                                    + " UTC"),
-                    CONTACT_CHANGED_TEMPLATE + ":" + userId + ":" + before.version(),
-                    "contact-changed:" + userId,
-                    now.plus(Duration.ofDays(1))));
+        // The old mailbox hears of it, so an Owner whose session was used by someone else finds out (ADR-062).
+        // Since issue #883 every active person whose email changes is told at the old address (never naming the
+        // new one) and at the new one.
+        boolean emailChanged = !Objects.equals(email, before.email()) && "active".equals(before.status());
+        Map<String, String> notes = new LinkedHashMap<>();
+        if (before.email() != null && ((contactChanged && before.isOwner()) || emailChanged)) {
+            notes.put(before.isOwner() ? CONTACT_CHANGED_TEMPLATE : EMAIL_CHANGED_OLD_TEMPLATE, before.email());
         }
+        if (emailChanged && email != null) {
+            notes.put(EMAIL_CHANGED_NEW_TEMPLATE, email);
+        }
+        Instant now = clock.now();
+        String when = DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(
+                        now.atOffset(ZoneOffset.UTC).withNano(0)) + " UTC";
+        notes.forEach((template, address) -> outbox.enqueue(new Outbox.Message(
+                Outbox.EMAIL,
+                address,
+                template,
+                Map.of("tenant_name", tenant.profile().name(), "when", when),
+                template + ":" + userId + ":" + before.version(),
+                // One volume key per note, apart from the SMS above: no note can count against another.
+                "contact-changed:" + userId + ":" + template,
+                now.plus(Duration.ofDays(1)))));
         audit.record(new AuditLog.Entry(
                 "core.user.updated",
                 "core.user",

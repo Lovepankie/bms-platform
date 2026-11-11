@@ -35,6 +35,7 @@ import { AskButton, HowDoILink } from './help/how-do-i';
 import { TwoStepNotices } from './two-step/notices';
 import { OwnTwoStep } from './two-step/own';
 import { mustSetUp } from './two-step/state';
+import { MyDetailsSheet } from './users/contact-editor';
 
 // The staff area layout: restores the session from the refresh cookie, shows who is signed in,
 // and holds the branch switcher (FR-BR-03). Switching the branch changes what lists show without
@@ -77,6 +78,7 @@ function StaffLayout() {
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [askEverywhere, setAskEverywhere] = useState(false);
+  const [myDetails, setMyDetails] = useState(false);
 
   useEffect(() => {
     if (token !== null || mock) return;
@@ -193,7 +195,7 @@ function StaffLayout() {
           <div className="nav-layout">
             <StaffSideNav me={profile} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} />
             <div className="nav-layout-main">
-              <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} onSignOutEverywhere={() => setAskEverywhere(true)} signOutInBar={mustSetUp(profile)} />
+              <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} onSignOutEverywhere={() => setAskEverywhere(true)} onMyDetails={() => setMyDetails(true)} signOutInBar={mustSetUp(profile)} />
               <InstallPrompt />
               <OthersWaitingNote />
               {!mock && <NewLogoCard />}
@@ -219,6 +221,7 @@ function StaffLayout() {
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
               <SignOutWarning ask={askSignOut} onSignOut={() => void signOut(true)} />
               <SignOutEverywhere open={askEverywhere} waiting={waitingNow(offline)} busy={signingOut} onConfirm={() => void signOut(true, true)} onClose={() => setAskEverywhere(false)} />
+              <MyDetailsSheet me={profile} open={myDetails} onClose={() => setMyDetails(false)} />
               {switchToast}
             </div>
             {!mustSetUp(profile) && <StaffTabBar me={profile} />}
@@ -350,6 +353,7 @@ export function StaffBar({
   onBranch,
   onSignOut,
   onSignOutEverywhere,
+  onMyDetails,
   busy = false,
   signOutInBar = false,
 }: {
@@ -359,6 +363,8 @@ export function StaffBar({
   onSignOut: () => void;
   /** Opens the sheet that asks before signing out on every device (issue #647). */
   onSignOutEverywhere?: () => void;
+  /** Opens My details, the signed-in person's name, phone and email (issue #883). */
+  onMyDetails?: () => void;
   /** True while signing out runs: Sign out shows its spinner and takes no second press. */
   busy?: boolean;
   /** Sign out in the menu on a phone too: while two-step set-up blocks the page there are no tabs and no More page to reach it. */
@@ -379,7 +385,7 @@ export function StaffBar({
           <FeatureSearch me={me} />
           {/* The Ask button (issue #603); none while two-step set-up blocks the page, whose header is kept minimal. */}
           {!mustSetUp(me) && <AskButton />}
-          <TopMenu me={me} busy={busy} onSignOut={onSignOut} onSignOutEverywhere={onSignOutEverywhere} signOut={!phone || signOutInBar} />
+          <TopMenu me={me} busy={busy} onSignOut={onSignOut} onSignOutEverywhere={onSignOutEverywhere} onMyDetails={onMyDetails} signOut={!phone || signOutInBar} />
         </div>
       </header>
       <OfflineBanner me={me} />
