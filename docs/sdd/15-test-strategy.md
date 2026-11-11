@@ -600,6 +600,17 @@ output changed.
   golden model, and `ReportMemoryIT` with both lending reports as PDF and Excel, a sheet of 20,000 rows and a PDF cut at 500 rows on the
   224 MB heap. The visual check is `make document-samples` (a PNG per page in `backend/target/document-samples`) and the reviewed sample
   sheet `docs/ui/report-samples/report-sample-sheet.png`, assembled by `scripts/report-sample-sheet.py`.
+  *What `ReportMemoryIT` judges (#899).* Its gate is the old generation's peak during the fifteen runs, measured from the
+  collection that takes the application's baseline, a tenth below the limit (134 of 149 MB), as `ImportBigFileIT` does.
+  Until #899 the peak was the child's whole life, and it failed from the #137 dispatches on (135 to 137 MB). Measured on
+  main at 809d239 (CI run 42923268352): the old generation peaks at **137 MB while the context starts**, before any run
+  is asked, and holds **68 MB** live after the collection that follows; the runs then peak at **107 of 149 MB**, 39 MB
+  over the baseline (each run's own peak is printed as `MEMORY step`). So no report grew, and the
+  startup figure is garbage promoted while the context starts, freed by the first full collection, not something a run
+  holds. The live baseline was 60 MB (24 October), 62 (2 November), 65 (4 November, the last pass, peak 132), 67 (the
+  first #137 dispatch and main at a6b408f) and 68 (now): 3 MB since the last pass, 1 MB of it since #137, against 27 MB
+  of headroom under the limit once the runs are judged alone. The startup peak and the baseline's largest classes are printed in every run of the job,
+  so a growing context shows there before it reaches the runs.
   The `core.ai` gateway (#220) is covered by
   `OpenAiCompatibleClientTest` (a local server: the request, retries and pauses with jitter and a minimum on a fake clock, the
   30 second budget, no redirect, no provider text in an exception, the usage of a bad 200), `CircuitBreakerTest` (states,

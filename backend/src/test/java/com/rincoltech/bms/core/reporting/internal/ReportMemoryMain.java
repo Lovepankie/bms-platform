@@ -62,6 +62,7 @@ public final class ReportMemoryMain {
             // double.
             com.rincoltech.bms.core.documents.internal.WatchedStorage.discard = true;
             // What the application itself holds once started, after a collection: the reports are measured against it.
+            System.out.println("MEMORY startup oldPeakMb=" + oldPeakMb());
             System.gc();
             long baseline = 0;
             for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {
@@ -71,6 +72,9 @@ public final class ReportMemoryMain {
                 }
             }
             System.out.println("MEMORY oldBaselineMb=" + baseline / 1024 / 1024);
+            histogram();
+            long startupPeak = oldPeakMb();
+            resetPeaks();
             TenantJobs jobs = ctx.getBean(TenantJobs.class);
             RunService runs = ctx.getBean(RunService.class);
             ReportRunner runner = ctx.getBean(ReportRunner.class);
@@ -139,11 +143,17 @@ public final class ReportMemoryMain {
                 askers.put(id, who);
                 tenantOf.put(id, asked);
             }
+            long runsPeak = 0;
             for (int i = 0; i < 100; i++) {
                 runner.tick();
                 if (!runner.awaitIdle(Duration.ofMinutes(5))) {
                     throw new IllegalStateException("a run did not finish");
                 }
+                // One run per tick at the staging limit, claimed in the order asked: the step's peak is that run's.
+                long step = oldPeakMb();
+                runsPeak = Math.max(runsPeak, step);
+                System.out.println("MEMORY step " + i + " oldPeakMb=" + step);
+                resetPeaks();
                 boolean open = false;
                 for (UUID id : ids) {
                     CurrentPrincipal.set(askers.get(id));
@@ -181,13 +191,41 @@ public final class ReportMemoryMain {
                     }
                 }
             }
+            System.out.println("MEMORY peaks startupOldPeakMb=" + startupPeak + " runsOldPeakMb=" + runsPeak);
+            // Issue #899: the judged peak is the runs', from the baseline collection on, as in ImportBigFileMain. The
+            // startup peak is garbage the context promotes while it starts (twice the live baseline); it is printed
+            // above and recorded in SDD 15.7, not counted against the reports.
+            oldPeak = Math.max(oldPeak / 1024 / 1024, runsPeak);
             System.out.println("MEMORY maxHeapMb=" + Runtime.getRuntime().maxMemory() / 1024 / 1024 + " peakHeapMb="
-                    + peak / 1024 / 1024 + " oldPeakMb=" + oldPeak / 1024 / 1024 + " oldMaxMb=" + oldMax / 1024 / 1024);
+                    + peak / 1024 / 1024 + " oldPeakMb=" + oldPeak + " oldMaxMb=" + oldMax / 1024 / 1024);
             System.out.println("MEMORY upload maxReadBytes="
                     + com.rincoltech.bms.core.documents.internal.WatchedStorage.MAX_READ.get() + " largestFileBytes="
                     + com.rincoltech.bms.core.documents.internal.WatchedStorage.LARGEST.get() + " totalBytes="
                     + com.rincoltech.bms.core.documents.internal.WatchedStorage.TOTAL.get());
         }
         System.exit(failures == 0 ? 0 : 1);
+    }
+
+    // JUSTIFICATION-A3: issue #899 asks the baseline and each run measured apart; these are the three probes it needs.
+    private static long oldPeakMb() {
+        return ManagementFactory.getMemoryPoolMXBeans().stream()
+                .filter(p -> p.getName().contains("Tenured") || p.getName().contains("Old"))
+                .mapToLong(p -> p.getPeakUsage().getUsed() / 1024 / 1024)
+                .sum();
+    }
+
+    private static void resetPeaks() {
+        ManagementFactory.getMemoryPoolMXBeans().forEach(MemoryPoolMXBean::resetPeakUsage);
+    }
+
+    /** The largest classes the started application holds (issue #899). */
+    private static void histogram() throws Exception {
+        Object histo = ManagementFactory.getPlatformMBeanServer()
+                .invoke(
+                        new javax.management.ObjectName("com.sun.management:type=DiagnosticCommand"),
+                        "gcClassHistogram",
+                        new Object[] {new String[0]},
+                        new String[] {String[].class.getName()});
+        histo.toString().lines().limit(25).forEach(l -> System.out.println("MEMORY histo " + l));
     }
 }

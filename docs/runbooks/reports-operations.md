@@ -56,7 +56,7 @@ pass before any change that makes a run hold more in memory.
 A PDF is laid out by the document renderer from the spool, after the snapshot has committed; the layout (not the spool) is what grows
 with `BMS_REPORTS_PDF_ROW_CAP`, because the whole table is held while pages are made. Measured on the 224 MB staging heap
 (`ReportMemoryIT`): with the cap at 500 the run, a sheet of 20,000 rows and the lending reports together keep the old generation at 118 to 124 of
-149 MB; with the cap at 3,000 the old generation fills (149 of 149 MB) though the run finishes. So staging keeps 500, and a host with
+149 MB (107 of 149 MB since #899, which measures the runs from the baseline collection on and not the context's startup; SDD 15.7); with the cap at 3,000 the old generation fills (149 of 149 MB) though the run finishes. So staging keeps 500, and a host with
 more heap may raise it; repeat the measurement with `mvn verify -Dit.test=ReportMemoryIT -Dreports.memory.pdf3000=true` before doing so on a small one.
 `-Dreports.memory.production=true` runs the production shape instead: two tenants asking at once for a PDF of 3,000 printed rows and a
 workbook of 20,000 rows, two runs at a time, on the production container's heap (1,075 MB, the default collector). A report takes at
