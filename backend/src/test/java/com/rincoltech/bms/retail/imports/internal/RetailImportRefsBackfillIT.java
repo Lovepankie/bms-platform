@@ -5,10 +5,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.core.ledger.LedgerPosting;
+import com.rincoltech.bms.core.ledger.LedgerPosting.EntryRequest;
+import com.rincoltech.bms.core.ledger.LedgerPosting.Line;
+import com.rincoltech.bms.kernel.Money;
+import com.rincoltech.bms.kernel.TenantContext;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -17,6 +23,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The expand step of issue #135 (chapter 6 section 6.9): references the {@code import-retail} command wrote in
@@ -32,6 +40,12 @@ class RetailImportRefsBackfillIT extends IntegrationTest {
 
     @Autowired
     TestRestTemplate http;
+
+    @Autowired
+    LedgerPosting ledger;
+
+    @Autowired
+    PlatformTransactionManager transactions;
 
     @Test
     void aReRunAfterTheMigrationRecognisesRowsTheOldCommandImported(@TempDir Path dir) throws IOException {
@@ -251,6 +265,70 @@ class RetailImportRefsBackfillIT extends IntegrationTest {
                         .list())
                 .as("TB-2 is left as the books hold it, TB-3 gets its balance")
                 .containsExactly("TB-1 0.000", "TB-2 2.000", "TB-3 3.000");
+    }
+
+    // JUSTIFICATION-A3: issue #876 (nice-to-have 5) asks this test of an old command's journal after the backfill.
+    /**
+     * Issue #876, nice-to-have 5: the opening journal of HQ the command posted before V145, registered in
+     * {@code retail_import_refs} alone ({@code opening}, the branch's code), is copied by the backfill; a run of the command
+     * after it finds HQ opened, reports "already posted" and posts no second journal.
+     */
+    @Test
+    void anOpeningJournalTheOldCommandPostedIsAlreadyPostedAfterTheBackfill(@TempDir Path dir) throws IOException {
+        TestDatabase.Fixture t = TestDatabase.tenant("retail-old-open", false, true);
+        new RetailTestSupport(http, t).product("TB-1", 100, 150);
+        UUID entry = oldCommandOpening(t, 500);
+        JdbcClient owner = TestDatabase.owner();
+        owner.sql("INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, target_id)"
+                        + " VALUES (?, 'opening', 'HQ', 'core.journal_entry', ?)")
+                .params(t.tenantId(), entry)
+                .update();
+
+        assertThat(owner.sql("SELECT bms_backfill_retail_import_refs(5000)")
+                        .query(Integer.class)
+                        .single())
+                .isGreaterThanOrEqualTo(1);
+        assertThat(owner.sql("SELECT source_key FROM import_refs WHERE tenant_id = ? AND target_id = ?")
+                        .params(t.tenantId(), entry)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("opening|inventory|legacy:branch:" + t.headOffice());
+
+        Files.writeString(dir.resolve("balances.jsonl"), """
+                {"branch": "HQ", "product_code": "TB-1", "qty": "7"}
+                """);
+        ImportReport report = importer.run(t.slug(), dir, false);
+
+        assertThat(report.failed()).as(report.render()).isFalse();
+        assertThat(report.render()).contains("already posted, not posted again");
+        assertThat(owner.sql("SELECT count(*) FROM journal_entries WHERE tenant_id = ? AND source_type = ?")
+                        .params(t.tenantId(), RetailV1Template.OPENING_TYPE)
+                        .query(Long.class)
+                        .single())
+                .as("no second opening journal")
+                .isEqualTo(1L);
+        assertThat(journalled(t)).isEqualTo(500L);
+    }
+
+    // JUSTIFICATION-A3: the test of issue #876 (nice-to-have 5) needs a journal as the old command posted it.
+    /** HQ's opening stock journal as the old command posted it: inventory against opening balance equity. */
+    private UUID oldCommandOpening(TestDatabase.Fixture t, long amountMinor) {
+        EntryRequest opening = new EntryRequest(
+                t.headOffice(),
+                LocalDate.of(2026, 9, 1),
+                "IMPORT-OPENING-HQ",
+                null,
+                "retail",
+                RetailV1Template.OPENING_TYPE,
+                UUID.randomUUID(),
+                null,
+                List.of(
+                        Line.debit(t.account("inventory"), Money.of(amountMinor, "UGX")),
+                        Line.credit(t.account("opening_balance_equity"), Money.of(amountMinor, "UGX"))));
+        return TenantContext.callAs(
+                t.tenantId(),
+                () -> new TransactionTemplate(transactions)
+                        .execute(s -> ledger.post(opening).entryId()));
     }
 
     /**

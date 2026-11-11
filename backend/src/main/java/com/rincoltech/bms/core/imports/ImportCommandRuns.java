@@ -33,7 +33,8 @@ public interface ImportCommandRuns {
      * business's import key, while a run of the command wrote a batch within its lease of 15 minutes, and while a run of
      * the import screens is committing (the unique index {@code import_runs_one_committing}, V127). A run of the command
      * left {@code committing} past its lease is one a killed process left behind: it becomes {@code cancelled} first,
-     * audited, and its committed batches stay. And, for a real run ({@code dryRun} false), 409 {@code imports_disabled} with the kill switch
+     * audited, and its committed batches stay; a commit of the import screens takes it over the same way (issue #876).
+     * And, for a real run ({@code dryRun} false), 409 {@code imports_disabled} with the kill switch
      * off; a dry run writes nothing, so the switch, which guards writes, does not stop it, as it does not stop the
      * framework's.
      */

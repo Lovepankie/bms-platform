@@ -136,6 +136,9 @@ class ImportRunService implements ImportRuns {
     /** The reconciliation the commit makes as it finishes (issue #134). */
     private final ReconciliationService reconciliations;
 
+    /** The command's runs, one of which a commit takes over once its lease expired (issue #876). */
+    private final CommandRunService commandRuns;
+
     /**
      * The application's build and commit: a dry run of another build no longer counts, and a run rehearsed on one build
      * neither starts nor resumes on another (reviews of #869). Null when the server knows neither; it then refuses both.
@@ -166,8 +169,10 @@ class ImportRunService implements ImportRuns {
             Branches branches,
             RefService refs,
             ObjectProvider<CommitSeams> seams,
-            ReconciliationService reconciliations) {
+            ReconciliationService reconciliations,
+            CommandRunService commandRuns) {
         this.reconciliations = reconciliations;
+        this.commandRuns = commandRuns;
         this.approvals = approvals;
         this.branches = branches;
         this.refs = refs;
@@ -833,6 +838,9 @@ class ImportRunService implements ImportRuns {
                             ? "The import's commit needs a request and a second person's approval first."
                             : "The import changed after its commit was approved; ask for the approval again.");
         }
+        // A run of the command a killed process left committing past its lease is taken over (issue #876); a live one
+        // keeps the business's one committing run, and this one is refused below.
+        commandRuns.takeOverExpired(runId);
         setStatus(runId, RunStates.COMMITTING);
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("status", RunStates.COMMITTING);

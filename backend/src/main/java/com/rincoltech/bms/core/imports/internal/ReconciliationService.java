@@ -565,10 +565,11 @@ class ReconciliationService implements ImportReconciliation {
         // The source: each row left out alone, with its own part, and the rows written netted together over the whole
         // run, as the forecast and the writer count them (Lead on the review of 4105c2a): an item counted in two
         // batches nets to one balance.
-        ImportForecast whole = template == null ? null : template.forecast(open, runId);
         Map<CheckId, BigDecimal> writtenParts = new LinkedHashMap<>();
-        // Each row's part is a fresh forecast of that row alone; what the template reads for one is read once (#880).
+        // Each row's part is a fresh forecast of that row alone; what the template reads for one is read once per run
+        // (#880), and the whole run's forecast is made from the same read (issue #876, nice-to-have 4).
         Supplier<ImportForecast> openParts = template == null ? null : template.forecasts(open, runId);
+        ImportForecast whole = openParts == null ? null : openParts.get();
         Supplier<ImportForecast> decidedParts =
                 template == null || sameDecision ? openParts : template.forecasts(actual, runId);
         for (BatchInfo b : batches) {

@@ -1054,9 +1054,7 @@ public class RetailImporter {
 
         /** True when the reference was imported before (or earlier in this file): the row is skipped. */
         boolean seen(String file, Row row, String ref, Set<String> inFile) {
-            if (!inFile.add(ref)) {
-                throw row.problem("duplicate source_ref " + ref);
-            }
+            RetailV1Template.refOnce(row, ref, inFile);
             return refs.seen(file, row, ref);
         }
 
@@ -1331,28 +1329,15 @@ public class RetailImporter {
         }
 
         private PurchaseRow parsePurchase(Row row) {
-            String ref = row.requiredText("source_ref", 100);
+            String ref = RetailV1Template.historyRef(row);
             String kind = row.oneOf("kind", List.of("purchase", "adjustment", "return"));
             Product product = product(row, row.text("product_code"));
             long cost = row.money("unit_cost_minor");
             Long sell = row.optionalMoney("unit_sell_minor");
+            // The quantities by the one rule the forecast predicts by (issue #876, review of 43a5867).
             Map<UUID, BigDecimal> qty = new TreeMap<>();
-            for (Map.Entry<String, BigDecimal> e :
-                    row.qtyByBranch("qty_by_branch").entrySet()) {
-                UUID branch = branch(row, "qty_by_branch", e.getKey());
-                BigDecimal q = e.getValue();
-                if (q.signum() == 0) {
-                    continue;
-                }
-                if (q.signum() < 0 && !kind.equals("adjustment")) {
-                    throw row.problem("a " + kind + " quantity must be positive, branch " + e.getKey());
-                }
-                if (qty.putIfAbsent(branch, q) != null) {
-                    throw row.problem("branch " + e.getKey() + " appears twice in qty_by_branch");
-                }
-            }
-            if (qty.isEmpty()) {
-                throw row.problem("no quantity in qty_by_branch");
+            for (RetailV1Template.Move m : RetailV1Template.historyMoves("purchases", row)) {
+                qty.put(branch(row, "qty_by_branch", m.branch()), m.qty());
             }
             Instant at = row.instant("purchased_on", zone);
             return new PurchaseRow(
@@ -1373,17 +1358,17 @@ public class RetailImporter {
             ImportReport.Counts c = report.file(file.name);
             Set<String> refs = new HashSet<>();
             each(file, row -> {
-                String ref = row.requiredText("source_ref", 100);
+                String ref = RetailV1Template.historyRef(row);
                 if (seen("sales", row, ref, refs)) {
                     c.existing++;
                     return;
                 }
                 UUID branch = branch(row, "branch", row.text("branch"));
                 Product product = product(row, row.text("product_code"));
-                BigDecimal qty = row.qty("qty");
-                if (qty.signum() <= 0) {
-                    throw row.problem("qty must be positive");
-                }
+                // What the sale takes off the branch, by the one rule the forecast predicts by (issue #876).
+                RetailV1Template.Move sold =
+                        RetailV1Template.historyMoves("sales", row).getFirst();
+                BigDecimal qty = sold.qty().negate();
                 long price = row.money("unit_price_minor");
                 long cost = row.money("unit_cost_minor");
                 String method = row.oneOf("payment_method", List.of("cash", "credit"));
@@ -1435,7 +1420,7 @@ public class RetailImporter {
             ImportReport.Counts c = report.file(file.name);
             Set<String> refs = new HashSet<>();
             each(file, row -> {
-                String ref = row.requiredText("source_ref", 100);
+                String ref = RetailV1Template.historyRef(row);
                 if (seen("usage", row, ref, refs)) {
                     c.existing++;
                     return;
@@ -1444,10 +1429,9 @@ public class RetailImporter {
                 Product product = product(row, row.text("product_code"));
                 String kind = row.oneOf("kind", List.of("used", "damaged"));
                 String reason = row.requiredText("reason", 300);
-                BigDecimal qty = row.qty("qty");
-                if (qty.signum() <= 0) {
-                    throw row.problem("qty must be positive");
-                }
+                RetailV1Template.Move used =
+                        RetailV1Template.historyMoves("usage", row).getFirst();
+                BigDecimal qty = used.qty().negate();
                 long cost = row.money("unit_cost_minor");
                 Instant at = row.instant("reported_at", zone);
                 UUID report = history.importUsage(
@@ -1986,9 +1970,10 @@ public class RetailImporter {
             // One opening journal per branch, ever (Lead's rule on the review of 4af7a39): the branches an import
             // already journalled, where a row that differs from the books is listed for a stock-take, never journalled.
             Set<String> opened = new HashSet<>(RetailV1Template.openedBranches(jdbc, null));
-            // The books' balance of each item an earlier import already wrote a legacy balance for: this run writes
-            // nothing for it, so its opening values the books, not the file (review of bf87e45, must-fix 1).
-            Map<String, Map<String, BigDecimal>> legacyHeld = new HashMap<>();
+            // The books' balance of each item this run leaves as the books hold it (an earlier import already wrote its
+            // legacy balance, or the books hold it at a branch already opened): this run writes nothing for it, so its
+            // opening values the books, not the file (review of bf87e45, must-fix 1, and issue #876).
+            Map<String, Map<String, BigDecimal>> kept = new HashMap<>();
             Set<String> covered = new HashSet<>();
             for (Balance b : rows) {
                 String key = b.branch() + "|" + b.product().id();
@@ -2003,8 +1988,7 @@ public class RetailImporter {
                     refs.matched(
                             file.name, b.row(), "retail.product", b.product().id());
                     c.existing++;
-                    legacyHeld
-                            .computeIfAbsent(b.branchCode(), k -> new HashMap<>())
+                    kept.computeIfAbsent(b.branchCode(), k -> new HashMap<>())
                             .put(b.product().code(), balance);
                     if (balance.compareTo(b.qty()) != 0) {
                         report.anomaly(
@@ -2035,6 +2019,8 @@ public class RetailImporter {
                     refs.matched(
                             file.name, b.row(), "retail.product", b.product().id());
                     c.existing++;
+                    kept.computeIfAbsent(b.branchCode(), k -> new HashMap<>())
+                            .put(b.product().code(), balance);
                     report.anomaly(
                             file.name,
                             b.row().line(),
@@ -2091,7 +2077,7 @@ public class RetailImporter {
                                     + " is kept");
                 }
             }
-            openingJournals(rows, importDate, opened, legacyHeld);
+            openingJournals(rows, importDate, opened, kept);
         }
 
         private List<Balance> parseBalances(ExportFile file) {
@@ -2126,10 +2112,7 @@ public class RetailImporter {
          * stock-take.
          */
         private void openingJournals(
-                List<Balance> rows,
-                LocalDate today,
-                Set<String> opened,
-                Map<String, Map<String, BigDecimal>> legacyHeld) {
+                List<Balance> rows, LocalDate today, Set<String> opened, Map<String, Map<String, BigDecimal>> kept) {
             Map<String, Map<String, BigDecimal>> byBranch = new TreeMap<>();
             Map<String, Long> costs = new HashMap<>();
             Map<String, UUID> ids = new HashMap<>();
@@ -2146,7 +2129,7 @@ public class RetailImporter {
             byBranch.forEach((code, items) -> {
                 UUID branch = ids.get(code);
                 RetailV1Template.BranchOpening opening = RetailV1Template.branchOpening(
-                        RetailV1Template.openingQuantities(items, legacyHeld.getOrDefault(code, Map.of())), costs::get);
+                        RetailV1Template.openingQuantities(items, kept.getOrDefault(code, Map.of())), costs::get);
                 checkpoint.stock(code, opening.qty(), opening.valueMinor());
                 boolean earlier = opened.contains(RetailV1Template.compare(code));
                 long amount = opening.journal(earlier);

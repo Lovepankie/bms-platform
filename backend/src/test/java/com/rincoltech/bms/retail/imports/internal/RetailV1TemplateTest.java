@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.imports.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.rincoltech.bms.core.imports.ImportForecast;
@@ -8,6 +9,7 @@ import com.rincoltech.bms.core.imports.ImportTemplate.EntitySet;
 import com.rincoltech.bms.core.imports.ImportTemplate.Field;
 import com.rincoltech.bms.core.imports.ImportTemplate.IssueCode;
 import com.rincoltech.bms.core.imports.ImportTemplate.RowFinding;
+import com.rincoltech.bms.kernel.CompactKeys;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -155,6 +157,118 @@ class RetailV1TemplateTest {
         assertThat(RetailV1Template.openingQuantities(rows, Map.of("TS-001", BigDecimal.ZERO)))
                 .containsEntry("TS-001", BigDecimal.ZERO)
                 .containsEntry("TS-009", new BigDecimal("-3"));
+    }
+
+    // JUSTIFICATION-A3: issue #876 asks a test of should-fix 1 and 2; these are three tests of the forecast.
+    /**
+     * Issue #876, should-fix 1 and 2: TS-001's legacy balance an earlier import wrote at HQ, which is not opened, and the
+     * books hold 0. This run restocks 3, sells 1 (the same sale twice, written once) and sends a balance of 5. The loader
+     * reads the books after the history, 2, so the opening values 2 and the run puts 2 on hand.
+     */
+    @Test
+    void theForecastValuesALegacyHeldItemAfterThisRunsHistoryAsTheLoaderReadsIt() {
+        Map<String, Map<String, RetailV1Template.Held>> books =
+                Map.of("HQ", Map.of("TS-001", new RetailV1Template.Held(BigDecimal.ZERO, true)));
+        ImportForecast f = new RetailV1Template.StockForecast(Map.of("TS-001", 100L), Set.of(), Set.of(), books);
+        f.batch(1);
+        f.row(
+                "purchases",
+                Map.of("source_ref", "P-2", "product_code", "TS-001", "kind", "purchase", "qty_by_branch", "HQ=3"));
+        f.batch(2);
+        Map<String, Object> sale =
+                Map.of("source_ref", "S-1", "branch", "HQ", "product_code", "TS-001", "qty", BigDecimal.ONE);
+        f.row("sales", sale);
+        f.row("sales", sale);
+        f.batch(3);
+        f.row("balances", Map.of("branch", "HQ", "product_code", "TS-001", "qty", new BigDecimal("5")));
+
+        assertThat(f.balances().journals()).containsExactly(new ImportForecast.Journal("HQ", "inventory", 200, 200));
+        assertThat(f.productStock()).singleElement().satisfies(p -> {
+            assertThat(p.product()).isEqualTo("TS-001");
+            assertThat(p.qty()).as("this run's history, not the file's 5").isEqualByComparingTo("2");
+        });
+    }
+
+    /**
+     * Issue #876: at a branch already opened the loader leaves an item the books hold as they hold it, so the run puts
+     * nothing on hand for it; a new item there takes its legacy balance. A sale other imports hold moves nothing.
+     */
+    @Test
+    void theForecastsStockPerItemIsWhatTheRunPutsOnHand() {
+        CompactKeys earlier = new CompactKeys();
+        earlier.putIfAbsent("sales|S-OLD", 0L);
+        ImportForecast f = new RetailV1Template.StockForecast(
+                Map.of("TS-002", 200L, "TS-003", 300L),
+                Set.of("HQ"),
+                Set.of(),
+                Map.of("HQ", Map.of("TS-002", new RetailV1Template.Held(new BigDecimal("2"), false))),
+                earlier);
+        f.batch(1);
+        f.row("sales", Map.of("source_ref", "S-OLD", "branch", "HQ", "product_code", "TS-002", "qty", BigDecimal.ONE));
+        f.batch(2);
+        f.row("balances", Map.of("branch", "HQ", "product_code", "TS-002", "qty", BigDecimal.ONE));
+        f.row("balances", Map.of("branch", "HQ", "product_code", "TS-003", "qty", new BigDecimal("3")));
+
+        assertThat(f.balances().journals()).as("HQ is opened").isEmpty();
+        assertThat(f.productStock())
+                .extracting(ImportForecast.ProductStock::product, p -> p.qty().stripTrailingZeros())
+                .containsExactly(tuple("TS-002", BigDecimal.ZERO), tuple("TS-003", new BigDecimal("3")));
+    }
+
+    /**
+     * Review of db86c31 on #908: at a closed branch the loader writes the legacy balance and posts no journal, so the
+     * forecast predicts no journal there and still counts the stock the run puts on hand, before and after balances().
+     */
+    @Test
+    void aClosedBranchTakesNoJournalButItsStockIsCounted() {
+        ImportForecast f =
+                new RetailV1Template.StockForecast(Map.of("TS-001", 100L), Set.of(), Set.of("KLA"), Map.of());
+        f.batch(1);
+        f.row("balances", Map.of("branch", "KLA", "product_code", "TS-001", "qty", new BigDecimal("4")));
+        f.batch(2);
+
+        assertThat(f.productStock())
+                .extracting(ImportForecast.ProductStock::branch, p -> p.qty().stripTrailingZeros())
+                .containsExactly(tuple("KLA", new BigDecimal("4")));
+        assertThat(f.balances().journals()).isEmpty();
+        assertThat(f.balances().stock()).containsExactly(new ImportForecast.Stock("KLA", new BigDecimal("4"), 400));
+    }
+
+    /** The stock a history row moves, read as the loader reads it; none for a row the loader refuses (issue #876). */
+    @Test
+    void aHistoryRowMovesTheStockTheLoaderWrites() {
+        assertThat(RetailV1Template.historyMoves("purchases", restock("adjustment", "hq=-2; KLA=0; ENT=1.5")))
+                .containsExactly(
+                        new RetailV1Template.Move("HQ", "ts-001", new BigDecimal("-2.000")),
+                        new RetailV1Template.Move("ENT", "ts-001", new BigDecimal("1.500")));
+        assertThatThrownBy(() -> RetailV1Template.historyMoves("purchases", restock("return", "HQ=-2")))
+                .isInstanceOf(ExportFile.RowProblem.class)
+                .hasMessage("a return quantity must be positive, branch HQ");
+        assertThatThrownBy(() -> RetailV1Template.historyMoves("purchases", restock("purchase", "HQ=1; hq=2")))
+                .hasMessage("branch hq appears twice in qty_by_branch");
+        assertThatThrownBy(() -> RetailV1Template.historyMoves("purchases", restock("purchase", "HQ=0")))
+                .hasMessage("no quantity in qty_by_branch");
+        assertThat(RetailV1Template.historyMoves(
+                        "usage", row(Map.of("branch", "HQ", "product_code", "TS-001", "qty", BigDecimal.TEN))))
+                .containsExactly(new RetailV1Template.Move("HQ", "TS-001", new BigDecimal("-10.000")));
+        assertThatThrownBy(() -> RetailV1Template.historyMoves(
+                        "sales", row(Map.of("branch", "HQ", "product_code", "TS-001", "qty", BigDecimal.ZERO))))
+                .hasMessage("qty must be positive");
+        Set<String> refs = new java.util.HashSet<>();
+        RetailV1Template.refOnce(restock("purchase", "HQ=1"), "P-1", refs);
+        assertThatThrownBy(() -> RetailV1Template.refOnce(restock("purchase", "HQ=1"), "P-1", refs))
+                .hasMessage("duplicate source_ref P-1");
+    }
+
+    /** A restock row of the fabricated item ts-001 as the validation types it, read as the loader reads it. */
+    private static ExportFile.Row restock(String kind, String qtyByBranch) {
+        return row(Map.of("source_ref", "P-1", "product_code", "ts-001", "kind", kind, "qty_by_branch", qtyByBranch));
+    }
+
+    private static ExportFile.Row row(Map<String, Object> values) {
+        return ExportFile.staged("rows.jsonl", List.of(Map.entry(1, values)))
+                .rows
+                .getFirst();
     }
 
     @Test

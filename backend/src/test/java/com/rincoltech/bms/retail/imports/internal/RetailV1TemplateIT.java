@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.imports.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.rincoltech.bms.IntegrationTest;
@@ -29,6 +30,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.TenantContext;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -439,6 +441,186 @@ class RetailV1TemplateIT extends IntegrationTest {
         assertThat(as(t, () -> runs.commitReport(run)).render())
                 .contains("differs from the opening")
                 .contains("correct it with a stock-take");
+    }
+
+    // JUSTIFICATION-A3: issue #876 asks a test of should-fix 1 and 2, of nice-to-have 3 and of 6; each is its own.
+    /**
+     * Issue #876, should-fix 1 and 2: the command writes TB-1's legacy balance to 0 (its 4 restocked are absent in the
+     * source) and journals nothing, so HQ is not opened. A screens run then restocks 3 more and sends a balance of 5. The
+     * loader reads the books after that restock, 3, so the opening values 3 x 100; the preview predicts it, the dry run
+     * matches, and the reconciliation finds the run's 3 on hand and ties.
+     */
+    @Test
+    void aLegacyHeldItemIsPreviewedAfterThisRunsHistoryAndTheReconciliationTies(@TempDir Path dir) throws IOException {
+        Path command = Files.createDirectories(dir.resolve("command"));
+        catalogue(command, "TB-1");
+        Files.writeString(command.resolve("purchases.jsonl"), restock("P-1", "TB-1", 4) + "\n");
+        Files.writeString(command.resolve("balances.jsonl"), balance("TB-1", 0) + "\n");
+        ImportReport first = importer.run(t.slug(), command, false);
+        assertThat(first.failed()).as(first.render()).isFalse();
+        assertThat(openingJournals()).as("nothing above zero, HQ not opened").isZero();
+
+        Path screens = Files.createDirectories(dir.resolve("screens"));
+        Files.writeString(screens.resolve("purchases.jsonl"), restock("P-2", "TB-1", 3) + "\n");
+        Files.writeString(screens.resolve("balances.jsonl"), balance("TB-1", 5) + "\n");
+        UUID run = reviewed(t, "retail-legacy-held", exportMapping(), screens, exportFiles());
+        committed(t, run);
+
+        assertThat(as(t, () -> runs.commitReport(run)).journals())
+                .extracting(CommitReport.Journal::branch, CommitReport.Journal::debitMinor)
+                .containsExactly(tuple("HQ", 3 * 100L));
+        ImportReconciliation.Report r = as(t, () -> reconciliation.latest(run)).orElseThrow();
+        assertThat(r.signable()).as(r.render()).isTrue();
+    }
+
+    /**
+     * Issue #876, nice-to-have 6: the opened-branch paths of the loader through the screens ({@code StagedRefs}). The
+     * command opens HQ (TB-1's legacy balance written to 0, TB-2 at 2). A screens run sends TB-1 at 1 (its legacy balance
+     * is already written), TB-2 at 1 (the books hold 2) and TB-3 at 3 (new at the branch). Each difference is listed, not
+     * journalled; each row is registered, the two matched ones by the item they matched; and the quantity checks tie.
+     */
+    @Test
+    void theOpenedBranchPathsThroughTheScreensRegisterEveryRowAndTheQuantitiesTie(@TempDir Path dir)
+            throws IOException {
+        Path command = Files.createDirectories(dir.resolve("command"));
+        catalogue(command, "TB-1", "TB-2", "TB-3");
+        Files.writeString(
+                command.resolve("purchases.jsonl"),
+                restock("P-1", "TB-1", 4) + "\n" + restock("P-2", "TB-2", 2) + "\n");
+        Files.writeString(command.resolve("balances.jsonl"), balance("TB-1", 0) + "\n" + balance("TB-2", 2) + "\n");
+        ImportReport first = importer.run(t.slug(), command, false);
+        assertThat(first.failed()).as(first.render()).isFalse();
+        assertThat(openingJournals()).as("HQ opened").isEqualTo(1L);
+
+        Path screens = Files.createDirectories(dir.resolve("screens"));
+        Files.writeString(
+                screens.resolve("balances.jsonl"),
+                balance("TB-1", 1) + "\n" + balance("TB-2", 1) + "\n" + balance("TB-3", 3) + "\n");
+        UUID run = reviewed(t, "retail-opened-paths", exportMapping(), screens, exportFiles());
+        committed(t, run);
+
+        assertThat(openingJournals()).as("no second journal").isEqualTo(1L);
+        assertThat(as(t, () -> runs.commitReport(run)).render())
+                .contains("legacy balance already written; the balance is 0.000 and the source says 1.000;"
+                        + " differs from the opening; correct it with a stock-take")
+                .contains("product TB-2: the source says 1.000 and the books hold 2.000;"
+                        + " differs from the opening; correct it with a stock-take")
+                .contains("product TB-3 is new at the branch");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT target_type FROM import_refs WHERE run_id = ? ORDER BY target_type")
+                        .param(run)
+                        .query(String.class)
+                        .list())
+                .as("every row registered: the two matched by their item, the new one by its legacy balance")
+                .containsExactly("retail.product", "retail.product", "retail.stock_movement");
+        ImportReconciliation.Report r = as(t, () -> reconciliation.latest(run)).orElseThrow();
+        List<ImportReconciliation.Check> checks = r.sections().stream()
+                .filter(s -> s.key().equals("counts") || s.key().equals("stock_quantity"))
+                .flatMap(s -> s.checks().stream())
+                .toList();
+        assertThat(checks).as(r.render()).isNotEmpty().allMatch(ImportReconciliation.Check::ties);
+        // The stock value check (review of 43a5867): the rows at the quantities the opening values (TB-1 at the books'
+        // 0, TB-2 at the books' 2, TB-3 at 3, each at 100) against the run's opening journal, of which an opened branch
+        // takes none (one per branch, ever). The difference is the signer's to see, so the run is not signable until
+        // the stock-take the report lists is done.
+        assertThat(r.sections())
+                .filteredOn(s -> s.key().equals("stock_value"))
+                .singleElement()
+                .satisfies(s -> assertThat(s.checks()).singleElement().satisfies(c -> {
+                    assertThat(c.key()).isEqualTo("HQ");
+                    assertThat(new BigDecimal(c.source())).isEqualByComparingTo("500");
+                    assertThat(new BigDecimal(c.system())).isEqualByComparingTo("0");
+                    assertThat(c.ties()).isFalse();
+                }));
+        assertThat(r.signable()).isFalse();
+    }
+
+    /**
+     * Issue #876, nice-to-have 3: a run of the command left committing is the business's one committing import. While it
+     * is within its lease it is live, and a screens commit is refused and takes nothing over; once the lease has expired
+     * (a killed process), the screens commit takes it over, audited, and commits.
+     */
+    @Test
+    void aScreensCommitTakesOverACommandRunWhoseLeaseExpiredNeverALiveOne(@TempDir Path dir) throws IOException {
+        catalogue(dir, "TB-1");
+        Files.writeString(dir.resolve("balances.jsonl"), balance("TB-1", 2) + "\n");
+        UUID run = reviewed(t, "retail-lease", exportMapping(), dir, exportFiles());
+        DryRun dry = as(t, () -> runs.dryRun(run, operator));
+        assertThat(dry.previewMatches()).as(dry.report().render()).isTrue();
+        as(t, () -> runs.transition(run, "ready"));
+        as(t, () -> runs.recordPreImportDump(run, "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, run, SHA);
+        UUID killed = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("INSERT INTO import_runs (id, tenant_id, created_by, status, committing_at, origin)"
+                        + " VALUES (?, ?, ?, 'committing', now(), 'import_retail')")
+                .params(killed, t.tenantId(), new UUID(0, 0))
+                .update();
+
+        assertThatThrownBy(() -> as(t, () -> runs.commit(run)))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo("IMPORT_IN_PROGRESS"));
+        assertThat(status(killed)).as("live: never taken over").isEqualTo("committing");
+        assertThat(status(run)).isEqualTo("ready");
+
+        TestDatabase.owner()
+                .sql("UPDATE import_runs SET updated_at = now() - interval '1 hour' WHERE id = ?")
+                .param(killed)
+                .update();
+
+        assertThat(as(t, () -> runs.commit(run))).isEqualTo(ImportRuns.CommitOutcome.COMMITTED);
+        assertThat(status(killed)).isEqualTo("cancelled");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT data -> 'after' ->> 'taken_over_by' FROM audit_log WHERE tenant_id = ?"
+                                + " AND entity_id = ? AND action = 'core.import_run.status_changed'")
+                        .params(t.tenantId(), killed)
+                        .query(String.class)
+                        .single())
+                .isEqualTo(run.toString());
+    }
+
+    /** A category, a unit and the fabricated items, each at a cost of 100 and a price of 150. */
+    private static void catalogue(Path dir, String... codes) throws IOException {
+        Files.writeString(dir.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(dir.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        StringBuilder products = new StringBuilder();
+        for (String code : codes) {
+            products.append("{\"code\": \"")
+                    .append(code)
+                    .append("\", \"description\": \"Test item ")
+                    .append(code)
+                    .append("\", \"category\": \"Test Category\", \"unit\": \"piece\", \"cost_minor\": 100,")
+                    .append(" \"sell_minor\": 150}\n");
+        }
+        Files.writeString(dir.resolve("products.jsonl"), products.toString());
+    }
+
+    /** A fabricated restock of the item at HQ, at its cost and price. */
+    private static String restock(String ref, String code, int qty) {
+        return "{\"source_ref\": \"" + ref + "\", \"product_code\": \"" + code + "\", \"kind\": \"purchase\","
+                + " \"unit_cost_minor\": 100, \"unit_sell_minor\": 150, \"qty_by_branch\": {\"HQ\": \"" + qty + "\"},"
+                + " \"purchased_on\": \"2026-09-01\"}";
+    }
+
+    private static String balance(String code, int qty) {
+        return "{\"branch\": \"HQ\", \"product_code\": \"" + code + "\", \"qty\": \"" + qty + "\"}";
+    }
+
+    /** The business's import opening stock journals, from the ledger. */
+    private long openingJournals() {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM journal_entries WHERE tenant_id = ? AND source_type = ?")
+                .params(t.tenantId(), RetailV1Template.OPENING_TYPE)
+                .query(Long.class)
+                .single();
+    }
+
+    private static String status(UUID run) {
+        return TestDatabase.owner()
+                .sql("SELECT status FROM import_runs WHERE id = ?")
+                .param(run)
+                .query(String.class)
+                .single();
     }
 
     /** The sample's first KLA balance row with its quantity changed to 1. */

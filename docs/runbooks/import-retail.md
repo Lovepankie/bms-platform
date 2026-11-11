@@ -37,8 +37,9 @@ framework's guards. What that means for the operator:
 - The command is refused, with nothing written, while an import of the screens is being committed
   for the business (`IMPORT_IN_PROGRESS`), and a real run is refused while the platform's import
   kill switch is off (`imports_disabled`). A dry run is not stopped by the switch.
-- A command killed part way leaves its run `committing`; the next run of the command cancels it
-  and, as before, skips what its committed files wrote.
+- A command killed part way leaves its run `committing`; once its lease of 15 minutes has passed,
+  the next run of the command, or a commit from the import screens, cancels it and, as before,
+  skips what its committed files wrote.
 - The next retail customer does not need an export script: their sheet is uploaded through the
   import screens with a mapping onto `retail_v1` (spec `docs/specs/customer-data-onboarding.md`
   Appendix A). The cash book files stay this command's.
@@ -298,7 +299,9 @@ The import is idempotent for the data it imports:
   balance, and each row that differs from the books is listed (`... differs from the opening;
   correct it with a stock-take`), never journalled. So a partial file, a corrected row or a full re-upload
   can never journal stock away; correct a difference with a stock-take in the app. The preview
-  applies the same rule, so it always agrees with the commit. Only the branches the balances name
+  applies the same rule, so it always agrees with the commit: it moves stock for the run's own
+  history rows as the commit writes them, so an item whose legacy balance an earlier import wrote
+  is valued at what the books hold after that history (issue #876). Only the branches the balances name
   are journalled: imported history at a branch with no balance rows is listed (`no balance row
   for branch ... its derived balance ... is kept`), so give a branch's balances whole the first
   time. At a branch that is inactive nothing is journalled; the report gives the amount for the
@@ -312,10 +315,10 @@ The import is idempotent for the data it imports:
 - Only one command runs per business. A second one started while the first is writing, or within
   15 minutes of its last file, is refused (`Another import is being written for this business`);
   wait and run it again. A run left `committing` for longer by a killed process is cancelled by
-  the next command, which recognises what the killed one wrote. Until then it holds the
-  business's one committing import, so a commit from the import screens is refused
-  (`IMPORT_IN_PROGRESS`): run the command again (a real run, not `--dry-run`, whose cancel is
-  rolled back with it) to clear it.
+  the next command, which recognises what the killed one wrote, or by the next commit from the
+  import screens, which takes it over (issue #876; audited `core.import_run.status_changed` with
+  `taken_over_by`). Within its lease it is live and is never taken over: a commit from the
+  screens is refused (`IMPORT_IN_PROGRESS`) until the lease has passed.
 - Cash book rows are keyed by `source_ref` per file (`savings`, `expenses`, `banking`,
   `withdrawals`, `advances`, `advance_payments`); a re-run takes no advance number and adds no row.
   A banked row keeps the expected amount it was computed with; a savings, expense or advance added

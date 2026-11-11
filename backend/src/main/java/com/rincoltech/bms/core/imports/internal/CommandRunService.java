@@ -82,14 +82,7 @@ class CommandRunService implements ImportCommandRuns {
         if (live) {
             throw importInProgress();
         }
-        List<UUID> left = jdbc.sql("""
-                        UPDATE import_runs SET status = 'cancelled', cancelled_at = now(), updated_at = now(),
-                               version = version + 1
-                         WHERE tenant_id = current_setting('app.tenant_id')::uuid AND origin = ?
-                           AND status = 'committing'
-                        RETURNING id
-                        """).param(IMPORT_RETAIL).query(UUID.class).list();
-        left.forEach(id -> record(id, "core.import_run.status_changed", "committing", "cancelled"));
+        cancelExpired(Map.of("status", "cancelled"));
         UUID run = UUID.randomUUID();
         try {
             jdbc.sql("""
@@ -203,6 +196,56 @@ class CommandRunService implements ImportCommandRuns {
             throw new IllegalStateException("the command's run is not committing");
         }
         record(runId, "core.import_run.status_changed", "committing", status);
+    }
+
+    // JUSTIFICATION-A3: issue #876 (nice-to-have 3): a screens commit takes over a command run whose lease expired.
+    /**
+     * Before a run of the import screens moves to {@code committing}, in its transaction (issue #876): a run of the command
+     * left {@code committing} past its lease ({@link #LEASE} after its last batch) was left by a killed process, so it
+     * becomes {@code cancelled}, audited with the run that took it over, and its committed batches stay, as the next
+     * command would have done. A claim is a lease: a command run that wrote within it is live and is never taken over (the
+     * screens run is then refused by the one committing run per business), and neither is one writing a batch now, which
+     * holds the business's import key: that is answered with 409 {@code IMPORT_IN_PROGRESS} at once.
+     */
+    void takeOverExpired(UUID screensRunId) {
+        requireTransaction();
+        boolean expired =
+                jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM import_runs
+                                        WHERE tenant_id = current_setting('app.tenant_id')::uuid AND origin = ?
+                                          AND status = 'committing' AND updated_at <= now() - CAST(? AS interval))
+                        """).params(IMPORT_RETAIL, LEASE).query(Boolean.class).single();
+        if (!expired) {
+            return;
+        }
+        if (!jdbc.sql("SELECT pg_try_advisory_xact_lock(" + ImportRunService.LOCK_KEY + ")")
+                .query(Boolean.class)
+                .single()) {
+            throw importInProgress();
+        }
+        cancelExpired(Map.of("status", "cancelled", "taken_over_by", screensRunId.toString()));
+    }
+
+    /** Cancels the command's runs left {@code committing} past their lease, each audited with {@code after}. */
+    private void cancelExpired(Map<String, Object> after) {
+        List<UUID> left =
+                jdbc.sql("""
+                        UPDATE import_runs SET status = 'cancelled', cancelled_at = now(), updated_at = now(),
+                               version = version + 1
+                         WHERE tenant_id = current_setting('app.tenant_id')::uuid AND origin = ?
+                           AND status = 'committing' AND updated_at <= now() - CAST(? AS interval)
+                        RETURNING id
+                        """).params(IMPORT_RETAIL, LEASE).query(UUID.class).list();
+        left.forEach(id -> audit.record(
+                new AuditLog.Entry(
+                        "core.import_run.status_changed",
+                        "import_run",
+                        id,
+                        null,
+                        Map.of("status", "committing"),
+                        after),
+                null,
+                "system"));
     }
 
     private void requireCommitting(UUID runId) {

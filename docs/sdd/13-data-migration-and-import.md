@@ -1445,6 +1445,14 @@ section 4.1 and Appendix A).**
   and each difference against the books is listed for a stock-take. The forecast applies the same rule through the same
   function (`RetailV1Template.BranchOpening.journal`, the opened branches read by `openedBranches`, leaving out the
   forecast run's own journal, `ImportTemplate.forecast(policy, runId)`), so the preview and the commit always agree.
+  The forecast reads the books as they were before its run (`heldBefore`: each position less the run's own movements)
+  and moves stock for the run's own history rows by `historyMoves`, the one function the loader also writes a history
+  row's movements by, so an item whose legacy balance an earlier import wrote is valued at the books' balance after this
+  run's history, which is when the loader reads it; a history row other imports hold moves nothing (`earlierHistory`).
+  `openingQuantities` gives each balance row the quantity it stands at once the run is written (the books' balance for
+  an item the run leaves as the books hold it: legacy-held, or held at a branch already opened), and both the opening
+  and the forecast's stock per item, the reconciliation's quantity check, read it: the stock per item is that quantity
+  less what the books held before, so an item the run leaves as the books hold it counts only its history (issue #876).
   Every row the loader writes is registered, the records it matched included, so the reconciliation finds each one in
   the books.
 - **The wrapper.** `import-retail --tenant --dir [--dry-run] [--first-live-date]` keeps its interface, its tolerant reading
@@ -1456,7 +1464,7 @@ section 4.1 and Appendix A).**
   not reconciled in the app; its dry run is one outer transaction rolled back, run included. A second command is refused
   with `IMPORT_IN_PROGRESS` while the first writes a batch (it holds the import key) or within its lease of 15 minutes
   after its last batch; a run of the command a killed process left `committing` past its lease is cancelled by the next
-  one. Each file of a real run is its own transaction.
+  one, or taken over by the next commit of the import screens (issue #876); a live one is never taken over. Each file of a real run is its own transaction.
 - **`retail_import_refs` into `import_refs`, expand and contract (chapter 6 section 6.9).** V145 copies every reference of
   the old table into `import_refs` under the key a JSON Lines upload of the export derives (`sales.jsonl|-|ref:SAL-00011`)
   with the marker `#by-key` (`ImportRefs.BY_KEY`): the command never hashed a row, so such a key is the same row whatever
