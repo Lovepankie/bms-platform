@@ -1468,8 +1468,10 @@ expand only:
   `import_rows.raw` `{}`, `normalised` NULL and `source_ref` hashed; its
   `import_issues.original_value` and `suggested_value` NULL and `message` hashed; its batches' `sheet_name` and
   `failure_reason` hashed; its resolutions' `before_value`, `after_value`, `row_key` and `note` hashed; its sign-off's
-  `signed_name` hashed; the `decision_note` and `execution_error` of the run's `import_commit` approval request hashed
-  (SHA-256 with a salt kept nowhere; one rule, every free-text column, listed in the V147 header and ADR-027). Refuses a run already purged or committing, and one whose batches still name a stored file (the
+  `signed_name` hashed; the `decision_note` and `execution_error` of every approval request whose subject is the run,
+  whatever its action type, hashed, with the `payload` of each but `import_commit`'s, and a pending one cancelled (V150,
+  #887; V147 reached the `import_commit` request only)
+  (SHA-256 with a salt kept nowhere; one rule, every free-text column, listed in the V147 and V150 headers and ADR-027). Refuses a run already purged or committing, and one whose batches still name a stored file (the
   application deletes them first). Returns the counts.
 - **`import_runs_purged_by_purge`** (V147, #139): a `BEFORE INSERT OR UPDATE OF status` trigger on `import_runs`; a run
   becomes `purged` only inside a definer function called by another role's session with `bms.purging_import_run` naming it
@@ -1516,6 +1518,12 @@ Added by `V149__import_view_raw.sql` (issue #141, spec section 6.3, chapter 13 s
 permission `core.imports.view_raw` (not money moving), granted to `tenant_admin` alone, which the raw row of an issue on the
 review screen needs (chapter 7 section 7.11.9); nothing else changes. The import screens need no other schema: they read and
 write through the tables of V127 to V148.
+
+Changed by `V150__import_purge_any_approval.sql` (issue #887, follow-ups of the review of #886), expand only:
+`import_purge_run` replaced by its own body with its approval statement widened: the purge cancels the run's pending
+approval requests, and hashes `decision_note` and `execution_error` of every approval request whose subject is the run,
+whatever its action type, and the `payload` of each but `import_commit`'s; it returns `approvals_cancelled` with its
+counts. No table, column, index or grant changes. Its header names every column the purge keeps readable, with its reason.
 
 ## 6.6 General ledger (RLS)
 

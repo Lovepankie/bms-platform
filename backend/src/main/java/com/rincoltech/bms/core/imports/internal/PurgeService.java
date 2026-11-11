@@ -342,6 +342,8 @@ class PurgeService implements ImportPurges {
         after.put("rows", counts.get("rows"));
         after.put("issues", counts.get("issues"));
         after.put("resolutions", counts.get("resolutions"));
+        // The run's approval requests still pending, cancelled by the purge (V150, #887).
+        after.put("approvals_cancelled", counts.get("approvals_cancelled"));
         after.put("dump_confirmed", plan.dumpConfirmed());
         after.put("certificate_sha256", certificate.sha256());
         after.put("warned", !plan.unwarned());

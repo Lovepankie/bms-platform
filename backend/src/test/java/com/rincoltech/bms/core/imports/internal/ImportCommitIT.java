@@ -10,6 +10,8 @@ import com.rincoltech.bms.core.imports.BatchWriter;
 import com.rincoltech.bms.core.imports.CommitApproval;
 import com.rincoltech.bms.core.imports.CommitReport;
 import com.rincoltech.bms.core.imports.ImportMappings;
+import com.rincoltech.bms.core.imports.ImportPurges;
+import com.rincoltech.bms.core.imports.ImportPurges.Purge;
 import com.rincoltech.bms.core.imports.ImportRefs;
 import com.rincoltech.bms.core.imports.ImportRuns;
 import com.rincoltech.bms.core.imports.ImportRuns.CommitOutcome;
@@ -688,6 +690,15 @@ class ImportCommitIT extends IntegrationTest {
                                 Policy.RECEIVABLE,
                                 new PolicyDecision(Policy.TREAT_AS_SETTLED, DAY, "", operator, null, null))),
                 "policy_confirmation_required");
+        // No confirmation at all is the same refusal, never a NullPointerException (review of #886, issue #887).
+        assertCode(
+                () -> as(
+                        t,
+                        () -> runs.recordPolicy(
+                                run,
+                                Policy.RECEIVABLE,
+                                new PolicyDecision(Policy.TREAT_AS_SETTLED, DAY, null, operator, null, null))),
+                "policy_confirmation_required");
         // Defer without the exception, or with an id that is no platform operator's.
         assertCode(
                 () -> as(
@@ -723,6 +734,60 @@ class ImportCommitIT extends IntegrationTest {
     // ---------------------------------------------------------------------------------------------
     // The refusals (acceptance criterion 4).
     // ---------------------------------------------------------------------------------------------
+
+    @Autowired
+    ImportPurges purges;
+
+    /** The application's notice to the checker after the file count (ImportRunService.requestCommit), word for word. */
+    static final String NOTICE_TAIL = " checked files of customer data into the business's records and opening"
+            + " balances. It cannot be undone except by restoring the dump taken before it.";
+
+    // JUSTIFICATION-A3: the Lead's ruling on the review of #907 asks for this case through the real services.
+    /**
+     * Lead on the review of #907: an import_commit request made by the real maker's request and still pending when its
+     * run is purged is cancelled in the purge's transaction (V150), and the checker's decision after it is refused, so
+     * no note is ever typed on a purged run. Its payload, the one kept readable, holds no value of the run.
+     */
+    @Test
+    void aPendingCommitRequestIsCancelledByThePurgeAndCannotBeDecidedAfter() {
+        UUID run = fullRun(t);
+        FixtureShopTemplate.SCRIPT = writer(t);
+        as(t, () -> runs.recordPolicy(run, Policy.RECEIVABLE, decision(Policy.TREAT_AS_SETTLED)));
+        as(t, () -> runs.dryRun(run, operator));
+        as(t, () -> runs.transition(run, "ready"));
+        as(t, () -> runs.recordPreImportDump(run, "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.verifyDump(t, runs, run, SHA);
+        UUID request = CommitApproval.request(t, runs, run, UUID.randomUUID());
+        assertThat(count("SELECT count(*) FROM approval_requests WHERE id = ? AND status = 'pending'", request))
+                .isEqualTo(1);
+        // Signed off as the owner, standing in for the commit and the sign-off, so the operator may purge it.
+        TestDatabase.owner()
+                .sql("UPDATE import_runs SET status = 'signed_off', signed_off_at = now() WHERE id = ?")
+                .param(run)
+                .update();
+        String operatorAt = Api.email("purge-operator");
+        String witnessAt = Api.email("purge-witness");
+        Api.platformUser(operatorAt);
+        Api.platformUser(witnessAt);
+        Purge purge = new Purge(operatorAt, witnessAt, "pre-import-fabricated.dump", SHA);
+        as(t, () -> purges.purge(run, purge));
+
+        // The payload the purge keeps readable is proven value-free (review of #907, round 2): exactly the run's id,
+        // the file count as a number and the application's fixed notice, nothing else.
+        String cancelled = "SELECT count(*) FROM approval_requests WHERE id = ? AND status = 'cancelled'"
+                + " AND decision_note IS NULL AND execution_error IS NULL"
+                + " AND (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(payload) k)"
+                + " = ARRAY['batches', 'checker_notice', 'run_id']"
+                + " AND jsonb_typeof(payload -> 'batches') = 'number' AND payload ->> 'run_id' = ?"
+                + " AND payload ->> 'checker_notice' = 'This writes ' || (payload ->> 'batches') || ?";
+        assertThat(count(cancelled, request, run.toString(), NOTICE_TAIL)).isEqualTo(1);
+        ResponseEntity<JsonNode> late = CommitApproval.approve(http, t, request, UUID.randomUUID());
+        assertThat(late.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(late.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
+        assertThat(count(cancelled, request, run.toString(), NOTICE_TAIL))
+                .as("still cancelled, with no note")
+                .isEqualTo(1);
+    }
 
     // JUSTIFICATION-A3: one test walks every refusal of acceptance criterion 4 on one run, as an operator meets them.
     @Test

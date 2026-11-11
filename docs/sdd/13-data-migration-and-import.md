@@ -1638,13 +1638,15 @@ section 4.1; coordinated with #110, which builds no second framework).**
   One rule, no case by case (Lead on #886): every free-text column on the run's tables is hashed or cleared, and only
   codes, counts, hashes, statuses, ids and timestamps stay in clear. Besides the above, that is the trading override's
   reason and each policy decision's confirmation reference (`import_runs.allow_trading_reason` and the `confirmation` of
-  each entry of `import_runs.policy`), and the checker's note and any execution error on the run's `import_commit`
-  request (`approval_requests.decision_note` and `execution_error`). Their audit rows, never purged, record only that
+  each entry of `import_runs.policy`), and the checker's note and any execution error on every approval request whose
+  subject is the run, whatever its action type (`approval_requests.decision_note` and `execution_error`; `import_commit`
+  until V150 widened it, issue #887), with the payload of every such request but `import_commit`'s; a request of the run
+  still pending is cancelled by the purge, so no note is typed on it afterwards. Their audit rows, never purged, record only that
   the text was given and its length (`core.import_run.trading_override_set`, `core.import_run.policy_recorded`), never
   an unsalted hash a guess of every phone number would undo; an approval's decision is audited without its note. A run
   has no notes and no halt or cancel reason (V127). `ImportPurgeIT` names every text column of the run's tables and its
   request as hashed, kept or codes only, so a new column fails CI until it is classed. The columns kept readable,
-  each with its one reason, are listed in the V147 header and the ADR-027 note of 9 November: the file names, sizes and
+  each with its one reason, are listed in the V150 header (checked by `ImportPurgeIT`) and the ADR-027 note of 9 November: the file names, sizes and
   hashes and the dump's name and hash (the certificate names them), the sheets' column names, `import_refs`, and the
   reports and certificate made by the application.
 - **The way past the guards** of a committed batch (Lead ruling on #867): the purge is one definer function,

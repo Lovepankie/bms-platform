@@ -94,13 +94,20 @@ public final class TestFiles {
     /** Public since #136: the lending template's golden test builds its workbook here too. */
     public static byte[] xlsx(List<String> header, List<List<Object>> rows) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeXlsx(out, header, rows.iterator(), true);
+        writeXlsx(out, "Items", header, rows.iterator(), true);
+        return out.toByteArray();
+    }
+
+    /** An XLSX workbook in memory with one tab only, named {@code sheet} (issue #887: a customer's tab name). */
+    static byte[] xlsx(String sheet, List<String> header, List<List<Object>> rows) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writeXlsx(out, sheet, header, rows.iterator(), false);
         return out.toByteArray();
     }
 
     static void writeXlsx(Path file, List<String> header, Iterator<List<Object>> rows) {
         try (OutputStream out = Files.newOutputStream(file)) {
-            writeXlsx(out, header, rows, false);
+            writeXlsx(out, "Items", header, rows, false);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -110,8 +117,10 @@ public final class TestFiles {
      * Cells: a String is a shared string, a Number a number, a LocalDate a date serial in the style {@code dd/mm/yyyy}, a
      * Boolean a boolean, {@code null} no cell.
      */
-    static void writeXlsx(OutputStream target, List<String> header, Iterator<List<Object>> rows, boolean hiddenNotes) {
+    static void writeXlsx(
+            OutputStream target, String sheet, List<String> header, Iterator<List<Object>> rows, boolean hiddenNotes) {
         Map<String, Integer> shared = new LinkedHashMap<>();
+        String visible = "<sheet name=\"" + escape(sheet) + "\" sheetId=\"1\" r:id=\"rId1\"/>";
         try (ZipOutputStream zip = new ZipOutputStream(target)) {
             put(zip, "[Content_Types].xml", """
                     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -125,7 +134,7 @@ public final class TestFiles {
                               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
                     <workbookPr/><sheets>
                     """ + (hiddenNotes ? "<sheet name=\"Notes\" sheetId=\"2\" state=\"hidden\" r:id=\"rId2\"/>" : "")
-                            + "<sheet name=\"Items\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+                            + visible + "</sheets></workbook>");
             put(zip, "xl/_rels/workbook.xml.rels", """
                     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                     <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
