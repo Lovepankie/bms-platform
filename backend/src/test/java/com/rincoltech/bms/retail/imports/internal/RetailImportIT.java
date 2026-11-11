@@ -6,14 +6,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import com.rincoltech.bms.retail.catalogue.CatalogueHistory;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -69,6 +73,15 @@ class RetailImportIT extends IntegrationTest {
 
     @Autowired
     BusinessClock clock;
+
+    @Autowired
+    CatalogueHistory catalogue;
+
+    @Autowired
+    TenantJobs tenants;
+
+    @Autowired
+    TransactionTemplate transactions;
 
     TestDatabase.Fixture t;
     TestDatabase.Fixture other;
@@ -562,5 +575,129 @@ class RetailImportIT extends IntegrationTest {
                 .params(t.tenantId(), code)
                 .query(UUID.class)
                 .single();
+    }
+
+    // JUSTIFICATION-A3: issue #905 asks a test for each rule of the restock price chain; these are they.
+    /**
+     * Issue #905, item 1: a restock refused as read (a negative quantity) or as a second row of one {@code source_ref} is
+     * never the restock before another, so {@code R-03}'s change is from {@code R-01}, as if the refused rows were absent.
+     */
+    @Test
+    void aRefusedRestockIsNeverThePredecessorOfAnother(@TempDir Path dir) throws IOException {
+        ImportReport report = importChain(dir, 150, """
+                {"source_ref": "R-01", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 100, "unit_sell_minor": 150, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-01"}
+                {"source_ref": "R-02", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 300, "unit_sell_minor": 450, "qty_by_branch": {"HQ": "-1"}, "purchased_on": "2026-07-02"}
+                {"source_ref": "R-01", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 999, "unit_sell_minor": 999, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-02"}
+                {"source_ref": "R-03", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 200, "unit_sell_minor": 300, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-03"}
+                """);
+
+        assertThat(report.counts("purchases.jsonl")).as(report.render()).containsExactly(4, 2, 0, 2);
+        assertThat(importChanges(t)).containsExactly("Imported restock R-03|100|200|150|300");
+    }
+
+    /**
+     * Issue #905, item 2: two restocks in a row without a sell price keep the last one known ({@code R-01}'s 900), not the
+     * item's 150, in one run and split over two alike.
+     */
+    @Test
+    void aRestockWithoutASellPriceKeepsTheLastOneKnownHoweverFarBack(@TempDir Path dir) throws IOException {
+        String first = """
+                {"source_ref": "R-01", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 100, "unit_sell_minor": 900, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-01"}
+                {"source_ref": "R-02", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 100, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-02"}
+                """;
+        String second = """
+                {"source_ref": "R-03", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 200, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-03"}
+                """;
+        importChain(dir, 150, first + second);
+        importChain(dir, 150, first, other);
+        importChain(dir, 150, second, other);
+
+        assertThat(importChanges(t)).containsExactly("Imported restock R-03|100|200|900|900");
+        assertThat(importChanges(other)).isEqualTo(importChanges(t));
+    }
+
+    /**
+     * Issue #905, item 3: the sell price a chain without one starts from is the item's in the books, which a later
+     * {@code products.jsonl} never moves (#73). A run between the halves whose file gives another sell price is reported
+     * and changes nothing, so the split records what one run of the first file records.
+     */
+    @Test
+    void aProductsFileWithAnotherSellBetweenTheHalvesLeavesTheChainAsOneRun(@TempDir Path dir) throws IOException {
+        String first = """
+                {"source_ref": "R-01", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 100, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-01"}
+                """;
+        String second = """
+                {"source_ref": "R-02", "product_code": "TW-1", "kind": "purchase", "unit_cost_minor": 200, "qty_by_branch": {"HQ": "1"}, "purchased_on": "2026-07-02"}
+                """;
+        importChain(dir, 150, first + second);
+        importChain(dir, 150, first, other);
+        ImportReport between = importChain(dir, 990, second, other);
+
+        assertThat(between.anomalies())
+                .anyMatch(a -> a.startsWith(
+                        "products.jsonl:1: product TW-1 existed with other prices; its prices were left unchanged"));
+        assertThat(importChanges(t)).containsExactly("Imported restock R-02|100|200|150|150");
+        assertThat(importChanges(other)).isEqualTo(importChanges(t));
+    }
+
+    /**
+     * Issue #905, item 5: of two {@code import} rows naming one purchase at one moment, the one taken is chosen by its
+     * prices, never by its random id. The importer writes one per purchase; the two here are inserted to pin the order.
+     */
+    @Test
+    void theRecordedChangeOfAPurchaseIsChosenByAStableKey(@TempDir Path dir) throws IOException {
+        importChain(dir, 150, "");
+        UUID product = owner.sql("SELECT id FROM retail_products WHERE tenant_id = ? AND code = 'TW-1'")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single();
+        UUID purchase = UUID.randomUUID();
+        // The higher change gets the lowest id, so an order by id would take it.
+        for (Object[] row : List.of(
+                new Object[] {"00000000-0000-0000-0000-000000000001", 300L},
+                new Object[] {"ffffffff-ffff-ffff-ffff-ffffffffffff", 200L})) {
+            owner.sql("""
+                            INSERT INTO retail_price_history (id, tenant_id, created_at, product_id, source, source_id,
+                                old_cost_minor, new_cost_minor, old_sell_minor, new_sell_minor, currency, reason)
+                            SELECT ?::uuid, tenant_id, TIMESTAMPTZ '2026-07-02 00:00:00+03', product_id, 'import', ?, 100,
+                                   ?, 150, 150, currency, 'Fabricated change'
+                              FROM retail_price_history WHERE tenant_id = ? AND product_id = ? AND source = 'initial'
+                            """)
+                    .params(row[0], purchase, row[1], t.tenantId(), product)
+                    .update();
+        }
+
+        Map<UUID, CatalogueHistory.ImportedChange> recorded = tenants.callAsTenant(
+                t.slug(), "retail", () -> transactions.execute(s -> catalogue.importedChanges(List.of(product))));
+
+        assertThat(recorded)
+                .containsExactly(Map.entry(purchase, new CatalogueHistory.ImportedChange(100, 200, 150, 150)));
+    }
+
+    /** The command run on item {@code TW-1} (cost 100, this sell price) and these restocks, for {@link #t}. */
+    private ImportReport importChain(Path dir, long sell, String purchases) throws IOException {
+        return importChain(dir, sell, purchases, t);
+    }
+
+    private ImportReport importChain(Path dir, long sell, String purchases, TestDatabase.Fixture f) throws IOException {
+        Files.writeString(dir.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(dir.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        Files.writeString(
+                dir.resolve("products.jsonl"),
+                "{\"code\": \"TW-1\", \"description\": \"Test kettle\", \"category\": \"Test Category\", \"unit\":"
+                        + " \"piece\", \"cost_minor\": 100, \"sell_minor\": " + sell + "}\n");
+        Files.writeString(dir.resolve("purchases.jsonl"), purchases);
+        ImportReport report = importer.run(f.slug(), dir, false);
+        assertThat(report.failed()).as(report.render()).isFalse();
+        return report;
+    }
+
+    /** Every {@code import} price change of the business: its reason, then the costs and sell prices from and to. */
+    private List<String> importChanges(TestDatabase.Fixture f) {
+        return owner.sql("""
+                        SELECT reason || '|' || old_cost_minor || '|' || new_cost_minor || '|' || old_sell_minor || '|'
+                               || new_sell_minor
+                          FROM retail_price_history WHERE tenant_id = ? AND source = 'import' ORDER BY 1
+                        """).param(f.tenantId()).query(String.class).list();
     }
 }

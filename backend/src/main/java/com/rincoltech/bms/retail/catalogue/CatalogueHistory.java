@@ -75,7 +75,9 @@ public interface CatalogueHistory {
     /**
      * Issue #881: the {@code import} history rows of these products that name a historical purchase
      * ({@link #importPriceChange}), by that purchase, in one query; a purchase without one is absent. The import compares
-     * one with the change a restock it adds just before that purchase calls for, since history is never rewritten.
+     * one with the change a restock it adds just before that purchase calls for, since history is never rewritten. Were a
+     * purchase to carry two, the earliest is taken, and of two at one moment the one first by old cost, new cost, old
+     * sell and new sell in turn, never a random id (#905).
      */
     Map<UUID, ImportedChange> importedChanges(Collection<UUID> productIds);
 

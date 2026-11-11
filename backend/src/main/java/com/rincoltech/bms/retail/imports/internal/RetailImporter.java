@@ -229,14 +229,12 @@ public class RetailImporter {
     static final String IMPORTED = "Imported ";
 
     /**
-     * Restocks of an item in time order (issue #881): by date, then by {@code source_ref} as UTF-8 bytes, which the books
-     * hold as well as the batch, so every split of the history over runs orders them as one run does.
+     * Restocks of an item in time order (issue #881): by date, then by {@code source_ref} in {@link #refOrder} (issue
+     * #905: PUR-9 before PUR-10, as an export lists them), which the books hold as well as the batch, so every split of
+     * the history over runs orders them as one run does.
      */
-    static final Comparator<Run.Restock> IN_TIME = Comparator.comparing(Run.Restock::at)
-            .thenComparing(
-                    Run.Restock::ref,
-                    (a, b) -> Arrays.compareUnsigned(
-                            a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
+    static final Comparator<Run.Restock> IN_TIME =
+            Comparator.comparing(Run.Restock::at).thenComparing(Run.Restock::ref, RetailImporter::refOrder);
 
     private final TenantJobs tenants;
     private final TransactionTemplate transactions;
@@ -648,6 +646,50 @@ public class RetailImporter {
             }
         }
         return a.compareTo(b);
+    }
+
+    // JUSTIFICATION-A3: issue #905 orders same-day restocks by a total natural order; advances keep naturalOrder.
+    /**
+     * Restock refs in natural order (issue #905, PUR-9 before PUR-10): character by character, a run of digits against a
+     * run of digits by its value, and refs equal so ({@code PUR-09}, {@code PUR-9}) by their UTF-8 bytes. A total order,
+     * so a sort by it is the same whatever order the rows come in. Characters compare as UTF-16 units and the final tie
+     * as UTF-8 bytes: each is a total order, so together they are one; keep both. Advances keep {@link #naturalOrder}.
+     */
+    static int refOrder(String a, String b) {
+        int i = 0;
+        int j = 0;
+        while (i < a.length() && j < b.length()) {
+            char x = a.charAt(i);
+            char y = b.charAt(j);
+            if (digit(x) && digit(y)) {
+                int from = i;
+                int to = j;
+                while (i < a.length() && digit(a.charAt(i))) {
+                    i++;
+                }
+                while (j < b.length() && digit(b.charAt(j))) {
+                    j++;
+                }
+                int byValue = new java.math.BigInteger(a.substring(from, i))
+                        .compareTo(new java.math.BigInteger(b.substring(to, j)));
+                if (byValue != 0) {
+                    return byValue;
+                }
+            } else if (x != y) {
+                return Character.compare(x, y);
+            } else {
+                i++;
+                j++;
+            }
+        }
+        int byLength = Integer.compare(a.length() - i, b.length() - j);
+        return byLength != 0
+                ? byLength
+                : Arrays.compareUnsigned(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static boolean digit(char c) {
+        return c >= '0' && c <= '9';
     }
 
     /** The state of one run: lookups refreshed at the start of each file's transaction. */
@@ -1096,6 +1138,9 @@ public class RetailImporter {
                     held.put(r, p);
                 }
             }
+            // Only rows that will be written enter the chain (issue #905): a row refused as read (parsePurchase) or
+            // by seen is never a predecessor. Nothing below refuses a single row: a failure while writing
+            // rolls the whole batch back, so no restock of the batch stays in the books, phantom predecessor or not.
             Neighbours neighbours = neighbours(rows.stream()
                     .filter(r -> r.kind().equals("purchase") && Boolean.FALSE.equals(held.get(r)))
                     .toList());
@@ -1140,7 +1185,9 @@ public class RetailImporter {
                     PriceStep step = before == null
                             ? null
                             : PriceStep.between(
-                                    before, Restock.of(r), r.product().sellMinor());
+                                    before,
+                                    neighbours.known().get(r),
+                                    r.product().sellMinor());
                     if (step != null) {
                         catalogue.importPriceChange(
                                 r.product().id(),
@@ -1181,7 +1228,12 @@ public class RetailImporter {
                 remember("purchases", r.row(), r.ref(), targetType, target, r.user());
                 Restock next = neighbours.after().get(r);
                 if (next != null) {
-                    laterRestock(file.name, r, next, neighbours.recorded().get(next.purchase()));
+                    laterRestock(
+                            file.name,
+                            r,
+                            neighbours.known().get(r),
+                            next,
+                            neighbours.recorded().get(next.purchase()));
                 }
                 c.written++;
             }
@@ -1211,7 +1263,8 @@ public class RetailImporter {
 
         /**
          * The price change from one restock to the next (data dictionary section 3): a restock without a sell price keeps
-         * the one before it, and the first one the item's; null when neither price changed.
+         * the last one before it that has one ({@link #neighbours} carries it along the item's restocks, issue #905), and
+         * when none before it has one, {@code itemSell}, the item's sell price in the books; null when neither changed.
          */
         record PriceStep(long oldCost, long newCost, long oldSell, long newSell) {
 
@@ -1232,11 +1285,13 @@ public class RetailImporter {
         }
 
         /**
-         * For each new restock row: the restock just before it ({@code before}), of this batch or the books; the restock
-         * of the books just after it when no new row comes between ({@code after}); and the {@code import} history row
-         * each such later restock already carries ({@code recorded}, by purchase).
+         * For each new restock row: the row itself ({@code known}), the restock just before it ({@code before}), of this
+         * batch or the books, and the restock of the books just after it when no new row comes between ({@code after}),
+         * each with the last sell price known at it (issue #905); and the {@code import} history row each such later
+         * restock already carries ({@code recorded}, by purchase).
          */
         record Neighbours(
+                Map<PurchaseRow, Restock> known,
                 Map<PurchaseRow, Restock> before,
                 Map<PurchaseRow, Restock> after,
                 Map<UUID, CatalogueHistory.ImportedChange> recorded) {}
@@ -1252,6 +1307,7 @@ public class RetailImporter {
             for (PurchaseRow r : fresh) {
                 byItem.computeIfAbsent(r.product().id(), k -> new ArrayList<>()).add(r);
             }
+            Map<PurchaseRow, Restock> known = new HashMap<>();
             Map<PurchaseRow, Restock> before = new HashMap<>();
             Map<PurchaseRow, Restock> after = new HashMap<>();
             Map<UUID, CatalogueHistory.ImportedChange> recorded = new HashMap<>();
@@ -1273,13 +1329,26 @@ public class RetailImporter {
                         restocks.add(s);
                     }
                     restocks.sort(IN_TIME);
+                    // Issue #905: a restock without a sell price carries the last one before it, however far back.
+                    List<Restock> carried = new ArrayList<>(restocks.size());
+                    Long sell = null;
+                    for (Restock s : restocks) {
+                        sell = s.sell() == null ? sell : s.sell();
+                        carried.add(new Restock(s.at(), s.ref(), s.cost(), sell, s.purchase()));
+                    }
+                    for (int i = 0; i < restocks.size(); i++) {
+                        PurchaseRow current = mine.get(restocks.get(i));
+                        if (current != null) {
+                            known.put(current, carried.get(i));
+                        }
+                    }
                     for (int i = 1; i < restocks.size(); i++) {
                         PurchaseRow previous = mine.get(restocks.get(i - 1));
                         PurchaseRow current = mine.get(restocks.get(i));
                         if (current != null) {
-                            before.put(current, restocks.get(i - 1));
+                            before.put(current, carried.get(i - 1));
                         } else if (previous != null) {
-                            after.put(previous, restocks.get(i));
+                            after.put(previous, carried.get(i));
                             followed.add(item);
                             later.add(restocks.get(i).purchase());
                         }
@@ -1293,7 +1362,7 @@ public class RetailImporter {
                     });
                 }
             }
-            return new Neighbours(before, after, recorded);
+            return new Neighbours(known, before, after, recorded);
         }
 
         /**
@@ -1301,9 +1370,11 @@ public class RetailImporter {
          * so the change at {@code next} is now from {@code r}, as one run of the whole history records it. History is
          * append only: a change the books lack is added (and registered with {@code r}), one they hold alike is left, and
          * one they hold otherwise, or where none is due now, is kept and reported, since only a rewrite could correct it.
+         * {@code at} is {@code r} with the last sell price known at it.
          */
-        void laterRestock(String file, PurchaseRow r, Restock next, CatalogueHistory.ImportedChange recorded) {
-            PriceStep step = PriceStep.between(Restock.of(r), next, r.product().sellMinor());
+        void laterRestock(
+                String file, PurchaseRow r, Restock at, Restock next, CatalogueHistory.ImportedChange recorded) {
+            PriceStep step = PriceStep.between(at, next, r.product().sellMinor());
             if (step == null ? recorded == null : recorded != null && step.same(recorded)) {
                 return;
             }

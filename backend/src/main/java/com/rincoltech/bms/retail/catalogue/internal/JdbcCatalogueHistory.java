@@ -266,11 +266,11 @@ class JdbcCatalogueHistory implements CatalogueHistory {
                         SELECT h.source_id, h.old_cost_minor, h.new_cost_minor, h.old_sell_minor, h.new_sell_minor
                           FROM unnest(CAST(? AS uuid[])) AS asked(id)
                          CROSS JOIN LATERAL (SELECT h.source_id, h.old_cost_minor, h.new_cost_minor, h.old_sell_minor,
-                                                    h.new_sell_minor, h.created_at, h.id
+                                                    h.new_sell_minor, h.created_at
                                                FROM retail_price_history h
                                               WHERE h.product_id = asked.id AND h.source = 'import'
                                                 AND h.source_id IS NOT NULL OFFSET 0) h
-                         ORDER BY h.created_at, h.id
+                         ORDER BY h.created_at, h.old_cost_minor, h.new_cost_minor, h.old_sell_minor, h.new_sell_minor
                         """)
                 .param(productIds.toArray(UUID[]::new))
                 .query((rs, n) -> out.putIfAbsent(
