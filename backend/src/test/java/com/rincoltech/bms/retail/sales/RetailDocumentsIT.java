@@ -1370,7 +1370,7 @@ class RetailDocumentsIT extends IntegrationTest {
         assertThat(printed).contains("30 Sep 2026 RS", "31 May 2027 RS");
     }
 
-    // JUSTIFICATION-A3: issue #893 asks for a test that the widest reference prints on one line; that needs glyph positions.
+    // JUSTIFICATION-A3: issue #893 needs a test that the widest reference prints on one line, from glyph positions.
     /** A printed word of a PDF: its text and where its glyphs stand on the page. */
     record Word(String text, List<org.apache.pdfbox.text.TextPosition> glyphs) {}
 
