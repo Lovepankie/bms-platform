@@ -751,7 +751,7 @@ class ReconciliationService implements ImportReconciliation {
                             SELECT r.source_row_no, r.source_ref, r.normalised::text, r.excluded_by IS NOT NULL,
                                    (SELECT res.code FROM import_issue_resolutions res WHERE res.id = r.excluded_by),
                                    EXISTS (SELECT 1 FROM import_issues i WHERE i.row_id = r.id
-                                                                       AND i.code IN ('BLANK_ROW', 'SUBHEADER_ROW')),
+                                                                       AND i.code IN %s),
                                    (SELECT string_agg(DISTINCT i.code, ' ' ORDER BY i.code)
                                       FROM import_issues i JOIN import_issue_resolutions res ON res.id = i.resolution_id
                                      WHERE i.row_id = r.id AND res.resolution = 'override'),
@@ -761,7 +761,7 @@ class ReconciliationService implements ImportReconciliation {
                               FROM import_rows r
                              WHERE r.batch_id = ? AND r.source_row_no > ?
                              ORDER BY r.source_row_no LIMIT 1000
-                            """)
+                            """.formatted(ImportTemplates.leftOutSql()))
                     .params(b.id(), after)
                     .query((rs, n) -> new Staged(
                             rs.getInt(1),

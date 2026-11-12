@@ -227,9 +227,7 @@ class LendingLoansV1Template implements ImportTemplate {
                     "PAY_DATE_AMBIGUOUS",
                     "{field} on {file} line {line} can be read two ways; the suggestion reads it as the row's other"
                             + " dates are read."),
-            warning(
-                    "PAY_DATE_OUT_OF_RANGE",
-                    "{field} on {file} line {line} is before the loan's date or after the cutover day."),
+            warning("PAY_DATE_OUT_OF_RANGE", "{field} on {file} line {line} is before the loan's date."),
             info("DURATION_NORMALISED", "{field} on {file} line {line} was tidied into a count and a unit."),
             blocking(
                     "DURATION_UNPARSEABLE",

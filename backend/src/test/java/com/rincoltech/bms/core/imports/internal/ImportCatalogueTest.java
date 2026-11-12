@@ -158,6 +158,12 @@ class ImportCatalogueTest {
         assertThat(report.issues()).containsExactlyElementsOf(expected);
     }
 
+    /** The list every left-out query names (preview, commit, reconciliation; issue #878): exactly these two codes. */
+    @Test
+    void theLeftOutCodesAreTheBlankAndSubheaderRows() {
+        assertThat(ImportTemplates.leftOutSql()).isEqualTo("('BLANK_ROW', 'SUBHEADER_ROW')");
+    }
+
     @Test
     void theSameRowsTemplateAndMappingVersionGiveIdenticalIssues() {
         GoldenRun.Report first = GoldenRun.run(new FixtureShopTemplate(), mapping());

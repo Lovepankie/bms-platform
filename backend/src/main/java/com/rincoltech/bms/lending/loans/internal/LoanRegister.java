@@ -638,7 +638,8 @@ final class LoanRegister {
     /**
      * DATE OF CURRENT PAY (13.6.3): the candidates on or after the disbursement and on or before the business date. One is
      * used; two give {@code PAY_DATE_AMBIGUOUS} with the one read the way the row's DATE was read; none gives
-     * {@code PAY_DATE_OUT_OF_RANGE} and the first reading is kept for a person to check. The date used, or null for none.
+     * {@code PAY_DATE_OUT_OF_RANGE} (a warning) and the first reading is kept for a person to check, or the blocking
+     * {@code DATE_AFTER_CUTOVER} when that reading is after the business date. The date used, or null for none.
      */
     record PayDate(LocalDate paidOn, Note note) {}
 
@@ -655,7 +656,11 @@ final class LoanRegister {
             return new PayDate(kept.getFirst().date(), null);
         }
         if (kept.isEmpty()) {
-            return new PayDate(all.getFirst().date(), Note.of("PAY_DATE_OUT_OF_RANGE", PAID_ON));
+            LocalDate first = all.getFirst().date();
+            // A payment after the cutover day is the live book's, never a historic one (issue #878): blocking, so no
+            // override writes it into the opening position.
+            boolean after = businessDate != null && first.isAfter(businessDate);
+            return new PayDate(first, Note.of(after ? "DATE_AFTER_CUTOVER" : "PAY_DATE_OUT_OF_RANGE", PAID_ON));
         }
         Candidate same =
                 kept.stream().filter(c -> c.kind().equals(dateKind)).findFirst().orElse(kept.getFirst());

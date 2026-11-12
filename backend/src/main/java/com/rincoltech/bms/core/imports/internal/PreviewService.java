@@ -342,10 +342,6 @@ class PreviewService implements ImportPreview {
         return template == null ? List.of() : template.policies();
     }
 
-    /**
-     * The policies the run needs and has not recorded, inside the caller's transaction: a policy is needed when a row the
-     * commit writes, of the policy's entity set, matches its rule.
-     */
     /** The first of the template's ready-blocking codes still open on a row the review keeps, if any (issue #136). */
     Optional<String> readyBlocker(UUID runId) {
         ImportTemplate template = template(batchRows(runId));
@@ -363,6 +359,10 @@ class PreviewService implements ImportPreview {
                 .optional();
     }
 
+    /**
+     * The policies the run needs and has not recorded, inside the caller's transaction: a policy is needed when a row the
+     * commit writes, of the policy's entity set, matches its rule.
+     */
     List<ImportTemplate.Policy> missingPolicies(UUID runId, Set<String> recorded) {
         List<BatchRow> batches = batchRows(runId);
         ImportTemplate template = template(batches);
@@ -442,6 +442,27 @@ class PreviewService implements ImportPreview {
                         + " AND r.normalised IS NOT NULL AND " + WRITE
                         + " ORDER BY r.source_row_no LIMIT ?")
                 .params(batchId, afterLine, Math.max(1, Math.min(limit, CHUNK)))
+                .query((rs, n) -> {
+                    Map<String, Object> stored = JSON.readValue(rs.getString(3), OBJECT);
+                    return new StoredRow(
+                            rs.getInt(1), rs.getString(2), stored, typed(set, stored), rs.getObject(4, UUID.class));
+                })
+                .list();
+    }
+
+    // JUSTIFICATION-A3: issue #878 item 2, a link_member carried to later files needs the earlier batches' linked rows.
+    /**
+     * The rows of the batches before this one in the run (by number, as validation and the commit order them) that the
+     * review linked to a member and the commit writes, typed as this batch's entity set (issue #878).
+     */
+    List<StoredRow> linkedEarlier(UUID batchId, EntitySet set) {
+        return jdbc.sql("SELECT r.source_row_no, r.source_ref, r.normalised::text, r.linked_member_id"
+                        + " FROM import_rows r JOIN import_batches b ON b.id = r.batch_id"
+                        + " JOIN import_batches t ON t.id = ? AND t.run_id = b.run_id AND b.seq < t.seq"
+                        + " WHERE b.status NOT IN ('failed', 'cancelled') AND r.linked_member_id IS NOT NULL"
+                        + " AND r.normalised IS NOT NULL AND " + WRITE
+                        + " ORDER BY b.seq, r.source_row_no")
+                .param(batchId)
                 .query((rs, n) -> {
                     Map<String, Object> stored = JSON.readValue(rs.getString(3), OBJECT);
                     return new StoredRow(

@@ -399,13 +399,28 @@ class LendingLoansV1TemplateIT extends IntegrationTest {
     @Test
     void aPhoneAnotherMemberOfTheBusinessHoldsIsAConflict() throws IOException {
         // Row 5's phone belongs to a member of this business with another NIN (fabricated).
-        member(t, "CFTEST0000099A", "+256700000003", "Test Other Member");
+        UUID held = member(t, "CFTEST0000099A", "+256700000003", "Test Other Member");
         UUID run = uploaded(t, officer, Map.of("register|pilot_loan_register_sample.csv", Files.readAllBytes(PILOT)));
 
         assertThat(as(t, () -> codesOn(run, 5)))
                 .contains("MEMBER_PHONE_CONFLICT")
                 .doesNotContain("MEMBER_MATCHED_EXISTING");
         assertThat(as(t, () -> codesOn(run, 3))).doesNotContain("MEMBER_PHONE_CONFLICT");
+
+        // Issue #878 item 3: the conflict overridden (keep them apart) makes row 5's borrower a member of their own.
+        settle(t, run);
+        committed(t, run);
+        assertThat(count(t, "SELECT count(*) FROM lending_loans WHERE tenant_id = ? AND member_id = '" + held + "'"))
+                .isZero();
+        String onPhone = "SELECT count(*) FROM lending_members WHERE tenant_id = ? AND phone_e164 = '+256700000003'";
+        assertThat(count(t, onPhone))
+                .as("the member the business had, and row 5's new member")
+                .isEqualTo(2);
+        String ofRowFive = "SELECT count(*) FROM lending_loans l JOIN lending_members m ON m.id = l.member_id"
+                + " WHERE l.tenant_id = ? AND m.national_id = 'CFTEST0000003A' AND m.source = 'import'";
+        assertThat(count(t, ofRowFive)).isEqualTo(1);
+        assertThat(count(t, "SELECT count(*) FROM lending_members WHERE tenant_id = ? AND source = 'import'"))
+                .isEqualTo(6);
     }
 
     // JUSTIFICATION-A3: the two tests round 2 of the review asks for (must-fix 1 and the Lead's must-fix 2).
@@ -436,6 +451,231 @@ class LendingLoansV1TemplateIT extends IntegrationTest {
         assertThat(count(
                         t, "SELECT count(*) FROM lending_members WHERE tenant_id = ? AND phone_e164 = '+256700000001'"))
                 .isEqualTo(1);
+    }
+
+    // JUSTIFICATION-A3: the tests of issue #878 (items 1, 2, 5, 6 and 9), on PostgreSQL.
+    /** Item 1: each file's next of kin is written as the review showed it, linked only to a borrower already a member. */
+    @Test
+    void aNextOfKinIsWrittenLinkedOnlyToABorrowerOfItsOwnOrAnEarlierFile() throws IOException {
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put("register|fab-kin-hq.csv", csv(LendingLoansV1TemplateTest.KIN_ACROSS_HQ));
+        files.put("register_br2|fab-kin-br2.csv", csv(LendingLoansV1TemplateTest.KIN_ACROSS_BR2));
+        UUID run = uploaded(t, officer, files);
+        assertThat(as(t, () -> codesIn(run, "fab-kin-hq.csv", 2))).doesNotContain("KIN_IS_MEMBER", "KIN_PHONE_MATCH");
+        assertThat(as(t, () -> codesIn(run, "fab-kin-br2.csv", 2))).contains("KIN_IS_MEMBER");
+        settle(t, run);
+        committed(t, run);
+
+        assertThat(lines(
+                        t,
+                        "SELECT m.national_id || '|' || coalesce(l.national_id, '-') || '|' || k.link_status"
+                                + " FROM lending_next_of_kin k JOIN lending_members m ON m.id = k.member_id"
+                                + " LEFT JOIN lending_members l ON l.id = k.linked_member_id WHERE k.tenant_id = ?"))
+                .containsExactlyInAnyOrder("CMTEST0000031A|-|none", "CFTEST0000032A|CMTEST0000031A|confirmed");
+    }
+
+    /**
+     * Item 2: a link the review made in an earlier file carries to the same borrower (by NIN) in a later file, which the
+     * review shows as that earlier line's borrower; so all three loans of borrower 01 are on the linked member.
+     */
+    @Test
+    void aLinkOfAnEarlierFileCarriesToTheSameBorrowerInALaterFile() throws IOException {
+        UUID linked = member(t, "CMTEST0000099A", "+256700000001", "Test Linked Member");
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        files.put("register|pilot_loan_register_sample.csv", Files.readAllBytes(PILOT));
+        files.put("register_br2|fab-borrower-01.csv", csv(BORROWER_01_AT_BR2));
+        UUID run = uploaded(t, officer, files);
+        assertThat(as(t, () -> codesIn(run, "fab-borrower-01.csv", 2)))
+                .contains("DUPLICATE_BORROWER")
+                .doesNotContain("MEMBER_PHONE_CONFLICT");
+        Issue conflict = as(t, () -> issueOn(run, 3, "MEMBER_PHONE_CONFLICT"));
+        as(
+                t,
+                () -> review.resolve(
+                        conflict.id(),
+                        new ImportReview.Resolution(
+                                "link_member", conflict.version(), null, null, linked, "Fabricated: confirmed"),
+                        operator));
+        settle(t, run);
+        // The dry run carries the link as the commit does (Lead on #911): it predicts the preview and reports alike.
+        DryRun dry = as(t, () -> runs.dryRun(run, operator));
+        assertThat(dry.previewMatches()).as(dry.report().render()).isTrue();
+        committed(t, run);
+        assertThat(as(t, () -> runs.commitReport(run)).sameAs(dry.report())).isTrue();
+
+        assertThat(count(t, "SELECT count(*) FROM lending_loans WHERE tenant_id = ? AND member_id = '" + linked + "'"))
+                .as("rows 3 and 12 of the head office, row 2 of the second branch")
+                .isEqualTo(3);
+        assertThat(count(t, "SELECT count(*) FROM lending_members WHERE tenant_id = ? AND source = 'import'"))
+                .isEqualTo(5);
+    }
+
+    /** Borrower 01 of the pilot register, borrowing at the second branch too (fabricated). */
+    static final String BORROWER_01_AT_BR2 = "2026-05-10,Test Borrower 01,Test Village A,700000001,CMTEST0000001A,"
+            + "MARRIED,Test Kin 01,700000051,CFTEST0000051A,WIFE,Test Village A,TRADER,POULTRY,STOCK,400000,0.2,1 Month,"
+            + "2026-06-10,480000,LAND,,,480000,ACTIVE,";
+
+    /**
+     * Item 5: the staff lookup names the business, so the user of another business who opened a run is not its staff: the
+     * remark is not kept as a collection note, and the reports of the dry run and the commit say so.
+     */
+    @Test
+    void aRunOpenedByAUserOfAnotherBusinessKeepsNoRemarkAndSaysSo() throws IOException {
+        Map<String, byte[]> files = Map.of("register|pilot_loan_register_sample.csv", Files.readAllBytes(PILOT));
+        UUID run = reviewed(t, otherOfficer, files);
+        committed(t, run);
+
+        assertThat(count(t, "SELECT count(*) FROM lending_collection_actions WHERE tenant_id = ?"))
+                .isZero();
+        assertThat(as(t, () -> runs.commitReport(run)).notes())
+                .anySatisfy(n -> assertThat(n).startsWith("1 remark(s) of this file are not kept as collection notes"));
+        assertThat(as(t, () -> runs.dryRunReport(run)).orElseThrow().report().notes())
+                .anySatisfy(n -> assertThat(n).startsWith("1 remark(s) of this file are not kept as collection notes"));
+        assertThat(count(other, "SELECT count(*) FROM lending_collection_actions WHERE tenant_id = ?"))
+                .isZero();
+
+        // The positive control (Lead on #911): a staff user of the run's own business keeps the remark.
+        UUID own = reviewed(other, otherOfficer, files);
+        committed(other, own);
+        assertThat(count(other, "SELECT count(*) FROM lending_collection_actions WHERE tenant_id = ?"))
+                .isEqualTo(1);
+        assertThat(as(other, () -> runs.commitReport(own)).notes())
+                .noneSatisfy(n -> assertThat(n).contains("are not kept as collection notes"));
+    }
+
+    /**
+     * Item 6: an overridden pay date before the loan's date is applied as at the cutover day by the one function
+     * ({@code BringIn.apply}), and the journal holds what the book holds; a pay date after the cutover day is blocking, so
+     * its row is left out and no payment after the cutover is ever written as historic.
+     */
+    @Test
+    void anOverriddenPayDateIsAppliedAsAtTheCutoverAndOneAfterTheCutoverIsNeverWritten() throws IOException {
+        UUID run = uploaded(
+                t, officer, Map.of("register|fab-pay-dates.csv", csv(PAID_BEFORE_THE_LOAN, PAID_AFTER_THE_CUTOVER)));
+        assertThat(as(t, () -> codesOn(run, 2))).contains("PAY_DATE_OUT_OF_RANGE");
+        assertThat(as(t, () -> codesOn(run, 3))).contains("DATE_AFTER_CUTOVER").doesNotContain("PAY_DATE_OUT_OF_RANGE");
+        settle(t, run);
+        assertThat(as(t, () -> issueOn(run, 2, "PAY_DATE_OUT_OF_RANGE")).resolution())
+                .isEqualTo("override");
+        committed(t, run);
+
+        // Interest first: 20,000 of interest and 30,000 of principal paid, 70,000 of principal owed at the cutover.
+        assertThat(bookPrincipal(t)).isEqualTo(Map.of("HQ", 70_000L));
+        assertThat(receivableLines(t)).isEqualTo(Map.of("HQ", 70_000L));
+        assertThat(journalTotals(t)).isEqualTo(Map.of("HQ", "70000|70000"));
+        assertThat(lines(t, TXN_STATE))
+                .containsExactlyInAnyOrder("disbursement|100000|2026-03-16|true", "repayment|50000|2026-03-01|true");
+        assertThat(count(
+                        t,
+                        "SELECT count(*) FROM lending_loan_transactions WHERE tenant_id = ?"
+                                + " AND value_date > DATE '2026-06-30'"))
+                .isZero();
+    }
+
+    /** Paid 50,000 on a date before the loan's date (fabricated). */
+    static final String PAID_BEFORE_THE_LOAN = "2026-03-16,Test Borrower 41,Test Village V,700000041,CMTEST0000041A,"
+            + "SINGLE,Test Kin 41,700000081,CFTEST0000081A,SISTER,Test Village V,TAILOR,NONE,STOCK,100000,0.2,1 Month,"
+            + "2026-04-16,120000,ID,50000,2026-03-01,70000,ACTIVE,";
+
+    /** Paid 100,000 after the cutover day (fabricated). */
+    static final String PAID_AFTER_THE_CUTOVER = "2026-05-10,Test Borrower 42,Test Village W,700000042,CMTEST0000042A,"
+            + "SINGLE,Test Kin 42,700000082,CFTEST0000082A,SISTER,Test Village W,FARMER,NONE,SEEDS,400000,0.2,1 Month,"
+            + "2026-06-10,480000,ID,100000,2026-07-10,380000,ACTIVE,";
+
+    /**
+     * Item 9: a link_member made on a row is cleared from {@code import_rows} once the row changes and is resolved again
+     * otherwise, and the commit writes no loan on that member; a run that is ready takes no file.
+     */
+    @Test
+    void aLinkIsClearedWhenItsRowIsResolvedAgainAndAReadyRunTakesNoFile() throws IOException {
+        UUID linked = member(t, "CMTEST0000099A", "+256700000001", "Test Linked Member");
+        UUID run = uploaded(t, officer, Map.of("register|pilot_loan_register_sample.csv", Files.readAllBytes(PILOT)));
+        Issue conflict = as(t, () -> issueOn(run, 3, "MEMBER_PHONE_CONFLICT"));
+        as(
+                t,
+                () -> review.resolve(
+                        conflict.id(),
+                        new ImportReview.Resolution(
+                                "link_member", conflict.version(), null, null, linked, "Fabricated: confirmed"),
+                        operator));
+        assertThat(linkedMemberOn(run, 3)).isEqualTo(linked.toString());
+
+        // JUSTIFICATION-A3: must-fix 1 of the review of #911, the same issue resolved again on the same cells.
+        // The same issue cannot be resolved again on the same cells (409 issue_not_open), so no override can sit
+        // beside a link it does not clear: the link stands until the row's cells change.
+        Issue linkedIssue = as(t, () -> issueOn(run, 3, "MEMBER_PHONE_CONFLICT"));
+        assertThat(linkedIssue.status()).isEqualTo("resolved");
+        ApiException twice = null;
+        try {
+            as(
+                    t,
+                    () -> review.resolve(
+                            linkedIssue.id(),
+                            new ImportReview.Resolution(
+                                    "override", linkedIssue.version(), null, null, null, "Fabricated: changed mind"),
+                            operator));
+        } catch (ApiException e) {
+            twice = e;
+        }
+        assertThat(twice).isNotNull();
+        assertThat(twice.code()).isEqualTo("issue_not_open");
+        assertThat(linkedMemberOn(run, 3)).isEqualTo(linked.toString());
+
+        // The customer sends the register again with line 3 changed: the link was made on other cells.
+        String original = Files.readString(PILOT, StandardCharsets.UTF_8);
+        String changed = original.replace(
+                "2026-03-16,Test Borrower 01,Test Village A,", "2026-03-16,Test Borrower 01,Test Village Z,");
+        assertThat(changed).isNotEqualTo(original);
+        UUID first = as(t, () -> uploads.batches(run).getFirst().id());
+        as(t, () -> uploads.cancelBatch(first));
+        UUID mapping =
+                as(t, () -> mappings.latest("pilot-register").orElseThrow().id());
+        byte[] sentAgain = changed.getBytes(StandardCharsets.UTF_8);
+        as(t, () -> upload(run, mapping, "register|pilot_loan_register_sample.csv", sentAgain));
+        as(t, () -> validation.validate(run));
+        assertThat(linkedMemberOn(run, 3)).isEqualTo("-");
+
+        // Resolved again, the other way: the row as it now is, and the conflict overridden (keep them apart).
+        Issue rowChanged = as(t, () -> issueOn(run, 3, "ROW_CHANGED_SINCE_REVIEW"));
+        as(
+                t,
+                () -> review.resolve(
+                        rowChanged.id(),
+                        new ImportReview.Resolution(
+                                "accept_suggestion", rowChanged.version(), null, null, null, "Fabricated: as sent"),
+                        operator));
+        Issue again = as(t, () -> issueOn(run, 3, "MEMBER_PHONE_CONFLICT"));
+        assertThat(again.status()).isEqualTo("open");
+        as(
+                t,
+                () -> review.resolve(
+                        again.id(),
+                        new ImportReview.Resolution(
+                                "override", again.version(), null, null, null, "Fabricated: different people"),
+                        operator));
+        assertThat(linkedMemberOn(run, 3)).isEqualTo("-");
+        settle(t, run);
+
+        DryRun dry = as(t, () -> runs.dryRun(run, operator));
+        assertThat(dry.previewMatches()).as(dry.report().render()).isTrue();
+        as(t, () -> runs.transition(run, "ready"));
+        ApiException refused = null;
+        byte[] late = csv(BORROWER_01_AT_BR2);
+        try {
+            as(t, () -> upload(run, mapping, "register|fab-late.csv", late));
+        } catch (ApiException e) {
+            refused = e;
+        }
+        assertThat(refused).isNotNull();
+        assertThat(refused.code()).isEqualTo("invalid_status_transition");
+        assertThat(as(t, () -> uploads.batches(run)).stream().map(ImportUploads.Batch::fileName))
+                .doesNotContain("fab-late.csv");
+
+        as(t, () -> runs.recordPreImportDump(run, "pre-import-fabricated.dump", Instant.now(), SHA));
+        CommitApproval.readyToCommit(http, t, runs, run, SHA);
+        assertThat(as(t, () -> runs.commit(run))).isEqualTo(ImportRuns.CommitOutcome.COMMITTED);
+        assertThat(count(t, "SELECT count(*) FROM lending_loans WHERE tenant_id = ? AND member_id = '" + linked + "'"))
+                .isZero();
     }
 
     @Test
@@ -629,21 +869,57 @@ class LendingLoansV1TemplateIT extends IntegrationTest {
                     .params(Timestamp.from(CUTOVER), run)
                     .update();
             files.forEach((key, content) -> {
-                String source = key.substring(0, key.indexOf('|'));
-                String name = key.substring(key.indexOf('|') + 1);
-                ImportUploads.Batch batch = uploads.upload(
-                        run,
-                        new Upload(
-                                name,
-                                new ByteArrayInputStream(content),
-                                content.length,
-                                operator,
-                                mappings.parseOptions(mapping, source)));
-                assertThat(batch.status()).as(name).isEqualTo("parsed");
+                ImportUploads.Batch batch = upload(run, mapping, key, content);
+                assertThat(batch.status()).as(key).isEqualTo("parsed");
             });
             validation.validate(run);
             return run;
         });
+    }
+
+    // JUSTIFICATION-A3: issue #878's tests need a file uploaded on its own, inline registers and per-file codes.
+    /** One file into the run, by {@code source|file name}, read with the mapping's source, in the caller's tenant. */
+    ImportUploads.Batch upload(UUID run, UUID mapping, String key, byte[] content) {
+        String source = key.substring(0, key.indexOf('|'));
+        String name = key.substring(key.indexOf('|') + 1);
+        return uploads.upload(
+                run,
+                new Upload(
+                        name,
+                        new ByteArrayInputStream(content),
+                        content.length,
+                        operator,
+                        mappings.parseOptions(mapping, source)));
+    }
+
+    /** A register of the pilot register's columns from data lines (fabricated). */
+    static byte[] csv(String... lines) throws IOException {
+        String header = Files.readAllLines(PILOT, StandardCharsets.UTF_8).getFirst();
+        return (header + "\n" + String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** The codes of a line of one file of the run. */
+    List<String> codesIn(UUID run, String file, int line) {
+        List<String> out = new ArrayList<>();
+        for (ImportUploads.Batch b : uploads.batches(run)) {
+            if (file.equals(b.fileName())) {
+                validation.issues(b.id()).stream().filter(i -> i.line() == line).forEach(i -> out.add(i.code()));
+            }
+        }
+        return out;
+    }
+
+    /** The member the review linked a line of the run's live batches to, from {@code import_rows}, or {@code -}. */
+    static String linkedMemberOn(UUID run, int line) {
+        return TestDatabase.owner()
+                .sql("""
+                        SELECT coalesce(r.linked_member_id::text, '-') FROM import_rows r
+                          JOIN import_batches b ON b.id = r.batch_id
+                         WHERE b.run_id = ? AND b.status <> 'cancelled' AND r.source_row_no = ?
+                        """)
+                .params(run, line)
+                .query(String.class)
+                .single();
     }
 
     /** Uploaded and reviewed with the standard resolutions of 13.12, the decision recorded. */
@@ -705,6 +981,9 @@ class LendingLoansV1TemplateIT extends IntegrationTest {
 
     Issue openIssue(UUID run, String kept) {
         for (ImportUploads.Batch b : uploads.batches(run)) {
+            if ("cancelled".equals(b.status())) {
+                continue;
+            }
             for (Issue i : validation.issues(b.id())) {
                 if ("open".equals(i.status()) && !i.code().equals(kept)) {
                     return i;
@@ -716,6 +995,9 @@ class LendingLoansV1TemplateIT extends IntegrationTest {
 
     Issue issueOn(UUID run, int line, String code) {
         for (ImportUploads.Batch b : uploads.batches(run)) {
+            if ("cancelled".equals(b.status())) {
+                continue;
+            }
             for (Issue i : validation.issues(b.id())) {
                 if (i.line() == line && i.code().equals(code)) {
                     return i;

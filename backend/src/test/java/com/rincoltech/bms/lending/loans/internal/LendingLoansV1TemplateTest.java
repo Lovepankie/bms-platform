@@ -1,10 +1,12 @@
 package com.rincoltech.bms.lending.loans.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.core.imports.ImportForecast;
 import com.rincoltech.bms.core.imports.ImportTemplate.IssueCode;
 import com.rincoltech.bms.core.imports.ImportTemplate.SetRules;
+import com.rincoltech.bms.core.imports.ImportTemplates;
 import com.rincoltech.bms.core.imports.internal.EngineRun;
 import com.rincoltech.bms.lending.members.MemberImports;
 import java.io.IOException;
@@ -458,6 +460,106 @@ class LendingLoansV1TemplateTest {
                         new ImportForecast.ArrearsBucket("HQ", "1-30", 1, 560_000),
                         new ImportForecast.ArrearsBucket("HQ", "31-60", 1, 250_000),
                         new ImportForecast.ArrearsBucket("HQ", "61-90", 4, 2_000_000));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Issue #878: the follow-ups of #877.
+    // ---------------------------------------------------------------------------------------------
+
+    // JUSTIFICATION-A3: the unit tests issue #878 asks for (items 1, 6 and 8), with their fabricated rows.
+    /** A file of the pilot register's columns from data lines (fabricated), for a run of more than one file. */
+    static EngineRun.File inline(String name, String source, String... lines) throws IOException {
+        List<List<String>> rows = new ArrayList<>();
+        for (String l : lines) {
+            rows.add(EngineRun.cells(l));
+        }
+        String header = Files.readAllLines(PILOT, StandardCharsets.UTF_8).getFirst();
+        return new EngineRun.File(name, source, EngineRun.cells(header), rows);
+    }
+
+    /**
+     * Item 1: a next of kin is shown linked only to a borrower the loader has made a member by then, one of its own file or
+     * of an earlier one; a borrower of a later file is not a member yet when the earlier file is written.
+     */
+    @Test
+    void aNextOfKinIsShownLinkedOnlyToABorrowerOfItsOwnOrAnEarlierFile() throws IOException {
+        EngineRun.Result r = EngineRun.run(
+                template(LoanRegisterRules.Directory.NONE),
+                mapping(),
+                CUTOVER,
+                List.of(
+                        inline("fab-hq.csv", "register", KIN_ACROSS_HQ),
+                        inline("fab-br2.csv", "register_br2", KIN_ACROSS_BR2)));
+
+        List<String> hq = codesOf(r, "fab-hq.csv", 2);
+        List<String> br2 = codesOf(r, "fab-br2.csv", 2);
+        assertThat(hq)
+                .as("the kin is the borrower of the later file")
+                .doesNotContain("KIN_IS_MEMBER", "KIN_PHONE_MATCH");
+        assertThat(br2).as("the kin is the borrower of the earlier file").contains("KIN_IS_MEMBER");
+    }
+
+    /** Line 2 of the head office's file names the borrower of line 2 of the second branch's file as next of kin. */
+    static final String KIN_ACROSS_HQ = "2026-05-10,Test Borrower 31,Test Village U,700000031,CMTEST0000031A,MARRIED,"
+            + "Test Borrower 32,700000032,CFTEST0000032A,WIFE,Test Village U,TRADER,NONE,STOCK,400000,0.2,1 Month,"
+            + "2026-06-10,480000,LAND,,,480000,ACTIVE,";
+
+    /** And the other way round. */
+    static final String KIN_ACROSS_BR2 = "2026-05-12,Test Borrower 32,Test Village U,700000032,CFTEST0000032A,MARRIED,"
+            + "Test Borrower 31,700000031,CMTEST0000031A,HUSBAND,Test Village U,TAILOR,NONE,STOCK,300000,0.2,1 Month,"
+            + "2026-06-12,360000,LAND,,,360000,ACTIVE,";
+
+    static List<String> codesOf(EngineRun.Result r, String file, int line) {
+        return r.issues().stream()
+                .filter(i -> i.file().equals(file) && i.line() == line)
+                .map(EngineRun.Issue::code)
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * Item 6: a pay date after the cutover day is the blocking DATE_AFTER_CUTOVER, so no override writes a payment of the
+     * live book as historic; one before the loan's date stays the warning PAY_DATE_OUT_OF_RANGE.
+     */
+    @Test
+    void aPayDateAfterTheCutoverDayIsBlockingAndOneBeforeTheLoanIsAWarning() {
+        LocalDate disbursed = LocalDate.of(2026, 5, 10);
+        LoanRegister.PayDate after = LoanRegister.payDate("2026-07-10", disbursed, "as_is", AS_AT);
+        LoanRegister.PayDate before = LoanRegister.payDate("2026-03-01", disbursed, "as_is", AS_AT);
+        LoanRegister.PayDate inside = LoanRegister.payDate("2026-06-20", disbursed, "as_is", AS_AT);
+
+        assertThat(after.note().code()).isEqualTo("DATE_AFTER_CUTOVER");
+        assertThat(after.note().field()).isEqualTo(LoanRegister.PAID_ON);
+        assertThat(before.note().code()).isEqualTo("PAY_DATE_OUT_OF_RANGE");
+        assertThat(inside.note()).isNull();
+        // DATE_AFTER_CUTOVER is a code of the framework's shared catalogue, not of the template's own.
+        assertThat(ImportTemplates.SHARED_CODES.stream()
+                        .filter(c -> c.code().equals("DATE_AFTER_CUTOVER"))
+                        .map(c -> c.severity().key()))
+                .containsExactly("blocking");
+    }
+
+    /**
+     * Item 8: the loader's refusal of a borrower linked to two members, the links of earlier files first; the first link of
+     * a key wins, the same member twice is no conflict, and each key is its own.
+     */
+    @Test
+    void aBorrowerLinkedToTwoMembersIsRefused() {
+        UUID x = UUID.randomUUID();
+        UUID y = UUID.randomUUID();
+        List<LoanRegisterWriter.Link> alike = List.of(
+                new LoanRegisterWriter.Link("nin:CMTEST0000001A", 3, x),
+                new LoanRegisterWriter.Link("nin:CMTEST0000001A", 12, x),
+                new LoanRegisterWriter.Link("phone:+256700000005", 7, y));
+        assertThat(LoanRegisterWriter.linkedByKey(alike))
+                .isEqualTo(Map.of("nin:CMTEST0000001A", x, "phone:+256700000005", y));
+
+        List<LoanRegisterWriter.Link> twice = List.of(
+                new LoanRegisterWriter.Link("nin:CMTEST0000001A", 3, x),
+                new LoanRegisterWriter.Link("nin:CMTEST0000001A", 12, y));
+        assertThatThrownBy(() -> LoanRegisterWriter.linkedByKey(twice))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("line 12 is linked to another member");
     }
 
     /** One opening journal per branch, ever: a branch another run opened takes none, as the loader posts none there. */

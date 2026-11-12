@@ -78,6 +78,15 @@ public interface BatchWriter {
         List<ImportRefs.StagedRow> rows(int afterLine, int limit);
 
         /**
+         * The rows of the run's earlier batches (by number) that the review linked to a member ({@code link_member}) and
+         * the commit writes, in commit order, each with its typed values and {@link ImportRefs.StagedRow#linkedMemberId}:
+         * so a writer can give the same borrower in this batch the same member (issue #878). None by default.
+         */
+        default List<ImportRefs.StagedRow> linkedEarlier() {
+            return List.of();
+        }
+
+        /**
          * Registers a record the writer created for a row in {@code import_refs}, in the batch's transaction: a re-run, or
          * a resume, of the same row then finds it {@link ImportRefs.Status#EXISTING} and writes nothing for it again.
          * {@code targetType} is a code such as {@code retail.product}. A source_ref whose key the business already holds

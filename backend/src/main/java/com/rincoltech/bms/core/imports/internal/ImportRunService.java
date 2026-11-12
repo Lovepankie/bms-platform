@@ -1683,6 +1683,22 @@ class ImportRunService implements ImportRuns {
         }
 
         @Override
+        public List<ImportRefs.StagedRow> linkedEarlier() {
+            if (source == null) {
+                return List.of();
+            }
+            return preview.linkedEarlier(batchId, source.set()).stream()
+                    .map(r -> new ImportRefs.StagedRow(
+                            r.line(),
+                            r.typed(),
+                            r.validationRef(),
+                            ImportRefs.Status.NEW,
+                            Map.of(),
+                            r.linkedMemberId()))
+                    .toList();
+        }
+
+        @Override
         public void register(String sourceRef, String targetType, UUID targetId) {
             refs.register(runId, batchId, sourceRef, targetType, targetId);
         }

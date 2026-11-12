@@ -32,10 +32,11 @@ import org.springframework.stereotype.Component;
 /**
  * The loader of {@code lending_loans_v1} (issue #136, chapter 13 section 13.10 steps 1 to 7): one batch of register rows,
  * in the batch's transaction. First every borrower is matched or made, in line order, as the validation's rules
- * ({@link LoanRegisterRules}) assigned them: the member the review linked a row of the key to (every row of the key takes
- * it; a key linked to two members is refused), the member an earlier row of the file with the same key made, a member
- * {@link LoanRegister#match} finds, or a new one with the details of the key's latest row by date. Then each row's next of kin (a duplicate collapses), collateral item, loan with its one bullet item, historic
- * disbursement and repayment with its allocations, and the remark as a collection note. Every record is registered in
+ * ({@link LoanRegisterRules}) assigned them: the member the review linked a row of the key to, in this file or by NIN in
+ * an earlier one (every row of the key takes it; a key linked to two members is refused), the member an earlier row of
+ * the file with the same key made, a member {@link LoanRegister#match} finds, or a new one with the details of the key's
+ * latest row by date. Then each row's next of kin (a duplicate collapses), collateral item, loan with its one bullet
+ * item, historic disbursement and repayment with its allocations, and the remark as a collection note. Every record is registered in
  * {@code import_refs}. Last, one opening journal per branch, ever: a branch with no import opening journal of loans yet takes
  * one for every imported loan of it still owing principal, one {@code loans_receivable} line per loan; a branch that has one
  * takes none and its new loans are listed for a correcting entry. Imported loans send no SMS, start no task and post no
@@ -129,6 +130,25 @@ class LoanRegisterWriter {
             ProductTerms product,
             String key) {}
 
+    /** A row the review linked to a member ({@code link_member}): its borrower key, its line and the member. */
+    record Link(String key, int line, UUID member) {}
+
+    /**
+     * The member each borrower key is linked to, the links in order: the first of a key wins, and a later one to another
+     * member refuses the batch, the reviewer to link the borrower's rows alike.
+     */
+    static Map<String, UUID> linkedByKey(List<Link> links) {
+        Map<String, UUID> byKey = new HashMap<>();
+        for (Link l : links) {
+            UUID held = byKey.putIfAbsent(l.key(), l.member());
+            if (held != null && !held.equals(l.member())) {
+                throw new IllegalStateException("line " + l.line() + " is linked to another member than an"
+                        + " earlier row of the same borrower; link both rows to one member");
+            }
+        }
+        return byKey;
+    }
+
     Map<String, Object> write(UUID runId, BatchWriter.Checkpoint checkpoint) {
         // 13.8 row 15: the requested principal is taken as disbursed in full. The run records the customer's decision
         // (DISBURSED_POLICY); ready, the commit's request and the commit refuse a run without it, so the loader only
@@ -141,7 +161,10 @@ class LoanRegisterWriter {
                 .param(runId)
                 .query(UUID.class)
                 .single();
-        boolean officerIsStaff = jdbc.sql("SELECT EXISTS (SELECT 1 FROM users WHERE id = ?)")
+        // A collection note names a staff member of the business (its foreign key); the opener may be a platform
+        // operator.
+        boolean officerIsStaff = jdbc.sql("SELECT EXISTS (SELECT 1 FROM users WHERE tenant_id ="
+                        + " current_setting('app.tenant_id')::uuid AND id = ? AND kind = 'staff')")
                 .param(officer)
                 .query(Boolean.class)
                 .single();
@@ -204,17 +227,22 @@ class LoanRegisterWriter {
         for (Planned p : planned) {
             latest.merge(p.key(), p.row(), (a, b) -> b.disbursedOn().isBefore(a.disbursedOn()) ? a : b);
         }
-        // A review's link_member is the borrower's, so every row of the same key takes that member; a key linked to two
-        // members is refused, the reviewer to link its rows alike.
-        Map<String, UUID> byKey = new HashMap<>();
-        for (Planned p : planned) {
-            UUID linked = p.staged().linkedMemberId();
-            UUID held = linked == null ? null : byKey.putIfAbsent(p.key(), linked);
-            if (held != null && !held.equals(linked)) {
-                throw new IllegalStateException("line " + p.staged().line() + " is linked to another member than an"
-                        + " earlier row of the same borrower; link both rows to one member");
+        // A review's link_member is the borrower's, so every row of the same key takes that member: the links of the
+        // run's earlier files first, by NIN, the key validation names them by there (DUPLICATE_BORROWER of the earlier
+        // line; issue #878), then this batch's own.
+        List<Link> links = new ArrayList<>();
+        for (ImportRefs.StagedRow s : checkpoint.linkedEarlier()) {
+            String nin = LoanRegister.row(s.values()).nin();
+            if (nin != null) {
+                links.add(new Link(LoanRegister.memberKey(nin, null, null), s.line(), s.linkedMemberId()));
             }
         }
+        for (Planned p : planned) {
+            if (p.staged().linkedMemberId() != null) {
+                links.add(new Link(p.key(), p.staged().line(), p.staged().linkedMemberId()));
+            }
+        }
+        Map<String, UUID> byKey = linkedByKey(links);
         Map<Integer, UUID> memberOf = new HashMap<>();
         int made = 0;
         for (Planned p : planned) {
@@ -263,6 +291,7 @@ class LoanRegisterWriter {
         int loansMade = 0;
         int kinMade = 0;
         int itemsMade = 0;
+        int remarksNotKept = 0;
         for (Planned p : planned) {
             UUID member = memberOf.get(p.staged().line());
             String ref = p.staged().sourceRef();
@@ -323,6 +352,9 @@ class LoanRegisterWriter {
             }
             BringIn.Plan plan = writeLoan(p, member, item, officer, officerIsStaff, asAt, checkpoint);
             loansMade++;
+            if (r.remarks() != null && !officerIsStaff) {
+                remarksNotKept++;
+            }
             String code = p.branch().code();
             touched.put(code, p.branch());
             long owed = plan.position().principalOutstandingMinor();
@@ -335,6 +367,11 @@ class LoanRegisterWriter {
                 b[1] += owed;
             }
             checkpoint.rowWritten();
+        }
+        if (remarksNotKept > 0) {
+            checkpoint.note(
+                    remarksNotKept + " remark(s) of this file are not kept as collection notes: a collection note"
+                            + " names a staff member of the business, and the run was opened by someone who is not one.");
         }
         // Step 7: one opening journal per branch, ever.
         for (Branches.Branch b : touched.values()) {

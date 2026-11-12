@@ -108,6 +108,7 @@ final class LoanRegisterRules implements SetRules {
     private final Map<String, UUID> branchFile = new HashMap<>();
 
     private Map<String, Assigned> assigned;
+    private Map<UUID, Integer> fileEnds;
 
     LoanRegisterRules(Directory directory) {
         this.directory = directory;
@@ -152,6 +153,7 @@ final class LoanRegisterRules implements SetRules {
                 r.paidOn(),
                 c != null && "vehicle".equals(c.type()) ? c.reference() : null));
         assigned = null;
+        fileEnds = null;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -382,6 +384,23 @@ final class LoanRegisterRules implements SetRules {
     // 13.9 Linking.
     // ---------------------------------------------------------------------------------------------
 
+    /**
+     * The rows whose borrowers are members by the time the loader writes a next of kin of this file: every row of this file
+     * (a batch makes its members before any next of kin) and of the files before it, in commit order. A borrower of a later
+     * file is not a member yet, so a next of kin naming them is neither linked nor shown as linked (issue #878). Pass 1 sees
+     * the batches one after another in {@code seq} order, the commit's order, so {@code seen} holds each file's rows
+     * together; the end of each file in it is computed once.
+     */
+    private List<Seen> membersBy(UUID batch) {
+        if (fileEnds == null) {
+            fileEnds = new HashMap<>();
+            for (int i = 0; i < seen.size(); i++) {
+                fileEnds.put(seen.get(i).batch(), i + 1);
+            }
+        }
+        return seen.subList(0, fileEnds.getOrDefault(batch, 0));
+    }
+
     private void link(SetRow row, List<Note> notes, Nin kinNin, Phone kinPhone, Phone phone) {
         Assigned a = assignments().get(row.batchId() + ":" + row.line());
         if (a != null && a.code() != null) {
@@ -390,8 +409,9 @@ final class LoanRegisterRules implements SetRules {
         }
         Nin ownNin = nin(row.text(CUSTOMER_NIN));
         String own = ownNin == null ? null : ownNin.valid();
+        List<Seen> members = membersBy(row.batchId());
         if (kinNin != null && kinNin.valid() != null && !kinNin.valid().equals(own)) {
-            if (seen.stream().anyMatch(s -> kinNin.valid().equals(s.nin()))
+            if (members.stream().anyMatch(s -> kinNin.valid().equals(s.nin()))
                     || directory.memberByNin(kinNin.valid()).isPresent()) {
                 notes.add(Note.of("KIN_IS_MEMBER", KIN_NAME));
                 kinPhone = null;
@@ -400,7 +420,7 @@ final class LoanRegisterRules implements SetRules {
         String ownPhone = phone == null ? null : phone.e164();
         if (kinPhone != null && kinPhone.e164() != null && !kinPhone.e164().equals(ownPhone)) {
             String kp = kinPhone.e164();
-            if (seen.stream().anyMatch(s -> kp.equals(s.phone()))
+            if (members.stream().anyMatch(s -> kp.equals(s.phone()))
                     || !directory.membersByPhone(kp).isEmpty()) {
                 notes.add(Note.of("KIN_PHONE_MATCH", KIN_PHONE));
             }

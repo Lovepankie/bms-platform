@@ -228,7 +228,10 @@ A single real date whose day equals its month, or whose day is above 12, has onl
 **DATE OF CURRENT PAY.** Candidates as above; keep those on or after the resolved DATE
 and on or before the batch business date. One left: use it. Two left: warning
 `PAY_DATE_AMBIGUOUS`, suggestion the `as_is` or `text_mdy` candidate matching the
-convention the row's other dates resolved to. None left: warning `PAY_DATE_OUT_OF_RANGE`.
+convention the row's other dates resolved to. None left: warning `PAY_DATE_OUT_OF_RANGE`
+when the first reading is before the business date (an override applies the payment on that
+date, as at the cutover day), or blocking `DATE_AFTER_CUTOVER` when it is after: a payment
+after the cutover is the live book's, never a historic one (issue #878).
 
 ### 13.6.4 Duration (DURATION)
 
@@ -467,7 +470,9 @@ record is planned for the row's member. Duplicates for the same member (same NIN
 phone, or same name when neither is present) collapse to one. Linking, run after all
 borrowers are keyed:
 
-- next of kin NIN equals a borrower's NIN in the batch or an existing member's NIN:
+- next of kin NIN equals the NIN of a borrower of the same file or of an earlier file of
+  the run (one the loader has made a member by then; a borrower of a later file is not
+  yet, so that kin is written and shown unlinked, issue #878) or an existing member's NIN:
   `linked_member_id` set, `link_method = nin`, `link_status = confirmed`, info
   `KIN_IS_MEMBER`;
 - else next of kin phone equals a borrower's or member's phone: warning `KIN_PHONE_MATCH`,
@@ -1507,7 +1512,8 @@ section 4.1; coordinated with #110, which builds no second framework).**
   column and a default feed is `FIELD_MAPPED_TWICE`; a required field fed by a default is fed). The pilot register's
   sources give `product` (and the second branch's `branch`), so one register file is one batch of one branch. The loans
   officer is the person who opened the run (`import_runs.created_by`); a remark is kept as a collection note only when that
-  person is a staff user of the business.
+  person is a staff user of the business (the lookup names the business, `users.tenant_id`, and `kind = 'staff'`); else
+  the dry run's and the commit's reports carry a note with the number of remarks not kept (issue #878).
 - **The pilot register as a fabricated fixture mapping.** `fixtures/imports/lending_loans_v1.pilot_register.mapping.json`
   maps the 25 columns of `fixtures/pilot_loan_register_sample.csv` onto the template (source `register`), switches on the
   two row rules, and names a second source `register_br2` for the fabricated second branch
@@ -1524,7 +1530,11 @@ section 4.1; coordinated with #110, which builds no second framework).**
   through the lending port `MemberImports` inside the validation's transaction, so only the business's own rows (each
   lookup also names the business). A review's `link_member` reaches the loader (`ImportRefs.StagedRow.linkedMemberId`):
   every row of the linked row's key in the batch takes that member, and a key whose rows are linked to two members fails
-  the batch. An existing member's fields are never changed.
+  the batch. A link carries forward to a later file of the run by NIN (`BatchWriter.Checkpoint.linkedEarlier`, issue
+  #878): validation shows such a row as the earlier line's borrower (`DUPLICATE_BORROWER`), so the loader puts it on the
+  linked member; a later file that links the same NIN to another member fails its batch. A borrower with no NIN is keyed
+  by phone, which validation shows in a later file as that file's own `MEMBER_PHONE_CONFLICT`: its own resolution decides
+  there. A link never reaches back to a file already written. An existing member's fields are never changed.
 - **The loader (13.10 steps 1 to 7).** One batch, one transaction: every borrower matched or made (the details of the
   key's latest row by date), then per row its next of kin (a duplicate for the member collapses; a kin whose NIN is a
   member's is linked `nin`, `confirmed`), its collateral item (`pledged`, no value, "imported; verify custody and value";
