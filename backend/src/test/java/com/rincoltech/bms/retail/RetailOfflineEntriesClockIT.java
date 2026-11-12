@@ -185,6 +185,46 @@ class RetailOfflineEntriesClockIT extends IntegrationTest {
         assertThat(RetailTestSupport.id(again)).isEqualTo(RetailTestSupport.id(sent));
     }
 
+    // JUSTIFICATION-A3: issue #912 moves this test unchanged in intent from RetailOfflineEntriesIT onto this clock.
+    /**
+     * Review of #839: a banking or withdrawal time sent with an offline entry is not used; the phone's judged time is. On this
+     * class's clock (issue #912): made 10 minutes before 15:00 Kampala, so the banking never closes a day before the
+     * withdrawal's, as it did on the wall clock just after midnight.
+     */
+    @Test
+    void aTimeSentWithAnOfflineBankingOrWithdrawalIsNotUsed() {
+        Instant made = MONTH_END.minus(Duration.ofMinutes(10));
+        String twentyDaysAgo = MONTH_END.minus(Duration.ofDays(20)).toString();
+        for (String path : java.util.List.of("/bankings", "/withdrawals")) {
+            Map<String, Object> b = new LinkedHashMap<>();
+            b.put("branch_id", hq);
+            if (path.equals("/bankings")) {
+                b.put("amount_minor", 3_000);
+                b.put("reference", "Test slip 01");
+                b.put("banked_at", twentyDaysAgo);
+            } else {
+                b.put("amount_minor", 1_000);
+                b.put("purpose", "Test purpose");
+                b.put("withdrawn_at", twentyDaysAgo);
+            }
+            b.put("offline", offline(made));
+            ResponseEntity<JsonNode> r = cb.api.postKeyed(
+                    path,
+                    b,
+                    RetailOfflineEntriesIT.SELLER,
+                    hq.toString(),
+                    UUID.randomUUID().toString());
+            assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.CREATED);
+            String at = r.getBody()
+                    .get(path.equals("/bankings") ? "banked_at" : "withdrawn_at")
+                    .asString();
+            assertThat(Instant.parse(at)).as(path).isEqualTo(made);
+            // Issue #856: the day the entry was made on the business clock.
+            String madeOn = LocalDate.ofInstant(made, KAMPALA).toString();
+            assertThat(r.getBody().get("business_date").asString()).as(path).isEqualTo(madeOn);
+        }
+    }
+
     /** A seller with the till's cash book (issue #799), scoped to the head office, with no backdate permission. */
     static final String CASHIER_WITH_EXPENSES = CashbookTestSupport.CASHIER;
 

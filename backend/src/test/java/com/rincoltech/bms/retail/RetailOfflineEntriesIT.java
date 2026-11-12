@@ -395,27 +395,6 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                 .anySatisfy(p -> assertThat(p).contains(yesterday.toString()).contains("retail.expense"));
     }
 
-    /** Review of #839: a banking or withdrawal time sent with an offline entry is not used; the phone's judged time is. */
-    @Test
-    void aTimeSentWithAnOfflineBankingOrWithdrawalIsNotUsed() {
-        Instant made = Instant.now().minus(Duration.ofMinutes(10)).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
-        String twentyDaysAgo = Instant.now().minus(Duration.ofDays(20)).toString();
-        for (String path : List.of("/bankings", "/withdrawals")) {
-            Map<String, Object> b = bodies(made, null).get(path).get();
-            b.put(path.equals("/bankings") ? "banked_at" : "withdrawn_at", twentyDaysAgo);
-            ResponseEntity<JsonNode> r = cb.api.postKeyed(
-                    path, b, SELLER, hq.toString(), UUID.randomUUID().toString());
-            assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.CREATED);
-            String at = r.getBody()
-                    .get(path.equals("/bankings") ? "banked_at" : "withdrawn_at")
-                    .asString();
-            assertThat(Instant.parse(at)).as(path).isEqualTo(made);
-            // Issue #856: the day the entry was made on the business clock, not today (they differ after midnight).
-            String madeOn = LocalDate.ofInstant(made, ZONE).toString();
-            assertThat(r.getBody().get("business_date").asString()).as(path).isEqualTo(madeOn);
-        }
-    }
-
     /**
      * Review of #839: an online request whose answer was lost is sent again from the phone under the same key with when it
      * was made. The key covers the request without its offline block, so a request that had arrived answers once.
@@ -429,7 +408,11 @@ class RetailOfflineEntriesIT extends IntegrationTest {
         ResponseEntity<JsonNode> first = cb.api.postKeyed("/expenses", online, SELLER, hq.toString(), key);
         assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
         Map<String, Object> again = new LinkedHashMap<>(online);
-        again.put("offline", offline(Instant.now().minus(Duration.ofMinutes(1)), null));
+        // A minute ago, but never before today began in Kampala (issue #912).
+        Instant now = Instant.now();
+        Instant aMinuteAgo = now.minus(Duration.ofMinutes(1));
+        Instant startOfToday = LocalDate.ofInstant(now, ZONE).atStartOfDay(ZONE).toInstant();
+        again.put("offline", offline(aMinuteAgo.isBefore(startOfToday) ? startOfToday : aMinuteAgo, null));
         ResponseEntity<JsonNode> replay = cb.api.postKeyed("/expenses", again, SELLER, hq.toString(), key);
         assertThat(replay.getStatusCode().is2xxSuccessful())
                 .as("%s", replay.getBody())
