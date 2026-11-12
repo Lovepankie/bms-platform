@@ -35,7 +35,8 @@
     <tbody>
       <tr class="note"><td th:text="${period.from}">1 Jan 2026</td><td></td><td colspan="3">Opening balance</td><td class="num" th:text="${totals.opening}">0</td></tr>
       <tr th:each="l : ${lines}">
-        <td th:text="${l.date}">date</td><td th:text="${l.reference}">RS00000001</td><td th:text="${l.description}">Sale on credit</td>
+        <!-- A reference never wraps (issue #893): a credit note's CN + branch code (up to 10) + 6 digits is wider than 15%, so the column grows and Description gives way. -->
+        <td th:text="${l.date}">date</td><td style="white-space: nowrap;" th:text="${l.reference}">RS00000001</td><td th:text="${l.description}">Sale on credit</td>
         <td class="num" th:text="${l.charged}">-</td><td class="num" th:text="${l.paid}">-</td><td class="num" th:text="${l.balance}">0</td>
       </tr>
     </tbody>

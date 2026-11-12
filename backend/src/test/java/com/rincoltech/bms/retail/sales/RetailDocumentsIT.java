@@ -249,7 +249,10 @@ class RetailDocumentsIT extends IntegrationTest {
                 .strip();
     }
 
-    /** Dates a void at noon in Kampala on {@code day}; the API dates it by the database clock, which moves with the calendar. */
+    /**
+     * Dates a void at noon in Kampala on {@code day}; the API dates it by the database clock, which moves with the calendar.
+     * Only {@code voided_at} moves: the statement's void line reads that column and no ledger table (issue #893).
+     */
     static void pinVoid(UUID sale, String day) {
         TestDatabase.owner()
                 .sql("DO $$ BEGIN PERFORM set_config('bms.allow_mutation', 'on', true);"
@@ -1365,6 +1368,78 @@ class RetailDocumentsIT extends IntegrationTest {
         pinVoid(s, "2027-05-31");
         String printed = raw(statementPdf(customer, "?from=2026-09-01&to=2028-06-30", DOCS));
         assertThat(printed).contains("30 Sep 2026 RS", "31 May 2027 RS");
+    }
+
+    // JUSTIFICATION-A3: issue #893 asks for a test that the widest reference prints on one line; that needs glyph positions.
+    /** A printed word of a PDF: its text and where its glyphs stand on the page. */
+    record Word(String text, List<org.apache.pdfbox.text.TextPosition> glyphs) {}
+
+    /** Every printed word of a PDF, cut at each space; a word broken across two lines comes out as two words. */
+    static List<Word> words(byte[] pdf) throws Exception {
+        List<Word> out = new ArrayList<>();
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            org.apache.pdfbox.text.PDFTextStripper s = new org.apache.pdfbox.text.PDFTextStripper() {
+                @Override
+                protected void writeString(String text, List<org.apache.pdfbox.text.TextPosition> positions) {
+                    List<org.apache.pdfbox.text.TextPosition> word = new ArrayList<>();
+                    for (org.apache.pdfbox.text.TextPosition p : positions) {
+                        if (!p.getUnicode().isBlank()) {
+                            word.add(p);
+                        } else if (!word.isEmpty()) {
+                            out.add(word(word));
+                            word.clear();
+                        }
+                    }
+                    if (!word.isEmpty()) {
+                        out.add(word(word));
+                    }
+                }
+            };
+            s.setSortByPosition(true);
+            s.getText(d);
+        }
+        return out;
+    }
+
+    static Word word(List<org.apache.pdfbox.text.TextPosition> glyphs) {
+        StringBuilder text = new StringBuilder();
+        glyphs.forEach(g -> text.append(g.getUnicode()));
+        return new Word(text.toString(), List.copyOf(glyphs));
+    }
+
+    /**
+     * Issue #893: the widest reference a statement line can carry, a credit note of a branch with a 10-character code of the
+     * widest letter (CN + code + '-' + 6 digits, about 48 mm at 9.5pt against 23 mm in the Reference column's 15%), prints
+     * whole on one line and ends before its Description starts.
+     */
+    @Test
+    void theWidestCreditNoteReferencePrintsOnOneLineOfTheStatement() throws Exception {
+        capability("customer_accounts", true);
+        capability("returns", true);
+        TestDatabase.owner()
+                .sql("UPDATE branches SET code = 'WWWWWWWWWW' WHERE id = ?")
+                .param(hq)
+                .update();
+        UUID customer = RetailTestSupport.id(api.post("/customers", Map.of("name", "Test Buyer 05"), DOCS));
+        UUID s = creditSale(customer, hq, "2026-10-02", "3");
+        String no = takeBack(s, 0, "2", null, "account").get("credit_note_no").asString();
+        assertThat(no).isEqualTo("CNWWWWWWWWWW-000001");
+        List<Word> printed = words(statementPdf(customer, "?from=2026-10-01&to=2026-10-31", DOCS));
+        Word ref = printed.stream()
+                .filter(w -> w.text().equals(no))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("not whole on one line: "
+                        + printed.stream().map(Word::text).toList()));
+        org.apache.pdfbox.text.TextPosition end = ref.glyphs().getLast();
+        // The return's line is the only one with "Goods returned (credit note)"; a cell is centred, so a wrapped
+        // Description may sit a little above the reference, never to its left.
+        Word description = printed.stream()
+                .filter(w -> w.text().equals("Goods"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no Description for the return"));
+        assertThat(description.glyphs().getFirst().getXDirAdj())
+                .as("Description starts after the reference ends")
+                .isGreaterThan(end.getXDirAdj() + end.getWidthDirAdj());
     }
 
     // ---- escaping and other scripts --------------------------------------------------------------
